@@ -1,0 +1,2 @@
+file,environment,scenario,transaction,result,request_mti,response_mti,notes
+ATM_LOCAL_BALANCE_APPROVED.pcap,QA,ATM_LOCAL,BALANCE,APPROVED,0200,0210,

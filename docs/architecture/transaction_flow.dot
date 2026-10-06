@@ -1,0 +1,19 @@
+digraph G {
+  graph [rankdir=LR, bgcolor="white", pad=0.3, nodesep=0.5, ranksep=0.6, fontname="Arial"];
+  node [shape=box, style="rounded,filled", fillcolor="#F4F6F8", color="#344054", fontname="Arial", fontsize=10];
+  edge [color="#667085", fontname="Arial", fontsize=9];
+  card [label="OMNIKEY / Card Profile"];
+  atm [label="ATM Profile"];
+  tx [label="Transaction Engine"];
+  build [label="ISO8583 Builder"];
+  tcp [label="TCP + Framing"];
+  svfe [label="SVFE"];
+  target [label="Core / BANRED / Externa"];
+  parse [label="ISO8583 Parser"];
+  validate [label="Validator"];
+  correlate [label="Switch + Core Correlation"];
+  result [label="PASS / FAIL + Metrics"];
+  card -> tx;
+  atm -> tx;
+  tx -> build -> tcp -> svfe -> target -> svfe -> tcp -> parse -> validate -> correlate -> result;
+}

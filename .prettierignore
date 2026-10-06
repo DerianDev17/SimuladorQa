@@ -1,0 +1,16 @@
+node_modules
+dist
+coverage
+test-results
+artifacts
+package-lock.json
+references
+Tramas transacciones
+# Documentación recibida: conservar su formato original.
+*.md
+docs
+agents
+templates
+codex-prompts
+*.dot
+MANIFEST.txt

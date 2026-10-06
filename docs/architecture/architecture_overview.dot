@@ -1,0 +1,57 @@
+digraph G {
+  graph [rankdir=LR, bgcolor="white", pad=0.3, nodesep=0.45, ranksep=0.7, fontname="Arial"];
+  node [shape=box, style="rounded,filled", fillcolor="#F4F6F8", color="#344054", fontname="Arial", fontsize=10];
+  edge [color="#667085", fontname="Arial", fontsize=9];
+
+  subgraph cluster_agent {
+    label="Electron Simulator Agent"; color="#98A2B3"; style="rounded";
+    ui [label="React UI"];
+    main [label="Electron Main"];
+    reader [label="CardReaderAdapter\nOMNIKEY / PCSC"];
+    profiles [label="ATM + Card Profiles"];
+    tx [label="Transaction Engine"];
+    iso [label="ISO8583 Engine"];
+    tcp [label="TCP Engine"];
+    load [label="Load Engine\nWorkers"];
+    sqlite [label="Local SQLite"];
+    agent [label="Realtime Agent"];
+    ui -> main;
+    main -> reader;
+    main -> profiles;
+    main -> tx;
+    tx -> iso;
+    tx -> tcp;
+    load -> tx;
+    main -> sqlite;
+    main -> agent;
+  }
+
+  svfe [label="SVFE / Switch Coonecta", fillcolor="#EEF4FF"];
+  core [label="Core Adapter(s)", fillcolor="#ECFDF3"];
+  external [label="BANRED / Externa", fillcolor="#FFF6ED"];
+  swobs [label="SmartVista Observer", fillcolor="#EEF4FF"];
+  coreobs [label="Core Observer", fillcolor="#ECFDF3"];
+
+  tcp -> svfe [label="ISO8583/TCP"];
+  svfe -> core;
+  svfe -> external;
+  swobs -> svfe [style=dashed, label="read-only"];
+  coreobs -> core [style=dashed, label="read-only"];
+  tx -> swobs [style=dashed];
+  tx -> coreobs [style=dashed];
+
+  subgraph cluster_control {
+    label="Control Plane"; color="#98A2B3"; style="rounded";
+    api [label="REST API"];
+    ws [label="WebSocket Gateway"];
+    coord [label="Run Coordinator"];
+    metrics [label="Metrics Aggregator"];
+    pg [label="PostgreSQL"];
+    api -> coord;
+    ws -> metrics;
+    coord -> pg;
+    metrics -> pg;
+  }
+  agent -> ws [label="heartbeats + metrics"];
+  api -> agent [style=dashed, label="commands/config"];
+}

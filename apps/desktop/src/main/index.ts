@@ -1,0 +1,113 @@
+import { app, BrowserWindow, dialog, ipcMain, session } from 'electron';
+import { randomUUID } from 'node:crypto';
+import { hostname, userInfo } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { channels, failure } from '../../../../packages/shared/src/contracts';
+import { DesktopApplication } from './application';
+import { FilePreferencesStore } from './infrastructure/preferences-store';
+import { isTrustedSender } from './security';
+
+const development = process.argv.includes('--dev');
+const rendererFile = join(__dirname, 'renderer', 'index.html');
+const rendererUrl = development ? 'http://127.0.0.1:5173/' : pathToFileURL(rendererFile).href;
+let window: BrowserWindow | null = null;
+
+app.setName('Coonecta ATM Simulator');
+// Solo se permite redirigir datos locales al lanzar tests con una carpeta temporal explícita.
+const dataArgument = process.argv.find((argument) => argument.startsWith('--user-data-dir='));
+if (dataArgument) app.setPath('userData', dataArgument.slice('--user-data-dir='.length));
+
+async function createWindow(): Promise<void> {
+  window = new BrowserWindow({
+    width: 1440,
+    height: 980,
+    minWidth: 1040,
+    minHeight: 760,
+    show: false,
+    title: 'Coonecta · ATM Transaction Simulator',
+    backgroundColor: '#f4f7fb',
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+    },
+  });
+  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  window.webContents.on('will-navigate', (event, url) => {
+    if (url !== rendererUrl) event.preventDefault();
+  });
+  window.webContents.on('will-attach-webview', (event) => event.preventDefault());
+  window.once('ready-to-show', () => window?.show());
+  window.on('closed', () => {
+    window = null;
+  });
+  if (development) await window.loadURL(rendererUrl);
+  else await window.loadFile(rendererFile);
+}
+
+void app
+  .whenReady()
+  .then(async () => {
+    session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) =>
+      callback(false),
+    );
+    session.defaultSession.setPermissionCheckHandler(() => false);
+    const application = new DesktopApplication(
+      new FilePreferencesStore(join(app.getPath('userData'), 'preferences.json')),
+      {
+        agentId: randomUUID(),
+        hostname: hostname(),
+        user: userInfo().username,
+        version: '0.1.0',
+        uuid: randomUUID,
+        now: () => new Date().toISOString(),
+      },
+    );
+    for (const channel of Object.values(channels)) {
+      ipcMain.handle(channel, (event, payload: unknown) => {
+        if (
+          !window ||
+          !isTrustedSender(
+            {
+              senderId: event.sender.id,
+              frameIsMain: event.senderFrame === event.sender.mainFrame,
+              frameUrl: event.senderFrame?.url,
+            },
+            window.webContents.id,
+            rendererUrl,
+          )
+        )
+          return failure('FORBIDDEN', 'Solicitud no autorizada.');
+        switch (channel) {
+          case channels.snapshot:
+            return payload === undefined
+              ? application.getSnapshot()
+              : failure('VALIDATION_ERROR', 'Solicitud inválida.');
+          case channels.environment:
+            return application.setEnvironment(payload);
+          case channels.prepare:
+            return application.prepare(payload);
+        }
+      });
+    }
+    await createWindow();
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) void createWindow();
+    });
+  })
+  .catch(() => {
+    dialog.showErrorBox(
+      'Coonecta',
+      'No se pudo iniciar la aplicación. Revisa la instalación y los permisos locales.',
+    );
+    app.quit();
+  });
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') app.quit();
+});
