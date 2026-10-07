@@ -8,6 +8,7 @@ import {
 import type { DataBlocker, Environment, PreparationRequest, TransactionType } from './index';
 import { isRevision, isUuid, selectableAtms } from './catalogs';
 import type { CatalogSnapshot } from './catalogs';
+import type { DestinationCompatibility, DestinationInspector } from './destination-compatibility';
 
 export const accountTypes = [
   { id: 'SAVINGS', label: 'Ahorros' },
@@ -44,6 +45,7 @@ export interface DraftReview {
   account: AccountType | null;
   blockers: readonly DataBlocker[];
   specification: string;
+  destinationCompatibility: DestinationCompatibility | null;
 }
 export function needsOriginal(transaction: TransactionType): boolean {
   return transaction === 'REVERSAL' || transaction === 'TIMEOUT_REVERSAL';
@@ -101,6 +103,7 @@ export function reviewDraft(
   request: DraftRequest,
   catalog: CatalogSnapshot,
   operations: OperationCatalog,
+  inspector?: DestinationInspector,
 ): DraftReview | undefined {
   if (!parseDraftRequest(request) || catalog.environment !== request.environment) return undefined;
   const atm = selectableAtms(catalog).find((item) => item.id === request.atmId);
@@ -123,6 +126,12 @@ export function reviewDraft(
     operation,
     blockers,
     specification,
+    destinationCompatibility:
+      inspector?.assess({
+        environment: request.environment,
+        terminalId: atm?.terminalId ?? null,
+        operationCode: operation?.code ?? null,
+      }) ?? null,
   };
 }
 

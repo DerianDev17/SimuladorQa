@@ -27,6 +27,8 @@ de requisitos. Las transacciones reales
 siguen bloqueadas hasta disponer de evidencia aprobada.
 La preparacion incluye plantillas documentales, validacion de monto, resumen de
 revision y borrador conservado al navegar durante la sesion.
+La revision PREPROD compara Terminal ID/codigo con el esquema inspeccionado de
+Mediator y muestra incompatibilidades sin truncar perfiles; no es un Observer conectado.
 
 Requiere Windows y Node.js 22.20 o una LTS posterior compatible.
 

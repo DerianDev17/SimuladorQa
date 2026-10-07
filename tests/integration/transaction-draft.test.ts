@@ -8,6 +8,7 @@ import { DesktopApplication } from '../../apps/desktop/src/main/application';
 import { WorkerCatalogStore } from '../../apps/desktop/src/main/infrastructure/worker-catalog-store';
 import { FilePreferencesStore } from '../../apps/desktop/src/main/infrastructure/preferences-store';
 import { CmsV36Catalog } from '../../apps/desktop/src/main/adapters/cms-v36-catalog';
+import { MediatorSchemaInspector } from '../../apps/desktop/src/main/adapters/mediator-schema-inspector';
 import type { DraftRequest } from '../../packages/domain/src/transaction-draft';
 import { removeTestDirectory } from '../helpers/temporary-directory';
 
@@ -56,6 +57,7 @@ describe('preparación con preferencias y Worker SQLite reales', () => {
       identity,
       store,
       new CmsV36Catalog(),
+      new MediatorSchemaInspector(),
     );
   });
   afterEach(async () => {
@@ -111,6 +113,7 @@ describe('preparación con preferencias y Worker SQLite reales', () => {
         atm: { id: atm.id, revision: 1, status: 'DRAFT' },
         operation: { code: '301000' },
         account: 'SAVINGS',
+        destinationCompatibility: null,
         reviewedAt: identity.now(),
         reviewId: expect.stringMatching(/^[0-9a-f-]{36}$/),
       },
@@ -137,6 +140,62 @@ describe('preparación con preferencias y Worker SQLite reales', () => {
     expect(first.value).not.toHaveProperty('transactionId');
     expect(first.value).not.toHaveProperty('runId');
     expect(first.value.status).toBe('BLOCKED');
+  });
+  it('revisa compatibilidad PREPROD desde Main contra el ATM real sin alterar ni truncar el catálogo', async () => {
+    const qaAtm = await seedAtm();
+    expect(await application.setEnvironment({ environment: 'PREPROD' })).toMatchObject({
+      ok: true,
+    });
+    const saved = await application.catalog('saveAtm', {
+      environment: 'PREPROD',
+      id: null,
+      revision: null,
+      values: {
+        alias: 'ATM PREPROD',
+        entityId: qaAtm.entityId,
+        terminalId: 'TOO-LONG-TERMINAL',
+        acquirerId: 'TEST',
+        active: true,
+      },
+    });
+    if (!saved.ok) throw new Error('Seed unavailable');
+    const atm = saved.value.atms[0]!;
+    const before = await application.catalog('list', { environment: 'PREPROD' });
+    const reviewed = await application.reviewDraft({
+      ...request,
+      environment: 'PREPROD',
+      atmId: atm.id,
+      atmRevision: atm.revision,
+    });
+    expect(reviewed).toMatchObject({
+      ok: true,
+      value: {
+        status: 'BLOCKED',
+        destinationCompatibility: {
+          source: { environment: 'PREPROD' },
+          checks: expect.arrayContaining([
+            expect.objectContaining({ id: 'TERMINAL_ID', status: 'MISMATCH' }),
+          ]),
+        },
+      },
+    });
+    expect(await application.catalog('list', { environment: 'PREPROD' })).toEqual(before);
+  });
+  it('mantiene disponible la revisión sin proveedor de esquema y sanitiza un proveedor fallido', async () => {
+    const preferences = new FilePreferencesStore(preferencesFile);
+    const without = new DesktopApplication(preferences, identity, store, new CmsV36Catalog());
+    expect(await without.reviewDraft(request)).toMatchObject({
+      ok: true,
+      value: { destinationCompatibility: null },
+    });
+    const failed = new DesktopApplication(preferences, identity, store, new CmsV36Catalog(), {
+      assess: () => {
+        throw new Error('private dependency detail');
+      },
+    });
+    const result = await failed.reviewDraft(request);
+    expect(result).toMatchObject({ ok: false, error: { code: 'STORAGE_UNAVAILABLE' } });
+    expect(JSON.stringify(result)).not.toContain('private dependency detail');
   });
   it('acepta revisar requisitos sin ATM y mantiene el reverso dependiente del original', async () => {
     expect(await application.reviewDraft(request)).toMatchObject({

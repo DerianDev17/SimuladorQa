@@ -11,6 +11,9 @@ La preparacion transaccional agrega OperationCatalog como puerto del dominio y
 CmsV36Catalog como adaptador documental inyectado en Main. DraftRequest se valida
 por IPC y se revalida contra preferencias/catalogos vigentes; no ejecuta tramas.
 Renderer recibe los metadatos del catalogo y un DraftReview siempre BLOCKED.
+DestinationInspector agrega comparacion de compatibilidad con evidencia guardada;
+MediatorSchemaInspector implementa ese puerto en Main solo para PREPROD. No abre
+conexion remota ni hereda la excepcion TLS de la inspeccion puntual.
 El dominio cataloga escenarios/transacciones, valida contexto y sus requisitos
 pendientes; no implementa el motor transaccional descrito mas abajo.
 
@@ -23,6 +26,8 @@ flowchart LR
   Worker --> SQLite[(catalogs.sqlite)]
   Main --> OperationPort[OperationCatalog]
   CMS[CmsV36Catalog: metadatos del manual] -. implementa .-> OperationPort
+  Main --> DestinationPort[DestinationInspector]
+  Mediator[MediatorSchemaInspector: esquema observado PREPROD] -. implementa .-> DestinationPort
 ```
 
 El resto de componentes sigue planificado. Ver `../implementation/BOOTSTRAP.md`

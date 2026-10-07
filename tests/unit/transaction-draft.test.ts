@@ -108,6 +108,7 @@ describe('borrador sin ejecución ni datos de tarjeta', () => {
     { ...request, pan: '0'.repeat(16) },
     { ...request, pin: 'private' },
     { ...request, code: '310000' },
+    { ...request, destinationCompatibility: { checks: [] } },
     { ...request, amount: '0.00' },
     { ...request, transaction: 'REVERSAL' },
   ])('rechaza entradas no documentadas o ambiguas %#', (candidate) => {

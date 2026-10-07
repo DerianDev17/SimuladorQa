@@ -12,6 +12,7 @@
 - **TODO-DATA ENTITY-CLASSIFICATION**: ENTITY_MODEL propone red/membresia separadas y ENTITY_TEMPLATE mezcla FRONT/BACK/EXTERNA/BANRED como Tipo. Se solicito validacion; el CRUD usa los campos comunes y difiere membresia, BIN/Core y deteccion automatica de escenarios.
 - **TODO-DATA HARDWARE**: falta prueba PC/SC en Windows con OMNIKEY 5422. Bloquea lectura fisica; no se presume lector conectado.
 - **TODO-DATA OBSERVERS**: faltan SQL/API y reglas de correlacion aprobadas de SmartVista/Core. Bloquea observabilidad remota sin alterar el estado transaccional.
+- **TODO-DATA MEDIATOR-OBSERVER-ACCESS / MEDIATOR-JOURNAL-CORRELATION**: SQL Server/Mediator PREPROD conectado e inspeccionado con excepcion TLS puntual autorizada (ADR-006). Falta cuenta de solo lectura, TLS con CA/nombre aprobado para conexion permanente, vinculo entidad/canal/terminal, queries y reglas de correlacion. Ver `docs/core/MEDIATOR_SCHEMA_REVIEW.md`; la inspeccion de metadatos no habilita un Observer ni envio.
 - **TODO-DATA LOAD-LIMITS**: faltan limites/ventanas autorizadas y gate funcional de los cinco flujos. Bloquea carga y estres.
 
 La documentacion describe los flujos, pero no aporta evidencia suficiente para ejecutarlos.
@@ -38,6 +39,9 @@ datos/evidencia externos y solo se marcaran al recibirlos y validarlos.
 - [x] Feedback de monto en vivo y checklist de entradas locales separado de evidencia pendiente.
 - [x] Resumen de revision desde Main con UUID/UTC; invalidado al editar contexto.
 - [x] Borrador conservado al navegar en la sesion y boton Limpiar borrador.
+- [x] Conexion autenticada e inspeccion de metadatos de Mediator PREPROD, con excepcion TLS puntual autorizada.
+- [x] Compatibilidad de Terminal ID/codigo en revision Main, sin truncado ni extrapolar el esquema a QA.
+- [x] Credencial pass.txt y artefactos privados excluidos de Git; sin acceso desde Renderer.
 
 Detalle y pruebas: `docs/implementation/TRANSACTION_PREPARATION.md`.
 

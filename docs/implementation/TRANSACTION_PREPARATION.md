@@ -42,6 +42,12 @@ Solo Datos Generales esta activo; revisar un borrador no avanza a ejecucion.
 
 ## Capas y contratos
 
+La inspeccion de Mediator PREPROD agrega una comparacion de compatibilidad del
+destino al revisar. Main usa un puerto DestinationInspector con evidencia guardada;
+la UI muestra longitudes incompatibles sin modificar los perfiles y deja pendiente
+el vinculo entidad/canal/terminal. No se aplica esa evidencia a QA ni prueba una
+conexion activa. Ver `docs/core/MEDIATOR_SCHEMA_REVIEW.md`.
+
 `CmsV36Catalog` es un adaptador de metadatos en Main que implementa el puerto
 `OperationCatalog` del dominio. La aplicacion recibe el adaptador por inyeccion;
 el dominio y Renderer no importan una implementacion Core/SmartVista.

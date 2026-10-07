@@ -294,6 +294,39 @@ test('plantillas documentales, resumen revisado y borrador conservado al navegar
   ).toBeVisible();
 });
 
+test('compatibilidad Mediator PREPROD desde evidencia del esquema, sin conexión simulada ni truncado', async () => {
+  const window = await launch();
+  await createTestEntity(window);
+  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
+  await createTestAtm(window, 'ATM para Mediator');
+  await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
+  await window
+    .getByLabel('Perfil ATM', { exact: true })
+    .selectOption({ label: 'ATM para Mediator · Borrador' });
+  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
+  const compatibility = window.getByRole('region', { name: 'Compatibilidad del destino' });
+  await expect(compatibility).toContainText('Esquema Mediator PREPROD');
+  await expect(compatibility).toContainText('Terminal ID · Incompatible');
+  await expect(compatibility).toContainText('13 bytes ASCII; Mediator admite 10. No se trunca.');
+  await expect(compatibility).toContainText('Entidad, canal y terminal · Pendiente');
+  await expect(window.getByRole('button', { name: 'Enviar transacción' })).toBeDisabled();
+  await compatibility.scrollIntoViewIfNeeded();
+  await mkdir('artifacts', { recursive: true });
+  await window.screenshot({ path: 'artifacts/mediator-compatibility.png' });
+  await window.getByRole('button', { name: 'Perfiles ATM', exact: true }).click();
+  await window.getByRole('button', { name: 'Editar ATM para Mediator', exact: true }).click();
+  await expect(window.getByLabel('Terminal ID', { exact: true })).toHaveValue('Test-Terminal');
+  await window.getByLabel('Terminal ID', { exact: true }).fill('TESTTERM');
+  await window.getByRole('button', { name: 'Guardar borrador' }).click();
+  await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
+  await expect(compatibility).toHaveCount(0);
+  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
+  await expect(compatibility).toContainText('Terminal ID · Longitud compatible');
+  await window.getByLabel('Ambiente', { exact: true }).selectOption('QA');
+  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
+  await expect(compatibility).toHaveCount(0);
+});
+
 test('CRUD de entidades y ATM, separación de ambientes, reinicio y eliminación protegida', async () => {
   test.setTimeout(60_000);
   let window = await launch();

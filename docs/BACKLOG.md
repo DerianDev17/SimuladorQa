@@ -64,6 +64,10 @@ Ver `docs/implementation/TRANSACTION_PREPARATION.md`. Revisar el borrador no
 genera una transaccion ni se cuenta como un flujo MVP aprobado.
 
 ## Epic 6 - Observability
+- [x] inspeccion autenticada de esquema Mediator PREPROD y matriz de evidencia
+- [x] compatibilidad de destino en revision Main con esquema observado, sin truncado
+- [ ] cuenta de solo lectura y TLS aprobado para Observer permanente
+- [ ] vinculo entidad/canal/terminal y query de correlacion Mediator aprobada
 - [x] estados vacios del inspector, recorrido, historial y metricas sin datos ficticios
 - [ ] ISO inspector con evidencia sanitizada (Parsed / RAW / HEX)
 - [ ] SmartVista observer

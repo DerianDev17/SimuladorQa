@@ -18,6 +18,7 @@ import type { CatalogCommand } from '../../../../packages/shared/src/catalog-wor
 import type { CatalogStore } from './catalog-port';
 import { parseDraftRequest, reviewDraft } from '../../../../packages/domain/src/transaction-draft';
 import type { OperationCatalog } from '../../../../packages/domain/src/transaction-draft';
+import type { DestinationInspector } from '../../../../packages/domain/src/destination-compatibility';
 
 // Toda operación comparte la cola: evita perder cambios y leer un ambiente intermedio.
 export class DesktopApplication {
@@ -27,6 +28,7 @@ export class DesktopApplication {
     private readonly identity: RuntimeIdentity,
     private readonly catalogs?: CatalogStore,
     private readonly operations?: OperationCatalog,
+    private readonly destinationInspector?: DestinationInspector,
   ) {}
 
   private serialize<T>(operation: () => Promise<T>): Promise<T> {
@@ -135,7 +137,12 @@ export class DesktopApplication {
           },
         );
         if (!catalog.ok) return catalog;
-        const review = reviewDraft(request, catalog.value, this.operations);
+        const review = reviewDraft(
+          request,
+          catalog.value,
+          this.operations,
+          this.destinationInspector,
+        );
         return review
           ? {
               ok: true,

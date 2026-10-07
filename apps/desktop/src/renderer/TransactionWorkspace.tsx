@@ -20,6 +20,7 @@ import type { DesktopClient } from './desktop-client';
 import { Icon } from './Icon';
 import { localDraftChecks } from './draft-feedback';
 import { DraftSummary } from './DraftSummary';
+import { DestinationCompatibilityView } from './DestinationCompatibilityView';
 
 interface Props {
   snapshot: AppSnapshot | undefined;
@@ -460,6 +461,9 @@ export function TransactionWorkspace({
           </div>
           <div className="transaction-readiness">
             {review && <DraftSummary review={review} />}
+            {review?.destinationCompatibility && (
+              <DestinationCompatibilityView report={review.destinationCompatibility} />
+            )}
             <div className="local-draft-checks" aria-label="Preparación local">
               <h3>
                 Preparación local{' '}

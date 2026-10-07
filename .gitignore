@@ -5,6 +5,7 @@ test-results/
 artifacts/
 .env
 .env.*
+**/[Pp][Aa][Ss][Ss].txt
 *.pem
 *.key
 *.p12
