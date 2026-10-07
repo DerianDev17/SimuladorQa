@@ -54,6 +54,7 @@ datos/evidencia externos y solo se marcaran al recibirlos y validarlos.
 - [x] Requisitos/CMS/PCAP separados del area de operacion; estados reales y codigos del manual conservados.
 - [x] Historial con filtros parametrizados Journal/Message PREPROD, bigint como string, limites, errores/timeout y estructura XML protegida fuera del Renderer; acceso real pendiente de TLS/cuenta.
 - [x] Configuracion muestra evidencia privada de red por ambiente, con destino ATM/PID/peer y pendientes; Main valida archivo acotado, sin sockets ni habilitar envio.
+- [x] Puerto/emisor de captura QA con un write tras conectar, validacion, deadlines, cierre y metricas sin contenido; pruebas TCP locales. No habilita envio general ni genera campos ISO. Ver `docs/implementation/QA_CAPTURE_REPLAY.md`.
 
 Detalle y pruebas: `docs/implementation/TRANSACTION_PREPARATION.md`.
 
