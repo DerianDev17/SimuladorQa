@@ -14,6 +14,7 @@ import type {
 import type { AppSnapshot, ErrorCode, Result } from '../../../../packages/shared/src/contracts';
 import type { CatalogSnapshot } from '../../../../packages/domain/src/catalogs';
 import { CatalogView } from './CatalogView';
+import { TransactionWorkspace } from './TransactionWorkspace';
 import type { CatalogMutation } from './CatalogView';
 import { DesktopClient } from './desktop-client';
 import { Icon } from './Icon';
@@ -44,6 +45,7 @@ export function App() {
   const [catalogError, setCatalogError] = useState<{ code: ErrorCode; message: string }>();
   const [catalogBusy, setCatalogBusy] = useState(false);
   const [catalogEditing, setCatalogEditing] = useState(false);
+  const [transactionBusy, setTransactionBusy] = useState(false);
 
   function applySnapshot(result: Result<AppSnapshot>) {
     if (result.ok) {
@@ -331,7 +333,7 @@ export function App() {
               <select
                 aria-label="Ambiente"
                 value={environment ?? ''}
-                disabled={busy || !snapshot || catalogBusy || catalogEditing}
+                disabled={busy || !snapshot || catalogBusy || catalogEditing || transactionBusy}
                 onChange={(event) => {
                   if (isEnvironment(event.target.value)) void changeEnvironment(event.target.value);
                 }}
@@ -370,12 +372,18 @@ export function App() {
           <div className="page-heading">
             <div>
               <span className="eyebrow">COONECTA / {environment ?? 'AMBIENTE SIN VERIFICAR'}</span>
-              <h1>{page === 'dashboard' ? 'Tu estación de pruebas' : current?.label}</h1>
+              <h1>
+                {page === 'dashboard'
+                  ? 'Tu estación de pruebas'
+                  : page === 'transactions'
+                    ? 'Nueva transacción'
+                    : current?.label}
+              </h1>
               <p>
                 {page === 'dashboard'
                   ? 'Prepara, ejecuta y observa tus pruebas ATM desde un solo lugar.'
                   : page === 'transactions'
-                    ? 'Selecciona el flujo y verifica sus requisitos antes de enviar.'
+                    ? 'Prepara el contexto y verifica el recorrido por Switch y Core.'
                     : 'Información y estado de tu laboratorio de QA.'}
               </p>
             </div>
@@ -532,46 +540,17 @@ export function App() {
           )}
 
           {page === 'transactions' && (
-            <div className="transaction-layout">
-              <section className="panel">
-                <div className="panel-heading">
-                  <h2>Contexto de la prueba</h2>
-                  <span className="pill blue">{environment ?? 'Sin verificar'}</span>
-                </div>
-                {transactionForm()}
-                <div className="timeline">
-                  <span>ATM</span>
-                  <Icon name="arrow" size={16} />
-                  <span>Switch Coonecta</span>
-                  <Icon name="arrow" size={16} />
-                  <span>Core</span>
-                </div>
-                <p className="form-note">
-                  No hay request ni response ISO hasta habilitar una ejecución real.
-                </p>
-              </section>
-              <section className="panel">
-                <div className="panel-heading">
-                  <h2>Requisitos de envío</h2>
-                  <span className="pill amber">Bloqueado</span>
-                </div>
-                {blockerList()}
-              </section>
-              <section className="panel inspector">
-                <div className="panel-heading">
-                  <h2>Inspector ISO</h2>
-                  <span className="pill neutral">Sin mensaje</span>
-                </div>
-                <div className="empty-state compact">
-                  <Icon name="transaction" size={30} />
-                  <h3>Esperando una ejecución</h3>
-                  <p>
-                    Las vistas parseada, ASCII y HEX se habilitarán con el motor ISO y sus reglas
-                    validadas.
-                  </p>
-                </div>
-              </section>
-            </div>
+            <TransactionWorkspace
+              key={environment ?? 'unavailable'}
+              snapshot={snapshot}
+              catalog={catalog}
+              catalogError={catalogError}
+              loading={catalogBusy}
+              disabled={busy || !snapshot}
+              client={client}
+              onRefresh={refreshCatalog}
+              onReviewingChange={setTransactionBusy}
+            />
           )}
 
           {page === 'settings' && (

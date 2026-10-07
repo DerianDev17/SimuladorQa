@@ -25,8 +25,13 @@ son un template de retiro ATM. Ver [revision y pendientes](../protocols/EXTREME_
 
 ## Pendientes
 - processing code exacto;
+- moneda, limites, monto minimo/maximo y denominaciones por cuenta/escenario (TODO-DATA AMOUNT-RULES);
 - PIN block;
 - campos obligatorios;
 - reglas F55 si aplica;
 - criterio de debito Core;
 - response esperado.
+
+Preparacion local implementada: seleccion ahorros/corriente, catalogo documental
+011000/012000 y monto con punto/dos decimales como string. No valida monto
+financieramente ni construye la trama. Ver `docs/implementation/TRANSACTION_PREPARATION.md`.

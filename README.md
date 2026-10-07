@@ -21,7 +21,9 @@ No inventar reglas transaccionales. Toda regla ISO8583, framing TCP, timeout, PI
 ## Desarrollo local
 
 Base desktop implementada: dashboard, navegacion, seleccion persistida QA/PREPROD,
-auditoria local, revision de requisitos MVP y CRUD de entidades/ATM en SQLite mediante Worker. Las transacciones reales
+auditoria local, CRUD de entidades/ATM en SQLite mediante Worker y pantalla de
+preparacion de transacciones con catalogo CMS por cuenta, seleccion ATM y revision
+de requisitos. Las transacciones reales
 siguen bloqueadas hasta disponer de evidencia aprobada.
 
 Requiere Windows y Node.js 22.20 o una LTS posterior compatible.
@@ -36,6 +38,9 @@ Validacion completa: `npm run check` y `npm run test:e2e`.
 
 Ver `docs/implementation/BOOTSTRAP.md` para el comportamiento entregado y sus limites.
 Ver `docs/implementation/LOCAL_CATALOGS.md` para los catalogos locales y la configuracion en borrador.
+Ver `docs/implementation/TRANSACTION_PREPARATION.md` para la pantalla y el catalogo documental.
+El progreso implementado se marca en `docs/BACKLOG.md` y en la seccion de desarrollo
+de `docs/INPUT_CHECKLIST.md`; la evidencia QA pendiente permanece sin marcar.
 
 ## Documentos principales
 

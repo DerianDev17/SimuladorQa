@@ -8,6 +8,7 @@
 - **TODO-DATA GOLDEN-SAMPLES**: faltan request/response y PCAP validados de cada flujo MVP. Bloquea validaciones byte a byte, codigos de respuesta y reversos.
 - **TODO-DATA ENVIRONMENT**: faltan endpoints autorizados QA/PREPROD, framing, TLS y timeouts por escenario. Bloquea conectar/enviar TCP.
 - **TODO-DATA PROFILES**: faltan ATM y tarjeta completos/validados. Bloquea configurar ejecuciones reales; el shell desktop y la seleccion de ambiente funcionan de forma independiente.
+- **TODO-DATA AMOUNT-RULES**: faltan moneda, limites, monto minimo/maximo, denominaciones y reglas por cuenta/escenario para retirar. El borrador solo valida la sintaxis decimal del manual; no aprueba elegibilidad financiera.
 - **TODO-DATA ENTITY-CLASSIFICATION**: ENTITY_MODEL propone red/membresia separadas y ENTITY_TEMPLATE mezcla FRONT/BACK/EXTERNA/BANRED como Tipo. Se solicito validacion; el CRUD usa los campos comunes y difiere membresia, BIN/Core y deteccion automatica de escenarios.
 - **TODO-DATA HARDWARE**: falta prueba PC/SC en Windows con OMNIKEY 5422. Bloquea lectura fisica; no se presume lector conectado.
 - **TODO-DATA OBSERVERS**: faltan SQL/API y reglas de correlacion aprobadas de SmartVista/Core. Bloquea observabilidad remota sin alterar el estado transaccional.
@@ -17,6 +18,24 @@ La documentacion describe los flujos, pero no aporta evidencia suficiente para e
 El manual recibido aporta reglas parciales de Mediator/Core: no se considera trama ATM ni mock aprobado.
 Ver `docs/implementation/BOOTSTRAP.md` para el alcance ya implementado.
 El CRUD local de entidades/ATM funciona con configuracion en borrador; no completa ni valida automaticamente los items del checklist. Ver `docs/implementation/LOCAL_CATALOGS.md`.
+
+## Checklist de desarrollo completado
+
+Estos checks registran implementacion local. Los checks P0/P1 siguientes son
+datos/evidencia externos y solo se marcaran al recibirlos y validarlos.
+
+- [x] Shell Electron seguro, TypeScript strict y navegacion.
+- [x] Seleccion QA/PREPROD persistida y auditoria de cambios; PROD bloqueado.
+- [x] CRUD de entidades/ATM en SQLite mediante Worker, con version y auditoria.
+- [x] Revision del mockup y matriz de evidencia CMS para las cinco transacciones.
+- [x] Catalogo de saldo/retiro CMS por ahorros/corriente con fuente y pagina.
+- [x] Pantalla de preparacion con los cuatro pasos y tres paneles del mockup.
+- [x] Seleccion ATM del ambiente y revision en Main de version/estado/entidad.
+- [x] Validacion de entradas y monto decimal de borrador, sin almacenar tarjeta.
+- [x] Contexto invalidado al cambiar ambiente, editar o recargar perfiles.
+- [x] Estados vacios y envio/RAW/HEX/reversos bloqueados por evidencia pendiente.
+
+Detalle y pruebas: `docs/implementation/TRANSACTION_PREPARATION.md`.
 
 ## P0 - Bloqueante para primer flujo real
 
@@ -34,6 +53,7 @@ El CRUD local de entidades/ATM funciona con configuracion en borrador; no comple
 - [ ] Host/puerto PREPROD por escenario.
 - [ ] Regla VLI/header/encoding.
 - [ ] Timeout oficial por escenario.
+- [ ] Moneda y reglas financieras del monto aprobadas por cuenta/escenario.
 - [ ] Al menos un ATM QA completo.
 - [ ] Al menos una tarjeta QA funcional.
 

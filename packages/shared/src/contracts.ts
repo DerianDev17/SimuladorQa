@@ -10,11 +10,17 @@ import type {
   SaveAtmRequest,
   SaveEntityRequest,
 } from '../../domain/src/catalogs';
+import type {
+  DocumentedOperation,
+  DraftRequest,
+  DraftReview,
+} from '../../domain/src/transaction-draft';
 
 export const channels = {
   snapshot: 'app:snapshot',
   environment: 'app:environment',
   prepare: 'app:prepare',
+  reviewDraft: 'transaction:draft:review',
   catalog: 'catalog:list',
   saveEntity: 'catalog:entity:save',
   deleteEntity: 'catalog:entity:delete',
@@ -54,12 +60,14 @@ export interface AppSnapshot {
   controlPlane: 'NOT_CONFIGURED';
   blockers: readonly DataBlocker[];
   audit: readonly EnvironmentAudit[];
+  documentedOperations: readonly DocumentedOperation[];
 }
 
 export interface DesktopApi {
   getSnapshot(): Promise<Result<AppSnapshot>>;
   setEnvironment(environment: Environment): Promise<Result<AppSnapshot>>;
   prepareTransaction(request: PreparationRequest): Promise<Result<Preparation>>;
+  reviewDraft(request: DraftRequest): Promise<Result<DraftReview>>;
   getCatalog(environment: Environment): Promise<Result<CatalogSnapshot>>;
   saveEntity(request: SaveEntityRequest): Promise<Result<CatalogSnapshot>>;
   deleteEntity(request: DeleteRequest): Promise<Result<CatalogSnapshot>>;

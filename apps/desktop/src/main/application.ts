@@ -16,6 +16,11 @@ import {
 import type { CatalogSnapshot } from '../../../../packages/domain/src/catalogs';
 import type { CatalogCommand } from '../../../../packages/shared/src/catalog-worker';
 import type { CatalogStore } from './catalog-port';
+import { parseDraftRequest, reviewDraft } from '../../../../packages/domain/src/transaction-draft';
+import type {
+  DraftReview,
+  OperationCatalog,
+} from '../../../../packages/domain/src/transaction-draft';
 
 // Toda operación comparte la cola: evita perder cambios y leer un ambiente intermedio.
 export class DesktopApplication {
@@ -24,6 +29,7 @@ export class DesktopApplication {
     private readonly store: PreferencesStore,
     private readonly identity: RuntimeIdentity,
     private readonly catalogs?: CatalogStore,
+    private readonly operations?: OperationCatalog,
   ) {}
 
   private serialize<T>(operation: () => Promise<T>): Promise<T> {
@@ -44,6 +50,7 @@ export class DesktopApplication {
       controlPlane: 'NOT_CONFIGURED',
       blockers: dataBlockers,
       audit: [...preferences.audit].reverse(),
+      documentedOperations: this.operations?.entries ?? [],
     };
   }
 
@@ -104,6 +111,45 @@ export class DesktopApplication {
         return { ok: true, value: prepareTransaction(preferences.environment, request) };
       } catch {
         return failure('STORAGE_UNAVAILABLE', 'No se pudo verificar la configuración local.');
+      }
+    });
+  }
+
+  reviewDraft(payload: unknown): Promise<Result<DraftReview>> {
+    return this.serialize(async () => {
+      const request = parseDraftRequest(payload);
+      if (!request)
+        return failure(
+          'VALIDATION_ERROR',
+          'Revisa la operación, cuenta, ATM y monto con punto y dos decimales.',
+        );
+      try {
+        const current = await this.store.read();
+        if (request.environment !== current.environment)
+          return failure('CONFLICT', 'El ambiente cambió. Recarga el contexto de la transacción.');
+        if (!this.catalogs || !this.operations)
+          return failure('SERVICE_UNAVAILABLE', 'El servicio de preparación no está disponible.');
+        const catalog = await this.catalogs.execute(
+          { kind: 'list', environment: request.environment },
+          {
+            user: this.identity.user,
+            machine: this.identity.hostname,
+            timestamp: this.identity.now(),
+          },
+        );
+        if (!catalog.ok) return catalog;
+        const review = reviewDraft(request, catalog.value, this.operations);
+        return review
+          ? { ok: true, value: review }
+          : failure(
+              'CONFLICT',
+              'El ATM cambió o su entidad ya no está disponible. Recarga los perfiles.',
+            );
+      } catch {
+        return failure(
+          'STORAGE_UNAVAILABLE',
+          'No se pudo verificar la configuración o los perfiles locales.',
+        );
       }
     });
   }

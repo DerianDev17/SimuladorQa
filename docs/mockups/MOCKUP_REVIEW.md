@@ -13,11 +13,11 @@ La lectura del manual asociado se documenta en
 | Area del mockup | Estado actual | Siguiente trabajo |
 | --- | --- | --- |
 | Navegacion lateral, marca, ambiente permanente | Shell y QA/PREPROD implementados; catalogos separados | Ajustar navegacion y composicion al mockup, preservando estados reales |
-| Datos Generales / Ejecutar / Resultado / Historial | Panel de requisitos; aun no hay ejecucion ni historial transaccional | Crear pasos con progreso real y restricciones por evidencia |
-| Formulario de ATM, tarjeta, transaccion y cuenta | CRUD ATM/entidad en borrador y seleccion del flujo MVP | Selector ATM del ambiente y resumen de requisitos; tarjeta/cuenta dependen de perfiles aprobados |
+| Datos Generales / Ejecutar / Resultado / Historial | Pasos implementados; solo Datos Generales activo, sin avance por revisar borrador | Conectar progreso a ejecucion e historial reales |
+| Formulario de ATM, tarjeta, transaccion y cuenta | Seleccion ATM activo del ambiente, flujo MVP, ahorros/corriente y monto de borrador; catalogo CMS con fuente | Tarjeta y perfiles aprobados; reglas de elegibilidad/moneda pendientes |
 | Lector fisico / tarjeta configurada | Lector y perfiles de tarjeta pendientes | Mostrar no disponible hasta obtener evidencia; PAN siempre enmascarado |
-| Timeline ATM -> Switch -> Core -> respuesta | No hay envio ni observadores remotos | Eventos y tiempos reales; estado de observabilidad independiente del resultado transaccional |
-| Inspector solicitud/respuesta, campos/RAW/HEX | Pendiente de diccionario y tramas | Contrato de evidencia sanitizada fuera del Renderer; distinguir ISO ATM de XML Core |
+| Timeline ATM -> Switch -> Core -> respuesta | Panel implementado con estados pendientes y sin tiempos inventados | Eventos y tiempos reales; estado de observabilidad independiente del resultado transaccional |
+| Inspector solicitud/respuesta, campos/RAW/HEX | Panel vacio y pestanas deshabilitadas; referencia CMS separada de ISO | Contrato de evidencia sanitizada fuera del Renderer; diccionario y tramas |
 | Ultimas transacciones y metricas realtime | Sin historial transaccional/Control Plane | Estados vacios; agregados con ventana y origen identificados |
 | Plantillas / Guardar como caso | No implementado | Templates versionados con fuente y caso asociado a evidencia sanitizada |
 
@@ -66,5 +66,6 @@ La lectura del manual asociado se documenta en
    Probar ausencia de datos sensibles en campos, RAW, HEX e historial cuando esas
    funciones se implementen.
 
-Esta revision no cambia la UI ni habilita transacciones. Es el criterio visual
-y funcional para la siguiente implementacion, separado del contrato de red.
+La preparacion visual/documental ya esta implementada, sin habilitar envios:
+ver [alcance y pruebas](../implementation/TRANSACTION_PREPARATION.md).
+La referencia visual sigue separada del contrato de red.

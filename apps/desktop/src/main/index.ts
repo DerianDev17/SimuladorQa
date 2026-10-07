@@ -8,6 +8,7 @@ import { DesktopApplication } from './application';
 import { FilePreferencesStore } from './infrastructure/preferences-store';
 import { isTrustedSender } from './security';
 import { WorkerCatalogStore } from './infrastructure/worker-catalog-store';
+import { CmsV36Catalog } from './adapters/cms-v36-catalog';
 
 const development = process.argv.includes('--dev');
 const rendererFile = join(__dirname, 'renderer', 'index.html');
@@ -75,6 +76,7 @@ void app
         now: () => new Date().toISOString(),
       },
       catalogs,
+      new CmsV36Catalog(),
     );
     for (const channel of Object.values(channels)) {
       ipcMain.handle(channel, (event, payload: unknown) => {
@@ -100,6 +102,8 @@ void app
             return application.setEnvironment(payload);
           case channels.prepare:
             return application.prepare(payload);
+          case channels.reviewDraft:
+            return application.reviewDraft(payload);
           case channels.catalog:
             return application.catalog('list', payload);
           case channels.saveEntity:

@@ -129,6 +129,115 @@ async function createTestAtm(window: Page, alias: string) {
   await expect(window.getByRole('button', { name: `Editar ${alias}`, exact: true })).toBeVisible();
 }
 
+test('pantalla del mockup: contexto ATM, catálogo CMS, monto y cambio de ambiente', async () => {
+  const window = await launch();
+  await createTestEntity(window);
+  await createTestAtm(window, 'ATM de preparación QA');
+  await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
+  await expect(window.getByRole('heading', { name: 'Nueva transacción' })).toBeVisible();
+  await expect(window.locator('.transaction-steps [aria-current="step"]')).toContainText(
+    'Datos Generales',
+  );
+  const reference = window.locator('.documented-operation');
+  await expect(reference.getByText('301000', { exact: true })).toBeVisible();
+  await expect(reference).toContainText('Extreme Mediator CMS v3.6 · p. 20');
+  await window.getByLabel('Cuenta', { exact: true }).selectOption('CURRENT');
+  await expect(reference.getByText('302000', { exact: true })).toBeVisible();
+  await window
+    .getByLabel('Perfil ATM', { exact: true })
+    .selectOption({ label: 'ATM de preparación QA · Borrador' });
+  await expect(window.getByText('Perfil en borrador', { exact: true })).toBeVisible();
+  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
+  await expect(window.getByText('Envío bloqueado · QA')).toBeVisible();
+  await expect(window.getByRole('button', { name: 'Enviar transacción' })).toBeDisabled();
+  await expect(window.getByRole('tab', { name: 'RAW', exact: true })).toBeDisabled();
+  await expect(window.getByRole('tab', { name: 'HEX', exact: true })).toBeDisabled();
+  await expect(window.getByText('Sin mensaje recibido', { exact: true })).toBeVisible();
+  await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
+  await expect(window.getByText('Envío bloqueado · QA')).toHaveCount(0);
+  await expect(reference.getByText('012000', { exact: true })).toBeVisible();
+  await window.getByLabel('Monto de prueba').fill('100,50');
+  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
+  await expect(window.getByRole('alert')).toContainText('punto y dos decimales');
+  await window.getByLabel('Monto de prueba').fill('100.50');
+  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
+  await expect(window.getByText('Envío bloqueado · QA')).toBeVisible();
+  await expect(window.getByText('Reglas financieras del monto', { exact: true })).toBeVisible();
+  await window.getByLabel('Cuenta', { exact: true }).selectOption('SAVINGS');
+  await expect(reference.getByText('011000', { exact: true })).toBeVisible();
+  await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_DECLINED');
+  await expect(reference.getByText('011000', { exact: true })).toBeVisible();
+  await expect(window.getByLabel('Monto de prueba')).toHaveValue('');
+  await mkdir('artifacts', { recursive: true });
+  await window.evaluate(() => globalThis.window.scrollTo(0, 0));
+  await window.screenshot({ path: 'artifacts/transaction-workspace.png' });
+  await app?.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setSize(1040, 760));
+  await expect
+    .poll(() =>
+      window.evaluate(() => document.documentElement.scrollWidth <= globalThis.window.innerWidth),
+    )
+    .toBe(true);
+  await window.screenshot({ path: 'artifacts/transaction-workspace-small.png' });
+  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
+  await expect(window.getByLabel('Perfil ATM', { exact: true })).toHaveValue('');
+  await expect(window.getByLabel('Transacción', { exact: true })).toHaveValue('BALANCE');
+  await expect(window.getByLabel('Monto de prueba')).toHaveCount(0);
+  await expect(window.getByText('Envío bloqueado · QA')).toHaveCount(0);
+  await expect(window.getByLabel('Perfil ATM', { exact: true })).toBeDisabled();
+  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
+  await expect(window.getByText('Envío bloqueado · PREPROD')).toBeVisible();
+  await expect(window.locator('.transaction-empty-row')).toContainText('Aún no hay ejecuciones');
+  await window.getByLabel('Ambiente', { exact: true }).selectOption('QA');
+  await window.getByLabel('Transacción', { exact: true }).selectOption('TIMEOUT_REVERSAL');
+  await expect(window.getByLabel('Cuenta', { exact: true })).toBeDisabled();
+  await expect(reference.getByText('TrnCode CMS', { exact: true })).toHaveCount(0);
+  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
+  await expect(
+    window.getByText('Transacción original y reglas de reverso', { exact: true }),
+  ).toBeVisible();
+  await expect(window.locator('.transaction-steps [aria-current="step"]')).toHaveCount(1);
+});
+
+test('preparación rechaza ATM editado y recupera el contexto al recargar', async () => {
+  const window = await launch();
+  await createTestEntity(window);
+  await createTestAtm(window, 'ATM para concurrencia');
+  await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
+  await window
+    .getByLabel('Perfil ATM', { exact: true })
+    .selectOption({ label: 'ATM para concurrencia · Borrador' });
+  const changed = await window.evaluate(async () => {
+    const api = globalThis.window.desktop!;
+    const catalog = await api.getCatalog('QA');
+    if (!catalog.ok) throw new Error('Catalog unavailable');
+    const atm = catalog.value.atms[0]!;
+    return api.saveAtm({
+      environment: 'QA',
+      id: atm.id,
+      revision: atm.revision,
+      values: {
+        alias: 'ATM actualizado',
+        entityId: atm.entityId,
+        terminalId: atm.terminalId,
+        acquirerId: atm.acquirerId,
+        active: true,
+      },
+    });
+  });
+  expect(changed).toMatchObject({ ok: true });
+  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
+  await expect(window.getByRole('alert')).toContainText('El ATM cambió');
+  await expect(window.getByText('Envío bloqueado · QA')).toHaveCount(0);
+  await window.getByRole('button', { name: 'Recargar perfiles' }).click();
+  await expect(window.getByRole('alert')).toHaveCount(0);
+  await expect(window.getByLabel('Perfil ATM', { exact: true })).toHaveValue('');
+  await window
+    .getByLabel('Perfil ATM', { exact: true })
+    .selectOption({ label: 'ATM actualizado · Borrador' });
+  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
+  await expect(window.getByText('Envío bloqueado · QA')).toBeVisible();
+});
+
 test('CRUD de entidades y ATM, separación de ambientes, reinicio y eliminación protegida', async () => {
   test.setTimeout(60_000);
   let window = await launch();
