@@ -3,6 +3,7 @@ import type { ElectronApplication, Page } from '@playwright/test';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import type { Environment } from '../../packages/domain/src/index';
 import { createServer } from 'vite';
 import { removeTestDirectory } from '../helpers/temporary-directory';
@@ -354,6 +355,88 @@ test('fallo al guardar un caso exige recargar antes de reintentar', async () => 
     window.getByRole('button', { name: 'Guardar como caso', exact: true }),
   ).toBeDisabled();
   await expect(window.getByLabel('Ambiente', { exact: true })).toBeEnabled();
+});
+
+test('una recarga fallida de casos bloquea la lista anterior hasta recuperar la base', async () => {
+  const window = await launch();
+  await createTestEntity(window);
+  await createTestAtm(window, 'ATM de recuperación de casos');
+  await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
+  await window
+    .getByLabel('Perfil ATM', { exact: true })
+    .selectOption({ label: 'ATM de recuperación de casos · Borrador' });
+  await window.getByRole('button', { name: 'Guardar como caso', exact: true }).click();
+  const dialog = window.getByRole('dialog');
+  await dialog.getByLabel('Nombre del caso').fill('Caso de recuperación');
+  await dialog.getByRole('button', { name: 'Guardar caso', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  const lock = new DatabaseSync(join(directory, 'catalogs.sqlite'));
+  try {
+    lock.exec('BEGIN EXCLUSIVE');
+    await window.getByRole('button', { name: 'Casos guardados (1)', exact: true }).click();
+    await expect(dialog.getByRole('alert')).toContainText('ocupado');
+    await expect(
+      dialog.getByRole('button', { name: 'Cargar Caso de recuperación', exact: true }),
+    ).toBeDisabled();
+    await expect(
+      dialog.getByRole('button', { name: 'Eliminar caso Caso de recuperación', exact: true }),
+    ).toBeDisabled();
+    lock.exec('ROLLBACK');
+    await dialog.getByRole('button', { name: 'Recargar casos', exact: true }).click();
+    await expect(dialog.getByRole('alert')).toHaveCount(0);
+    await expect(
+      dialog.getByRole('button', { name: 'Cargar Caso de recuperación', exact: true }),
+    ).toBeEnabled();
+    await dialog.getByRole('button', { name: 'Cargar Caso de recuperación', exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect(window.getByLabel('Perfil ATM', { exact: true })).not.toHaveValue('');
+  } finally {
+    lock.close();
+  }
+});
+
+test('una entrada sensible rechazada no guarda silenciosamente el valor previo de una entidad', async () => {
+  const window = await launch();
+  await createTestEntity(window);
+  await window.getByRole('button', { name: 'Editar TEST-E2E', exact: true }).click();
+  await window.getByLabel('Código de entidad').fill('0'.repeat(16));
+  await expect(window.getByRole('alert')).toContainText('No incluyas datos de tarjeta');
+  await expect(window.getByLabel('Código de entidad')).toHaveValue('');
+  await window.getByRole('button', { name: 'Guardar borrador', exact: true }).click();
+  const result = await window.evaluate(() => globalThis.window.desktop!.getCatalog('QA'));
+  expect(result).toMatchObject({
+    ok: true,
+    value: { entities: [{ code: 'TEST-E2E', revision: 1 }], audit: [{ action: 'CREATED' }] },
+  });
+  await window.getByLabel('Código de entidad').fill('TEST-CORREGIDO');
+  await window.getByRole('button', { name: 'Guardar borrador', exact: true }).click();
+  await expect(
+    window.getByRole('button', { name: 'Editar TEST-CORREGIDO', exact: true }),
+  ).toBeVisible();
+});
+
+test('Escape no cierra una eliminación de catálogo pendiente y permite cancelar después del timeout', async () => {
+  const window = await launch();
+  await createTestEntity(window);
+  await window.getByRole('button', { name: 'Eliminar TEST-E2E', exact: true }).click();
+  const dialog = window.getByRole('dialog');
+  const lock = new DatabaseSync(join(directory, 'catalogs.sqlite'));
+  try {
+    lock.exec('BEGIN IMMEDIATE');
+    await dialog.getByRole('button', { name: 'Confirmar eliminación', exact: true }).click();
+    await window.keyboard.press('Escape');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('alert')).toContainText('ocupado');
+    lock.exec('ROLLBACK');
+    await dialog.getByRole('button', { name: 'Cancelar', exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+    await window.getByRole('button', { name: 'Recargar', exact: true }).click();
+    await expect(
+      window.getByRole('button', { name: 'Editar TEST-E2E', exact: true }),
+    ).toBeVisible();
+  } finally {
+    lock.close();
+  }
 });
 
 test('pantalla del mockup: contexto ATM, catálogo CMS, monto y cambio de ambiente', async () => {

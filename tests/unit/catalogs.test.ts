@@ -30,6 +30,18 @@ describe('validación de catálogos', () => {
       acquirerId: 'Test-Acquirer',
     });
   });
+  it.each([' ', '-', '\u00a0'])(
+    'rechaza secuencias sensibles separadas por %j en todos los textos administrativos',
+    (separator) => {
+      const sensitive = Array(4).fill('0'.repeat(4)).join(separator);
+      for (const field of ['code', 'name']) {
+        expect(parseEntityValues({ ...entity, [field]: sensitive })).toBeUndefined();
+      }
+      for (const field of ['alias', 'terminalId', 'acquirerId']) {
+        expect(parseAtmValues({ ...atm, [field]: sensitive })).toBeUndefined();
+      }
+    },
+  );
   it.each(['COONECTA', 'BANRED', 'EXTERNAL'])(
     'admite la red %s seleccionada explícitamente',
     (networkType) => {

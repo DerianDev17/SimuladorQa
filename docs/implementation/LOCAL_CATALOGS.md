@@ -33,6 +33,14 @@ el editor y muestra lo que efectivamente quedó guardado; un timeout no cancela 
 que ya se haya confirmado. Una base corrupta se conserva y produce un error seguro; el shell
 y las preferencias siguen funcionando. Cerrar la app termina el Worker y libera la base.
 
+La validación rechaza secuencias de 12 o más dígitos también cuando están separadas
+por espacios (incluidos espacios no separables) o guiones. Se aplica a entidades,
+ATM y casos en UI, IPC y lectura de SQLite. No cambia los formatos ISO pendientes.
+Una entrada rechazada deja vacío el campo editado y requiere completarlo de nuevo;
+no conserva silenciosamente el valor anterior para guardarlo. Escape no cierra el
+diálogo de eliminación mientras hay una operación pendiente; vuelve a estar
+disponible cuando llega su respuesta, incluso si termina en timeout.
+
 ## Alcance pendiente
 
 Guardar un perfil **DRAFT** no valida los campos ISO ni habilita envío. El panel transaccional
@@ -53,5 +61,7 @@ como **TODO-DATA ENTITY-CLASSIFICATION** y se solicitó validación al usuario.
 - Rollback completo si falla auditoría, queries parametrizadas y schema futuro/corrupto conservado.
 - Error de arranque/bloqueo/timeout del Worker sin filtrar contenido; recuperación al reconsultar.
 - E2E Electron comprueba formularios, ambientes, reinicio, conflicto concurrente y corrupción.
+- Regresión de secuencias sensibles con separadores, edición rechazada sin guardar
+  el valor anterior y Escape durante eliminación bajo bloqueo SQLite real.
 
 Diseño y límites: `docs/adr/ADR-004-LOCAL-CATALOGS.md`.

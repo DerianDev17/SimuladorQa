@@ -68,6 +68,7 @@ export function CaseLibrary({
     await refresh();
   }
   async function refresh(): Promise<CatalogSnapshot | undefined> {
+    setNeedsReload(true);
     if (!draft) return undefined;
     setBusy(true);
     setError('');
@@ -110,6 +111,7 @@ export function CaseLibrary({
     setMessage('Caso guardado como borrador local. No se ha ejecutado ninguna transacción.');
   }
   async function load(saved: SavedCase) {
+    if (busy || needsReload) return;
     const latest = await refresh();
     if (!latest) return;
     const current = latest.cases.find((item) => item.id === saved.id);
@@ -271,14 +273,14 @@ export function CaseLibrary({
                     </div>
                     <div className="catalog-actions">
                       <button
-                        disabled={busy}
+                        disabled={busy || needsReload}
                         aria-label={`Cargar ${saved.name}`}
                         onClick={() => void load(saved)}
                       >
                         Cargar
                       </button>
                       <button
-                        disabled={busy}
+                        disabled={busy || needsReload}
                         aria-label={`Eliminar caso ${saved.name}`}
                         onClick={() => {
                           setError('');

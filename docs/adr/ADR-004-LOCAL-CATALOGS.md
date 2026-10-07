@@ -16,7 +16,7 @@ Referencia técnica: [API SQLite de Node](https://nodejs.org/download/release/la
 - Entidad: código, nombre, red COONECTA/BANRED/EXTERNAL y active.
 - ATM: alias, entidad, ambiente, terminalId, acquirerId y active.
 - Estado constante DRAFT: guardar no certifica el perfil ni desbloquea ISO.
-- Límites de almacenamiento/UI: código 64 caracteres, nombres/alias/identificadores 128, sin controles ni secuencias numéricas de 12 o más dígitos que puedan contener PAN. No son restricciones ISO ni se rellenan, convierten o formatean identificadores del proveedor.
+- Límites de almacenamiento/UI: código 64 caracteres, nombres/alias/identificadores 128, sin controles ni secuencias numéricas de 12 o más dígitos que puedan contener PAN, incluso con espacios o guiones entre dígitos. No son restricciones ISO ni se rellenan, convierten o formatean identificadores del proveedor.
 - Código de entidad único exacto; terminalId único exacto dentro del ambiente. Son claves administrativas del catálogo, pendientes de revisión si los datos oficiales exigen otra organización.
 - No se elimina una entidad referenciada por ATM. No se crea ni activa un ATM bajo una entidad inactiva. Desactivar una entidad conserva sus perfiles, pero los excluye de selección funcional.
 - Revisión entera creciente para rechazar edición/eliminación obsoleta; el cliente debe recargar después de conflicto/timeout antes de reintentar.

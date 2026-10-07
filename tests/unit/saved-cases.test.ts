@@ -58,6 +58,7 @@ describe('casos documentales locales', () => {
     '0'.repeat(16),
     '0000 0000 0000 0000',
     '0000-0000-0000-0000',
+    Array(4).fill('0'.repeat(4)).join('\u00a0'),
     'PIN 1234',
     'token=private',
     'track 2: private',

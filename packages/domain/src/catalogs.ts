@@ -87,7 +87,7 @@ function hasKeys(value: Record<string, unknown>, keys: readonly string[]): boole
 // Límites administrativos y protección de datos; no valida formatos ISO.
 export function isRestrictedCatalogText(value: string): boolean {
   return (
-    /\d{12,}/.test(value) ||
+    /(?:\d[\s-]*){12,}/.test(value) ||
     Array.from(value).some(
       (character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127,
     )

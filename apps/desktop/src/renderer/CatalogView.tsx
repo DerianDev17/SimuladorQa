@@ -129,15 +129,17 @@ export function CatalogView({
     value: string,
   ) {
     if (!editor) return;
-    if (isRestrictedCatalogText(value)) {
-      setFormError('No incluyas datos de tarjeta, secretos ni caracteres de control.');
-      return;
-    }
-    setFormError('');
+    const restricted = isRestrictedCatalogText(value);
+    setFormError(
+      restricted
+        ? 'No incluyas datos de tarjeta, secretos ni caracteres de control. Completa de nuevo el campo.'
+        : '',
+    );
+    const accepted = restricted ? '' : value;
     setEditor(
       entitiesView
-        ? { ...editor, entity: { ...editor.entity, [field]: value } }
-        : { ...editor, atm: { ...editor.atm, [field]: value } },
+        ? { ...editor, entity: { ...editor.entity, [field]: accepted } }
+        : { ...editor, atm: { ...editor.atm, [field]: accepted } },
     );
   }
 
@@ -608,7 +610,10 @@ export function CatalogView({
       <dialog
         className="catalog-dialog"
         ref={dialog}
-        onCancel={() => setDeleting(undefined)}
+        onCancel={(event) => {
+          event.preventDefault();
+          if (!loading) setDeleting(undefined);
+        }}
         aria-labelledby="delete-title"
       >
         <h2 id="delete-title">Eliminar {entitiesView ? 'entidad' : 'perfil ATM'}</h2>

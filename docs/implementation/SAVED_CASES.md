@@ -37,6 +37,13 @@ ofrece **Revisar casos guardados** para comprobar si un timeout dejo un caso
 persistido antes de crear otra copia. No se recrea una base corrupta ni se
 devuelve contenido de casos manipulados externamente que no pase la validacion.
 
+Toda recarga de casos invalida temporalmente la disponibilidad de la lista.
+Si falla por bloqueo de SQLite, timeout o servicio no disponible, los casos
+anteriores pueden seguir visibles pero Cargar/Eliminar permanecen deshabilitados.
+Solo una consulta exitosa habilita esas acciones; cerrar y reabrir Guardar caso
+no evita la recarga necesaria. La regresion Electron usa un bloqueo exclusivo
+real de SQLite y comprueba recuperacion al liberar la base y pulsar Recargar casos.
+
 ## Verificacion
 
 `tests/unit/saved-cases.test.ts`: validacion, cinco flujos, referencias y estados

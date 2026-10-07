@@ -29,11 +29,7 @@ export function parseCaseValues(value: unknown): CaseValues | undefined {
   )
     return undefined;
   const name = catalogText(value.name, 80);
-  if (
-    name &&
-    (/(?:\d[ -]*){12,}/.test(name) ||
-      /\b(?:PIN|CVV|CVC|ZPK|PASSWORD|TOKEN|SECRET|TRACK\s*2)\s*[:=\d]/i.test(name))
-  )
+  if (name && /\b(?:PIN|CVV|CVC|ZPK|PASSWORD|TOKEN|SECRET|TRACK\s*2)\s*[:=\d]/i.test(name))
     return undefined;
   const draft = parseDraftRequest(value.draft);
   return name && draft ? { name, draft } : undefined;

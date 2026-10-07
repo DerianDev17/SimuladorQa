@@ -269,20 +269,22 @@ describe('catálogos SQLite reales', () => {
     expect(JSON.stringify(result)).not.toContain('private-secret');
     expect(value(execute({ kind: 'list', environment: 'QA' })).entities).toEqual([]);
   });
-  it('bloquea contenido sensible introducido externamente en una base persistida', () => {
-    const entity = createEntity();
-    const connection = new DatabaseSync(file);
-    try {
-      connection
-        .prepare('UPDATE entities SET name = ? WHERE id = ?')
-        .run('0'.repeat(16), entity.id);
-    } finally {
-      connection.close();
-    }
-    const result = execute({ kind: 'list', environment: 'QA' });
-    expect(result).toMatchObject({ ok: false, error: { code: 'STORAGE_UNAVAILABLE' } });
-    expect(JSON.stringify(result)).not.toContain('0'.repeat(16));
-  });
+  it.each(['', ' ', '-', '\u00a0'])(
+    'bloquea contenido sensible introducido externamente en una base persistida (separador %j)',
+    (separator) => {
+      const entity = createEntity();
+      const sensitive = Array(4).fill('0'.repeat(4)).join(separator);
+      const connection = new DatabaseSync(file);
+      try {
+        connection.prepare('UPDATE entities SET name = ? WHERE id = ?').run(sensitive, entity.id);
+      } finally {
+        connection.close();
+      }
+      const result = execute({ kind: 'list', environment: 'QA' });
+      expect(result).toMatchObject({ ok: false, error: { code: 'STORAGE_UNAVAILABLE' } });
+      expect(JSON.stringify(result)).not.toContain(sensitive);
+    },
+  );
   it('rechaza schemas futuros sin recrear la base', () => {
     const connection = new DatabaseSync(file);
     try {
