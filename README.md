@@ -44,6 +44,8 @@ Ver `docs/implementation/LOCAL_CATALOGS.md` para los catalogos locales y la conf
 - `docs/product/PRODUCT_SPEC.md`: especificacion funcional.
 - `docs/product/MVP1.md`: alcance MVP 1.
 - `docs/INPUT_CHECKLIST.md`: informacion que falta subir.
+- `docs/protocols/EXTREME_MEDIATOR_CMS_REVIEW.md`: reglas CMS recibidas, matriz MVP y diferencias pendientes con ATM.
+- `docs/mockups/MOCKUP_REVIEW.md`: revision del mockup y criterios para la pantalla de transacciones.
 - `docs/BACKLOG.md`: backlog inicial.
 - `docs/testing/TEST_STRATEGY.md`: estrategia QA.
 - `docs/security/SECURITY.md`: controles de seguridad.

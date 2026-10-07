@@ -1,5 +1,9 @@
 # TCP Framing
 
+El manual Extreme Mediator CMS v3.6 describe API REST/XML Mediator-Core (p. 4).
+No confirma el VLI/header ni autoriza el endpoint TCP de referencia siguiente.
+Ver [revision CMS](EXTREME_MEDIATOR_CMS_REVIEW.md). No combinar ambos transportes.
+
 ## Base conocida
 
 Material previo indica como referencia inicial:

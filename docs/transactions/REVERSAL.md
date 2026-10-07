@@ -3,6 +3,17 @@
 ## Objetivo
 Generar un reverso asociado a una transaccion original.
 
+## Evidencia recibida: Extreme Mediator CMS v3.6
+
+MsgType 2 identifica reverso en XML y Reverse es otro campo booleano (pp. 17, 19).
+La tabla de p. 23 lista 0400/0410 y 0420/0421/0430, sin elegir una familia para
+Coonecta. ValorParcial se describe como valor a restar del ValueTrn original para
+un reverso parcial (p. 17); no es una regla de construccion F90.
+
+Pendientes MsgType/Reverse, MTI por canal, campos originales, secuencias y
+duplicados. La API de reverso Core no es un metodo de observacion read-only.
+Ver [revision y pendientes](../protocols/EXTREME_MEDIATOR_CMS_REVIEW.md).
+
 ## Requisitos
 - conservar snapshot de datos originales;
 - construir F90 segun especificacion real;
