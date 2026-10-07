@@ -84,6 +84,7 @@ Detalle y pruebas: `docs/implementation/TRANSACTION_PREPARATION.md`.
 - [x] Matriz de evidencia para los cinco flujos: `docs/protocols/EXTREME_MEDIATOR_CMS_REVIEW.md`.
 - [x] Prioridad de 301000/302000 del documento sobre 310000 del mockup: usuario indico seguir el documento el 2026-10-06. No valida por si sola el formato de la trama ATM.
 - [x] Filas/captura USR_RelationEntity de entidad 205 CB Cooperativa, canales 1/21, destino HTTPS QA y timeout observado 20000; entrada por Switch/SmartVista confirmada, contrato pendiente.
+- [x] Par XML de MDT_Message.msgRequest/msgResponse aportado para retiro de USD 10, entidad 205/canal 1, con respuesta que reporta exito; etapas de registro, cambio de TraceId, fecha contable y contrato pendientes. Ver `docs/core/MEDIATOR_ENTITY_205_MESSAGE_SAMPLE.md`. No es fixture ATM aprobado ni la prueba de USD 20.
 - [x] Diez PCAP recibidos e inspeccionados; matriz y metodo en `docs/protocols/PCAP_REVIEW.md`.
 - [x] Encapsulado observado del enlace 4946 confirmado en 218 mensajes: BE16 inclusivo, header 12, MTI ASCII y bitmap ASCII hex de 128 bits.
 - [ ] Validacion del ambiente, roles de enlaces y mapeo de capturas a cada caso MVP.

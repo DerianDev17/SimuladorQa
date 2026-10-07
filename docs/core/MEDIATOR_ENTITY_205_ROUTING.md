@@ -62,8 +62,11 @@ datos sensibles en la app.
   no hay envio directo al Core.
 - CMS-TRANSPORT: metodo, ruta/operacion exacta, Content-Type, cabeceras,
   autenticacion, TLS y unidad/semantica de entEndPointTimeOut.
-- CMS-XML-CONTRACT: request/response emparejados y sanitizados o contrato validado
-  del servicio, incluyendo errores. La ruta por si sola no define la envoltura.
+- CMS-XML-CONTRACT: recibido par XML aportado para retiro de USD 10, con limites
+  y diferencias en [muestra de entidad 205](MEDIATOR_ENTITY_205_MESSAGE_SAMPLE.md).
+  Origen MDT_Message.msgRequest/msgResponse confirmado por el usuario; faltan
+  etapas de registro, contrato validado del servicio y casos de error.
+  La ruta por si sola no define la envoltura.
 - MEDIATOR-ENTITY-CHANNEL: alcance y significado de canales 1/21 y mapeo a
   perfiles locales. No escoger canal 21 automaticamente para una transaccion ATM.
 

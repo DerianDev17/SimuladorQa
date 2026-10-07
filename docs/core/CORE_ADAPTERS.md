@@ -30,6 +30,14 @@ enlace Mediator aportados despues: [evidencia de red](../implementation/SWITCH_N
 Faltan acceso desde la PC al PID, contrato ISO/framing y HTTP/XML/unidad del timeout Core;
 no se llama al servicio ni se altera la configuracion del servidor.
 
+El usuario aporto despues un par XML de retiro de USD 10 para entidad 205,
+canal 1, con respuesta que reporta exito. Se documentaron cambio de TraceId,
+fecha contable distinta y variantes de campos sin copiar datos personales.
+Ver [muestra aportada](MEDIATOR_ENTITY_205_MESSAGE_SAMPLE.md). El usuario confirmo
+origen MDT_Message.msgRequest/msgResponse; las etapas de registro, reglas de
+correlacion y contrato de transporte siguen pendientes;
+no es una ejecucion del simulador ni sustituye la trama ATM de USD 20 solicitada.
+
 ## Principios
 
 Se inspecciono el esquema SQL Server Mediator PREPROD con SELECT de metadatos y

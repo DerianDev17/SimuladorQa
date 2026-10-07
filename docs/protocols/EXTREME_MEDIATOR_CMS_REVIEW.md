@@ -23,6 +23,14 @@ Estado: **evidencia documental recibida para la interfaz Mediator/Core**.
 No habilita envio ATM, debitos directos al Core, PIN/HSM ni golden samples.
 Los adaptadores Core del MVP siguen siendo observadores de solo lectura.
 
+Actualizacion 2026-10-07: el usuario aporto un par XML de retiro de USD 10
+para entidad 205/canal 1, extraido de MDT_Message.msgRequest/msgResponse.
+Aporta campos/resultados observados y diferencias
+de TraceId, raiz de respuesta, importes y fecha contable. Ver
+[revision de la muestra](../core/MEDIATOR_ENTITY_205_MESSAGE_SAMPLE.md).
+Las etapas de registro y el contrato siguen pendientes; no habilita envio ATM
+ni acredita la prueba solicitada de USD 20.
+
 Decision del usuario el 2026-10-06: **seguir lo que dice el documento** ante la
 diferencia de saldo con el mockup. El catalogo funcional tomara 301000 para ahorros
 y 302000 para corriente; 310000 de la imagen queda descartado como referencia.
