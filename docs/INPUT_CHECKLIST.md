@@ -2,10 +2,11 @@
 
 ## TODO-DATA activos de la primera entrega
 
-- **TODO-DATA ISO-SPEC**: faltan ContextoISO.xml y especificacion ATM aprobada. Bloquea construir/parsear ISO, PIN/HSM y reglas de negocio.
+- **TODO-DATA ISO-SPEC**: faltan ContextoISO.xml y especificacion ATM aprobada. Bloquea construir/parsear campos de negocio ISO, PIN/HSM y reglas de negocio; la envolvente observada se verifica offline sin interpretar esos campos.
 - **TODO-DATA CMS-ATM-MAPPING / CMS-XML-CONTRACT / CMS-RESULT-MAPPING**: recibido Extreme Mediator CMS v3.6 para XML/REST Mediator-Core. Falta validar su correspondencia con ATM, las diferencias tablas/ejemplos y los codigos por canal; no sustituye ISO-SPEC. Conflictos y solicitudes registrados en `docs/protocols/EXTREME_MEDIATOR_CMS_REVIEW.md`.
 - **TODO-DATA CMS-REVERSAL / CMS-CORRELATION / CMS-TRANSPORT / CMS-POS-MAPPING**: el manual lista familias MTI y campos Core, pero faltan la seleccion del reverso, reglas de correlacion, contrato REST y resolucion de diferencias POS. Bloquean solo sus adaptadores/reglas dependientes.
-- **TODO-DATA GOLDEN-SAMPLES**: faltan request/response y PCAP validados de cada flujo MVP. Bloquea validaciones byte a byte, codigos de respuesta y reversos.
+- **TODO-DATA GOLDEN-SAMPLES / PCAP-CASE-MAPPING**: recibidos diez PCAP, con 218 envolventes BANRED reconstruidas byte a byte. Falta identificar/aprobar request/response de cada flujo MVP y correlacionar originales/reversos. Bloquea validacion de campos, codigos de respuesta y resultados de negocio. Ver `docs/protocols/PCAP_REVIEW.md`.
+- **TODO-DATA PCAP-LINK-PROFILES**: BE16 inclusivo/header/bitmap confirmados solo para el enlace capturado 4946. Faltan ambiente, roles/diccionario de los otros enlaces y explicacion de solapamientos distintos. No se aplica este perfil automaticamente a todos los ATM.
 - **TODO-DATA ENVIRONMENT**: faltan endpoints autorizados QA/PREPROD, framing, TLS y timeouts por escenario. Bloquea conectar/enviar TCP.
 - **TODO-DATA PROFILES**: faltan ATM y tarjeta completos/validados. Bloquea configurar ejecuciones reales; el shell desktop y la seleccion de ambiente funcionan de forma independiente.
 - **TODO-DATA AMOUNT-RULES**: faltan moneda, limites, monto minimo/maximo, denominaciones y reglas por cuenta/escenario para retirar. El borrador solo valida la sintaxis decimal del manual; no aprueba elegibilidad financiera.
@@ -42,6 +43,10 @@ datos/evidencia externos y solo se marcaran al recibirlos y validarlos.
 - [x] Conexion autenticada e inspeccion de metadatos de Mediator PREPROD, con excepcion TLS puntual autorizada.
 - [x] Compatibilidad de Terminal ID/codigo en revision Main, sin truncado ni extrapolar el esquema a QA.
 - [x] Credencial pass.txt y artefactos privados excluidos de Git; sin acceso desde Renderer.
+- [x] Inventario de los diez PCAP, hashes y reporte sanitizado; originales excluidos de Git.
+- [x] Framing incremental BE16 inclusivo y codec de envolvente BANRED con bitmap de 128 bits.
+- [x] Reconstruccion offline byte a byte de 218 mensajes; errores de longitud/fuente incompleta controlados.
+- [x] Vista de evidencia de capturas en transacciones sin exponer campos, RAW ni endpoints.
 
 Detalle y pruebas: `docs/implementation/TRANSACTION_PREPARATION.md`.
 
@@ -71,6 +76,9 @@ Detalle y pruebas: `docs/implementation/TRANSACTION_PREPARATION.md`.
 - [x] Manual local Extreme Mediator CMS v3.6 (24 paginas, revision 13-04-2023).
 - [x] Matriz de evidencia para los cinco flujos: `docs/protocols/EXTREME_MEDIATOR_CMS_REVIEW.md`.
 - [x] Prioridad de 301000/302000 del documento sobre 310000 del mockup: usuario indico seguir el documento el 2026-10-06. No valida por si sola el formato de la trama ATM.
+- [x] Diez PCAP recibidos e inspeccionados; matriz y metodo en `docs/protocols/PCAP_REVIEW.md`.
+- [x] Encapsulado observado del enlace 4946 confirmado en 218 mensajes: BE16 inclusivo, header 12, MTI ASCII y bitmap ASCII hex de 128 bits.
+- [ ] Validacion del ambiente, roles de enlaces y mapeo de capturas a cada caso MVP.
 - [ ] Mapeo aprobado ATM ISO -> Mediator XML por escenario/cuenta/canal.
 - [ ] Contrato XML aprobado o XSD y export request/response emparejado, sin errores de ejemplo.
 - [ ] Mapeo de RetCode/CodigoProceso/MappedRespCode a RC ATM; tratamiento parcial.

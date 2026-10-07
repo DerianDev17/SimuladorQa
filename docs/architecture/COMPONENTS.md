@@ -14,6 +14,11 @@ Renderer recibe los metadatos del catalogo y un DraftReview siempre BLOCKED.
 DestinationInspector agrega comparacion de compatibilidad con evidencia guardada;
 MediatorSchemaInspector implementa ese puerto en Main solo para PREPROD. No abre
 conexion remota ni hereda la excepcion TLS de la inspeccion puntual.
+CaptureEvidenceCatalog inyecta en Main los metadatos sanitizados del analisis
+offline; el Renderer recibe conteos/fuentes, sin RAW ni endpoints. El codec
+InclusiveBe16Framing (infraestructura) y CapturedBanredEnvelope (adaptador del
+perfil observado) no acceden a Electron, sockets ni BD. La herramienta local
+inspect-pcaps valida el pipeline y conserva payload solo en memoria.
 El dominio cataloga escenarios/transacciones, valida contexto y sus requisitos
 pendientes; no implementa el motor transaccional descrito mas abajo.
 
@@ -28,6 +33,11 @@ flowchart LR
   CMS[CmsV36Catalog: metadatos del manual] -. implementa .-> OperationPort
   Main --> DestinationPort[DestinationInspector]
   Mediator[MediatorSchemaInspector: esquema observado PREPROD] -. implementa .-> DestinationPort
+  Main --> CapturePort[CaptureEvidenceCatalog]
+  Captures[CapturedEvidenceCatalog: metadatos sanitizados PCAP] -. implementa .-> CapturePort
+  Offline[Herramienta local: inspeccion PCAP] --> Framing[InclusiveBe16Framing]
+  Framing --> Envelope[CapturedBanredEnvelope: cuerpo opaco]
+  Offline -. metadatos revisados .-> Captures
 ```
 
 El resto de componentes sigue planificado. Ver `../implementation/BOOTSTRAP.md`

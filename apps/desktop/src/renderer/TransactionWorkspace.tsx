@@ -21,6 +21,7 @@ import { Icon } from './Icon';
 import { localDraftChecks } from './draft-feedback';
 import { DraftSummary } from './DraftSummary';
 import { DestinationCompatibilityView } from './DestinationCompatibilityView';
+import { CaptureEvidenceView } from './CaptureEvidenceView';
 
 interface Props {
   snapshot: AppSnapshot | undefined;
@@ -573,6 +574,7 @@ export function TransactionWorkspace({
               </p>
             )}
           </div>
+          {snapshot?.captureEvidence && <CaptureEvidenceView report={snapshot.captureEvidence} />}
           {original && (
             <div className="document-note">
               <Icon name="shield" size={19} />

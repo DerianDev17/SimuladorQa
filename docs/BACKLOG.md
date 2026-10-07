@@ -31,11 +31,15 @@ un borrador no completa esos requisitos.
 - [ ] import CSV tarjetas
 
 ## Epic 4 - ISO/TCP
+- [x] inventario privado de los diez PCAP y reporte sanitizado con hashes/UUID/UTC
+- [x] framing offline del enlace BANRED capturado: BE16 inclusivo, fragmentacion y concatenacion
+- [x] codec de envolvente observada: cabecera/MTI/bitmap de 128 bits y cuerpo opaco
+- [x] reconstruccion byte a byte de 218 mensajes, sin exportar campos sensibles
 - [ ] field dictionary ATM aprobado
-- [ ] parser
-- [ ] builder
-- [ ] bitmap
-- [ ] framing
+- [ ] parser de campos de negocio conforme al diccionario aprobado
+- [ ] builder de campos de negocio/templates por flujo
+- [ ] variantes de bitmap de otros perfiles aprobados
+- [ ] perfiles de framing aprobados para todos los escenarios/ambientes
 - [ ] persistent connection
 - [ ] timeout/reconnect de transporte ATM
 
@@ -64,6 +68,7 @@ Ver `docs/implementation/TRANSACTION_PREPARATION.md`. Revisar el borrador no
 genera una transaccion ni se cuenta como un flujo MVP aprobado.
 
 ## Epic 6 - Observability
+- [x] evidencia de las diez capturas visible en transacciones, con conteos MTI y limites del analisis
 - [x] inspeccion autenticada de esquema Mediator PREPROD y matriz de evidencia
 - [x] compatibilidad de destino en revision Main con esquema observado, sin truncado
 - [ ] cuenta de solo lectura y TLS aprobado para Observer permanente

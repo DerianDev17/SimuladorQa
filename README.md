@@ -29,6 +29,9 @@ La preparacion incluye plantillas documentales, validacion de monto, resumen de
 revision y borrador conservado al navegar durante la sesion.
 La revision PREPROD compara Terminal ID/codigo con el esquema inspeccionado de
 Mediator y muestra incompatibilidades sin truncar perfiles; no es un Observer conectado.
+Diez PCAP inspeccionados aportan un codec offline de encapsulado BANRED y una
+vista de evidencia. 218 mensajes se reconstruyen byte a byte; los campos de
+negocio y otros enlaces requieren diccionario y validacion de casos.
 
 Requiere Windows y Node.js 22.20 o una LTS posterior compatible.
 
@@ -54,6 +57,7 @@ de `docs/INPUT_CHECKLIST.md`; la evidencia QA pendiente permanece sin marcar.
 - `docs/product/MVP1.md`: alcance MVP 1.
 - `docs/INPUT_CHECKLIST.md`: informacion que falta subir.
 - `docs/protocols/EXTREME_MEDIATOR_CMS_REVIEW.md`: reglas CMS recibidas, matriz MVP y diferencias pendientes con ATM.
+- `docs/protocols/PCAP_REVIEW.md`: inventario de capturas, encapsulado confirmado, verificacion y pendientes.
 - `docs/mockups/MOCKUP_REVIEW.md`: revision del mockup y criterios para la pantalla de transacciones.
 - `docs/BACKLOG.md`: backlog inicial.
 - `docs/testing/TEST_STRATEGY.md`: estrategia QA.

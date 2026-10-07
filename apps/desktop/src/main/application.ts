@@ -19,6 +19,7 @@ import type { CatalogStore } from './catalog-port';
 import { parseDraftRequest, reviewDraft } from '../../../../packages/domain/src/transaction-draft';
 import type { OperationCatalog } from '../../../../packages/domain/src/transaction-draft';
 import type { DestinationInspector } from '../../../../packages/domain/src/destination-compatibility';
+import type { CaptureEvidenceCatalog } from '../../../../packages/domain/src/capture-evidence';
 
 // Toda operación comparte la cola: evita perder cambios y leer un ambiente intermedio.
 export class DesktopApplication {
@@ -29,6 +30,7 @@ export class DesktopApplication {
     private readonly catalogs?: CatalogStore,
     private readonly operations?: OperationCatalog,
     private readonly destinationInspector?: DestinationInspector,
+    private readonly captureEvidence?: CaptureEvidenceCatalog,
   ) {}
 
   private serialize<T>(operation: () => Promise<T>): Promise<T> {
@@ -50,6 +52,7 @@ export class DesktopApplication {
       blockers: dataBlockers,
       audit: [...preferences.audit].reverse(),
       documentedOperations: this.operations?.entries ?? [],
+      captureEvidence: this.captureEvidence?.report ?? null,
     };
   }
 

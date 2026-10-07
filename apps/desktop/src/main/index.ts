@@ -10,6 +10,7 @@ import { isTrustedSender } from './security';
 import { WorkerCatalogStore } from './infrastructure/worker-catalog-store';
 import { CmsV36Catalog } from './adapters/cms-v36-catalog';
 import { MediatorSchemaInspector } from './adapters/mediator-schema-inspector';
+import { CapturedEvidenceCatalog } from './adapters/captured-evidence-catalog';
 
 const development = process.argv.includes('--dev');
 const rendererFile = join(__dirname, 'renderer', 'index.html');
@@ -79,6 +80,7 @@ void app
       catalogs,
       new CmsV36Catalog(),
       new MediatorSchemaInspector(),
+      new CapturedEvidenceCatalog(),
     );
     for (const channel of Object.values(channels)) {
       ipcMain.handle(channel, (event, payload: unknown) => {

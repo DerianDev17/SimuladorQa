@@ -31,3 +31,16 @@ Por escenario/ambiente:
 - max inflight messages por conexion.
 
 El motor debe hacer framing mediante estrategia configurable, no hardcodeada.
+
+## Evidencia recibida e implementacion offline
+
+Diez PCAP recibidos; cuatro contienen 218 mensajes completos del enlace 4946.
+Confirman VLI de 2 bytes big endian **incluido** en la longitud, cabecera de 12
+bytes, MTI ASCII y bitmap ASCII hex de 128 bits. `InclusiveBe16Framing` separa
+transporte de `CapturedBanredEnvelope`; soporta fragmentacion y concatenacion,
+rechaza longitud invalida y detecta fuente incompleta al finalizar.
+Ver [revision PCAP](PCAP_REVIEW.md) para hashes, variantes y comprobacion byte a byte.
+
+Estos puntos dejan de estar pendientes para ese enlace capturado. Ambiente,
+autorizacion, TLS, timeout, reconexion y los otros perfiles siguen pendientes.
+El endpoint previo es solo referencia; no se crea ninguna conexion TCP.

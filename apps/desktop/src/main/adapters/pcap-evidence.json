@@ -1,0 +1,173 @@
+{
+  "id": "b8be8605-9ba2-497a-aa05-70bd476764ec",
+  "inspectedAt": "2026-10-07T03:00:02.875Z",
+  "document": "docs/protocols/PCAP_REVIEW.md",
+  "environment": "UNCONFIRMED",
+  "profile": {
+    "name": "BANRED · enlace capturado 4946",
+    "prefixBytes": 2,
+    "byteOrder": "BIG_ENDIAN",
+    "lengthIncludesPrefix": true,
+    "headerBytes": 12,
+    "mtiEncoding": "ASCII",
+    "bitmapEncoding": "ASCII_HEX",
+    "bitmapBits": 128,
+    "minimumObservedBytes": 69,
+    "maximumObservedBytes": 664,
+    "headers": [
+      "ISO006000040",
+      "ISO006000047",
+      "ISO006000060",
+      "ISO016000040",
+      "ISO016000044",
+      "ISO016000045",
+      "ISO016000046",
+      "ISO016000047",
+      "ISO016000055"
+    ]
+  },
+  "captures": [
+    {
+      "id": "710d6857-054d-4590-9ab9-d608e3ea99da",
+      "file": "CertificacionMandatoVisa28092026.pcap",
+      "sha256": "aa375875ac5a5c226bd597cafa04886dfd311bcea42ba9a1ba07270baad68530",
+      "bytes": 231798,
+      "inspectedDirections": 6,
+      "unsupportedDirections": 6,
+      "conflictingDirections": 2,
+      "incompleteDirections": 0,
+      "messages": 0,
+      "mtiCounts": {}
+    },
+    {
+      "id": "1cf4163f-c910-45b6-b05c-6da173b0186b",
+      "file": "CertificacionMandatoVisa28092026RedExterna.pcap",
+      "sha256": "ee1a74a69d81a0b4a0006561e24c8a7412825366661efe7297b921bc7af5abef",
+      "bytes": 256467,
+      "inspectedDirections": 4,
+      "unsupportedDirections": 4,
+      "conflictingDirections": 1,
+      "incompleteDirections": 0,
+      "messages": 0,
+      "mtiCounts": {}
+    },
+    {
+      "id": "90d28785-2220-4871-9bbe-da8f351e6374",
+      "file": "CertificacionMandatoVisa28092026_BanredAuth.pcap",
+      "sha256": "70ffb1668e663eff4acd8b0eeb5c056a4f139b96052c34ecf59d998a02c1e473",
+      "bytes": 174937,
+      "inspectedDirections": 96,
+      "unsupportedDirections": 2,
+      "conflictingDirections": 1,
+      "incompleteDirections": 0,
+      "messages": 112,
+      "mtiCounts": {
+        "0200": 6,
+        "0420": 3,
+        "0210": 6,
+        "0430": 3,
+        "0800": 92,
+        "0810": 2
+      }
+    },
+    {
+      "id": "de408a7b-f1b9-4585-8dbe-bdd8f440f798",
+      "file": "CertificacionMandatoVisa28092026_Externas.pcap",
+      "sha256": "598ccf77779ddb83d747da0dea34b481542d188638f510f25cc336bfc78815ed",
+      "bytes": 15209,
+      "inspectedDirections": 4,
+      "unsupportedDirections": 4,
+      "conflictingDirections": 2,
+      "incompleteDirections": 0,
+      "messages": 0,
+      "mtiCounts": {}
+    },
+    {
+      "id": "ceb49695-c702-4f82-a3fb-193a1fdd75ad",
+      "file": "CertificacionMandatoVisa28092026_VisaLocal.pcap",
+      "sha256": "9cc13262db953675a987bda6add6068f3bfb44a59fd81c8b109ffb55687aee0e",
+      "bytes": 98343,
+      "inspectedDirections": 4,
+      "unsupportedDirections": 4,
+      "conflictingDirections": 1,
+      "incompleteDirections": 0,
+      "messages": 0,
+      "mtiCounts": {}
+    },
+    {
+      "id": "ff99714f-4d68-442e-9a68-95ea9eea9a10",
+      "file": "CertificacionMandatoVisa29092026_CRBanred.pcap",
+      "sha256": "2b6a3d5f4027ed6d6c1e1a074a1cf80fa0fbf7fc4b6167488bd40e9edc87accc",
+      "bytes": 24871,
+      "inspectedDirections": 3,
+      "unsupportedDirections": 1,
+      "conflictingDirections": 0,
+      "incompleteDirections": 0,
+      "messages": 14,
+      "mtiCounts": {
+        "0200": 5,
+        "0420": 2,
+        "0210": 5,
+        "0430": 2
+      }
+    },
+    {
+      "id": "12501b05-c7c2-4d4c-9245-80817a494ed2",
+      "file": "CertificacionMandatoVisa29092026_CRREverso.pcap",
+      "sha256": "655d2c1b9ab26b47d47995725c82dc970833665b3cfe5956b59a38e595598047",
+      "bytes": 22692,
+      "inspectedDirections": 4,
+      "unsupportedDirections": 4,
+      "conflictingDirections": 2,
+      "incompleteDirections": 0,
+      "messages": 0,
+      "mtiCounts": {}
+    },
+    {
+      "id": "6e620efc-7fc0-4a17-b59d-6a4bd910fc2a",
+      "file": "CertificacionMandatoVisa29092026_CrReverso_2.pcap",
+      "sha256": "46c8653d5040f7bf58f4dd173cf830d5b1ea68a79a3696235ed91061f72a5cc6",
+      "bytes": 153854,
+      "inspectedDirections": 6,
+      "unsupportedDirections": 2,
+      "conflictingDirections": 1,
+      "incompleteDirections": 0,
+      "messages": 66,
+      "mtiCounts": {
+        "0200": 28,
+        "0420": 2,
+        "0800": 3,
+        "0210": 28,
+        "0430": 2,
+        "0810": 3
+      }
+    },
+    {
+      "id": "ec668c7a-fc9f-4833-b73d-b96ad62ba7c9",
+      "file": "CertificacionMandatoVisa29092026_CrVisa.pcap",
+      "sha256": "d611fbc9cfe73830dcbfc042501f642b0bc1250e1ce58152c62ef2a989466711",
+      "bytes": 52635,
+      "inspectedDirections": 9,
+      "unsupportedDirections": 9,
+      "conflictingDirections": 1,
+      "incompleteDirections": 0,
+      "messages": 0,
+      "mtiCounts": {}
+    },
+    {
+      "id": "6a9a899f-6078-4962-938a-d7cb07bbfe58",
+      "file": "CertificacionMandatoVisa29092026_FondoInsuficientes.pcap",
+      "sha256": "eeb1e91433ed0f20b2262b1b8fd49cb703c4f36ff8342d08638d217a0d603302",
+      "bytes": 43064,
+      "inspectedDirections": 4,
+      "unsupportedDirections": 2,
+      "conflictingDirections": 1,
+      "incompleteDirections": 0,
+      "messages": 26,
+      "mtiCounts": {
+        "0200": 13,
+        "0210": 13
+      }
+    }
+  ]
+}

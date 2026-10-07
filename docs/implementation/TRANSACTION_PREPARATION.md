@@ -104,6 +104,11 @@ La mejora incluye `tests/unit/draft-feedback.test.ts` y comprobaciones Electron
 de plantillas, feedback/foco, navegacion conservada, resumen e invalidacion.
 `artifacts/transaction-review-summary.png` captura un contexto sintetico revisado.
 
-Pendientes: profiles aprobados/tarjetas, PIN/HSM, diccionario ATM, framing,
+La pantalla agrega evidencia sanitizada de diez PCAP y 218 envolventes verificadas
+del enlace BANRED. Es referencia del analisis offline, independiente de una
+revision de borrador; no es un mensaje generado/recibido por la app. La vista
+no cambia TrnCode CMS ni habilita RAW/HEX. Ver [revision PCAP](../protocols/PCAP_REVIEW.md).
+
+Pendientes: profiles aprobados/tarjetas, PIN/HSM, diccionario ATM, perfiles de framing aprobados por ambiente,
 fixtures request/response, mapeo ISO/CMS, codigos ATM y observadores de lectura.
 Ver [checklist de datos](../INPUT_CHECKLIST.md) y [backlog](../BACKLOG.md).

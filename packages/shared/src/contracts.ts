@@ -15,6 +15,7 @@ import type {
   DraftRequest,
   DraftReview,
 } from '../../domain/src/transaction-draft';
+import type { CaptureEvidence } from '../../domain/src/capture-evidence';
 
 export const channels = {
   snapshot: 'app:snapshot',
@@ -61,6 +62,7 @@ export interface AppSnapshot {
   blockers: readonly DataBlocker[];
   audit: readonly EnvironmentAudit[];
   documentedOperations: readonly DocumentedOperation[];
+  captureEvidence: CaptureEvidence | null;
 }
 
 export interface ReviewedDraft extends DraftReview {

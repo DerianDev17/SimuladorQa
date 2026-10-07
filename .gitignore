@@ -17,3 +17,5 @@ artifacts/
 .DS_Store
 # Manual de proveedor restringido: conservar la fuente local fuera de Git.
 /Docs tecnicos/Extreme MediatorII Message Interface CMS v3.6 (1).pdf
+# Capturas originales privadas; versionar solo evidencia sanitizada y metadatos.
+/Tramas transacciones/

@@ -1409,6 +1409,41 @@ main {
   min-width: 0;
   justify-content: center;
 }
+.capture-evidence {
+  border-top: 1px solid var(--border);
+  padding-top: 18px;
+  margin-top: 18px;
+  font-size: 13px;
+}
+.capture-evidence h3 {
+  margin: 7px 0;
+}
+.capture-evidence p,
+.capture-evidence small,
+.capture-evidence dt {
+  color: var(--muted);
+  line-height: 1.6;
+}
+.capture-evidence dl > div {
+  margin-bottom: 9px;
+}
+.capture-evidence dd {
+  margin: 0;
+}
+.capture-evidence summary {
+  cursor: pointer;
+  margin: 14px 0;
+}
+.capture-evidence ul {
+  padding-left: 18px;
+}
+.capture-evidence li {
+  overflow-wrap: anywhere;
+  margin: 10px 0;
+}
+.capture-evidence small {
+  display: block;
+}
 .documented-operation {
   border: 1px solid #dce7f7;
   border-radius: 8px;

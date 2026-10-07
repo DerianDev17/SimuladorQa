@@ -31,6 +31,27 @@ async function launch(development = false) {
 test.beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'coonecta-e2e-'));
 });
+
+test('muestra evidencia de capturas sin habilitar envío ni RAW', async () => {
+  const window = await launch();
+  await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
+  const evidence = window.getByLabel('Evidencia de capturas');
+  await expect(evidence.getByRole('heading', { name: '10 archivos · 218 mensajes' })).toBeVisible();
+  await expect(evidence.getByText('2 bytes, big endian; incluye el prefijo')).toBeVisible();
+  await evidence.getByText('Ver archivos y MTI', { exact: true }).click();
+  await expect(evidence.locator('li')).toHaveCount(10);
+  await expect(evidence.getByText('Formato pendiente de identificar')).toHaveCount(6);
+  await expect(
+    evidence.getByText('CertificacionMandatoVisa29092026_CRBanred.pcap', { exact: true }),
+  ).toBeVisible();
+  await expect(window.getByRole('tab', { name: 'RAW', exact: true })).toBeDisabled();
+  await expect(window.getByRole('button', { name: 'Enviar transacción' })).toBeDisabled();
+  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
+  await expect(evidence.getByRole('heading', { name: '10 archivos · 218 mensajes' })).toBeVisible();
+  await expect(window.getByRole('button', { name: 'Enviar transacción' })).toBeDisabled();
+  await mkdir('artifacts', { recursive: true });
+  await window.screenshot({ path: 'artifacts/capture-evidence.png', fullPage: true });
+});
 test.afterEach(async () => {
   await app?.close();
   app = undefined;
