@@ -11,12 +11,14 @@ import { WorkerCatalogStore } from './infrastructure/worker-catalog-store';
 import { CmsV36Catalog } from './adapters/cms-v36-catalog';
 import { MediatorSchemaInspector } from './adapters/mediator-schema-inspector';
 import { CapturedEvidenceCatalog } from './adapters/captured-evidence-catalog';
+import { MediatorObserver } from './adapters/mediator-observer';
 
 const development = process.argv.includes('--dev');
 const rendererFile = join(__dirname, 'renderer', 'index.html');
 const rendererUrl = development ? 'http://127.0.0.1:5173/' : pathToFileURL(rendererFile).href;
 let window: BrowserWindow | null = null;
 let catalogs: WorkerCatalogStore | undefined;
+let observer: MediatorObserver | undefined;
 let quitting = false;
 
 app.setName('Coonecta ATM Simulator');
@@ -67,6 +69,10 @@ void app
       join(__dirname, 'catalog-worker.cjs'),
       join(app.getPath('userData'), 'catalogs.sqlite'),
     );
+    observer = new MediatorObserver(
+      join(__dirname, 'mediator-query.ps1'),
+      join(app.getPath('userData'), 'mediator-observer.json'),
+    );
     const application = new DesktopApplication(
       new FilePreferencesStore(join(app.getPath('userData'), 'preferences.json')),
       {
@@ -81,6 +87,7 @@ void app
       new CmsV36Catalog(),
       new MediatorSchemaInspector(),
       new CapturedEvidenceCatalog(),
+      observer,
     );
     for (const channel of Object.values(channels)) {
       ipcMain.handle(channel, (event, payload: unknown) => {
@@ -108,6 +115,8 @@ void app
             return application.prepare(payload);
           case channels.reviewDraft:
             return application.reviewDraft(payload);
+          case channels.observations:
+            return application.searchObservations(payload);
           case channels.catalog:
             return application.catalog('list', payload);
           case channels.saveEntity:
@@ -143,6 +152,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', (event) => {
+  observer?.close();
   if (quitting || !catalogs) return;
   event.preventDefault();
   quitting = true;

@@ -15,6 +15,7 @@ import type { AppSnapshot, ErrorCode, Result } from '../../../../packages/shared
 import type { CatalogSnapshot } from '../../../../packages/domain/src/catalogs';
 import { CatalogView } from './CatalogView';
 import { TransactionWorkspace } from './TransactionWorkspace';
+import { ObservationView } from './ObservationView';
 import type { CatalogMutation } from './CatalogView';
 import { DesktopClient } from './desktop-client';
 import { Icon } from './Icon';
@@ -671,7 +672,15 @@ export function App() {
             />
           )}
 
-          {['cards', 'load', 'history'].includes(page) && (
+          {page === 'history' && (
+            <ObservationView
+              key={environment ?? 'unavailable'}
+              environment={environment}
+              disabled={busy || !snapshot}
+            />
+          )}
+
+          {['cards', 'load'].includes(page) && (
             <section className="panel">
               <div className="empty-state">
                 <span className="empty-icon">

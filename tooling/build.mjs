@@ -1,6 +1,6 @@
 import { build as buildElectron } from 'esbuild';
 import { build as buildRenderer } from 'vite';
-import { readFile, writeFile } from 'node:fs/promises';
+import { copyFile, readFile, writeFile } from 'node:fs/promises';
 
 export async function buildMain() {
   await buildElectron({
@@ -18,6 +18,9 @@ export async function buildMain() {
     target: 'node22',
     sourcemap: true,
   });
+  for (const name of ['mediator-query.ps1', 'mediator-redaction.ps1', 'mediator-command.ps1']) {
+    await copyFile(`apps/desktop/src/main/adapters/${name}`, `dist/${name}`);
+  }
 }
 
 if (process.argv[1]?.endsWith('build.mjs')) {

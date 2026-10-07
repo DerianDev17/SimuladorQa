@@ -30,7 +30,10 @@ revision y borrador conservado al navegar durante la sesion.
 Permite guardar, recuperar y eliminar casos locales por ambiente, conservados
 tras reiniciar, con referencias documentales y revision obligatoria del contexto.
 La revision PREPROD compara Terminal ID/codigo con el esquema inspeccionado de
-Mediator y muestra incompatibilidades sin truncar perfiles; no es un Observer conectado.
+Mediator y muestra incompatibilidades sin truncar perfiles.
+Historial incorpora una consulta parametrizada de Journal/Message PREPROD con
+filtros y estructura XML protegida. La conexion real requiere TLS confiable y
+una cuenta de lectura; el servidor actual sigue fallando validacion TLS.
 Diez PCAP inspeccionados aportan un codec offline de encapsulado BANRED y una
 vista de evidencia. 218 mensajes se reconstruyen byte a byte; los campos de
 negocio y otros enlaces requieren diccionario y validacion de casos.
@@ -51,6 +54,7 @@ Ver `docs/implementation/BOOTSTRAP.md` para el comportamiento entregado y sus li
 Ver `docs/implementation/LOCAL_CATALOGS.md` para los catalogos locales y la configuracion en borrador.
 Ver `docs/implementation/TRANSACTION_PREPARATION.md` para la pantalla y el catalogo documental.
 Ver `docs/implementation/SAVED_CASES.md` para los casos locales persistentes.
+Ver `docs/implementation/MEDIATOR_OBSERVER.md` para consultar transacciones y mensajes.
 El progreso implementado se marca en `docs/BACKLOG.md` y en la seccion de desarrollo
 de `docs/INPUT_CHECKLIST.md`; la evidencia QA pendiente permanece sin marcar.
 

@@ -17,6 +17,7 @@ import type {
 } from '../../domain/src/transaction-draft';
 import type { CaptureEvidence } from '../../domain/src/capture-evidence';
 import type { SaveCaseRequest } from '../../domain/src/saved-cases';
+import type { ObservationRequest, ObservationSearch } from '../../domain/src/observations';
 
 export const channels = {
   snapshot: 'app:snapshot',
@@ -30,9 +31,11 @@ export const channels = {
   deleteAtm: 'catalog:atm:delete',
   saveCase: 'catalog:case:save',
   deleteCase: 'catalog:case:delete',
+  observations: 'observations:search',
 } as const;
 
 export type ErrorCode =
+  | 'TLS_ERROR'
   | 'VALIDATION_ERROR'
   | 'STORAGE_UNAVAILABLE'
   | 'SERVICE_UNAVAILABLE'
@@ -85,6 +88,7 @@ export interface DesktopApi {
   deleteAtm(request: DeleteRequest): Promise<Result<CatalogSnapshot>>;
   saveCase(request: SaveCaseRequest): Promise<Result<CatalogSnapshot>>;
   deleteCase(request: DeleteRequest): Promise<Result<CatalogSnapshot>>;
+  searchObservations(request: ObservationRequest): Promise<Result<ObservationSearch>>;
 }
 
 export function failure(code: ErrorCode, message: string): Result<never> {

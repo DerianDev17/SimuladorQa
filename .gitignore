@@ -3,6 +3,8 @@ dist/
 coverage/
 test-results/
 artifacts/
+**/mediator-observer.json
+**/*.credential.xml
 .env
 .env.*
 **/[Pp][Aa][Ss][Ss].txt

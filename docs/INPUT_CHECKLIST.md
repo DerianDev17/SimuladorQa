@@ -12,8 +12,9 @@
 - **TODO-DATA AMOUNT-RULES**: faltan moneda, limites, monto minimo/maximo, denominaciones y reglas por cuenta/escenario para retirar. El borrador solo valida la sintaxis decimal del manual; no aprueba elegibilidad financiera.
 - **TODO-DATA ENTITY-CLASSIFICATION**: ENTITY_MODEL propone red/membresia separadas y ENTITY_TEMPLATE mezcla FRONT/BACK/EXTERNA/BANRED como Tipo. Se solicito validacion; el CRUD usa los campos comunes y difiere membresia, BIN/Core y deteccion automatica de escenarios.
 - **TODO-DATA HARDWARE**: falta prueba PC/SC en Windows con OMNIKEY 5422. Bloquea lectura fisica; no se presume lector conectado.
-- **TODO-DATA OBSERVERS**: faltan SQL/API y reglas de correlacion aprobadas de SmartVista/Core. Bloquea observabilidad remota sin alterar el estado transaccional.
-- **TODO-DATA MEDIATOR-OBSERVER-ACCESS / MEDIATOR-JOURNAL-CORRELATION**: SQL Server/Mediator PREPROD conectado e inspeccionado con excepcion TLS puntual autorizada (ADR-006). Falta cuenta de solo lectura, TLS con CA/nombre aprobado para conexion permanente, vinculo entidad/canal/terminal, queries y reglas de correlacion. Ver `docs/core/MEDIATOR_SCHEMA_REVIEW.md`; la inspeccion de metadatos no habilita un Observer ni envio.
+- **TODO-DATA OBSERVERS**: faltan SQL/API y reglas de correlacion aprobadas de SmartVista/Core. Consulta Journal/Message aportada por el usuario e implementada para Mediator; no completa validacion de resultados ni SmartVista.
+- **TODO-DATA MEDIATOR-OBSERVER-ACCESS / MEDIATOR-JOURNAL-CORRELATION**: implementada consulta acotada PREPROD por TraceId a partir del SQL del usuario (2026-10-07). Falta cuenta de lectura, TLS con CA/nombre aprobado, mapeo entidad/canal y correlacion con ISO/runId/transactionId. La prueba segura actual devuelve TLS_ERROR, sin autenticar ni leer registros. Ver `docs/implementation/MEDIATOR_OBSERVER.md` y ADR-009; ADR-006 sigue limitado a metadatos.
+- **TODO-DATA MEDIATOR-SQL-TIMEZONE / MEDIATOR-MESSAGE-PROJECTION**: confirmar zona de fechas SQL y aprobar allowlist de valores XML visibles. La consulta conserva hora SQL sin inferir UTC y protege todos los valores XML.
 - **TODO-DATA LOAD-LIMITS**: faltan limites/ventanas autorizadas y gate funcional de los cinco flujos. Bloquea carga y estres.
 
 La documentacion describe los flujos, pero no aporta evidencia suficiente para ejecutarlos.
@@ -50,6 +51,7 @@ datos/evidencia externos y solo se marcaran al recibirlos y validarlos.
 - [x] Vista de evidencia de capturas en transacciones sin exponer campos, RAW ni endpoints.
 - [x] Composicion visual del mockup compactada: navegacion, cabecera, pasos/recorrido, inspector tabular e historial/metricas.
 - [x] Requisitos/CMS/PCAP separados del area de operacion; estados reales y codigos del manual conservados.
+- [x] Historial con filtros parametrizados Journal/Message PREPROD, bigint como string, limites, errores/timeout y estructura XML protegida fuera del Renderer; acceso real pendiente de TLS/cuenta.
 
 Detalle y pruebas: `docs/implementation/TRANSACTION_PREPARATION.md`.
 

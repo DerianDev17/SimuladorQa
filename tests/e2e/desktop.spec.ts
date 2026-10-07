@@ -97,6 +97,40 @@ test.afterEach(async () => {
   await removeTestDirectory(directory, 'coonecta-e2e-');
 });
 
+test('Historial: consulta Mediator validada, QA bloqueado y dependencia no configurada', async () => {
+  const window = await launch();
+  await window.getByRole('button', { name: 'Historial', exact: false }).click();
+  const observer = window.getByLabel('Consulta de Mediator', { exact: true });
+  await expect(
+    observer.getByRole('heading', { name: 'Transacciones y mensajes de Mediator' }),
+  ).toBeVisible();
+  await expect(observer.getByRole('button', { name: 'Consultar Mediator' })).toBeDisabled();
+  await expect(observer.getByText('Selecciona PREPROD para consultar Mediator.')).toBeVisible();
+  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
+  await expect(observer.getByLabel('Entidad', { exact: true })).toHaveValue('205');
+  await expect(observer.getByLabel('Canal', { exact: true })).toHaveValue('1');
+  await expect(observer.getByLabel('Desde (hora SQL)', { exact: true })).toHaveValue(
+    '2026-09-29 00:00:07.803',
+  );
+  await observer.getByLabel('Hasta (hora SQL)', { exact: true }).fill('2026-09-30 23:00:07.803');
+  await observer.getByRole('button', { name: 'Consultar Mediator' }).click();
+  await expect(observer.getByRole('alert')).toContainText('hasta 24 horas');
+  await observer.getByLabel('Hasta (hora SQL)', { exact: true }).fill('2026-09-29 23:00:07.803');
+  await expect(observer.getByRole('alert')).toHaveCount(0);
+  await observer.getByRole('button', { name: 'Consultar Mediator' }).click();
+  await expect(observer.getByRole('alert')).toContainText('configuración local de Mediator', {
+    timeout: 20_000,
+  });
+  await expect(observer.locator('tbody tr')).toHaveCount(0);
+  await window.getByLabel('Ambiente', { exact: true }).selectOption('QA');
+  await expect(observer.getByRole('alert')).toHaveCount(0);
+  await expect(observer.getByRole('button', { name: 'Consultar Mediator' })).toBeDisabled();
+  await expect(observer.locator('pre')).toHaveCount(0);
+  await mkdir('artifacts', { recursive: true });
+  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
+  await window.screenshot({ path: 'artifacts/mediator-observer.png', fullPage: true });
+});
+
 test('dashboard real, aislamiento, navegación y gate transaccional', async () => {
   const window = await launch();
   await expect(window.getByText('Servicios locales activos', { exact: true })).toBeVisible();

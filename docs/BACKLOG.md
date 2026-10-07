@@ -75,6 +75,7 @@ referencias no son evidencia de una ejecucion ni habilitan envio.
 - [x] evidencia de las diez capturas visible en transacciones, con conteos MTI y limites del analisis
 - [x] inspeccion autenticada de esquema Mediator PREPROD y matriz de evidencia
 - [x] compatibilidad de destino en revision Main con esquema observado, sin truncado
+- [x] consulta Journal/Message PREPROD por TraceId con filtros, limites, timeout y estructura XML protegida; acceso real pendiente
 - [ ] cuenta de solo lectura y TLS aprobado para Observer permanente
 - [ ] vinculo entidad/canal/terminal y query de correlacion Mediator aprobada
 - [x] estados vacios del inspector, recorrido, historial y metricas sin datos ficticios

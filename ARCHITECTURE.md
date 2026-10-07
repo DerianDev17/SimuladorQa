@@ -34,6 +34,9 @@ Permitir que varias estaciones QA ejecuten transacciones ATM funcionales y carga
 4. **Observers**
    - SmartVista Observer: consulta datos de correlacion del Switch.
    - Core Observer: valida aplicacion contable o respuesta Core.
+   - Consulta Mediator PREPROD: puerto independiente, SQL parametrizado y
+     redaccion XML en proceso PowerShell/.NET externo al Renderer. La vista
+     no asigna resultados transaccionales. Ver ADR-009.
 
 ## Restricciones
 

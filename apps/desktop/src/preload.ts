@@ -14,5 +14,6 @@ const api: DesktopApi = Object.freeze<DesktopApi>({
   deleteAtm: (request) => ipcRenderer.invoke(channels.deleteAtm, request),
   saveCase: (request) => ipcRenderer.invoke(channels.saveCase, request),
   deleteCase: (request) => ipcRenderer.invoke(channels.deleteCase, request),
+  searchObservations: (request) => ipcRenderer.invoke(channels.observations, request),
 });
 contextBridge.exposeInMainWorld('desktop', api);

@@ -5,6 +5,13 @@ a metadatos. La conexion autenticada a Mediator funciono con la excepcion TLS
 puntual de [ADR-006](../adr/ADR-006-MEDIATOR-INSPECTION-TLS.md).
 No se ejecutaron procedures, DDL/DML ni consultas de registros de negocio.
 
+Actualizacion 2026-10-07: el usuario aporto la consulta Journal/Message por TraceId.
+Se implemento un observador acotado con filtros y estructura XML protegida
+([ADR-009](../adr/ADR-009-MEDIATOR-OBSERVER.md)). La prueba actual con TLS validado
+devuelve TLS_ERROR sin autenticar ni leer transacciones; falta cuenta de lectura
+y certificado confiable. La inspeccion y evidencia siguientes siguen siendo
+exclusivamente de metadatos.
+
 Evidencia local ignorada: `artifacts/mediator-schema.json`.
 Inspeccion UUID: `2bd7c692-6fec-49af-ba15-7f0fb88c0440`.
 Timestamp original UTC: `2026-10-07T01:15:14.7199883Z` (6 de octubre en Ecuador).
@@ -60,14 +67,17 @@ La pantalla presenta compatibilidad del destino, origen y fecha de la evidencia,
 y mapeo entidad/canal/terminal pendiente. Es una comparacion con esquema guardado,
 no un health check ni un Observer conectado. Editar contexto/catalogo invalida
 el resultado como las otras revisiones. Todos los envios permanecen BLOCKED.
-No se introduce driver SQL, credencial o excepcion TLS en la aplicacion.
+Esta revision documental no consulta SQL. El observador agregado posteriormente
+usa .NET SqlClient fuera del Renderer con credencial privada y sin excepcion TLS;
+ver ADR-009 y MEDIATOR_OBSERVER.
 
 ## TODO-DATA pendientes
 
 - MEDIATOR-OBSERVER-ACCESS: cuenta de solo lectura y TLS con CA/nombre aprobado
   para un Observer permanente. La excepcion puntual no autoriza consultas continuas.
 - MEDIATOR-ENTITY-CHANNEL: vinculo de entidad/canal/terminal con configuracion habilitada.
-- MEDIATOR-JOURNAL-CORRELATION: queries/vistas aprobadas, semantica de TraceId,
+- MEDIATOR-JOURNAL-CORRELATION: consulta Journal/Message por TraceId aportada e
+  implementada; faltan semantica de TraceId,
   terminalSeq, parentTraceId, fechas/zona, duplicados y relacion STAN/RRN/UTRNNO.
 - MEDIATOR-STATUS-MAPPING: estados/codigos de respuesta/reverso con su significado.
 - Los requisitos ISO-SPEC, muestras QA y reglas financieras siguen abiertos.

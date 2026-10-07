@@ -21,10 +21,16 @@ import type { OperationCatalog } from '../../../../packages/domain/src/transacti
 import type { DestinationInspector } from '../../../../packages/domain/src/destination-compatibility';
 import type { CaptureEvidenceCatalog } from '../../../../packages/domain/src/capture-evidence';
 import { parseSaveCaseRequest } from '../../../../packages/domain/src/saved-cases';
+import { parseObservationRequest } from '../../../../packages/domain/src/observations';
+import type { ObservationSearch } from '../../../../packages/domain/src/observations';
+import type { TransactionObserver } from './observation-port';
 
-// Toda operación comparte la cola: evita perder cambios y leer un ambiente intermedio.
+// Las operaciones locales comparten cola. El observador verifica el ambiente antes
+// y después de consultar, sin retener esa cola durante la espera de red.
 export class DesktopApplication {
   private queue: Promise<unknown> = Promise.resolve();
+  private environmentRevision = 0;
+  private observationBusy = false;
   constructor(
     private readonly store: PreferencesStore,
     private readonly identity: RuntimeIdentity,
@@ -32,6 +38,7 @@ export class DesktopApplication {
     private readonly operations?: OperationCatalog,
     private readonly destinationInspector?: DestinationInspector,
     private readonly captureEvidence?: CaptureEvidenceCatalog,
+    private readonly observer?: TransactionObserver,
   ) {}
 
   private serialize<T>(operation: () => Promise<T>): Promise<T> {
@@ -94,6 +101,7 @@ export class DesktopApplication {
           ].slice(-100),
         };
         await this.store.write(next);
+        this.environmentRevision++;
         return { ok: true, value: this.snapshot(next) };
       } catch {
         return failure(
@@ -116,6 +124,57 @@ export class DesktopApplication {
         return failure('STORAGE_UNAVAILABLE', 'No se pudo verificar la configuración local.');
       }
     });
+  }
+
+  async searchObservations(payload: unknown): Promise<Result<ObservationSearch>> {
+    const request = parseObservationRequest(payload);
+    if (!request)
+      return failure(
+        'VALIDATION_ERROR',
+        'Revisa los filtros: intervalo de hasta 24 horas, fechas SQL y máximo 100 resultados.',
+      );
+    if (request.environment !== 'PREPROD')
+      return failure('FORBIDDEN', 'La consulta de Mediator está disponible únicamente en PREPROD.');
+    if (this.observationBusy)
+      return failure('CONFLICT', 'Ya hay una consulta de Mediator en curso.');
+    this.observationBusy = true;
+    try {
+      const initial = await this.serialize(async () => ({
+        preferences: await this.store.read(),
+        revision: this.environmentRevision,
+      }));
+      if (initial.preferences.environment !== request.environment)
+        return failure('CONFLICT', 'El ambiente cambió. Repite la consulta en PREPROD.');
+      if (!this.observer)
+        return failure('SERVICE_UNAVAILABLE', 'El observador de Mediator no está configurado.');
+      const result = await this.observer.search(request);
+      const current = await this.serialize(async () => ({
+        preferences: await this.store.read(),
+        revision: this.environmentRevision,
+      }));
+      if (
+        current.revision !== initial.revision ||
+        current.preferences.environment !== request.environment
+      )
+        return failure(
+          'CONFLICT',
+          'El ambiente cambió durante la consulta. Los resultados se descartaron.',
+        );
+      return result.ok
+        ? {
+            ok: true,
+            value: {
+              ...result.value,
+              queryId: this.identity.uuid(),
+              queriedAt: this.identity.now(),
+            },
+          }
+        : result;
+    } catch {
+      return failure('SERVICE_UNAVAILABLE', 'No se pudo completar la consulta de Mediator.');
+    } finally {
+      this.observationBusy = false;
+    }
   }
 
   reviewDraft(payload: unknown): Promise<Result<ReviewedDraft>> {
