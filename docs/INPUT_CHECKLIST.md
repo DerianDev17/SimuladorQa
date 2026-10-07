@@ -6,12 +6,14 @@
 - **TODO-DATA GOLDEN-SAMPLES**: faltan request/response y PCAP validados de cada flujo MVP. Bloquea validaciones byte a byte, codigos de respuesta y reversos.
 - **TODO-DATA ENVIRONMENT**: faltan endpoints autorizados QA/PREPROD, framing, TLS y timeouts por escenario. Bloquea conectar/enviar TCP.
 - **TODO-DATA PROFILES**: faltan ATM y tarjeta completos/validados. Bloquea configurar ejecuciones reales; el shell desktop y la seleccion de ambiente funcionan de forma independiente.
+- **TODO-DATA ENTITY-CLASSIFICATION**: ENTITY_MODEL propone red/membresia separadas y ENTITY_TEMPLATE mezcla FRONT/BACK/EXTERNA/BANRED como Tipo. Se solicito validacion; el CRUD usa los campos comunes y difiere membresia, BIN/Core y deteccion automatica de escenarios.
 - **TODO-DATA HARDWARE**: falta prueba PC/SC en Windows con OMNIKEY 5422. Bloquea lectura fisica; no se presume lector conectado.
 - **TODO-DATA OBSERVERS**: faltan SQL/API y reglas de correlacion aprobadas de SmartVista/Core. Bloquea observabilidad remota sin alterar el estado transaccional.
 - **TODO-DATA LOAD-LIMITS**: faltan limites/ventanas autorizadas y gate funcional de los cinco flujos. Bloquea carga y estres.
 
 La documentacion describe los flujos, pero no aporta evidencia suficiente para ejecutarlos.
 Ver `docs/implementation/BOOTSTRAP.md` para el alcance ya implementado.
+El CRUD local de entidades/ATM funciona con configuracion en borrador; no completa ni valida automaticamente los items del checklist. Ver `docs/implementation/LOCAL_CATALOGS.md`.
 
 ## P0 - Bloqueante para primer flujo real
 

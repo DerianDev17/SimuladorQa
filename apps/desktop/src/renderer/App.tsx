@@ -11,7 +11,10 @@ import type {
   Scenario,
   TransactionType,
 } from '../../../../packages/domain/src/index';
-import type { AppSnapshot, Result } from '../../../../packages/shared/src/contracts';
+import type { AppSnapshot, ErrorCode, Result } from '../../../../packages/shared/src/contracts';
+import type { CatalogSnapshot } from '../../../../packages/domain/src/catalogs';
+import { CatalogView } from './CatalogView';
+import type { CatalogMutation } from './CatalogView';
 import { DesktopClient } from './desktop-client';
 import { Icon } from './Icon';
 import type { IconName } from './Icon';
@@ -20,6 +23,7 @@ const navigation: { id: string; label: string; icon: IconName; group: string }[]
   { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', group: 'ESTACIÓN DE PRUEBAS' },
   { id: 'transactions', label: 'Transacciones', icon: 'transaction', group: '' },
   { id: 'atms', label: 'Perfiles ATM', icon: 'atm', group: '' },
+  { id: 'entities', label: 'Entidades', icon: 'entity', group: '' },
   { id: 'cards', label: 'Tarjetas', icon: 'card', group: '' },
   { id: 'load', label: 'Carga y estrés', icon: 'load', group: '' },
   { id: 'monitor', label: 'Monitor', icon: 'monitor', group: 'OBSERVABILIDAD' },
@@ -36,6 +40,10 @@ export function App() {
   const [transaction, setTransaction] = useState<TransactionType>('BALANCE');
   const [scenario, setScenario] = useState<Scenario>('LOCAL');
   const [preparation, setPreparation] = useState<Preparation>();
+  const [catalog, setCatalog] = useState<CatalogSnapshot>();
+  const [catalogError, setCatalogError] = useState<{ code: ErrorCode; message: string }>();
+  const [catalogBusy, setCatalogBusy] = useState(false);
+  const [catalogEditing, setCatalogEditing] = useState(false);
 
   function applySnapshot(result: Result<AppSnapshot>) {
     if (result.ok) {
@@ -58,6 +66,63 @@ export function App() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    const environment = snapshot?.environment;
+    let active = true;
+    setCatalog(undefined);
+    setCatalogError(undefined);
+    if (!environment)
+      return () => {
+        active = false;
+      };
+    setCatalogBusy(true);
+    void client
+      .call((api) => api.getCatalog(environment))
+      .then((result) => {
+        if (!active) return;
+        if (result.ok) setCatalog(result.value);
+        else setCatalogError(result.error);
+        setCatalogBusy(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [snapshot?.environment]);
+
+  async function refreshCatalog() {
+    if (!snapshot) return;
+    setCatalogBusy(true);
+    setCatalog(undefined);
+    setCatalogError(undefined);
+    const result = await client.call((api) => api.getCatalog(snapshot.environment));
+    if (result.ok) setCatalog(result.value);
+    else setCatalogError(result.error);
+    setCatalogBusy(false);
+  }
+
+  async function mutateCatalog(command: CatalogMutation): Promise<boolean> {
+    setCatalogBusy(true);
+    setCatalogError(undefined);
+    const result = await client.call((api) => {
+      switch (command.kind) {
+        case 'saveEntity':
+          return api.saveEntity(command.request);
+        case 'saveAtm':
+          return api.saveAtm(command.request);
+        case 'deleteEntity':
+          return api.deleteEntity(command.request);
+        case 'deleteAtm':
+          return api.deleteAtm(command.request);
+      }
+    });
+    if (result.ok) {
+      setCatalog(result.value);
+      setPreparation(undefined);
+    } else setCatalogError(result.error);
+    setCatalogBusy(false);
+    return result.ok;
+  }
 
   async function refresh() {
     setBusy(true);
@@ -162,7 +227,11 @@ export function App() {
           <label>
             Perfil ATM
             <select disabled aria-label="Perfil ATM">
-              <option>Sin perfiles validados</option>
+              <option>
+                {catalog?.atms.length
+                  ? `${catalog.atms.length} perfiles en borrador`
+                  : 'Sin perfiles validados'}
+              </option>
             </select>
           </label>
           <label>
@@ -262,7 +331,7 @@ export function App() {
               <select
                 aria-label="Ambiente"
                 value={environment ?? ''}
-                disabled={busy || !snapshot}
+                disabled={busy || !snapshot || catalogBusy || catalogEditing}
                 onChange={(event) => {
                   if (isEnvironment(event.target.value)) void changeEnvironment(event.target.value);
                 }}
@@ -598,7 +667,22 @@ export function App() {
             </section>
           )}
 
-          {['atms', 'cards', 'load', 'history'].includes(page) && (
+          {['entities', 'atms'].includes(page) && (
+            <CatalogView
+              key={`${page}-${environment ?? 'unavailable'}`}
+              kind={page === 'entities' ? 'entities' : 'atms'}
+              environment={environment}
+              catalog={catalog}
+              loading={catalogBusy}
+              disabled={busy || !snapshot}
+              error={catalogError}
+              onRefresh={refreshCatalog}
+              onMutate={mutateCatalog}
+              onEditingChange={setCatalogEditing}
+            />
+          )}
+
+          {['cards', 'load', 'history'].includes(page) && (
             <section className="panel">
               <div className="empty-state">
                 <span className="empty-icon">
@@ -608,22 +692,18 @@ export function App() {
                   {page === 'load' ? 'GATE FUNCIONAL' : 'ESTACIÓN LOCAL'}
                 </span>
                 <h2>
-                  {page === 'atms'
-                    ? 'Aún no hay perfiles ATM'
-                    : page === 'cards'
-                      ? 'Aún no hay tarjetas de prueba'
-                      : page === 'load'
-                        ? 'Primero, valida los flujos funcionales'
-                        : 'Aún no hay ejecuciones'}
+                  {page === 'cards'
+                    ? 'Aún no hay tarjetas de prueba'
+                    : page === 'load'
+                      ? 'Primero, valida los flujos funcionales'
+                      : 'Aún no hay ejecuciones'}
                 </h2>
                 <p>
-                  {page === 'atms'
-                    ? 'El catálogo se habilitará con un ATM de QA completo y la validación de sus campos.'
-                    : page === 'cards'
-                      ? 'Se requiere el catálogo validado y el almacenamiento cifrado antes de guardar datos sensibles.'
-                      : page === 'load'
-                        ? 'La carga requiere que los cinco flujos MVP pasen pruebas deterministas y que existan límites autorizados por ambiente.'
-                        : 'El historial estará disponible cuando el motor transaccional pueda generar evidencia real.'}
+                  {page === 'cards'
+                    ? 'Se requiere el catálogo validado y el almacenamiento cifrado antes de guardar datos sensibles.'
+                    : page === 'load'
+                      ? 'La carga requiere que los cinco flujos MVP pasen pruebas deterministas y que existan límites autorizados por ambiente.'
+                      : 'El historial estará disponible cuando el motor transaccional pueda generar evidencia real.'}
                 </p>
                 <button
                   className="primary"

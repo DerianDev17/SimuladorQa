@@ -8,6 +8,14 @@ import { failure } from '../../../../packages/shared/src/contracts';
 import type { AppSnapshot, Result } from '../../../../packages/shared/src/contracts';
 import type { Preparation } from '../../../../packages/domain/src/index';
 import type { Preferences, PreferencesStore, RuntimeIdentity } from './ports';
+import {
+  parseSaveAtmRequest,
+  parseSaveEntityRequest,
+  parseDeleteRequest,
+} from '../../../../packages/domain/src/catalogs';
+import type { CatalogSnapshot } from '../../../../packages/domain/src/catalogs';
+import type { CatalogCommand } from '../../../../packages/shared/src/catalog-worker';
+import type { CatalogStore } from './catalog-port';
 
 // Toda operación comparte la cola: evita perder cambios y leer un ambiente intermedio.
 export class DesktopApplication {
@@ -15,6 +23,7 @@ export class DesktopApplication {
   constructor(
     private readonly store: PreferencesStore,
     private readonly identity: RuntimeIdentity,
+    private readonly catalogs?: CatalogStore,
   ) {}
 
   private serialize<T>(operation: () => Promise<T>): Promise<T> {
@@ -95,6 +104,59 @@ export class DesktopApplication {
         return { ok: true, value: prepareTransaction(preferences.environment, request) };
       } catch {
         return failure('STORAGE_UNAVAILABLE', 'No se pudo verificar la configuración local.');
+      }
+    });
+  }
+
+  catalog(kind: CatalogCommand['kind'], payload: unknown): Promise<Result<CatalogSnapshot>> {
+    return this.serialize(async () => {
+      let command: CatalogCommand | undefined;
+      switch (kind) {
+        case 'list': {
+          const environment = parseEnvironmentRequest(payload);
+          if (environment) command = { kind, environment };
+          break;
+        }
+        case 'saveEntity': {
+          const request = parseSaveEntityRequest(payload);
+          if (request) command = { kind, request };
+          break;
+        }
+        case 'saveAtm': {
+          const request = parseSaveAtmRequest(payload);
+          if (request) command = { kind, request };
+          break;
+        }
+        case 'deleteEntity':
+        case 'deleteAtm': {
+          const request = parseDeleteRequest(payload);
+          if (request) command = { kind, request };
+          break;
+        }
+      }
+      if (!command)
+        return failure(
+          'VALIDATION_ERROR',
+          'Revisa los campos, el ambiente y la versión del registro. No incluyas datos de tarjeta ni secretos.',
+        );
+      try {
+        const current = await this.store.read();
+        const environment =
+          command.kind === 'list' ? command.environment : command.request.environment;
+        if (environment !== current.environment)
+          return failure('CONFLICT', 'El ambiente cambió. Recarga antes de guardar el catálogo.');
+        if (!this.catalogs)
+          return failure('SERVICE_UNAVAILABLE', 'El servicio de catálogos no está disponible.');
+        return await this.catalogs.execute(command, {
+          user: this.identity.user,
+          machine: this.identity.hostname,
+          timestamp: this.identity.now(),
+        });
+      } catch {
+        return failure(
+          'STORAGE_UNAVAILABLE',
+          'No se pudo verificar la configuración o acceder al catálogo.',
+        );
       }
     });
   }

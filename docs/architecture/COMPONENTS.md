@@ -4,8 +4,20 @@
 
 Implementados: Desktop UI, preload IPC tipado, DesktopApplication en Main y
 PreferencesStore como puerto con adaptador de archivo para ambiente y auditoria.
+La segunda entrega agrega CatalogStore como puerto, adaptador WorkerCatalogStore y
+SqliteCatalog en Worker. Main valida IPC y el ambiente activo; el Worker controla
+integridad referencial, revisiones y transacciones de catalogo/auditoria.
 El dominio solo cataloga escenarios/transacciones documentados y sus requisitos
 pendientes; no implementa el motor transaccional descrito mas abajo.
+
+```mermaid
+flowchart LR
+  Renderer[React: catalogos] --> Preload[IPC tipado]
+  Preload --> Main[Main: validacion y ambiente]
+  Main --> Port[CatalogStore]
+  Port --> Worker[Node Worker: SqliteCatalog]
+  Worker --> SQLite[(catalogs.sqlite)]
+```
 
 El resto de componentes sigue planificado. Ver `../implementation/BOOTSTRAP.md`
 y `../adr/ADR-003-DESKTOP-BOOTSTRAP.md`.

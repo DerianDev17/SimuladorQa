@@ -7,7 +7,8 @@
 - [x] React layout y navegacion inicial
 - [x] seleccion de ambiente persistida y auditoria local
 - [ ] configuracion completa de endpoints y limites (TODO-DATA ENVIRONMENT)
-- [ ] SQLite para catalogos e historial
+- [x] SQLite/Worker para catalogos de entidades y ATM, con auditoria atomica
+- [ ] SQLite para historial transaccional
 - [ ] logging transaccional sanitizado y rotacion
 
 La primera entrega tiene pruebas unitarias, integracion y E2E Electron. Ver `docs/implementation/BOOTSTRAP.md`.
@@ -19,10 +20,11 @@ La primera entrega tiene pruebas unitarias, integracion y E2E Electron. Ver `doc
 - resolver perfil
 
 ## Epic 3 - Profiles
-- entidades CRUD
-- ATM CRUD
-- tarjetas CRUD
-- import CSV tarjetas
+- [x] entidades CRUD (campos comunes, en borrador)
+- [x] ATM CRUD (ambientes independientes, en borrador)
+- [ ] membresia/BIN/Core y validacion de catalogos aprobados
+- [ ] tarjetas CRUD con almacenamiento cifrado
+- [ ] import CSV tarjetas
 
 ## Epic 4 - ISO/TCP
 - field dictionary

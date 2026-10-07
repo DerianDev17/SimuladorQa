@@ -29,7 +29,7 @@ Es una compilación ejecutable con las dependencias instaladas; aún no es un in
 - Errores seguros, reintento y límite de espera del servicio local.
 - Estado explícito de lector, Switch y Control Plane sin configurar.
 
-Las páginas de perfiles, tarjetas, carga e historial muestran los requisitos pendientes; aún no tienen CRUD, cifrado ni ejecución. La pantalla de monitor describe solamente la estación actual; no inventa agentes ni heartbeats.
+La segunda entrega añade CRUD de entidades y perfiles ATM en borrador mediante SQLite/Worker; ver `LOCAL_CATALOGS.md`. Las páginas de tarjetas, carga e historial mantienen los requisitos pendientes; aún no tienen cifrado ni ejecución. La pantalla de monitor describe solamente la estación actual; no inventa agentes ni heartbeats.
 
 Las preferencias viven en `preferences.json` dentro de `app.getPath('userData')` de Electron, fuera del repo. Si el archivo es inválido, corregirlo o respaldarlo fuera de la app y restablecerlo manualmente; la app no lo sobrescribe silenciosamente.
 
@@ -59,4 +59,4 @@ La primera ejecución necesita acceso a la descarga oficial del runtime Electron
 
 ## Siguiente incremento
 
-Catálogos de entidades y ATM, SQLite y pruebas de persistencia, siguiendo docs/entities/ENTITY_MODEL.md y las plantillas aprobadas. La configuración real de tarjetas y los flujos ISO siguen condicionados por TODO-DATA de docs/INPUT_CHECKLIST.md.
+Implementados catálogos de entidades/ATM y SQLite; quedan tarjetas con almacenamiento seguro y flujos ISO, condicionados por TODO-DATA de docs/INPUT_CHECKLIST.md. La clasificación de membresía de entidades espera reconciliar los documentos del proyecto.

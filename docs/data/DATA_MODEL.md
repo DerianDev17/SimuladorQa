@@ -2,6 +2,11 @@
 
 ## Local SQLite
 
+Implementados `entities`, `atm_profiles` y `catalog_audit` en schema v1 de `catalogs.sqlite`.
+Los catalogos son DRAFT, con revision y timestamps UTC. Mutacion/auditoria son atomicas;
+ATM usa FK restringida hacia entidades y ambiente QA/PREPROD. `environment_config` permanece
+provisionalmente en preferences.json; las tablas transaccionales siguientes siguen planificadas.
+
 ### environment_config
 Configuracion no secreta por ambiente.
 

@@ -4,7 +4,11 @@ import { readFile, writeFile } from 'node:fs/promises';
 
 export async function buildMain() {
   await buildElectron({
-    entryPoints: { main: 'apps/desktop/src/main/index.ts', preload: 'apps/desktop/src/preload.ts' },
+    entryPoints: {
+      main: 'apps/desktop/src/main/index.ts',
+      preload: 'apps/desktop/src/preload.ts',
+      'catalog-worker': 'apps/desktop/src/main/infrastructure/catalog-worker.ts',
+    },
     outdir: 'dist',
     outExtension: { '.js': '.cjs' },
     platform: 'node',

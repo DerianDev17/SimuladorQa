@@ -7,11 +7,14 @@ import { channels, failure } from '../../../../packages/shared/src/contracts';
 import { DesktopApplication } from './application';
 import { FilePreferencesStore } from './infrastructure/preferences-store';
 import { isTrustedSender } from './security';
+import { WorkerCatalogStore } from './infrastructure/worker-catalog-store';
 
 const development = process.argv.includes('--dev');
 const rendererFile = join(__dirname, 'renderer', 'index.html');
 const rendererUrl = development ? 'http://127.0.0.1:5173/' : pathToFileURL(rendererFile).href;
 let window: BrowserWindow | null = null;
+let catalogs: WorkerCatalogStore | undefined;
+let quitting = false;
 
 app.setName('Coonecta ATM Simulator');
 // Solo se permite redirigir datos locales al lanzar tests con una carpeta temporal explícita.
@@ -57,6 +60,10 @@ void app
       callback(false),
     );
     session.defaultSession.setPermissionCheckHandler(() => false);
+    catalogs = new WorkerCatalogStore(
+      join(__dirname, 'catalog-worker.cjs'),
+      join(app.getPath('userData'), 'catalogs.sqlite'),
+    );
     const application = new DesktopApplication(
       new FilePreferencesStore(join(app.getPath('userData'), 'preferences.json')),
       {
@@ -67,6 +74,7 @@ void app
         uuid: randomUUID,
         now: () => new Date().toISOString(),
       },
+      catalogs,
     );
     for (const channel of Object.values(channels)) {
       ipcMain.handle(channel, (event, payload: unknown) => {
@@ -92,6 +100,16 @@ void app
             return application.setEnvironment(payload);
           case channels.prepare:
             return application.prepare(payload);
+          case channels.catalog:
+            return application.catalog('list', payload);
+          case channels.saveEntity:
+            return application.catalog('saveEntity', payload);
+          case channels.deleteEntity:
+            return application.catalog('deleteEntity', payload);
+          case channels.saveAtm:
+            return application.catalog('saveAtm', payload);
+          case channels.deleteAtm:
+            return application.catalog('deleteAtm', payload);
         }
       });
     }
@@ -110,4 +128,11 @@ void app
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('before-quit', (event) => {
+  if (quitting || !catalogs) return;
+  event.preventDefault();
+  quitting = true;
+  void catalogs.close().finally(() => app.quit());
 });

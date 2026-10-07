@@ -2,6 +2,7 @@ const paths = {
   dashboard: 'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',
   transaction: 'M4 7h16m-4-4 4 4-4 4 M20 17H4m4-4-4 4 4 4',
   atm: 'M5 3h14v18H5z M8 6h8v6H8z M8 16h8 M8 19h3',
+  entity: 'M3 9l9-6 9 6 M5 10v10 M10 10v10 M14 10v10 M19 10v10 M3 21h18',
   card: 'M3 5h18v14H3z M3 9h18 M6 15h4',
   load: 'M3 17 8 12l4 3 8-11 M15 4h5v5',
   monitor: 'M3 4h18v13H3z M8 21h8 M12 17v4 M5 11h3l2-4 4 7 2-3h3',

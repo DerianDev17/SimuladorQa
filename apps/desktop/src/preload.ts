@@ -6,5 +6,10 @@ const api: DesktopApi = Object.freeze<DesktopApi>({
   getSnapshot: () => ipcRenderer.invoke(channels.snapshot),
   setEnvironment: (environment) => ipcRenderer.invoke(channels.environment, { environment }),
   prepareTransaction: (request) => ipcRenderer.invoke(channels.prepare, request),
+  getCatalog: (environment) => ipcRenderer.invoke(channels.catalog, { environment }),
+  saveEntity: (request) => ipcRenderer.invoke(channels.saveEntity, request),
+  deleteEntity: (request) => ipcRenderer.invoke(channels.deleteEntity, request),
+  saveAtm: (request) => ipcRenderer.invoke(channels.saveAtm, request),
+  deleteAtm: (request) => ipcRenderer.invoke(channels.deleteAtm, request),
 });
 contextBridge.exposeInMainWorld('desktop', api);

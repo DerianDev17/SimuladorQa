@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DesktopApplication } from '../../apps/desktop/src/main/application';
 import { FilePreferencesStore } from '../../apps/desktop/src/main/infrastructure/preferences-store';
 import type { RuntimeIdentity } from '../../apps/desktop/src/main/ports';
+import { removeTestDirectory } from '../helpers/temporary-directory';
 
 describe('aplicación con almacenamiento real', () => {
   let directory: string;
@@ -25,7 +26,7 @@ describe('aplicación con almacenamiento real', () => {
     application = new DesktopApplication(new FilePreferencesStore(file), identity);
   });
   afterEach(async () => {
-    await rm(directory, { recursive: true, force: true });
+    await removeTestDirectory(directory, 'coonecta-integration-');
   });
 
   it('inicia en QA sin depender de una base de datos, lector o red', async () => {

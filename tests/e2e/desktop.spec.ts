@@ -1,10 +1,11 @@
 import { _electron as electron, expect, test } from '@playwright/test';
-import type { ElectronApplication } from '@playwright/test';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import type { ElectronApplication, Page } from '@playwright/test';
+import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
 import type { Environment } from '../../packages/domain/src/index';
 import { createServer } from 'vite';
+import { removeTestDirectory } from '../helpers/temporary-directory';
 
 let directory: string;
 let app: ElectronApplication | undefined;
@@ -33,7 +34,7 @@ test.beforeEach(async () => {
 test.afterEach(async () => {
   await app?.close();
   app = undefined;
-  await rm(directory, { recursive: true, force: true });
+  await removeTestDirectory(directory, 'coonecta-e2e-');
 });
 
 test('dashboard real, aislamiento, navegación y gate transaccional', async () => {
@@ -80,6 +81,7 @@ test('dashboard real, aislamiento, navegación y gate transaccional', async () =
   ).toBeVisible();
   for (const name of [
     'Perfiles ATM',
+    'Entidades',
     'Tarjetas',
     'Carga y estrés',
     'Monitor',
@@ -99,6 +101,144 @@ test('dashboard real, aislamiento, navegación y gate transaccional', async () =
   await window.reload();
   await expect(window.getByText('Servicios locales activos', { exact: true })).toBeVisible();
   expect(pageErrors).toEqual([]);
+});
+
+async function createTestEntity(window: Page) {
+  await window.getByRole('button', { name: 'Entidades', exact: true }).click();
+  await window.getByRole('button', { name: 'Nueva entidad' }).click();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toBeDisabled();
+  await window.getByLabel('Código de entidad').fill('TEST-E2E');
+  await window.getByLabel('Nombre de entidad').fill('Entidad sintética E2E');
+  await window.getByLabel('Red de entidad').selectOption('COONECTA');
+  await window.getByRole('button', { name: 'Guardar borrador' }).click();
+  await expect(
+    window.getByRole('cell', { name: 'Entidad sintética E2E', exact: true }),
+  ).toBeVisible();
+}
+
+async function createTestAtm(window: Page, alias: string) {
+  await window.getByRole('button', { name: 'Perfiles ATM', exact: true }).click();
+  await window.getByRole('button', { name: 'Nuevo perfil ATM' }).click();
+  await window.getByLabel('Alias ATM').fill(alias);
+  await window
+    .getByLabel('Entidad del ATM')
+    .selectOption({ label: 'TEST-E2E · Entidad sintética E2E' });
+  await window.getByLabel('Terminal ID', { exact: true }).fill('Test-Terminal');
+  await window.getByLabel('Acquirer ID', { exact: true }).fill('Test-Acquirer');
+  await window.getByRole('button', { name: 'Guardar borrador' }).click();
+  await expect(window.getByRole('button', { name: `Editar ${alias}`, exact: true })).toBeVisible();
+}
+
+test('CRUD de entidades y ATM, separación de ambientes, reinicio y eliminación protegida', async () => {
+  test.setTimeout(60_000);
+  let window = await launch();
+  await createTestEntity(window);
+  await createTestAtm(window, 'ATM sintético QA');
+  await window.getByRole('button', { name: 'Editar ATM sintético QA', exact: true }).click();
+  await window.getByLabel('Alias ATM').fill('ATM QA editado');
+  await window.getByLabel('Perfil ATM activo').uncheck();
+  await window.getByRole('button', { name: 'Guardar borrador' }).click();
+  await expect(window.getByRole('cell', { name: 'Inactivo', exact: true })).toBeVisible();
+  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
+  await expect(window.getByText('Aún no hay perfiles ATM en este ambiente')).toBeVisible();
+  await createTestAtm(window, 'ATM sintético PREPROD');
+  await window.getByLabel('Ambiente', { exact: true }).selectOption('QA');
+  await expect(
+    window.getByRole('button', { name: 'Editar ATM QA editado', exact: true }),
+  ).toBeVisible();
+  await app?.close();
+  app = undefined;
+  window = await launch();
+  await window.getByRole('button', { name: 'Perfiles ATM', exact: true }).click();
+  await expect(
+    window.getByRole('button', { name: 'Editar ATM QA editado', exact: true }),
+  ).toBeVisible();
+  const catalog = await window.evaluate(() => globalThis.window.desktop?.getCatalog('QA'));
+  expect(catalog).toMatchObject({
+    ok: true,
+    value: { atms: [{ alias: 'ATM QA editado', revision: 2, active: false, status: 'DRAFT' }] },
+  });
+  await mkdir('artifacts', { recursive: true });
+  await window.screenshot({ path: 'artifacts/atm-catalog.png', fullPage: true });
+  await window.getByRole('button', { name: 'Eliminar ATM QA editado', exact: true }).click();
+  await window.getByRole('dialog').getByRole('button', { name: 'Confirmar eliminación' }).click();
+  await expect(
+    window.getByRole('button', { name: 'Editar ATM QA editado', exact: true }),
+  ).toHaveCount(0);
+  await window.getByRole('button', { name: 'Entidades', exact: true }).click();
+  await window.getByRole('button', { name: 'Eliminar TEST-E2E', exact: true }).click();
+  await window.getByRole('dialog').getByRole('button', { name: 'Confirmar eliminación' }).click();
+  await expect(window.getByRole('dialog').getByRole('alert')).toContainText(
+    'perfiles ATM asociados',
+  );
+  await window.getByRole('dialog').getByRole('button', { name: 'Cancelar', exact: true }).click();
+  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
+  await window.getByRole('button', { name: 'Perfiles ATM', exact: true }).click();
+  await window.getByRole('button', { name: 'Eliminar ATM sintético PREPROD', exact: true }).click();
+  await window.getByRole('dialog').getByRole('button', { name: 'Confirmar eliminación' }).click();
+  await expect(window.getByText('Aún no hay perfiles ATM en este ambiente')).toBeVisible();
+  await window.getByRole('button', { name: 'Entidades', exact: true }).click();
+  await window.getByRole('button', { name: 'Eliminar TEST-E2E', exact: true }).click();
+  await window.getByRole('dialog').getByRole('button', { name: 'Confirmar eliminación' }).click();
+  await expect(window.getByText('Crea tu primera entidad de prueba')).toBeVisible();
+});
+
+test('una edición concurrente se conserva y los contratos rechazan producción/datos sensibles', async () => {
+  const window = await launch();
+  await createTestEntity(window);
+  await window.getByRole('button', { name: 'Editar TEST-E2E', exact: true }).click();
+  const result = await window.evaluate(async () => {
+    const api = globalThis.window.desktop;
+    if (!api) throw new Error('Service unavailable');
+    const catalog = await api.getCatalog('QA');
+    if (!catalog.ok || !catalog.value.entities[0]) throw new Error('Catalog unavailable');
+    const entity = catalog.value.entities[0];
+    const saved = await api.saveEntity({
+      environment: 'QA',
+      id: entity.id,
+      revision: entity.revision,
+      values: {
+        code: entity.code,
+        name: 'Cambio concurrente E2E',
+        networkType: entity.networkType,
+        active: entity.active,
+      },
+    });
+    const production = await api.getCatalog('PROD' as Environment);
+    const sensitive = await api.saveEntity({
+      environment: 'QA',
+      id: null,
+      revision: null,
+      values: { code: 'SENSITIVE', name: '0'.repeat(16), networkType: 'COONECTA', active: true },
+    });
+    return { saved, production, sensitive };
+  });
+  expect(result.saved).toMatchObject({ ok: true });
+  expect(result.production).toMatchObject({ ok: false, error: { code: 'VALIDATION_ERROR' } });
+  expect(result.sensitive).toMatchObject({ ok: false, error: { code: 'VALIDATION_ERROR' } });
+  await window.getByLabel('Nombre de entidad').fill('Edición obsoleta');
+  await window.getByRole('button', { name: 'Guardar borrador' }).click();
+  await expect(window.getByRole('alert')).toContainText('El registro cambió');
+  await expect(window.getByRole('button', { name: 'Guardar borrador' })).toBeDisabled();
+  await window.getByRole('button', { name: 'Recargar', exact: true }).click();
+  await expect(
+    window.getByRole('cell', { name: 'Cambio concurrente E2E', exact: true }),
+  ).toBeVisible();
+  await expect(window.getByText('Edición obsoleta', { exact: true })).toHaveCount(0);
+});
+
+test('SQLite corrupto bloquea el catálogo pero permite el shell y conserva el archivo', async () => {
+  const file = join(directory, 'catalogs.sqlite');
+  await writeFile(file, 'private-secret');
+  const window = await launch();
+  await window.getByRole('button', { name: 'Entidades', exact: true }).click();
+  await expect(window.getByRole('alert')).toContainText('No se pudo abrir el catálogo local');
+  await expect(window.getByRole('button', { name: 'Nueva entidad' })).toBeDisabled();
+  await expect(window.getByText('private-secret')).toHaveCount(0);
+  expect(await window.evaluate(() => globalThis.window.desktop?.getSnapshot())).toMatchObject({
+    ok: true,
+  });
+  expect(await readFile(file, 'utf8')).toBe('private-secret');
 });
 
 test('PREPROD y su auditoría persisten entre reinicios', async () => {
