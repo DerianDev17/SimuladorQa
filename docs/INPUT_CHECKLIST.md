@@ -70,6 +70,7 @@ datos/evidencia externos y solo se marcaran al recibirlos y validarlos.
 - [x] Historial con filtros parametrizados Journal/Message PREPROD, bigint como string, limites, errores/timeout y estructura XML protegida fuera del Renderer; acceso real pendiente de TLS/cuenta.
 - [x] Configuracion muestra evidencia privada de red por ambiente, con destino ATM/PID/peer y pendientes; Main valida archivo acotado, sin sockets ni habilitar envio.
 - [x] Puerto/emisor de captura QA con un write tras conectar, validacion, deadlines, cierre y metricas sin contenido; pruebas TCP locales. No habilita envio general ni genera campos ISO. Ver `docs/implementation/QA_CAPTURE_REPLAY.md`.
+- [x] Envolvente VISA VCP Lite implementada fuera del Renderer: cuatro bytes, cuerpo BE16, extension opaca, fragmentacion y fuente truncada; 262 frames reconstruidos identicos. Caso USD 20 / STAN 001391 preparado offline conservando campos originales; admision de PC y generacion ISO pendientes.
 
 Detalle y pruebas: `docs/implementation/TRANSACTION_PREPARATION.md`.
 

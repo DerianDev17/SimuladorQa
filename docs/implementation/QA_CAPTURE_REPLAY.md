@@ -97,14 +97,56 @@ No se cambia el PID activo ni se envia otra transaccion durante el diagnostico.
 runId: 2fcdaf9c-8715-4213-88f3-26c76abe2ab6; evidencia privada de metadatos:
 artifacts/qa-switch-greeting.json.
 
-La revision offline del paquete 759 observa 548 bytes y valor 544 al leer los
-primeros dos bytes como BE16. No coincide con longitud total ni total menos dos.
-No se recorta/reencapsula ni se declara completo un mensaje ISO a partir de un
-limite de paquete TCP. Resolver SWITCH-ATM-FRAMING con el perfil aprobado sigue
-siendo necesario despues de resolver la autorizacion de la conexion.
+La revision inicial del paquete 759 observaba 548 bytes y valor BE16 544, sin
+explicar la diferencia. La captura VCP Lite y sus logs posteriores identifican
+la envolvente de cuatro bytes descrita abajo; ya no se considera desconocida
+esa mecanica para esta muestra. El perfil completo del proveedor sigue pendiente.
+
+## Caso USD 20 y envolvente observada VCP Lite
+
+La nueva fuente CertificacionVcpLite450Diebold.pcap y los logs de la misma hora
+permiten seleccionar el retiro historico STAN 001391 / UTRNNO
+262801638052798660, Terminal ATM20301, codigo observado 011000. El log registra
+monto 2000 y moneda 840; el monitor de ese caso muestra USD 20 y respuesta 00.
+El estado interno final observado es -1. Esta correlacion identifica la muestra;
+no define por si sola reglas generales de packing o aprobacion futura.
+
+El request es el paquete 543, con 562 bytes: BE16 de 558 bytes de cuerpo,
+extension 0000 y cuerpo opaco. Su respuesta historica es el paquete 545, con
+220 bytes, cuerpo 216 y extension 2020. El codigo CapturedVisaFraming preserva
+los dos bytes de extension sin interpretarlos, soporta fragmentacion TCP y
+varios frames concatenados, y rechaza fin de fuente incompleta. No aplica el
+codec BANRED ni decodifica campos ISO. El maximo mecanico BE16 es 65535 bytes de
+cuerpo (65539 de frame); el emisor conserva su limite tecnico de 65535 bytes
+totales. No se modifica ese limite por una observacion de esta captura.
+
+La herramienta privada artifacts/prepare-vcp-approved-replay.mjs verifica hash
+de PCAP, direccion/puertos, hashes request/response y destino documental QA antes
+de preparar el caso. Utiliza el codec implementado para reensamblar y reconstruir
+262/262 frames byte a byte, sin huecos, conflictos ni residuo. No abre sockets.
+Guarda exclusivamente metadatos en qa-replay-profile.json del directorio privado
+de datos de la app y artifacts/qa-vcp-replay-case.json; no almacena payload
+extraido. Estos reportes no son un catalogo de casos importado en la UI.
+
+La reproduccion preparada conserva todos los campos historicos, incluida la
+tarjeta original terminada en 0663, fechas y STAN/RRN. No se reemplazan por la
+tarjeta ficticia terminada en 0311 ni por otra cuenta. Reutilizar campos de
+seguridad o identificadores no garantiza aceptacion. Construir un request nuevo
+requiere el diccionario y las reglas de sesion, PIN/HSM y campos dinamicos.
+Se preparo offline sin nuevo envio porque la ultima evidencia de la PC sigue
+siendo NO AUTHORIZATION antes de escribir. La admision y la envolvente son
+dependencias distintas; las capturas aprobadas resuelven la segunda para este
+caso, pero no cambian la configuracion del PID ni prueban llegada al Core.
+
+Detalle de correlacion y conflicto del enlace Mediator:
+`docs/protocols/VCP_LITE_450_REVIEW.md`.
 
 Unit: QA obligatorio, entrada invalida sin sockets, conexion pendiente sin write
 ni reintento y error protegido. Integration: servidor TCP local real, bytes
 originales pese a mutacion del consumidor, envio unico, respuesta contada sin
 contenido, silencio con plazo, dependencia no disponible y limite de recepcion.
 Las fixtures son sinteticas y no constituyen una transaccion bancaria aprobada.
+Las pruebas adicionales del encapsulado cubren request/response, extension,
+fragmentacion, concatenacion, limites y entrada invalida. La integracion TCP
+local comprueba una entrega completa y un receptor que espera un frame truncado
+hasta finalizar la ventana de observacion. No usa datos bancarios reales.

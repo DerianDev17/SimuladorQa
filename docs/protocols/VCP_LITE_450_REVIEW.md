@@ -123,6 +123,13 @@ historico de 548 bytes con longitud inicial 544 es compatible con esta forma;
 la nueva evidencia explica esa diferencia sin recortar cuatro bytes de la fuente.
 No se convierte una coincidencia de packing en autorizacion para enviar.
 
+CapturedVisaFraming implementa esta mecanica fuera del Renderer. La verificacion
+offline con el codigo de la app vuelve a reconstruir los 262 frames identicos,
+con fragmentos de 37 bytes para ejercitar limites distintos de los paquetes.
+El caso USD 20 / STAN 001391 queda preparado por hashes request/response, sin
+nuevo envio ni modificaciones de campos; detalle en
+`docs/implementation/QA_CAPTURE_REPLAY.md`.
+
 ## Reportes privados y pendientes
 
 Reportes JSON de metadatos bajo artifacts: vcp-log-review, vcp-pcap-review,
