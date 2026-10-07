@@ -25,6 +25,15 @@ pero el extremo responde NO AUTHORIZATION y cierra incluso sin enviar trama.
 SWITCH-ATM-ACCESS queda pendiente de autorizacion/asociacion al PID y de confirmar
 la IP vista por SmartVista, no de apertura TCP general. El usuario no encuentra
 el intento de captura en los monitores. Ver `docs/implementation/QA_CAPTURE_REPLAY.md`.
+
+Nueva evidencia VCP Lite 450 Diebold: PCAP y 39 logs de 11:00-12:00. El log VISA
+lee cuatro bytes de cabecera e ignora la longitud configurada; 262 envolventes
+de 16100 se reconstruyen sin residuo. Se localiza retiro USD 20, STAN 001391,
+y dos reversos emparejados con sus originales. ISO-SPEC permanece pendiente.
+Los logs enrutan al PID 82032, confirmado por el usuario como Mediator 49212,
+pero ese PCAP no contiene payload financiero en 49212. Falta resolver esta
+diferencia y recibir el tramo horario de nuestra denegacion antes de atribuir
+una causa de configuracion precisa. Ver `docs/protocols/VCP_LITE_450_REVIEW.md`.
 El manual recibido aporta reglas parciales de Mediator/Core: no se considera trama ATM ni mock aprobado.
 Ver `docs/implementation/BOOTSTRAP.md` para el alcance ya implementado.
 El CRUD local de entidades/ATM funciona con configuracion en borrador; no completa ni valida automaticamente los items del checklist. Ver `docs/implementation/LOCAL_CATALOGS.md`.

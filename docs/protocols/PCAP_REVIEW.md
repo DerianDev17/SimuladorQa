@@ -1,5 +1,13 @@
 # Revision de capturas transaccionales
 
+Actualizacion 2026-10-07: recibidos PCAP VCP Lite 450 Diebold y 39 logs del
+Switch. Revision separada en [VCP Lite 450](VCP_LITE_450_REVIEW.md): 13 solicitudes
+ATM correlacionadas y 262 envolventes del enlace 16100 reconstruidas con cabecera
+efectiva de cuatro bytes, sustentada por tcpcomms01. El retiro STAN 001391
+corresponde a USD 20; los mensajes financieros del PID 82032 no aparecen en
+el enlace 49212 del nuevo PCAP. No se modifica el reporte historico BANRED ni
+se habilita una nueva trama o se declara llegada al Core.
+
 Inspeccion local del 2026-10-06, completada a `2026-10-07T03:00:02.875Z` (UTC).
 Reporte UUID `b8be8605-9ba2-497a-aa05-70bd476764ec`.
 Se recibieron los diez archivos de `Tramas transacciones/`. Los originales son
