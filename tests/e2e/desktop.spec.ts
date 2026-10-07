@@ -7,6 +7,7 @@ import { DatabaseSync } from 'node:sqlite';
 import type { Environment } from '../../packages/domain/src/index';
 import { createServer } from 'vite';
 import { removeTestDirectory } from '../helpers/temporary-directory';
+import { networkEvidence } from '../helpers/network-evidence';
 
 let directory: string;
 let app: ElectronApplication | undefined;
@@ -39,6 +40,9 @@ test('composición del mockup: tres paneles y resumen dentro de la ventana deskt
     BrowserWindow.getAllWindows()[0]?.setContentSize(1536, 1024),
   );
   await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
+  await expect(
+    window.getByRole('button', { name: 'Recargar perfiles', exact: true }),
+  ).toBeEnabled();
   const composition = await window.evaluate(() => {
     const bounds = (selector: string) => {
       const rect = document.querySelector(selector)!.getBoundingClientRect();
@@ -95,6 +99,44 @@ test.afterEach(async () => {
   await app?.close();
   app = undefined;
   await removeTestDirectory(directory, 'coonecta-e2e-');
+});
+
+test('Configuración muestra evidencia documental QA sin conectar ni heredarla en PREPROD', async () => {
+  await writeFile(join(directory, 'network-evidence.json'), JSON.stringify(networkEvidence()));
+  const window = await launch();
+  await window.getByRole('button', { name: 'Configuración', exact: true }).click();
+  const evidence = window.getByLabel('Evidencia de red del Switch', { exact: true });
+  await expect(evidence.getByRole('heading', { name: 'Destino ATM documentado' })).toBeVisible();
+  await expect(evidence.getByText('10.0.0.11:16100', { exact: true })).toBeVisible();
+  await expect(evidence.getByText('PID 80131 · TCP01 · VISA', { exact: true })).toBeVisible();
+  await expect(evidence.getByText('Sin conexión comprobada', { exact: true })).toBeVisible();
+  await expect(
+    evidence.getByText('Esta PC; acceso desde su IP pendiente de validar'),
+  ).toBeVisible();
+  await mkdir('artifacts', { recursive: true });
+  await window.screenshot({ path: 'artifacts/switch-network-evidence-test.png', fullPage: true });
+  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
+  await expect(evidence.getByRole('status')).toContainText(
+    'No hay evidencia de red cargada para PREPROD',
+  );
+  await expect(evidence.getByText('10.0.0.11:16100', { exact: true })).toHaveCount(0);
+  await window.getByLabel('Ambiente', { exact: true }).selectOption('QA');
+  await expect(evidence.getByText('10.0.0.11:16100', { exact: true })).toBeVisible();
+  await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
+  await expect(window.getByRole('button', { name: 'Enviar transacción' })).toBeDisabled();
+});
+
+test('evidencia de red corrupta muestra error seguro sin impedir usar el shell', async () => {
+  await writeFile(join(directory, 'network-evidence.json'), '{private-secret');
+  const window = await launch();
+  await window.getByRole('button', { name: 'Configuración', exact: true }).click();
+  const evidence = window.getByLabel('Evidencia de red del Switch', { exact: true });
+  await expect(evidence.getByRole('alert')).toContainText(
+    'No se pudo validar la evidencia local de red',
+  );
+  await expect(window.getByText('private-secret')).toHaveCount(0);
+  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
+  await expect(window.getByLabel('Ambiente', { exact: true })).toHaveValue('PREPROD');
 });
 
 test('Historial: consulta Mediator validada, QA bloqueado y dependencia no configurada', async () => {

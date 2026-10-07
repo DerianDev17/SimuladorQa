@@ -12,6 +12,7 @@ import { CmsV36Catalog } from './adapters/cms-v36-catalog';
 import { MediatorSchemaInspector } from './adapters/mediator-schema-inspector';
 import { CapturedEvidenceCatalog } from './adapters/captured-evidence-catalog';
 import { MediatorObserver } from './adapters/mediator-observer';
+import { FileNetworkEvidence } from './adapters/file-network-evidence';
 
 const development = process.argv.includes('--dev');
 const rendererFile = join(__dirname, 'renderer', 'index.html');
@@ -88,6 +89,7 @@ void app
       new MediatorSchemaInspector(),
       new CapturedEvidenceCatalog(),
       observer,
+      await FileNetworkEvidence.load(join(app.getPath('userData'), 'network-evidence.json')),
     );
     for (const channel of Object.values(channels)) {
       ipcMain.handle(channel, (event, payload: unknown) => {

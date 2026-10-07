@@ -18,6 +18,7 @@ import type {
 import type { CaptureEvidence } from '../../domain/src/capture-evidence';
 import type { SaveCaseRequest } from '../../domain/src/saved-cases';
 import type { ObservationRequest, ObservationSearch } from '../../domain/src/observations';
+import type { NetworkEvidenceSnapshot } from '../../domain/src/network-evidence';
 
 export const channels = {
   snapshot: 'app:snapshot',
@@ -69,6 +70,7 @@ export interface AppSnapshot {
   audit: readonly EnvironmentAudit[];
   documentedOperations: readonly DocumentedOperation[];
   captureEvidence: CaptureEvidence | null;
+  networkEvidence: NetworkEvidenceSnapshot;
 }
 
 export interface ReviewedDraft extends DraftReview {

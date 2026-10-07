@@ -25,8 +25,9 @@ Tambien aporto dos filas/captura de USR_RelationEntity para CB Cooperativa,
 entidad 205 y canales 1/21, con el mismo servicio HTTPS y timeout observado
 20000. Confirmo **QA** y el recorrido cajero -> Switch/SmartVista -> Core ->
 respuesta: el simulador debe entrar por el Switch. Ver
-[evidencia de destino](MEDIATOR_ENTITY_205_ROUTING.md). Faltan endpoint ATM del
-Switch, contrato ISO/framing y contrato HTTP/XML/unidad del timeout Core;
+[evidencia de destino](MEDIATOR_ENTITY_205_ROUTING.md). Entrada ATM del Switch y
+enlace Mediator aportados despues: [evidencia de red](../implementation/SWITCH_NETWORK_EVIDENCE.md).
+Faltan acceso desde la PC al PID, contrato ISO/framing y HTTP/XML/unidad del timeout Core;
 no se llama al servicio ni se altera la configuracion del servidor.
 
 ## Principios

@@ -16,6 +16,7 @@ import type { CatalogSnapshot } from '../../../../packages/domain/src/catalogs';
 import { CatalogView } from './CatalogView';
 import { TransactionWorkspace } from './TransactionWorkspace';
 import { ObservationView } from './ObservationView';
+import { NetworkEvidenceView } from './NetworkEvidenceView';
 import type { CatalogMutation } from './CatalogView';
 import { DesktopClient } from './desktop-client';
 import { Icon } from './Icon';
@@ -451,8 +452,14 @@ export function App() {
                   },
                   {
                     label: 'Conexión al Switch',
-                    value: 'Sin configurar',
-                    note: 'Endpoint pendiente',
+                    value:
+                      snapshot?.networkEvidence.status === 'DOCUMENTED'
+                        ? 'Sin comprobar'
+                        : 'Sin configurar',
+                    note:
+                      snapshot?.networkEvidence.status === 'DOCUMENTED'
+                        ? 'Destino documentado; acceso pendiente'
+                        : 'Endpoint pendiente',
                     icon: 'monitor' as const,
                     color: 'amber',
                   },
@@ -566,6 +573,7 @@ export function App() {
 
           {page === 'settings' && (
             <>
+              <NetworkEvidenceView state={snapshot?.networkEvidence} environment={environment} />
               <section className="panel settings-panel">
                 <div className="panel-heading">
                   <h2>Estado de configuración</h2>

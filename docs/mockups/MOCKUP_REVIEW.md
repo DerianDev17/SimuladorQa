@@ -85,6 +85,10 @@ La referencia visual sigue separada del contrato de red.
   legible. En 1536 x 1024 se comprueba que los tres paneles y resumen inferior
   entren en la ventana; en 1040 x 760 se comprueba ausencia de overflow horizontal.
 
+La comprobacion de 1536 x 1024 espera a que los perfiles terminen de cargar.
+El resumen inferior conserva espacio vertical compacto para que tambien entre
+con los catalogos ya disponibles, sin medir solo el estado de carga inicial.
+
 No se replica el verde Conectado/5 de 5 online ni transacciones aprobadas de ejemplo.
 El estado local y la conexion Switch se presentan por separado. PREPROD conserva
 su banner y color ambar. El catalogo de saldo mantiene 301000/302000 del manual.

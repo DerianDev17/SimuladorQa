@@ -5,10 +5,10 @@
 - **TODO-DATA ISO-SPEC**: faltan ContextoISO.xml y especificacion ATM aprobada. Bloquea construir/parsear campos de negocio ISO, PIN/HSM y reglas de negocio; la envolvente observada se verifica offline sin interpretar esos campos.
 - **TODO-DATA CMS-ATM-MAPPING / CMS-XML-CONTRACT / CMS-RESULT-MAPPING**: recibido Extreme Mediator CMS v3.6 para XML/REST Mediator-Core. Falta validar su correspondencia con ATM, las diferencias tablas/ejemplos y los codigos por canal; no sustituye ISO-SPEC. Conflictos y solicitudes registrados en `docs/protocols/EXTREME_MEDIATOR_CMS_REVIEW.md`.
 - **TODO-DATA CMS-REVERSAL / CMS-CORRELATION / CMS-TRANSPORT / CMS-POS-MAPPING**: el manual lista familias MTI y campos Core, pero faltan la seleccion del reverso, reglas de correlacion, contrato REST y resolucion de diferencias POS. Bloquean solo sus adaptadores/reglas dependientes.
-- **TODO-DATA SWITCH-ATM-QA-ENDPOINT / CMS-TRANSPORT**: recibida URL HTTPS Core configurada para CB Cooperativa, entidad 205, canales 1/21, en USR_RelationEntity. Usuario confirmo QA y recorrido cajero -> Switch/SmartVista -> Core -> respuesta. Faltan host/puerto ATM del Switch, contrato ISO/framing y contrato HTTP/XML/unidad del timeout Core 20000. Evidencia privada y limites en `docs/core/MEDIATOR_ENTITY_205_ROUTING.md`; el perfil SQL PREPROD existente no cambia.
+- **TODO-DATA SWITCH-ATM-ACCESS / SWITCH-ATM-FRAMING / CMS-TRANSPORT**: recibida URL HTTPS Core de CB Cooperativa 205/canales 1/21, entrada ATM SmartVista 16100 y enlace Mediator 49212. Usuario confirmo todos esos enlaces QA y simulador desde su PC. Faltan acceso desde la PC al PID (remoto configurado: equipo de cajeros), ISO/framing, TLS/timeouts/conexiones y contrato HTTP/XML/unidad del timeout Core 20000. Ver `docs/implementation/SWITCH_NETWORK_EVIDENCE.md` y `docs/core/MEDIATOR_ENTITY_205_ROUTING.md`; el perfil SQL PREPROD existente no cambia.
 - **TODO-DATA GOLDEN-SAMPLES / PCAP-CASE-MAPPING**: recibidos diez PCAP, con 218 envolventes BANRED reconstruidas byte a byte. Falta identificar/aprobar request/response de cada flujo MVP y correlacionar originales/reversos. Bloquea validacion de campos, codigos de respuesta y resultados de negocio. Ver `docs/protocols/PCAP_REVIEW.md`.
-- **TODO-DATA PCAP-LINK-PROFILES**: BE16 inclusivo/header/bitmap confirmados solo para el enlace capturado 4946. Faltan ambiente, roles/diccionario de los otros enlaces y explicacion de solapamientos distintos. No se aplica este perfil automaticamente a todos los ATM.
-- **TODO-DATA ENVIRONMENT**: faltan endpoints autorizados QA/PREPROD, framing, TLS y timeouts por escenario. Bloquea conectar/enviar TCP.
+- **TODO-DATA PCAP-LINK-PROFILES**: BE16 inclusivo/header/bitmap confirmados solo para enlace capturado 4946. Usuario identifico roles/QA de enlaces actuales 16100 y 49212; no certifica el perfil de sus PCAP. Persisten framing/diccionario, validacion de capturas completas y explicacion de solapamientos. No se aplica 4946 automaticamente a ATM.
+- **TODO-DATA ENVIRONMENT**: recibida entrada ATM QA y enlace con Mediator; faltan acceso desde PC al PID, framing, TLS, limites y timeouts por escenario. PREPROD tiene configuracion independiente. Bloquea solo conectar/enviar TCP dependiente.
 - **TODO-DATA PROFILES**: faltan ATM y tarjeta completos/validados. Bloquea configurar ejecuciones reales; el shell desktop y la seleccion de ambiente funcionan de forma independiente.
 - **TODO-DATA AMOUNT-RULES**: faltan moneda, limites, monto minimo/maximo, denominaciones y reglas por cuenta/escenario para retirar. El borrador solo valida la sintaxis decimal del manual; no aprueba elegibilidad financiera.
 - **TODO-DATA ENTITY-CLASSIFICATION**: ENTITY_MODEL propone red/membresia separadas y ENTITY_TEMPLATE mezcla FRONT/BACK/EXTERNA/BANRED como Tipo. Se solicito validacion; el CRUD usa los campos comunes y difiere membresia, BIN/Core y deteccion automatica de escenarios.
@@ -53,6 +53,7 @@ datos/evidencia externos y solo se marcaran al recibirlos y validarlos.
 - [x] Composicion visual del mockup compactada: navegacion, cabecera, pasos/recorrido, inspector tabular e historial/metricas.
 - [x] Requisitos/CMS/PCAP separados del area de operacion; estados reales y codigos del manual conservados.
 - [x] Historial con filtros parametrizados Journal/Message PREPROD, bigint como string, limites, errores/timeout y estructura XML protegida fuera del Renderer; acceso real pendiente de TLS/cuenta.
+- [x] Configuracion muestra evidencia privada de red por ambiente, con destino ATM/PID/peer y pendientes; Main valida archivo acotado, sin sockets ni habilitar envio.
 
 Detalle y pruebas: `docs/implementation/TRANSACTION_PREPARATION.md`.
 
@@ -68,7 +69,7 @@ Detalle y pruebas: `docs/implementation/TRANSACTION_PREPARATION.md`.
 - [ ] Trama reverso request/response + original.
 - [ ] PCAP reverso.
 - [ ] Evidencia timeout + reverso.
-- [ ] Host/puerto QA por escenario.
+- [x] Host/puerto de entrada ATM QA aportado con PID/netstat; acceso desde PC y perfil/escenarios pendientes.
 - [ ] Host/puerto PREPROD por escenario.
 - [ ] Regla VLI/header/encoding.
 - [ ] Timeout oficial por escenario.

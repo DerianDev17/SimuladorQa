@@ -38,6 +38,10 @@ Permitir que varias estaciones QA ejecuten transacciones ATM funcionales y carga
      redaccion XML en proceso PowerShell/.NET externo al Renderer. La vista
      no asigna resultados transaccionales. Ver ADR-009.
 
+La evidencia documental de red se carga en Main desde un archivo privado
+acotado mediante NetworkEvidenceCatalog. Se valida y se proyecta por ambiente
+en Configuracion; no reemplaza los adaptadores de transporte ni autoriza sockets.
+
 ## Restricciones
 
 - Produccion bloqueada.

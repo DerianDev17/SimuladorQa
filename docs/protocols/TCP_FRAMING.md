@@ -17,10 +17,18 @@ Material previo indica como referencia inicial:
 
 ## Pendiente de confirmar
 
+Actualizacion 2026-10-07: el usuario aporto entrada ATM SmartVista 16100,
+enlace SmartVista/Mediator 49212, roles de hosts y PID/netstat. Confirmo QA
+para todos esos enlaces y ejecucion del simulador desde su PC. Configuracion
+muestra evidencia documental por ambiente. Ver
+[evidencia de red](../implementation/SWITCH_NETWORK_EVIDENCE.md).
+El PID muestra longitud de encabezado 2 y keep alive habilitado; no define por
+si solo encoding, inclusion del prefijo ni contenido de cabecera de negocio.
+El framing del enlace 16100 sigue sin validarse con un stream completo.
+
 Por escenario/ambiente:
 
-- host/IP;
-- puerto;
+- acceso al host/puerto ATM QA recibido desde la PC/PID; otros endpoints por escenario;
 - encoding del VLI;
 - inclusion/exclusion de VLI dentro de la longitud;
 - contenido de header;

@@ -11,7 +11,10 @@ El usuario confirmo despues que el destino corresponde a **QA** y que el flujo
 es cajero -> Switch/SmartVista -> Core -> respuesta. La app simula el cajero y
 su punto de entrada es el Switch/SmartVista de QA. La URL aportada identifica
 el servicio Core configurado en el servidor; no se aplica como host TCP del
-simulador. Falta el host/puerto ATM del Switch y su contrato/framing.
+simulador. Posteriormente aporto el host/puerto ATM del Switch y capturas del
+PID/netstat, confirmando todos esos enlaces como QA y ejecucion desde su PC.
+Ver [evidencia de red](../implementation/SWITCH_NETWORK_EVIDENCE.md).
+El acceso desde la PC y el contrato/framing siguen pendientes.
 
 El esquema PREPROD previamente inspeccionado contiene estos nombres/tipos de
 columnas; la captura permite reconocer los campos, pero no certifica el esquema
@@ -53,9 +56,10 @@ datos sensibles en la app.
 
 ## TODO-DATA acotados
 
-- SWITCH-ATM-QA-ENDPOINT: host/puerto de entrada ATM del Switch/SmartVista,
-  transporte/TLS, framing y contrato ISO aprobado. Ambiente QA y recorrido
-  cajero -> Switch -> Core confirmados; no hay envio directo al Core.
+- SWITCH-ATM-ACCESS / SWITCH-ATM-FRAMING: entrada ATM del Switch recibida;
+  faltan acceso desde la PC al PID, transporte/TLS, framing y contrato ISO
+  aprobado. Ambiente QA y recorrido cajero -> Switch -> Core confirmados;
+  no hay envio directo al Core.
 - CMS-TRANSPORT: metodo, ruta/operacion exacta, Content-Type, cabeceras,
   autenticacion, TLS y unidad/semantica de entEndPointTimeOut.
 - CMS-XML-CONTRACT: request/response emparejados y sanitizados o contrato validado
@@ -65,5 +69,5 @@ datos sensibles en la app.
 
 La nueva URL es un destino de servicio, independiente del acceso SQL del
 observador. No resuelve el certificado SQL ni la credencial con minimo privilegio.
-Solo la parte de envio dependiente del endpoint Switch y contrato permanece
+Solo la parte de envio dependiente del acceso al PID y contrato permanece
 bloqueada. El observador SQL PREPROD existente conserva su configuracion y alcance.

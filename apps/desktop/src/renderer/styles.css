@@ -1617,7 +1617,7 @@ main {
 }
 .transaction-bottom-grid .panel {
   min-width: 0;
-  padding: 12px;
+  padding: 8px 12px;
 }
 .transaction-bottom-grid .panel-heading {
   margin-bottom: 8px;
@@ -2133,4 +2133,17 @@ td {
   border-radius: 8px;
   max-height: 320px;
   overflow: auto;
+}
+.network-evidence-view {
+  padding: 24px;
+}
+.network-evidence-view > p {
+  margin-bottom: 16px;
+}
+.network-evidence-view .document-note {
+  margin: 16px 0;
+}
+.network-evidence-view small,
+.network-evidence-view dd {
+  overflow-wrap: anywhere;
 }

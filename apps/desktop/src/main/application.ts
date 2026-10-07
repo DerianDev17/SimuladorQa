@@ -24,6 +24,7 @@ import { parseSaveCaseRequest } from '../../../../packages/domain/src/saved-case
 import { parseObservationRequest } from '../../../../packages/domain/src/observations';
 import type { ObservationSearch } from '../../../../packages/domain/src/observations';
 import type { TransactionObserver } from './observation-port';
+import type { NetworkEvidenceCatalog } from '../../../../packages/domain/src/network-evidence';
 
 // Las operaciones locales comparten cola. El observador verifica el ambiente antes
 // y después de consultar, sin retener esa cola durante la espera de red.
@@ -39,6 +40,7 @@ export class DesktopApplication {
     private readonly destinationInspector?: DestinationInspector,
     private readonly captureEvidence?: CaptureEvidenceCatalog,
     private readonly observer?: TransactionObserver,
+    private readonly networkEvidence?: NetworkEvidenceCatalog,
   ) {}
 
   private serialize<T>(operation: () => Promise<T>): Promise<T> {
@@ -61,6 +63,9 @@ export class DesktopApplication {
       audit: [...preferences.audit].reverse(),
       documentedOperations: this.operations?.entries ?? [],
       captureEvidence: this.captureEvidence?.report ?? null,
+      networkEvidence: this.networkEvidence?.forEnvironment(preferences.environment) ?? {
+        status: 'NOT_CONFIGURED',
+      },
     };
   }
 

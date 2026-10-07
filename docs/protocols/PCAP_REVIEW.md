@@ -86,6 +86,12 @@ sinteticas prueban estructura; no son golden samples de saldo/retiro/reverso.
 
 ## TODO-DATA y validaciones solicitadas/registradas
 
+Los roles actuales de SmartVista, Mediator y cajeros, puertos 16100/49212 y
+ambiente QA fueron confirmados despues por el usuario. Esto no valida el
+encapsulado de esos PCAP. La revision preliminar de sus streams, incluidos los
+solapamientos y perfiles incompletos, queda registrada en
+[evidencia de red](../implementation/SWITCH_NETWORK_EVIDENCE.md).
+
 - **PCAP-LINK-PROFILES**: ambiente QA/PREPROD, roles de cada endpoint, perfil y
   diccionario para los enlaces binarios/otros formatos (entre ellos puertos 16100,
   49212, 10200, 16214 y 49206/49208). El nombre Visa/Externa de un archivo no
