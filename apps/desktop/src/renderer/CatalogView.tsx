@@ -580,7 +580,13 @@ export function CatalogView({
                 {catalog.audit.slice(0, 10).map((entry) => (
                   <tr key={entry.id}>
                     <td>{new Date(entry.timestamp).toLocaleString('es-EC')}</td>
-                    <td>{entry.resource === 'ENTITY' ? 'Entidad' : 'ATM'}</td>
+                    <td>
+                      {entry.resource === 'ENTITY'
+                        ? 'Entidad'
+                        : entry.resource === 'ATM'
+                          ? 'ATM'
+                          : 'Caso'}
+                    </td>
                     <td>
                       {
                         { CREATED: 'Creado', UPDATED: 'Actualizado', DELETED: 'Eliminado' }[

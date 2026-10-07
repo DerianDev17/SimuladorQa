@@ -6,13 +6,16 @@ import type {
 } from '../../domain/src/catalogs';
 import type { Environment } from '../../domain/src/index';
 import type { Result } from './contracts';
+import type { SaveCaseRequest } from '../../domain/src/saved-cases';
 
 export type CatalogCommand =
   | { kind: 'list'; environment: Environment }
   | { kind: 'saveEntity'; request: SaveEntityRequest }
   | { kind: 'deleteEntity'; request: DeleteRequest }
   | { kind: 'saveAtm'; request: SaveAtmRequest }
-  | { kind: 'deleteAtm'; request: DeleteRequest };
+  | { kind: 'deleteAtm'; request: DeleteRequest }
+  | { kind: 'saveCase'; request: SaveCaseRequest }
+  | { kind: 'deleteCase'; request: DeleteRequest };
 export interface CatalogContext {
   user: string;
   machine: string;

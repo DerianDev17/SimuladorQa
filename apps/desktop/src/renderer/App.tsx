@@ -116,6 +116,10 @@ export function App() {
           return api.deleteEntity(command.request);
         case 'deleteAtm':
           return api.deleteAtm(command.request);
+        case 'saveCase':
+          return api.saveCase(command.request);
+        case 'deleteCase':
+          return api.deleteCase(command.request);
       }
     });
     if (result.ok) {
@@ -555,6 +559,7 @@ export function App() {
               onRefresh={refreshCatalog}
               onReviewingChange={setTransactionBusy}
               onNavigate={setPage}
+              onCatalogChange={setCatalog}
             />
           </div>
 

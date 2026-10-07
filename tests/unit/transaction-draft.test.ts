@@ -20,7 +20,13 @@ const request: DraftRequest = {
   account: 'SAVINGS',
   amount: null,
 };
-const emptyCatalog: CatalogSnapshot = { environment: 'QA', entities: [], atms: [], audit: [] };
+const emptyCatalog: CatalogSnapshot = {
+  environment: 'QA',
+  entities: [],
+  atms: [],
+  audit: [],
+  cases: [],
+};
 
 describe('catálogo documental CMS v3.6', () => {
   it.each([
@@ -156,6 +162,7 @@ describe('borrador sin ejecución ni datos de tarjeta', () => {
     const catalog: CatalogSnapshot = {
       environment: 'QA',
       audit: [],
+      cases: [],
       entities: [
         {
           ...metadata,

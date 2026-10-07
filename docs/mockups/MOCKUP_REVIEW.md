@@ -19,7 +19,7 @@ La lectura del manual asociado se documenta en
 | Timeline ATM -> Switch -> Core -> respuesta | Conectores verticales, iconos y bloque de resultado/RC/monto pendientes con distribucion compacta | Eventos y tiempos reales; estado de observabilidad independiente del resultado transaccional |
 | Inspector solicitud/respuesta, campos/RAW/HEX | Tabla Campo/Descripcion/Valor vacia; pestanas/vista deshabilitadas; referencia CMS y PCAP debajo del resumen | Contrato de evidencia sanitizada fuera del Renderer; diccionario y tramas |
 | Ultimas transacciones y metricas realtime | Tabla de ocho columnas, acceso a Historial y tarjetas TPS/total/resultados con cero ejecuciones, sin ventana activa | Agregados con ventana y origen identificados al implementar el motor |
-| Plantillas / Guardar como caso | Plantillas documentales saldo/retiro por cuenta implementadas, con fuente CMS; casos persistentes pendientes | Templates ISO aprobados y caso asociado a evidencia sanitizada |
+| Plantillas / Guardar como caso | Plantillas documentales por cuenta con fuente CMS; casos DRAFT persistentes por ambiente con referencias documentales y revalidacion ATM | Templates ISO aprobados y evidencia de ejecuciones reales |
 
 ## Correcciones necesarias al convertir el diseno en producto
 
@@ -73,7 +73,8 @@ La referencia visual sigue separada del contrato de red.
 ## Igualacion visual implementada
 
 - Titulo y Plantillas documentales/Guardar como caso/Limpiar borrador en una fila.
-  Guardar como caso sigue deshabilitado; no se simula persistencia.
+  Guardar como caso persiste el contexto DRAFT con referencias documentales;
+  Casos guardados permite cargar/eliminar. Ver `docs/implementation/SAVED_CASES.md`.
 - Pasos con circulos/conectores horizontales. Solo Datos Generales activo.
 - Tres paneles principales con proporciones cercanas a 400/383/451 del mockup,
   campos compactos y tarjeta pendiente con icono, sin PAN ni entidad inventados.

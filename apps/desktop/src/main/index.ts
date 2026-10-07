@@ -118,6 +118,10 @@ void app
             return application.catalog('saveAtm', payload);
           case channels.deleteAtm:
             return application.catalog('deleteAtm', payload);
+          case channels.saveCase:
+            return application.catalog('saveCase', payload);
+          case channels.deleteCase:
+            return application.catalog('deleteCase', payload);
         }
       });
     }

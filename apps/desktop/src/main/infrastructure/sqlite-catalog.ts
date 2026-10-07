@@ -27,6 +27,13 @@ import type {
   CatalogCommand,
   CatalogContext,
 } from '../../../../../packages/shared/src/catalog-worker';
+import {
+  caseEvidenceDocuments,
+  parseCaseValues,
+  parseSaveCaseRequest,
+  caseAtmAvailable,
+} from '../../../../../packages/domain/src/saved-cases';
+import type { SavedCase } from '../../../../../packages/domain/src/saved-cases';
 
 class CatalogFault extends Error {
   constructor(
@@ -61,6 +68,37 @@ CREATE TABLE catalog_audit (
   action TEXT NOT NULL CHECK(action IN ('CREATED','UPDATED','DELETED'))
 ) STRICT;
 PRAGMA user_version = 1;`;
+
+const casesMigration = `
+CREATE TABLE saved_cases (
+  id TEXT PRIMARY KEY, environment TEXT NOT NULL CHECK(environment IN ('QA','PREPROD')),
+  name TEXT NOT NULL, draft_json TEXT NOT NULL, evidence_json TEXT NOT NULL,
+  revision INTEGER NOT NULL CHECK(revision >= 1), created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+) STRICT;
+CREATE INDEX cases_environment ON saved_cases(environment);
+ALTER TABLE catalog_audit RENAME TO catalog_audit_v1;
+CREATE TABLE catalog_audit (
+  sequence INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, timestamp TEXT NOT NULL,
+  environment TEXT NOT NULL CHECK(environment IN ('QA','PREPROD')),
+  actor TEXT NOT NULL, machine TEXT NOT NULL,
+  resource TEXT NOT NULL CHECK(resource IN ('ENTITY','ATM','CASE')), record_id TEXT NOT NULL,
+  action TEXT NOT NULL CHECK(action IN ('CREATED','UPDATED','DELETED'))
+) STRICT;
+INSERT INTO catalog_audit SELECT * FROM catalog_audit_v1;
+DROP TABLE catalog_audit_v1;
+PRAGMA user_version = 2;`;
+
+function savedCase(row: Record<string, unknown>): SavedCase {
+  if (typeof row.draft_json !== 'string' || typeof row.evidence_json !== 'string')
+    throw new Error('INVALID_CASE');
+  const values = parseCaseValues({ name: row.name, draft: JSON.parse(row.draft_json) });
+  if (!values || !isEnvironment(row.environment) || values.draft.environment !== row.environment)
+    throw new Error('INVALID_CASE');
+  const evidenceDocuments = caseEvidenceDocuments(values.draft);
+  if (JSON.stringify(JSON.parse(row.evidence_json)) !== JSON.stringify(evidenceDocuments))
+    throw new Error('INVALID_CASE_EVIDENCE');
+  return { ...record(row), ...values, environment: row.environment, evidenceDocuments };
+}
 
 function record(row: Record<string, unknown>): CatalogRecord {
   if (
@@ -114,7 +152,8 @@ export class SqliteCatalog {
       this.database.exec('BEGIN IMMEDIATE');
       const version = this.database.prepare('PRAGMA user_version').get()?.user_version;
       if (version === 0) this.database.exec(schema);
-      else if (version !== 1) throw new Error('UNSUPPORTED_SCHEMA');
+      else if (version !== 1 && version !== 2) throw new Error('UNSUPPORTED_SCHEMA');
+      if (version === 0 || version === 1) this.database.exec(casesMigration);
       this.database.exec('COMMIT');
     } catch (error) {
       this.database.close();
@@ -142,7 +181,7 @@ export class SqliteCatalog {
           !isEnvironment(row.environment) ||
           typeof row.actor !== 'string' ||
           typeof row.machine !== 'string' ||
-          (row.resource !== 'ENTITY' && row.resource !== 'ATM') ||
+          !['ENTITY', 'ATM', 'CASE'].includes(String(row.resource)) ||
           !['CREATED', 'UPDATED', 'DELETED'].includes(String(row.action))
         )
           throw new Error('INVALID_AUDIT');
@@ -152,18 +191,22 @@ export class SqliteCatalog {
           environment: row.environment,
           user: row.actor,
           machine: row.machine,
-          resource: row.resource,
+          resource: row.resource as CatalogAudit['resource'],
           recordId: row.record_id,
           action: row.action as CatalogAudit['action'],
         };
       });
-    return { environment, entities, atms, audit };
+    const cases = this.database
+      .prepare('SELECT * FROM saved_cases WHERE environment = ? ORDER BY updated_at DESC, id')
+      .all(environment)
+      .map(savedCase);
+    return { environment, entities, atms, audit, cases };
   }
 
   private audit(
     context: CatalogContext,
     environment: Environment,
-    resource: 'ENTITY' | 'ATM',
+    resource: CatalogAudit['resource'],
     id: string,
     action: CatalogAudit['action'],
   ): void {
@@ -187,7 +230,7 @@ export class SqliteCatalog {
   }
 
   private existing(
-    table: 'entities' | 'atm_profiles',
+    table: 'entities' | 'atm_profiles' | 'saved_cases',
     id: string,
     revision: number | null,
     environment?: Environment,
@@ -352,6 +395,66 @@ export class SqliteCatalog {
             );
           this.database.prepare(`DELETE FROM ${table} WHERE id = ?`).run(request.id);
           this.audit(context, environment, resource, request.id, 'DELETED');
+          break;
+        }
+        case 'saveCase': {
+          const request = parseSaveCaseRequest(command.request);
+          if (!request)
+            throw new CatalogFault('VALIDATION_ERROR', 'Revisa el nombre y el contexto del caso.');
+          const { id, revision, values } = request;
+          if (id) this.existing('saved_cases', id, revision, environment);
+          const recordId = id ?? randomUUID();
+          const evidenceDocuments = caseEvidenceDocuments(values.draft);
+          const candidate: SavedCase = {
+            ...values,
+            id: recordId,
+            revision: revision ?? 1,
+            status: 'DRAFT',
+            environment,
+            createdAt: context.timestamp,
+            updatedAt: context.timestamp,
+            evidenceDocuments,
+          };
+          if (!caseAtmAvailable(candidate, this.list(environment)))
+            throw new CatalogFault(
+              'CONFLICT',
+              'El ATM cambió o su entidad ya no está disponible. Recarga y selecciona el perfil antes de guardar.',
+            );
+          if (id)
+            this.database
+              .prepare(
+                'UPDATE saved_cases SET name=?,draft_json=?,evidence_json=?,revision=revision+1,updated_at=? WHERE id=?',
+              )
+              .run(
+                values.name,
+                JSON.stringify(values.draft),
+                JSON.stringify(evidenceDocuments),
+                context.timestamp,
+                id,
+              );
+          else
+            this.database
+              .prepare('INSERT INTO saved_cases VALUES (?,?,?,?,?,?,?,?)')
+              .run(
+                recordId,
+                environment,
+                values.name,
+                JSON.stringify(values.draft),
+                JSON.stringify(evidenceDocuments),
+                1,
+                context.timestamp,
+                context.timestamp,
+              );
+          this.audit(context, environment, 'CASE', recordId, id ? 'UPDATED' : 'CREATED');
+          break;
+        }
+        case 'deleteCase': {
+          const request = parseDeleteRequest(command.request);
+          if (!request)
+            throw new CatalogFault('VALIDATION_ERROR', 'Solicitud de eliminación inválida.');
+          this.existing('saved_cases', request.id, request.revision, environment);
+          this.database.prepare('DELETE FROM saved_cases WHERE id = ?').run(request.id);
+          this.audit(context, environment, 'CASE', request.id, 'DELETED');
           break;
         }
       }

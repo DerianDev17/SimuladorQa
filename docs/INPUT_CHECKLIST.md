@@ -40,6 +40,7 @@ datos/evidencia externos y solo se marcaran al recibirlos y validarlos.
 - [x] Feedback de monto en vivo y checklist de entradas locales separado de evidencia pendiente.
 - [x] Resumen de revision desde Main con UUID/UTC; invalidado al editar contexto.
 - [x] Borrador conservado al navegar en la sesion y boton Limpiar borrador.
+- [x] Casos DRAFT persistentes QA/PREPROD, referencias documentales, carga con revalidacion ATM, borrado/auditoria y migracion SQLite v1 -> v2.
 - [x] Conexion autenticada e inspeccion de metadatos de Mediator PREPROD, con excepcion TLS puntual autorizada.
 - [x] Compatibilidad de Terminal ID/codigo en revision Main, sin truncado ni extrapolar el esquema a QA.
 - [x] Credencial pass.txt y artefactos privados excluidos de Git; sin acceso desde Renderer.

@@ -2038,3 +2038,33 @@ td {
     padding-bottom: 20px;
   }
 }
+.case-library-dialog {
+  width: min(800px, 90vw);
+  max-height: 80vh;
+  overflow: auto;
+}
+.saved-case-list {
+  list-style: none;
+  padding: 0;
+}
+.saved-case-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+}
+.saved-case-list small {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+}
+.saved-case-list code {
+  overflow-wrap: anywhere;
+}
+.case-notice {
+  font-size: 11px;
+  color: var(--muted);
+  max-width: 280px;
+}

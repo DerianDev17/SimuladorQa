@@ -10,7 +10,8 @@ La igualacion visual compacta la cabecera, controles y paneles; agrega conectore
 en pasos/recorrido y tabla vacia del inspector. Los requisitos, referencia CMS y
 PCAP siguen visibles debajo del resumen de historial/metricas, separados de un
 mensaje ejecutado. Ver todas abre Historial conservando el borrador de la sesion.
-Guardar como caso permanece deshabilitado. QA/PREPROD y estados pendientes
+Guardar como caso permite persistir contextos documentales DRAFT por ambiente;
+ver [casos locales](SAVED_CASES.md). QA/PREPROD y estados pendientes
 conservan el mismo contrato; no se agrega un resultado o conexion ficticios.
 
 - Seleccion de ATM activo con entidad activa dentro de QA o PREPROD. Los perfiles
@@ -45,7 +46,8 @@ conservan el mismo contrato; no se agrega un resultado o conexion ficticios.
   no una transaccion ejecutada ni una autorizacion para enviar.
 - Borrador y resumen conservados al navegar dentro del mismo ambiente durante
   la sesion. Cambiar ambiente o Limpiar borrador reinicia los datos. No se guardan
-  casos en disco ni se restaura el borrador tras cerrar/reiniciar la app.
+  automaticamente borradores en disco ni se restaura el formulario tras reiniciar;
+  los casos guardados explicitamente se recuperan desde Casos guardados.
 
 ## Capas y contratos
 

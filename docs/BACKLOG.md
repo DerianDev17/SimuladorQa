@@ -59,7 +59,7 @@ un borrador no completa esos requisitos.
 - [x] feedback de monto y checklist local/requisitos de envio en vivo
 - [x] resumen del contexto revisado por Main con UUID y timestamp UTC
 - [x] borrador conservado al navegar durante la sesion y accion Limpiar borrador
-- [ ] guardar/cargar casos persistentes con evidencia sanitizada
+- [x] guardar/cargar/eliminar casos DRAFT persistentes por ambiente con referencias documentales sanitizadas y revalidacion de ATM
 - [ ] balance real (ISO-SPEC / GOLDEN-SAMPLES / ENVIRONMENT / PROFILES)
 - [ ] withdrawal approved real
 - [ ] withdrawal declined real
@@ -68,6 +68,8 @@ un borrador no completa esos requisitos.
 
 Ver `docs/implementation/TRANSACTION_PREPARATION.md`. Revisar el borrador no
 genera una transaccion ni se cuenta como un flujo MVP aprobado.
+La biblioteca local se documenta en `docs/implementation/SAVED_CASES.md`; sus
+referencias no son evidencia de una ejecucion ni habilitan envio.
 
 ## Epic 6 - Observability
 - [x] evidencia de las diez capturas visible en transacciones, con conteos MTI y limites del analisis

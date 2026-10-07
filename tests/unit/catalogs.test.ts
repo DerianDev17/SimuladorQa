@@ -99,6 +99,7 @@ describe('validación de catálogos', () => {
     const catalog: CatalogSnapshot = {
       environment: 'QA',
       audit: [],
+      cases: [],
       entities: [{ ...record, ...entity, networkType: 'COONECTA' }],
       atms: [
         { ...record, ...atm, environment: 'QA' },

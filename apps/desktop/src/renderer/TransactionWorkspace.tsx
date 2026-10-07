@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { scenarios, transactions } from '../../../../packages/domain/src/index';
 import type { Scenario, TransactionType } from '../../../../packages/domain/src/index';
 import { selectableAtms } from '../../../../packages/domain/src/catalogs';
@@ -10,7 +10,8 @@ import {
   needsAmount,
   needsOriginal,
 } from '../../../../packages/domain/src/transaction-draft';
-import type { AccountType } from '../../../../packages/domain/src/transaction-draft';
+import type { AccountType, DraftRequest } from '../../../../packages/domain/src/transaction-draft';
+import { parseDraftRequest } from '../../../../packages/domain/src/transaction-draft';
 import type {
   AppSnapshot,
   ErrorCode,
@@ -22,6 +23,7 @@ import { localDraftChecks } from './draft-feedback';
 import { DraftSummary } from './DraftSummary';
 import { DestinationCompatibilityView } from './DestinationCompatibilityView';
 import { CaptureEvidenceView } from './CaptureEvidenceView';
+import { CaseLibrary } from './CaseLibrary';
 
 interface Props {
   snapshot: AppSnapshot | undefined;
@@ -33,6 +35,7 @@ interface Props {
   onRefresh: () => Promise<void>;
   onReviewingChange: (reviewing: boolean) => void;
   onNavigate: (page: 'atms' | 'settings' | 'history') => void;
+  onCatalogChange: (catalog: CatalogSnapshot) => void;
 }
 export function TransactionWorkspace({
   snapshot,
@@ -44,6 +47,7 @@ export function TransactionWorkspace({
   onRefresh,
   onReviewingChange,
   onNavigate,
+  onCatalogChange,
 }: Props) {
   const [transaction, setTransaction] = useState<TransactionType>('BALANCE');
   const [scenario, setScenario] = useState<Scenario>('LOCAL');
@@ -53,6 +57,15 @@ export function TransactionWorkspace({
   const [review, setReview] = useState<ReviewedDraft>();
   const [error, setError] = useState<{ code: string; message: string }>();
   const [reviewing, setReviewing] = useState(false);
+  const [casesOpen, setCasesOpen] = useState(false);
+  const [caseWarning, setCaseWarning] = useState<string>();
+  const onCasesOpenChange = useCallback(
+    (open: boolean) => {
+      setCasesOpen(open);
+      onReviewingChange(open);
+    },
+    [onReviewingChange],
+  );
   const generation = useRef(0);
   const active = useRef(true);
   const amountInput = useRef<HTMLInputElement>(null);
@@ -82,7 +95,18 @@ export function TransactionWorkspace({
     : snapshot?.documentedOperations.find(
         (item) => item.transaction === transaction && item.account === account,
       );
-  const fieldsDisabled = disabled || reviewing;
+  const fieldsDisabled = disabled || reviewing || casesOpen;
+  const draft: DraftRequest | undefined = snapshot
+    ? {
+        environment: snapshot.environment,
+        transaction,
+        scenario,
+        atmId: selectedAtm?.id ?? null,
+        atmRevision: selectedAtm?.revision ?? null,
+        account: original ? null : account,
+        amount: monetary ? amount : null,
+      }
+    : undefined;
   const blockers = review?.blockers ?? draftBlockers(transaction, !!operation);
   const amountInvalid = monetary && amount.length > 0 && !isDraftAmount(amount);
   const checks = localDraftChecks({
@@ -97,6 +121,7 @@ export function TransactionWorkspace({
 
   function reset() {
     invalidate();
+    setCaseWarning(undefined);
     setTransaction('BALANCE');
     setScenario('LOCAL');
     setAccount('SAVINGS');
@@ -108,6 +133,16 @@ export function TransactionWorkspace({
     generation.current++;
     setReview(undefined);
     setError(undefined);
+    setCaseWarning(undefined);
+  }
+  function loadCase(saved: DraftRequest, warning: string | undefined) {
+    invalidate();
+    setTransaction(saved.transaction);
+    setScenario(saved.scenario);
+    setAccount(saved.account ?? 'SAVINGS');
+    setAmount(saved.amount ?? '');
+    setAtmId(saved.atmId ?? '');
+    setCaseWarning(warning);
   }
   async function prepare() {
     invalidate();
@@ -180,14 +215,26 @@ export function TransactionWorkspace({
               ))}
             </select>
           </label>
-          <button disabled title="Requiere casos persistentes con evidencia validada">
-            <Icon name="file" size={16} /> Guardar como caso
-          </button>
+          <CaseLibrary
+            draft={draft}
+            catalog={catalog}
+            client={client}
+            disabled={fieldsDisabled || loading || !!catalogError}
+            canSave={!!selectedAtm && !!parseDraftRequest(draft)}
+            onCatalogChange={onCatalogChange}
+            onLoad={loadCase}
+            onOpenChange={onCasesOpenChange}
+          />
           <button disabled={fieldsDisabled} onClick={reset}>
             Limpiar borrador
           </button>
         </div>
       </div>
+      {caseWarning && (
+        <div className="document-note" role="status">
+          {caseWarning}
+        </div>
+      )}
       <ol className="transaction-steps" aria-label="Pasos de la transacción">
         {[
           ['Datos Generales', 'Cajero, cuenta y operación'],

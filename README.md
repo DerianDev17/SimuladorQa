@@ -27,6 +27,8 @@ de requisitos. Las transacciones reales
 siguen bloqueadas hasta disponer de evidencia aprobada.
 La preparacion incluye plantillas documentales, validacion de monto, resumen de
 revision y borrador conservado al navegar durante la sesion.
+Permite guardar, recuperar y eliminar casos locales por ambiente, conservados
+tras reiniciar, con referencias documentales y revision obligatoria del contexto.
 La revision PREPROD compara Terminal ID/codigo con el esquema inspeccionado de
 Mediator y muestra incompatibilidades sin truncar perfiles; no es un Observer conectado.
 Diez PCAP inspeccionados aportan un codec offline de encapsulado BANRED y una
@@ -48,6 +50,7 @@ Validacion completa: `npm run check` y `npm run test:e2e`.
 Ver `docs/implementation/BOOTSTRAP.md` para el comportamiento entregado y sus limites.
 Ver `docs/implementation/LOCAL_CATALOGS.md` para los catalogos locales y la configuracion en borrador.
 Ver `docs/implementation/TRANSACTION_PREPARATION.md` para la pantalla y el catalogo documental.
+Ver `docs/implementation/SAVED_CASES.md` para los casos locales persistentes.
 El progreso implementado se marca en `docs/BACKLOG.md` y en la seccion de desarrollo
 de `docs/INPUT_CHECKLIST.md`; la evidencia QA pendiente permanece sin marcar.
 

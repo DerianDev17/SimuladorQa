@@ -20,6 +20,7 @@ import { parseDraftRequest, reviewDraft } from '../../../../packages/domain/src/
 import type { OperationCatalog } from '../../../../packages/domain/src/transaction-draft';
 import type { DestinationInspector } from '../../../../packages/domain/src/destination-compatibility';
 import type { CaptureEvidenceCatalog } from '../../../../packages/domain/src/capture-evidence';
+import { parseSaveCaseRequest } from '../../../../packages/domain/src/saved-cases';
 
 // Toda operación comparte la cola: evita perder cambios y leer un ambiente intermedio.
 export class DesktopApplication {
@@ -185,6 +186,16 @@ export class DesktopApplication {
         }
         case 'deleteEntity':
         case 'deleteAtm': {
+          const request = parseDeleteRequest(payload);
+          if (request) command = { kind, request };
+          break;
+        }
+        case 'saveCase': {
+          const request = parseSaveCaseRequest(payload);
+          if (request) command = { kind, request };
+          break;
+        }
+        case 'deleteCase': {
           const request = parseDeleteRequest(payload);
           if (request) command = { kind, request };
           break;

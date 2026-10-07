@@ -16,6 +16,7 @@ import type {
   DraftReview,
 } from '../../domain/src/transaction-draft';
 import type { CaptureEvidence } from '../../domain/src/capture-evidence';
+import type { SaveCaseRequest } from '../../domain/src/saved-cases';
 
 export const channels = {
   snapshot: 'app:snapshot',
@@ -27,6 +28,8 @@ export const channels = {
   deleteEntity: 'catalog:entity:delete',
   saveAtm: 'catalog:atm:save',
   deleteAtm: 'catalog:atm:delete',
+  saveCase: 'catalog:case:save',
+  deleteCase: 'catalog:case:delete',
 } as const;
 
 export type ErrorCode =
@@ -80,6 +83,8 @@ export interface DesktopApi {
   deleteEntity(request: DeleteRequest): Promise<Result<CatalogSnapshot>>;
   saveAtm(request: SaveAtmRequest): Promise<Result<CatalogSnapshot>>;
   deleteAtm(request: DeleteRequest): Promise<Result<CatalogSnapshot>>;
+  saveCase(request: SaveCaseRequest): Promise<Result<CatalogSnapshot>>;
+  deleteCase(request: DeleteRequest): Promise<Result<CatalogSnapshot>>;
 }
 
 export function failure(code: ErrorCode, message: string): Result<never> {

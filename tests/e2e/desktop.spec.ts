@@ -188,6 +188,174 @@ async function createTestAtm(window: Page, alias: string) {
   await expect(window.getByRole('button', { name: `Editar ${alias}`, exact: true })).toBeVisible();
 }
 
+test('casos locales: validación, reinicio, carga, separación de ambientes y eliminación', async () => {
+  let window = await launch();
+  await createTestEntity(window);
+  await createTestAtm(window, 'ATM de casos');
+  await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
+  await window
+    .getByLabel('Perfil ATM', { exact: true })
+    .selectOption({ label: 'ATM de casos · Borrador' });
+  await window.getByLabel('Escenario', { exact: true }).selectOption('BANRED');
+  await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
+  await expect(
+    window.getByRole('button', { name: 'Guardar como caso', exact: true }),
+  ).toBeDisabled();
+  await window.getByLabel('Cuenta', { exact: true }).selectOption('CURRENT');
+  await window.getByLabel('Monto de prueba').fill('100.50');
+  await window.getByRole('button', { name: 'Guardar como caso', exact: true }).click();
+  let dialog = window.getByRole('dialog');
+  await expect(window.getByLabel('Ambiente', { exact: true })).toBeDisabled();
+  await dialog.getByLabel('Nombre del caso').fill('0000 '.repeat(4).trim());
+  await dialog.getByRole('button', { name: 'Guardar caso', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('sin datos de tarjeta');
+  await dialog.getByLabel('Nombre del caso').fill('Retiro sintético corriente');
+  await dialog.getByRole('button', { name: 'Guardar caso', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(
+    window.getByRole('button', { name: 'Casos guardados (1)', exact: true }),
+  ).toBeVisible();
+  await app?.close();
+  app = undefined;
+  window = await launch();
+  await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
+  await window.getByRole('button', { name: 'Casos guardados (1)', exact: true }).click();
+  dialog = window.getByRole('dialog');
+  await expect(dialog.getByText('Retiro sintético corriente', { exact: true })).toBeVisible();
+  await dialog.getByText('Referencias documentales', { exact: true }).click();
+  await expect(dialog.getByText('docs/protocols/PCAP_REVIEW.md', { exact: true })).toBeVisible();
+  await mkdir('artifacts', { recursive: true });
+  await window.screenshot({ path: 'artifacts/saved-cases-library.png', scale: 'css' });
+  await dialog
+    .getByRole('button', { name: 'Cargar Retiro sintético corriente', exact: true })
+    .click();
+  await expect(dialog).not.toBeVisible();
+  await expect(window.getByLabel('Transacción', { exact: true })).toHaveValue(
+    'WITHDRAWAL_APPROVED',
+  );
+  await expect(window.getByLabel('Cuenta', { exact: true })).toHaveValue('CURRENT');
+  await expect(window.getByLabel('Escenario', { exact: true })).toHaveValue('BANRED');
+  await expect(window.getByLabel('Monto de prueba')).toHaveValue('100.50');
+  await expect(window.getByLabel('Perfil ATM', { exact: true })).not.toHaveValue('');
+  await expect(window.getByRole('button', { name: 'Enviar transacción' })).toBeDisabled();
+  await expect(window.getByLabel('Contexto revisado', { exact: true })).toHaveCount(0);
+  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
+  await expect(window.getByText('Envío bloqueado · QA')).toBeVisible();
+  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
+  await window.getByRole('button', { name: 'Casos guardados (0)', exact: true }).click();
+  await expect(dialog.getByText('Aún no hay casos guardados en este ambiente.')).toBeVisible();
+  await window.keyboard.press('Escape');
+  await expect(dialog).not.toBeVisible();
+  await window.getByLabel('Ambiente', { exact: true }).selectOption('QA');
+  await window.getByRole('button', { name: 'Casos guardados (1)', exact: true }).click();
+  await dialog
+    .getByRole('button', { name: 'Eliminar caso Retiro sintético corriente', exact: true })
+    .click();
+  await dialog.getByRole('button', { name: 'Confirmar eliminación', exact: true }).click();
+  await expect(dialog.getByText('Aún no hay casos guardados en este ambiente.')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  await window.getByRole('button', { name: 'Entidades', exact: true }).click();
+  await expect(window.getByRole('cell', { name: 'Caso', exact: true })).toHaveCount(2);
+});
+
+test('un caso con ATM editado conserva cuenta/monto y exige seleccionar el perfil actual', async () => {
+  const window = await launch();
+  await createTestEntity(window);
+  await createTestAtm(window, 'ATM de caso obsoleto');
+  await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
+  await window
+    .getByLabel('Perfil ATM', { exact: true })
+    .selectOption({ label: 'ATM de caso obsoleto · Borrador' });
+  await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_DECLINED');
+  await window.getByLabel('Monto de prueba').fill('50.00');
+  await window.getByRole('button', { name: 'Guardar como caso', exact: true }).click();
+  const dialog = window.getByRole('dialog');
+  await dialog.getByLabel('Nombre del caso').fill('Caso obsoleto');
+  await dialog.getByRole('button', { name: 'Guardar caso', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  const changed = await window.evaluate(async () => {
+    const api = globalThis.window.desktop!;
+    const result = await api.getCatalog('QA');
+    if (!result.ok) throw new Error('Catalog unavailable');
+    const atm = result.value.atms[0]!;
+    return api.saveAtm({
+      environment: 'QA',
+      id: atm.id,
+      revision: atm.revision,
+      values: {
+        alias: 'ATM de caso actualizado',
+        entityId: atm.entityId,
+        terminalId: atm.terminalId,
+        acquirerId: atm.acquirerId,
+        active: true,
+      },
+    });
+  });
+  expect(changed.ok).toBe(true);
+  await window.getByRole('button', { name: 'Casos guardados (1)', exact: true }).click();
+  await expect(dialog.getByText('ATM pendiente de seleccionar de nuevo.')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Cargar Caso obsoleto', exact: true }).click();
+  await expect(
+    window.getByText(
+      'El ATM guardado cambió o no está disponible. Selecciona un perfil actual y vuelve a revisar los requisitos.',
+    ),
+  ).toBeVisible();
+  await expect(window.getByLabel('Perfil ATM', { exact: true })).toHaveValue('');
+  await expect(window.getByLabel('Monto de prueba')).toHaveValue('50.00');
+  await expect(window.getByLabel('Transacción', { exact: true })).toHaveValue(
+    'WITHDRAWAL_DECLINED',
+  );
+  await window
+    .getByLabel('Perfil ATM', { exact: true })
+    .selectOption({ label: 'ATM de caso actualizado · Borrador' });
+  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
+  await expect(window.getByLabel('Contexto revisado', { exact: true })).toContainText('versión 2');
+  await expect(window.getByRole('button', { name: 'Enviar transacción' })).toBeDisabled();
+});
+
+test('fallo al guardar un caso exige recargar antes de reintentar', async () => {
+  const window = await launch();
+  await createTestEntity(window);
+  await createTestAtm(window, 'ATM de guardado concurrente');
+  await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
+  await window
+    .getByLabel('Perfil ATM', { exact: true })
+    .selectOption({ label: 'ATM de guardado concurrente · Borrador' });
+  await window.getByRole('button', { name: 'Guardar como caso', exact: true }).click();
+  const dialog = window.getByRole('dialog');
+  await dialog.getByLabel('Nombre del caso').fill('Caso concurrente');
+  const changed = await window.evaluate(async () => {
+    const api = globalThis.window.desktop!;
+    const result = await api.getCatalog('QA');
+    if (!result.ok) throw new Error('Catalog unavailable');
+    const atm = result.value.atms[0]!;
+    return api.saveAtm({
+      environment: 'QA',
+      id: atm.id,
+      revision: atm.revision,
+      values: {
+        alias: atm.alias,
+        entityId: atm.entityId,
+        terminalId: atm.terminalId,
+        acquirerId: atm.acquirerId,
+        active: false,
+      },
+    });
+  });
+  expect(changed.ok).toBe(true);
+  await dialog.getByRole('button', { name: 'Guardar caso', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('El ATM cambió');
+  await expect(dialog.getByRole('button', { name: 'Guardar caso', exact: true })).toBeDisabled();
+  await dialog.getByRole('button', { name: 'Revisar casos guardados', exact: true }).click();
+  await expect(dialog.getByText('Aún no hay casos guardados en este ambiente.')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Cerrar', exact: true }).click();
+  await expect(window.getByLabel('Perfil ATM', { exact: true })).toHaveValue('');
+  await expect(
+    window.getByRole('button', { name: 'Guardar como caso', exact: true }),
+  ).toBeDisabled();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toBeEnabled();
+});
+
 test('pantalla del mockup: contexto ATM, catálogo CMS, monto y cambio de ambiente', async () => {
   const window = await launch();
   await createTestEntity(window);

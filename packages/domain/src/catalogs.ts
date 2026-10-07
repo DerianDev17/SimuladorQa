@@ -1,5 +1,6 @@
 import { isEnvironment, isRecord } from './index';
 import type { Environment } from './index';
+import type { SavedCase } from './saved-cases';
 
 export const networkTypes = ['COONECTA', 'BANRED', 'EXTERNAL'] as const;
 export type NetworkType = (typeof networkTypes)[number];
@@ -49,7 +50,7 @@ export interface CatalogAudit {
   environment: Environment;
   user: string;
   machine: string;
-  resource: 'ENTITY' | 'ATM';
+  resource: 'ENTITY' | 'ATM' | 'CASE';
   recordId: string;
   action: CatalogAction;
 }
@@ -58,6 +59,7 @@ export interface CatalogSnapshot {
   entities: Entity[];
   atms: AtmProfile[];
   audit: CatalogAudit[];
+  cases: SavedCase[];
 }
 
 export function isUuid(value: unknown): value is string {

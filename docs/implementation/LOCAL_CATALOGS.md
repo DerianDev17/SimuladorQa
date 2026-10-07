@@ -16,7 +16,7 @@ Los datos usados en tests/capturas son sintéticos y viven en directorios tempor
 ## Persistencia y seguridad
 
 `catalogs.sqlite` vive bajo `app.getPath('userData')`, junto a las preferencias JSON existentes.
-Su esquema inicial es versión 1, con foreign keys y restricciones QA/PREPROD. El Worker
+Su esquema actual es versión 2, con migración atómica desde versión 1, foreign keys y restricciones QA/PREPROD. Incluye casos documentales DRAFT y su auditoría; ver `SAVED_CASES.md`. El Worker
 usa queries parametrizadas; la UI nunca abre SQLite ni recibe el objeto DatabaseSync.
 
 Guardar/eliminar y su evento de auditoría se confirman juntos. Se conservan los últimos
