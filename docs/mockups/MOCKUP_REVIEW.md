@@ -19,7 +19,7 @@ La lectura del manual asociado se documenta en
 | Timeline ATM -> Switch -> Core -> respuesta | Panel implementado con estados pendientes y sin tiempos inventados | Eventos y tiempos reales; estado de observabilidad independiente del resultado transaccional |
 | Inspector solicitud/respuesta, campos/RAW/HEX | Panel vacio y pestanas deshabilitadas; referencia CMS separada de ISO | Contrato de evidencia sanitizada fuera del Renderer; diccionario y tramas |
 | Ultimas transacciones y metricas realtime | Sin historial transaccional/Control Plane | Estados vacios; agregados con ventana y origen identificados |
-| Plantillas / Guardar como caso | No implementado | Templates versionados con fuente y caso asociado a evidencia sanitizada |
+| Plantillas / Guardar como caso | Plantillas documentales saldo/retiro por cuenta implementadas, con fuente CMS; casos persistentes pendientes | Templates ISO aprobados y caso asociado a evidencia sanitizada |
 
 ## Correcciones necesarias al convertir el diseno en producto
 

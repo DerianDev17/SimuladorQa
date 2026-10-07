@@ -63,11 +63,16 @@ export interface AppSnapshot {
   documentedOperations: readonly DocumentedOperation[];
 }
 
+export interface ReviewedDraft extends DraftReview {
+  reviewId: string;
+  reviewedAt: string;
+}
+
 export interface DesktopApi {
   getSnapshot(): Promise<Result<AppSnapshot>>;
   setEnvironment(environment: Environment): Promise<Result<AppSnapshot>>;
   prepareTransaction(request: PreparationRequest): Promise<Result<Preparation>>;
-  reviewDraft(request: DraftRequest): Promise<Result<DraftReview>>;
+  reviewDraft(request: DraftRequest): Promise<Result<ReviewedDraft>>;
   getCatalog(environment: Environment): Promise<Result<CatalogSnapshot>>;
   saveEntity(request: SaveEntityRequest): Promise<Result<CatalogSnapshot>>;
   deleteEntity(request: DeleteRequest): Promise<Result<CatalogSnapshot>>;

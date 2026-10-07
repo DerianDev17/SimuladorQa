@@ -25,6 +25,8 @@ auditoria local, CRUD de entidades/ATM en SQLite mediante Worker y pantalla de
 preparacion de transacciones con catalogo CMS por cuenta, seleccion ATM y revision
 de requisitos. Las transacciones reales
 siguen bloqueadas hasta disponer de evidencia aprobada.
+La preparacion incluye plantillas documentales, validacion de monto, resumen de
+revision y borrador conservado al navegar durante la sesion.
 
 Requiere Windows y Node.js 22.20 o una LTS posterior compatible.
 

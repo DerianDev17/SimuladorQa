@@ -238,6 +238,62 @@ test('preparación rechaza ATM editado y recupera el contexto al recargar', asyn
   await expect(window.getByText('Envío bloqueado · QA')).toBeVisible();
 });
 
+test('plantillas documentales, resumen revisado y borrador conservado al navegar', async () => {
+  const window = await launch();
+  await createTestEntity(window);
+  await createTestAtm(window, 'ATM de plantillas');
+  await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
+  await window
+    .getByLabel('Perfil ATM', { exact: true })
+    .selectOption({ label: 'ATM de plantillas · Borrador' });
+  await window.getByLabel('Escenario', { exact: true }).selectOption('RTC');
+  await window.getByLabel('Plantilla documental').selectOption('WITHDRAWAL_APPROVED:CURRENT');
+  await expect(window.getByLabel('Transacción', { exact: true })).toHaveValue(
+    'WITHDRAWAL_APPROVED',
+  );
+  await expect(window.getByLabel('Cuenta', { exact: true })).toHaveValue('CURRENT');
+  await expect(window.getByLabel('Escenario', { exact: true })).toHaveValue('RTC');
+  await expect(window.getByLabel('Perfil ATM', { exact: true })).not.toHaveValue('');
+  await expect(window.getByText('Reglas financieras del monto', { exact: true })).toBeVisible();
+  await window.getByLabel('Monto de prueba').fill('100,50');
+  await expect(window.getByLabel('Monto de prueba')).toHaveAttribute('aria-invalid', 'true');
+  await expect(
+    window.getByText('Usa punto y dos decimales, por ejemplo 100.50. No se modifica tu entrada.'),
+  ).toBeVisible();
+  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
+  await expect(window.getByLabel('Monto de prueba')).toBeFocused();
+  await window.getByLabel('Monto de prueba').fill('100.50');
+  await expect(window.getByLabel('Monto de prueba')).toHaveAttribute('aria-invalid', 'false');
+  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
+  const summary = window.getByRole('region', { name: 'Contexto revisado' });
+  await expect(summary).toContainText('012000');
+  await expect(summary).toContainText('100.50');
+  await expect(summary).toContainText('ATM de plantillas · versión 1 · borrador');
+  await summary.getByText('Referencia de revisión').click();
+  await expect(summary.locator('code')).toHaveText(/^[0-9a-f-]{36}$/);
+  await window.getByRole('button', { name: 'Ver configuración pendiente', exact: true }).click();
+  await expect(window.getByRole('heading', { name: 'Configuración', exact: true })).toBeVisible();
+  await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
+  await expect(window.getByLabel('Monto de prueba')).toHaveValue('100.50');
+  await expect(summary).toBeVisible();
+  await window.getByLabel('Monto de prueba').fill('120.00');
+  await expect(summary).toHaveCount(0);
+  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
+  await expect(summary).toContainText('120.00');
+  await summary.scrollIntoViewIfNeeded();
+  await mkdir('artifacts', { recursive: true });
+  await window.screenshot({ path: 'artifacts/transaction-review-summary.png' });
+  await window.getByRole('button', { name: 'Limpiar borrador' }).click();
+  await expect(window.getByLabel('Transacción', { exact: true })).toHaveValue('BALANCE');
+  await expect(window.getByLabel('Escenario', { exact: true })).toHaveValue('LOCAL');
+  await expect(window.getByLabel('Perfil ATM', { exact: true })).toHaveValue('');
+  await expect(summary).toHaveCount(0);
+  await window.getByLabel('Transacción', { exact: true }).selectOption('REVERSAL');
+  await expect(
+    window.getByText('Transacción original y reglas de reverso', { exact: true }),
+  ).toBeVisible();
+});
+
 test('CRUD de entidades y ATM, separación de ambientes, reinicio y eliminación protegida', async () => {
   test.setTimeout(60_000);
   let window = await launch();

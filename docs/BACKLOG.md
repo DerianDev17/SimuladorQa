@@ -49,6 +49,11 @@ un borrador no completa esos requisitos.
 - [x] revision de borrador por IPC y revalidacion de ambiente/version ATM en Main
 - [x] bloqueo explicito de reverso/original y requisitos de envio
 - [x] invalidacion del contexto al editar, recargar o cambiar ambiente
+- [x] plantillas documentales por operacion/cuenta que conservan ATM/escenario
+- [x] feedback de monto y checklist local/requisitos de envio en vivo
+- [x] resumen del contexto revisado por Main con UUID y timestamp UTC
+- [x] borrador conservado al navegar durante la sesion y accion Limpiar borrador
+- [ ] guardar/cargar casos persistentes con evidencia sanitizada
 - [ ] balance real (ISO-SPEC / GOLDEN-SAMPLES / ENVIRONMENT / PROFILES)
 - [ ] withdrawal approved real
 - [ ] withdrawal declined real

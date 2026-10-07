@@ -5,7 +5,7 @@ import {
   prepareTransaction,
 } from '../../../../packages/domain/src/index';
 import { failure } from '../../../../packages/shared/src/contracts';
-import type { AppSnapshot, Result } from '../../../../packages/shared/src/contracts';
+import type { AppSnapshot, Result, ReviewedDraft } from '../../../../packages/shared/src/contracts';
 import type { Preparation } from '../../../../packages/domain/src/index';
 import type { Preferences, PreferencesStore, RuntimeIdentity } from './ports';
 import {
@@ -17,10 +17,7 @@ import type { CatalogSnapshot } from '../../../../packages/domain/src/catalogs';
 import type { CatalogCommand } from '../../../../packages/shared/src/catalog-worker';
 import type { CatalogStore } from './catalog-port';
 import { parseDraftRequest, reviewDraft } from '../../../../packages/domain/src/transaction-draft';
-import type {
-  DraftReview,
-  OperationCatalog,
-} from '../../../../packages/domain/src/transaction-draft';
+import type { OperationCatalog } from '../../../../packages/domain/src/transaction-draft';
 
 // Toda operación comparte la cola: evita perder cambios y leer un ambiente intermedio.
 export class DesktopApplication {
@@ -115,7 +112,7 @@ export class DesktopApplication {
     });
   }
 
-  reviewDraft(payload: unknown): Promise<Result<DraftReview>> {
+  reviewDraft(payload: unknown): Promise<Result<ReviewedDraft>> {
     return this.serialize(async () => {
       const request = parseDraftRequest(payload);
       if (!request)
@@ -140,7 +137,10 @@ export class DesktopApplication {
         if (!catalog.ok) return catalog;
         const review = reviewDraft(request, catalog.value, this.operations);
         return review
-          ? { ok: true, value: review }
+          ? {
+              ok: true,
+              value: { ...review, reviewId: this.identity.uuid(), reviewedAt: this.identity.now() },
+            }
           : failure(
               'CONFLICT',
               'El ATM cambió o su entidad ya no está disponible. Recarga los perfiles.',

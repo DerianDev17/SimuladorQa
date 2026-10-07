@@ -23,6 +23,22 @@ Solo Datos Generales esta activo; revisar un borrador no avanza a ejecucion.
 - Cambio de ambiente reinicia el contexto. Recarga de perfiles invalida la
   revision y elimina una seleccion no disponible. Edicion de cualquier campo
   invalida el resultado anterior.
+- Plantillas documentales de saldo/retiro por ahorros/corriente. Seleccionar una
+  cambia operacion/cuenta y limpia monto, conservando ATM y escenario; no completa
+  campos bancarios ni es un fixture ISO aprobado.
+- Validacion del monto al escribir, con aria-invalid, ayuda asociada y foco en
+  el campo al solicitar revision con sintaxis incorrecta. No corrige ni convierte
+  automaticamente coma, signo, ceros iniciales o decimales de la entrada.
+- Checklist de preparacion local separado de requisitos de envio. Seleccionar
+  un perfil en borrador completa la seleccion, no su validacion QA. Las reglas
+  de monto y dependencia del original aparecen antes de pulsar Revisar requisitos.
+- Resumen del contexto devuelto por Main: ambiente, escenario, operacion, ATM y
+  revision, cuenta, monto y codigo documental; reviewId UUID y reviewedAt UTC.
+  Hora convertida a local solo en UI. Estos IDs identifican una revision local,
+  no una transaccion ejecutada ni una autorizacion para enviar.
+- Borrador y resumen conservados al navegar dentro del mismo ambiente durante
+  la sesion. Cambiar ambiente o Limpiar borrador reinicia los datos. No se guardan
+  casos en disco ni se restaura el borrador tras cerrar/reiniciar la app.
 
 ## Capas y contratos
 
@@ -42,6 +58,11 @@ Main verifica preferencias, lee el catalogo mediante Worker/SQLite y revalida
 revision ATM, ambiente y estado del ATM/entidad antes de devolver DraftReview.
 Toda revision conserva status BLOCKED y los requisitos de evidencia. No se
 guarda como transaccion ejecutada ni genera runId, STAN, RRN o RC artificiales.
+El contrato de respuesta ReviewedDraft agrega reviewId/reviewedAt desde Main;
+el payload de entrada no puede suministrarlos. El resumen representa ese instante
+de revision y debe volver a revisarse tras editar; no garantiza estado futuro de
+un perfil ni de dependencias externas. draftBlockers centraliza los requisitos
+por operacion para la vista previa y la respuesta del dominio.
 
 El resumen no certifica disponibilidad de fondos ni monto elegible. Incluso un
 monto 0.00 con sintaxis correcta permanece bloqueado por reglas financieras
@@ -73,6 +94,9 @@ preferencias y Worker SQLite reales, revision/ambiente, dependencia ausente y
 timeout), `tests/e2e/desktop.spec.ts` (pantalla, cambio de cuenta/ambiente, monto,
 reverso, edicion concurrente y recuperacion). Screenshot local ignorado:
 `artifacts/transaction-workspace.png`; solo usa perfiles sinteticos de pruebas.
+La mejora incluye `tests/unit/draft-feedback.test.ts` y comprobaciones Electron
+de plantillas, feedback/foco, navegacion conservada, resumen e invalidacion.
+`artifacts/transaction-review-summary.png` captura un contexto sintetico revisado.
 
 Pendientes: profiles aprobados/tarjetas, PIN/HSM, diccionario ATM, framing,
 fixtures request/response, mapeo ISO/CMS, codigos ATM y observadores de lectura.

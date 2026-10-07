@@ -539,7 +539,7 @@ export function App() {
             </>
           )}
 
-          {page === 'transactions' && (
+          <div hidden={page !== 'transactions'}>
             <TransactionWorkspace
               key={environment ?? 'unavailable'}
               snapshot={snapshot}
@@ -550,8 +550,9 @@ export function App() {
               client={client}
               onRefresh={refreshCatalog}
               onReviewingChange={setTransactionBusy}
+              onNavigate={setPage}
             />
-          )}
+          </div>
 
           {page === 'settings' && (
             <>

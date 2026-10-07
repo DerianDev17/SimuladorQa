@@ -34,6 +34,10 @@ datos/evidencia externos y solo se marcaran al recibirlos y validarlos.
 - [x] Validacion de entradas y monto decimal de borrador, sin almacenar tarjeta.
 - [x] Contexto invalidado al cambiar ambiente, editar o recargar perfiles.
 - [x] Estados vacios y envio/RAW/HEX/reversos bloqueados por evidencia pendiente.
+- [x] Plantillas documentales por cuenta y requisitos de monto/original visibles al seleccionar el flujo.
+- [x] Feedback de monto en vivo y checklist de entradas locales separado de evidencia pendiente.
+- [x] Resumen de revision desde Main con UUID/UTC; invalidado al editar contexto.
+- [x] Borrador conservado al navegar en la sesion y boton Limpiar borrador.
 
 Detalle y pruebas: `docs/implementation/TRANSACTION_PREPARATION.md`.
 

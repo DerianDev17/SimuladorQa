@@ -110,6 +110,9 @@ describe('preparación con preferencias y Worker SQLite reales', () => {
         status: 'BLOCKED',
         atm: { id: atm.id, revision: 1, status: 'DRAFT' },
         operation: { code: '301000' },
+        account: 'SAVINGS',
+        reviewedAt: identity.now(),
+        reviewId: expect.stringMatching(/^[0-9a-f-]{36}$/),
       },
     });
     expect(await application.catalog('list', { environment: 'QA' })).toEqual(before);
@@ -124,6 +127,16 @@ describe('preparación con preferencias y Worker SQLite reales', () => {
       ok: true,
       value: { operation: { code: '012000' }, amount: '100.50', status: 'BLOCKED' },
     });
+  });
+  it('identifica cada revisión local con UUID/UTC sin generar una ejecución', async () => {
+    const first = await application.reviewDraft(request);
+    const second = await application.reviewDraft(request);
+    if (!first.ok || !second.ok) throw new Error('Review unavailable');
+    expect(first.value.reviewId).not.toBe(second.value.reviewId);
+    expect(new Date(first.value.reviewedAt).toISOString()).toBe(first.value.reviewedAt);
+    expect(first.value).not.toHaveProperty('transactionId');
+    expect(first.value).not.toHaveProperty('runId');
+    expect(first.value.status).toBe('BLOCKED');
   });
   it('acepta revisar requisitos sin ATM y mantiene el reverso dependiente del original', async () => {
     expect(await application.reviewDraft(request)).toMatchObject({

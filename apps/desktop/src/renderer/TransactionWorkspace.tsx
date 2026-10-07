@@ -1,18 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
-import { dataBlockers, scenarios, transactions } from '../../../../packages/domain/src/index';
+import { scenarios, transactions } from '../../../../packages/domain/src/index';
 import type { Scenario, TransactionType } from '../../../../packages/domain/src/index';
 import { selectableAtms } from '../../../../packages/domain/src/catalogs';
 import type { CatalogSnapshot } from '../../../../packages/domain/src/catalogs';
 import {
   accountTypes,
+  draftBlockers,
   isDraftAmount,
   needsAmount,
   needsOriginal,
 } from '../../../../packages/domain/src/transaction-draft';
-import type { AccountType, DraftReview } from '../../../../packages/domain/src/transaction-draft';
-import type { AppSnapshot, ErrorCode } from '../../../../packages/shared/src/contracts';
+import type { AccountType } from '../../../../packages/domain/src/transaction-draft';
+import type {
+  AppSnapshot,
+  ErrorCode,
+  ReviewedDraft,
+} from '../../../../packages/shared/src/contracts';
 import type { DesktopClient } from './desktop-client';
 import { Icon } from './Icon';
+import { localDraftChecks } from './draft-feedback';
+import { DraftSummary } from './DraftSummary';
 
 interface Props {
   snapshot: AppSnapshot | undefined;
@@ -23,6 +30,7 @@ interface Props {
   client: DesktopClient;
   onRefresh: () => Promise<void>;
   onReviewingChange: (reviewing: boolean) => void;
+  onNavigate: (page: 'atms' | 'settings') => void;
 }
 export function TransactionWorkspace({
   snapshot,
@@ -33,17 +41,19 @@ export function TransactionWorkspace({
   client,
   onRefresh,
   onReviewingChange,
+  onNavigate,
 }: Props) {
   const [transaction, setTransaction] = useState<TransactionType>('BALANCE');
   const [scenario, setScenario] = useState<Scenario>('LOCAL');
   const [account, setAccount] = useState<AccountType>('SAVINGS');
   const [amount, setAmount] = useState('');
   const [atmId, setAtmId] = useState('');
-  const [review, setReview] = useState<DraftReview>();
+  const [review, setReview] = useState<ReviewedDraft>();
   const [error, setError] = useState<{ code: string; message: string }>();
   const [reviewing, setReviewing] = useState(false);
   const generation = useRef(0);
   const active = useRef(true);
+  const amountInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     active.current = true;
@@ -71,7 +81,26 @@ export function TransactionWorkspace({
         (item) => item.transaction === transaction && item.account === account,
       );
   const fieldsDisabled = disabled || reviewing;
-  const blockers = review?.blockers ?? snapshot?.blockers ?? dataBlockers;
+  const blockers = review?.blockers ?? draftBlockers(transaction, !!operation);
+  const amountInvalid = monetary && amount.length > 0 && !isDraftAmount(amount);
+  const checks = localDraftChecks({
+    transaction,
+    amount,
+    environmentVerified: !!snapshot,
+    atmSelected: !!selectedAtm,
+    catalogAvailable: !!catalog && !loading && !catalogError,
+    operationAvailable: !!operation,
+    original,
+  });
+
+  function reset() {
+    invalidate();
+    setTransaction('BALANCE');
+    setScenario('LOCAL');
+    setAccount('SAVINGS');
+    setAmount('');
+    setAtmId('');
+  }
 
   function invalidate() {
     generation.current++;
@@ -82,6 +111,7 @@ export function TransactionWorkspace({
     invalidate();
     if (!snapshot || !catalog || loading) return;
     if (monetary && !isDraftAmount(amount)) {
+      amountInput.current?.focus();
       setError({
         code: 'VALIDATION_ERROR',
         message: 'Escribe el monto con punto y dos decimales, por ejemplo 100.50.',
@@ -113,6 +143,41 @@ export function TransactionWorkspace({
 
   return (
     <div className="transaction-workspace">
+      <div className="transaction-toolbar">
+        <label>
+          Plantilla documental
+          <select
+            aria-label="Plantilla documental"
+            value=""
+            disabled={fieldsDisabled || !snapshot?.documentedOperations.length}
+            onChange={(event) => {
+              const selected = snapshot?.documentedOperations.find(
+                (item) => `${item.transaction}:${item.account}` === event.target.value,
+              );
+              if (!selected) return;
+              invalidate();
+              setTransaction(selected.transaction);
+              setAccount(selected.account);
+              setAmount('');
+            }}
+          >
+            <option value="">Elegir operación y cuenta</option>
+            {snapshot?.documentedOperations.map((item) => (
+              <option
+                key={`${item.transaction}:${item.account}`}
+                value={`${item.transaction}:${item.account}`}
+              >
+                {transactions.find((entry) => entry.id === item.transaction)?.label} ·{' '}
+                {accountTypes.find((entry) => entry.id === item.account)?.label} · {item.code}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p>La plantilla define operación y cuenta. El ATM y escenario se conservan.</p>
+        <button disabled={fieldsDisabled} onClick={reset}>
+          Limpiar borrador
+        </button>
+      </div>
       <ol className="transaction-steps" aria-label="Pasos de la transacción">
         {[
           ['Datos Generales', 'Cajero, cuenta y operación'],
@@ -140,6 +205,7 @@ export function TransactionWorkspace({
             <label>
               Escenario
               <select
+                aria-label="Escenario"
                 value={scenario}
                 disabled={fieldsDisabled}
                 onChange={(event) => {
@@ -196,6 +262,15 @@ export function TransactionWorkspace({
               >
                 Recargar perfiles
               </button>
+              {!atms.length && !loading && (
+                <button
+                  className="text-button"
+                  disabled={fieldsDisabled}
+                  onClick={() => onNavigate('atms')}
+                >
+                  Configurar ATM
+                </button>
+              )}
             </div>
             {selectedAtm && (
               <p className="form-note">
@@ -275,7 +350,10 @@ export function TransactionWorkspace({
               <label>
                 Monto de prueba
                 <input
+                  ref={amountInput}
                   aria-label="Monto de prueba"
+                  aria-invalid={amountInvalid}
+                  aria-describedby="draft-amount-help"
                   inputMode="decimal"
                   value={amount}
                   maxLength={14}
@@ -286,8 +364,14 @@ export function TransactionWorkspace({
                     setAmount(event.target.value);
                   }}
                 />
-                <small className="form-note">
-                  Punto y dos decimales. Límites y moneda de ejecución pendientes.
+                <small
+                  id="draft-amount-help"
+                  className={amountInvalid ? 'field-feedback invalid' : 'field-feedback'}
+                  aria-live="polite"
+                >
+                  {amountInvalid
+                    ? 'Usa punto y dos decimales, por ejemplo 100.50. No se modifica tu entrada.'
+                    : 'Punto y dos decimales. Límites y moneda de ejecución pendientes.'}
                 </small>
               </label>
             )}
@@ -375,6 +459,34 @@ export function TransactionWorkspace({
             </div>
           </div>
           <div className="transaction-readiness">
+            {review && <DraftSummary review={review} />}
+            <div className="local-draft-checks" aria-label="Preparación local">
+              <h3>
+                Preparación local{' '}
+                <span>
+                  {checks.filter((check) => check.complete).length}/{checks.length}
+                </span>
+              </h3>
+              <ul>
+                {checks.map((check) => (
+                  <li key={check.key}>
+                    <span
+                      className={check.complete ? 'local-check complete' : 'local-check'}
+                      aria-label={check.complete ? 'Completado' : 'Pendiente'}
+                    >
+                      {check.complete ? '✓' : '○'}
+                    </span>
+                    <div>
+                      <strong>{check.label}</strong>
+                      <p>{check.detail}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <small>
+                Completar estos datos prepara el borrador; el envío requiere la evidencia pendiente.
+              </small>
+            </div>
             <h3>Requisitos de envío</h3>
             <ul>
               {blockers.map((blocker) => (
@@ -387,6 +499,9 @@ export function TransactionWorkspace({
                 </li>
               ))}
             </ul>
+            <button className="text-button" onClick={() => onNavigate('settings')}>
+              Ver configuración pendiente <Icon name="arrow" size={14} />
+            </button>
           </div>
         </section>
 

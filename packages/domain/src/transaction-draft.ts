@@ -41,6 +41,7 @@ export interface DraftReview {
   atm: { id: string; revision: number; alias: string; status: 'DRAFT' } | null;
   amount: string | null;
   operation: DocumentedOperation | null;
+  account: AccountType | null;
   blockers: readonly DataBlocker[];
   specification: string;
 }
@@ -108,29 +109,7 @@ export function reviewDraft(
     operations.entries.find(
       (item) => item.transaction === request.transaction && item.account === request.account,
     ) ?? null;
-  const blockers: DataBlocker[] = [...dataBlockers];
-  if (needsOriginal(request.transaction))
-    blockers.push({
-      id: 'ORIGINAL_TRANSACTION',
-      label: 'Transacción original y reglas de reverso',
-      description: 'Faltan original validado, MTI, campos de correlación y política de timeout.',
-      document: 'docs/transactions/REVERSAL.md',
-    });
-  else if (!operation)
-    blockers.push({
-      id: 'OPERATION_CATALOG',
-      label: 'Código documentado de la operación',
-      description:
-        'La combinación de cuenta y operación no está disponible en el catálogo documental.',
-      document: 'docs/INPUT_CHECKLIST.md',
-    });
-  if (needsAmount(request.transaction))
-    blockers.push({
-      id: 'AMOUNT_RULES',
-      label: 'Reglas financieras del monto',
-      description: 'Faltan límites, denominaciones y reglas aprobadas por cuenta y escenario.',
-      document: 'docs/transactions/WITHDRAWAL.md',
-    });
+  const blockers = draftBlockers(request.transaction, !!operation);
   const specification = transactions.find((item) => item.id === request.transaction)?.document;
   if (!specification) return undefined;
   return {
@@ -140,8 +119,40 @@ export function reviewDraft(
     status: 'BLOCKED',
     atm: atm ? { id: atm.id, revision: atm.revision, alias: atm.alias, status: atm.status } : null,
     amount: request.amount,
+    account: request.account,
     operation,
     blockers,
     specification,
   };
+}
+
+// Los mismos requisitos antes y despues de revisar; elegir una plantilla no los completa.
+export function draftBlockers(
+  transaction: TransactionType,
+  operationAvailable: boolean,
+): readonly DataBlocker[] {
+  const blockers: DataBlocker[] = [...dataBlockers];
+  if (needsOriginal(transaction))
+    blockers.push({
+      id: 'ORIGINAL_TRANSACTION',
+      label: 'Transacción original y reglas de reverso',
+      description: 'Faltan original validado, MTI, campos de correlación y política de timeout.',
+      document: 'docs/transactions/REVERSAL.md',
+    });
+  else if (!operationAvailable)
+    blockers.push({
+      id: 'OPERATION_CATALOG',
+      label: 'Código documentado de la operación',
+      description:
+        'La combinación de cuenta y operación no está disponible en el catálogo documental.',
+      document: 'docs/INPUT_CHECKLIST.md',
+    });
+  if (needsAmount(transaction))
+    blockers.push({
+      id: 'AMOUNT_RULES',
+      label: 'Reglas financieras del monto',
+      description: 'Faltan límites, denominaciones y reglas aprobadas por cuenta y escenario.',
+      document: 'docs/transactions/WITHDRAWAL.md',
+    });
+  return blockers;
 }
