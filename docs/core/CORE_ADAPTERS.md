@@ -21,6 +21,14 @@ credito o reverso para validar una ejecucion ATM. El usuario aporto una consulta
 SQL de Journal/Message por TraceId el 2026-10-07; falta la relacion
 TraceId/TerminalSeq con STAN/RRN/UTRNNO y clasificacion del resultado.
 
+Tambien aporto dos filas/captura de USR_RelationEntity para CB Cooperativa,
+entidad 205 y canales 1/21, con el mismo servicio HTTPS y timeout observado
+20000. Confirmo **QA** y el recorrido cajero -> Switch/SmartVista -> Core ->
+respuesta: el simulador debe entrar por el Switch. Ver
+[evidencia de destino](MEDIATOR_ENTITY_205_ROUTING.md). Faltan endpoint ATM del
+Switch, contrato ISO/framing y contrato HTTP/XML/unidad del timeout Core;
+no se llama al servicio ni se altera la configuracion del servidor.
+
 ## Principios
 
 Se inspecciono el esquema SQL Server Mediator PREPROD con SELECT de metadatos y

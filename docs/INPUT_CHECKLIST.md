@@ -5,6 +5,7 @@
 - **TODO-DATA ISO-SPEC**: faltan ContextoISO.xml y especificacion ATM aprobada. Bloquea construir/parsear campos de negocio ISO, PIN/HSM y reglas de negocio; la envolvente observada se verifica offline sin interpretar esos campos.
 - **TODO-DATA CMS-ATM-MAPPING / CMS-XML-CONTRACT / CMS-RESULT-MAPPING**: recibido Extreme Mediator CMS v3.6 para XML/REST Mediator-Core. Falta validar su correspondencia con ATM, las diferencias tablas/ejemplos y los codigos por canal; no sustituye ISO-SPEC. Conflictos y solicitudes registrados en `docs/protocols/EXTREME_MEDIATOR_CMS_REVIEW.md`.
 - **TODO-DATA CMS-REVERSAL / CMS-CORRELATION / CMS-TRANSPORT / CMS-POS-MAPPING**: el manual lista familias MTI y campos Core, pero faltan la seleccion del reverso, reglas de correlacion, contrato REST y resolucion de diferencias POS. Bloquean solo sus adaptadores/reglas dependientes.
+- **TODO-DATA SWITCH-ATM-QA-ENDPOINT / CMS-TRANSPORT**: recibida URL HTTPS Core configurada para CB Cooperativa, entidad 205, canales 1/21, en USR_RelationEntity. Usuario confirmo QA y recorrido cajero -> Switch/SmartVista -> Core -> respuesta. Faltan host/puerto ATM del Switch, contrato ISO/framing y contrato HTTP/XML/unidad del timeout Core 20000. Evidencia privada y limites en `docs/core/MEDIATOR_ENTITY_205_ROUTING.md`; el perfil SQL PREPROD existente no cambia.
 - **TODO-DATA GOLDEN-SAMPLES / PCAP-CASE-MAPPING**: recibidos diez PCAP, con 218 envolventes BANRED reconstruidas byte a byte. Falta identificar/aprobar request/response de cada flujo MVP y correlacionar originales/reversos. Bloquea validacion de campos, codigos de respuesta y resultados de negocio. Ver `docs/protocols/PCAP_REVIEW.md`.
 - **TODO-DATA PCAP-LINK-PROFILES**: BE16 inclusivo/header/bitmap confirmados solo para el enlace capturado 4946. Faltan ambiente, roles/diccionario de los otros enlaces y explicacion de solapamientos distintos. No se aplica este perfil automaticamente a todos los ATM.
 - **TODO-DATA ENVIRONMENT**: faltan endpoints autorizados QA/PREPROD, framing, TLS y timeouts por escenario. Bloquea conectar/enviar TCP.
@@ -81,6 +82,7 @@ Detalle y pruebas: `docs/implementation/TRANSACTION_PREPARATION.md`.
 - [x] Manual local Extreme Mediator CMS v3.6 (24 paginas, revision 13-04-2023).
 - [x] Matriz de evidencia para los cinco flujos: `docs/protocols/EXTREME_MEDIATOR_CMS_REVIEW.md`.
 - [x] Prioridad de 301000/302000 del documento sobre 310000 del mockup: usuario indico seguir el documento el 2026-10-06. No valida por si sola el formato de la trama ATM.
+- [x] Filas/captura USR_RelationEntity de entidad 205 CB Cooperativa, canales 1/21, destino HTTPS QA y timeout observado 20000; entrada por Switch/SmartVista confirmada, contrato pendiente.
 - [x] Diez PCAP recibidos e inspeccionados; matriz y metodo en `docs/protocols/PCAP_REVIEW.md`.
 - [x] Encapsulado observado del enlace 4946 confirmado en 218 mensajes: BE16 inclusivo, header 12, MTI ASCII y bitmap ASCII hex de 128 bits.
 - [ ] Validacion del ambiente, roles de enlaces y mapeo de capturas a cada caso MVP.

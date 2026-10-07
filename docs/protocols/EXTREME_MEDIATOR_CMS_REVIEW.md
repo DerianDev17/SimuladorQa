@@ -116,7 +116,7 @@ Los contratos y mapeos tecnicos de la tabla siguen **pendientes de validacion**.
 | CMS-RESULT-MAPPING | RetCode/CodigoProceso/MappedRespCode y RC ATM no tienen regla conjunta; existe aprobacion parcial | pp. 5, 19, 23-24 | Clasificar resultados de retiro, rechazo y parcial |
 | CMS-REVERSAL | Dos familias MTI de reverso, flags y resta parcial sin relacion con F90 ni timeout | pp. 17, 19, 23 | Construccion, correlacion e idempotencia del reverso |
 | CMS-CORRELATION | TraceId y TerminalSeq definidos, pero ejemplos request/response muestran distinta transaccion; no hay regla de eco ni vinculo a STAN/RRN/UTRNNO | pp. 16, 18-19 | Correlacion con Switch/Core; no usar PAN completo |
-| CMS-TRANSPORT | API REST sin URL, metodo HTTP, envoltura/cabeceras, charset, autenticacion, TLS, limites ni timeout | p. 4 | Acceso Mediator/Core; no reutilizar el endpoint TCP de referencia |
+| CMS-TRANSPORT | URL Core QA de entidad 205/canales 1/21 aportada por usuario; entrada del simulador por Switch/SmartVista confirmada. Timeout 20000 sin unidad confirmada. Faltan endpoint ATM del Switch, metodo HTTP Core, envoltura/cabeceras, charset, autenticacion y TLS | p. 4 y `docs/core/MEDIATOR_ENTITY_205_ROUTING.md` | Acceso dependiente del contrato; no usar la URL Core como endpoint ATM ni reutilizar el endpoint TCP de referencia |
 | CMS-POS-MAPPING | Resumen de PosEntryMode 90 y 10 no coincide con la tabla detallada; contiene reglas Visa/Plus que no definen el perfil ATM Coonecta | pp. 18, 21-22 | F22/POS y capacidad PIN; no escoger una definicion sin validacion |
 
 Las diferencias de ejemplos de pais/red/operacion no se resuelven copiando sus
