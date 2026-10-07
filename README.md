@@ -40,7 +40,9 @@ por ambiente al iniciar; no equivale a conexion comprobada ni habilita envio.
 Una herramienta de prueba QA dispone de un emisor de captura con write unico,
 plazos y metricas protegidas fuera del Renderer. Ver
 `docs/implementation/QA_CAPTURE_REPLAY.md`; no construye nuevas tramas ISO ni
-habilita el envio general de la app. El acceso real a TCP 16100 sigue pendiente.
+habilita el envio general de la app. TCP 16100 ya acepta conexion desde la PC,
+pero devuelve NO AUTHORIZATION y cierra incluso sin trama: falta autorizar o
+vincular el origen a una interfaz ATM QA en SmartVista.
 Diez PCAP inspeccionados aportan un codec offline de encapsulado BANRED y una
 vista de evidencia. 218 mensajes se reconstruyen byte a byte; los campos de
 negocio y otros enlaces requieren diccionario y validacion de casos.

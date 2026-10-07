@@ -58,6 +58,9 @@ PROD, PREPROD ni carga.
   cajeros y Mediator; no contiene los SYN de la PC en ens3. La captura posterior
   en any aportada tampoco muestra esos intentos. Confirmar interfaz/ruta/filtros
   y el permiso especifico TCP 16100; no atribuirlo al monto o respuesta Core.
+  Este era el estado inicial. La conexion posterior acepta TCP pero devuelve
+  NO AUTHORIZATION sin recibir una trama; falta validar la IP vista por el
+  servidor y su autorizacion/vinculacion al PID QA (ver evidencia posterior).
 - CMS-CORRELATION: vincular los identificadores de la captura con Journal/Message
   sin asumir eco de TraceId. El par XML aportado de USD 10 es otra muestra.
 
@@ -71,6 +74,34 @@ bytesQueued=0 y bytesReceived=0. No se transmitio una trama ni se acredita
 llegada a SmartVista, Mediator o Core. runId:
 8b44afb9-e3de-468e-b9ea-afe1106a4bad. Reporte privado de metadatos:
 artifacts/qa-captured-send-attempt.json.
+
+Intento posterior a las 21:26:18.151 UTC (16:26:18 Ecuador): writeCompleted=true,
+bytesQueued=548, bytesReceived=17 y PEER_CLOSED. El usuario informo que no aparece
+en los monitores ni en SmartVista. El contenido de esos 17 bytes no se conservo;
+no se identifica retrospectivamente como respuesta ISO ni como un mensaje
+concreto. runId: 17109565-f5de-469e-8a50-06a4a49d400d.
+
+Diagnostico separado a las 21:36:53.571 UTC (16:36:53 Ecuador): se abrio TCP sin
+ningun write ni trama. El extremo devolvio el aviso textual NO AUTHORIZATION
+y cerro, con 17 bytes recibidos. Esto prueba una denegacion de la conexion
+independiente del contenido ISO o monto; no se interpreta como response code
+financiero. La causa precisa requiere log/configuracion del Switch. El PID
+aportado admite como remoto el equipo de cajeros, mientras esta prueba usa la
+PC; falta confirmar el origen visto por SmartVista y su asignacion autorizada.
+El usuario ratifico que la Direccion remota del PID sigue siendo el equipo de
+cajeros. Esa configuracion es coherente con la denegacion de la PC, pero el log
+del Switch debe confirmar la regla exacta y la IP que ve (posible NAT). La
+habilitacion debe acordarse en una interfaz de prueba preservando el enlace
+existente; no se inventa un PID/puerto ni una regla de coexistencia del proveedor.
+No se cambia el PID activo ni se envia otra transaccion durante el diagnostico.
+runId: 2fcdaf9c-8715-4213-88f3-26c76abe2ab6; evidencia privada de metadatos:
+artifacts/qa-switch-greeting.json.
+
+La revision offline del paquete 759 observa 548 bytes y valor 544 al leer los
+primeros dos bytes como BE16. No coincide con longitud total ni total menos dos.
+No se recorta/reencapsula ni se declara completo un mensaje ISO a partir de un
+limite de paquete TCP. Resolver SWITCH-ATM-FRAMING con el perfil aprobado sigue
+siendo necesario despues de resolver la autorizacion de la conexion.
 
 Unit: QA obligatorio, entrada invalida sin sockets, conexion pendiente sin write
 ni reintento y error protegido. Integration: servidor TCP local real, bytes

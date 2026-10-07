@@ -19,6 +19,12 @@
 - **TODO-DATA LOAD-LIMITS**: faltan limites/ventanas autorizadas y gate funcional de los cinco flujos. Bloquea carga y estres.
 
 La documentacion describe los flujos, pero no aporta evidencia suficiente para ejecutarlos.
+
+Actualizacion de acceso ATM QA (2026-10-07): TCP 16100 ya conecta desde la PC,
+pero el extremo responde NO AUTHORIZATION y cierra incluso sin enviar trama.
+SWITCH-ATM-ACCESS queda pendiente de autorizacion/asociacion al PID y de confirmar
+la IP vista por SmartVista, no de apertura TCP general. El usuario no encuentra
+el intento de captura en los monitores. Ver `docs/implementation/QA_CAPTURE_REPLAY.md`.
 El manual recibido aporta reglas parciales de Mediator/Core: no se considera trama ATM ni mock aprobado.
 Ver `docs/implementation/BOOTSTRAP.md` para el alcance ya implementado.
 El CRUD local de entidades/ATM funciona con configuracion en borrador; no completa ni valida automaticamente los items del checklist. Ver `docs/implementation/LOCAL_CATALOGS.md`.

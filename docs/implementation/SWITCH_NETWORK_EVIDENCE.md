@@ -73,6 +73,15 @@ frames vacios. El reporte privado es `artifacts/tcp-transport-probe.json`.
 
 ## TODO-DATA dependientes
 
+Actualizacion 2026-10-07: TCP 16100 acepta conexion desde la PC. Un intento de
+captura completa la escritura local, recibe 17 bytes y termina PEER_CLOSED;
+el usuario no encuentra la transaccion en sus monitores. Una conexion posterior
+sin enviar bytes recibe NO AUTHORIZATION y cierra. El acceso TCP no acredita
+autorizacion de la interfaz ni procesamiento ISO. Validar origen visto por el
+Switch, log de denegacion y asociacion al PID QA antes de repetir la transaccion.
+No se ha modificado la configuracion del servidor. Detalle y UUID en
+[prueba de captura](QA_CAPTURE_REPLAY.md).
+
 - SWITCH-ATM-ACCESS: IP vista por SmartVista desde la PC/VPN/NAT, vinculacion
   a PID/configuracion autorizada, limites de conexiones y convivencia con cajeros.
 - SWITCH-ATM-FRAMING: significado de longitud de encabezado 2, prefijo/orden de
