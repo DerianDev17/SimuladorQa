@@ -32,6 +32,8 @@ Mediator y muestra incompatibilidades sin truncar perfiles; no es un Observer co
 Diez PCAP inspeccionados aportan un codec offline de encapsulado BANRED y una
 vista de evidencia. 218 mensajes se reconstruyen byte a byte; los campos de
 negocio y otros enlaces requieren diccionario y validacion de casos.
+La pantalla se ajusta al mockup con paneles compactos, conectores e inspector
+tabular; documentacion y evidencia se muestran debajo del resumen de ejecucion.
 
 Requiere Windows y Node.js 22.20 o una LTS posterior compatible.
 

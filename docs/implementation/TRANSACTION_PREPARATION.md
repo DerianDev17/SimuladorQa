@@ -6,6 +6,13 @@ La pantalla Transacciones sigue la composicion del mockup: cuatro pasos,
 formulario de contexto, recorrido ATM/Switch/Core, inspector e historial vacios.
 Solo Datos Generales esta activo; revisar un borrador no avanza a ejecucion.
 
+La igualacion visual compacta la cabecera, controles y paneles; agrega conectores
+en pasos/recorrido y tabla vacia del inspector. Los requisitos, referencia CMS y
+PCAP siguen visibles debajo del resumen de historial/metricas, separados de un
+mensaje ejecutado. Ver todas abre Historial conservando el borrador de la sesion.
+Guardar como caso permanece deshabilitado. QA/PREPROD y estados pendientes
+conservan el mismo contrato; no se agrega un resultado o conexion ficticios.
+
 - Seleccion de ATM activo con entidad activa dentro de QA o PREPROD. Los perfiles
   siguen en estado DRAFT y requieren validacion.
 - Escenario manual: LOCAL, RTC, BANRED o EXTERNAL. No se deduce del perfil/red.

@@ -23,10 +23,10 @@ import type { IconName } from './Icon';
 const navigation: { id: string; label: string; icon: IconName; group: string }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', group: 'ESTACIÓN DE PRUEBAS' },
   { id: 'transactions', label: 'Transacciones', icon: 'transaction', group: '' },
-  { id: 'atms', label: 'Perfiles ATM', icon: 'atm', group: '' },
-  { id: 'entities', label: 'Entidades', icon: 'entity', group: '' },
-  { id: 'cards', label: 'Tarjetas', icon: 'card', group: '' },
   { id: 'load', label: 'Carga y estrés', icon: 'load', group: '' },
+  { id: 'atms', label: 'Perfiles ATM', icon: 'atm', group: '' },
+  { id: 'cards', label: 'Tarjetas', icon: 'card', group: '' },
+  { id: 'entities', label: 'Entidades', icon: 'entity', group: '' },
   { id: 'monitor', label: 'Monitor', icon: 'monitor', group: 'OBSERVABILIDAD' },
   { id: 'history', label: 'Historial', icon: 'history', group: '' },
   { id: 'settings', label: 'Configuración', icon: 'settings', group: '' },
@@ -277,16 +277,8 @@ export function App() {
             <strong>
               Coonecta<span className="brand-dot">.</span>
             </strong>
-            <small>ATM Transaction Simulator</small>
+            <small>ATM Simulator</small>
           </div>
-        </div>
-        <div className="workspace">
-          <span className="workspace-icon">QA</span>
-          <div>
-            <strong>Laboratorio de pruebas</strong>
-            <small>Estación local</small>
-          </div>
-          <span className="workspace-chevron">⌄</span>
         </div>
         <nav aria-label="Navegación principal">
           {navigation.map((item) => (
@@ -305,17 +297,28 @@ export function App() {
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <div className="local-status">
-            <span className={`status-dot ${snapshot ? 'green' : ''}`} />
-            {snapshot
-              ? 'Servicios locales activos'
-              : busy
-                ? 'Iniciando servicios…'
-                : 'Servicios no disponibles'}
+          <div className="sidebar-system">
+            <strong>Estado del sistema</strong>
+            <div className="local-status">
+              <span className={`status-dot ${snapshot ? 'green' : ''}`} />
+              {snapshot
+                ? 'Servicios locales activos'
+                : busy
+                  ? 'Iniciando servicios…'
+                  : 'Servicios no disponibles'}
+            </div>
+            <span className="sidebar-network">
+              <span className="status-dot" /> Switch sin configurar
+            </span>
+            <small>Control Plane sin configurar</small>
           </div>
-          <span>
-            v{snapshot?.version ?? '0.1.0'} <span className="version-separator">·</span> MVP 1
-          </span>
+          <div className="sidebar-station">
+            <span className="user-avatar">QA</span>
+            <span>Estación local</span>
+            <span>
+              v{snapshot?.version ?? '0.1.0'} <span className="version-separator">·</span> MVP 1
+            </span>
+          </div>
           <div className="sidebar-security">
             <Icon name="shield" size={15} /> Producción bloqueada
           </div>
@@ -324,9 +327,6 @@ export function App() {
 
       <div className={`main-area ${environment === 'PREPROD' ? 'preprod' : ''}`}>
         <header className="topbar">
-          <div className="breadcrumb">
-            Estación QA <span>/</span> <strong>{current?.label}</strong>
-          </div>
           <div className="topbar-actions">
             <label className="environment-label">
               Ambiente
@@ -344,7 +344,15 @@ export function App() {
               </select>
             </label>
             <span className="topbar-divider" />
+            <span className="topbar-network">
+              <span className="status-dot" /> Switch sin configurar
+            </span>
+          </div>
+          <div className="topbar-identity">
+            <Icon name="shield" size={18} />
+            <span className="topbar-divider" />
             <div className="user-avatar">QA</div>
+            <span>Estación QA</span>
           </div>
         </header>
 
@@ -369,29 +377,25 @@ export function App() {
               </button>
             </div>
           )}
-          <div className="page-heading">
-            <div>
-              <span className="eyebrow">COONECTA / {environment ?? 'AMBIENTE SIN VERIFICAR'}</span>
-              <h1>
-                {page === 'dashboard'
-                  ? 'Tu estación de pruebas'
-                  : page === 'transactions'
-                    ? 'Nueva transacción'
-                    : current?.label}
-              </h1>
-              <p>
-                {page === 'dashboard'
-                  ? 'Prepara, ejecuta y observa tus pruebas ATM desde un solo lugar.'
-                  : page === 'transactions'
-                    ? 'Prepara el contexto y verifica el recorrido por Switch y Core.'
+          {page !== 'transactions' && (
+            <div className="page-heading">
+              <div>
+                <span className="eyebrow">
+                  COONECTA / {environment ?? 'AMBIENTE SIN VERIFICAR'}
+                </span>
+                <h1>{page === 'dashboard' ? 'Tu estación de pruebas' : current?.label}</h1>
+                <p>
+                  {page === 'dashboard'
+                    ? 'Prepara, ejecuta y observa tus pruebas ATM desde un solo lugar.'
                     : 'Información y estado de tu laboratorio de QA.'}
-              </p>
+                </p>
+              </div>
+              <span className="pill outline">
+                <span className="status-dot" />
+                {snapshot ? 'Configuración inicial' : 'Servicios sin verificar'}
+              </span>
             </div>
-            <span className="pill outline">
-              <span className="status-dot" />
-              {snapshot ? 'Configuración inicial' : 'Servicios sin verificar'}
-            </span>
-          </div>
+          )}
 
           {page === 'dashboard' && (
             <>

@@ -12,13 +12,13 @@ La lectura del manual asociado se documenta en
 
 | Area del mockup | Estado actual | Siguiente trabajo |
 | --- | --- | --- |
-| Navegacion lateral, marca, ambiente permanente | Shell y QA/PREPROD implementados; catalogos separados | Ajustar navegacion y composicion al mockup, preservando estados reales |
+| Navegacion lateral, marca, ambiente permanente | Barra lateral de 222 px con degradado, marca compacta, estado local inferior; ambiente a la izquierda y estado Switch separado | Conexion/usuarios reales cuando existan sus adaptadores |
 | Datos Generales / Ejecutar / Resultado / Historial | Pasos implementados; solo Datos Generales activo, sin avance por revisar borrador | Conectar progreso a ejecucion e historial reales |
 | Formulario de ATM, tarjeta, transaccion y cuenta | Seleccion ATM activo del ambiente, flujo MVP, ahorros/corriente y monto de borrador; catalogo CMS con fuente | Tarjeta y perfiles aprobados; reglas de elegibilidad/moneda pendientes |
 | Lector fisico / tarjeta configurada | Lector y perfiles de tarjeta pendientes | Mostrar no disponible hasta obtener evidencia; PAN siempre enmascarado |
-| Timeline ATM -> Switch -> Core -> respuesta | Panel implementado con estados pendientes y sin tiempos inventados | Eventos y tiempos reales; estado de observabilidad independiente del resultado transaccional |
-| Inspector solicitud/respuesta, campos/RAW/HEX | Panel vacio y pestanas deshabilitadas; referencia CMS separada de ISO | Contrato de evidencia sanitizada fuera del Renderer; diccionario y tramas |
-| Ultimas transacciones y metricas realtime | Sin historial transaccional/Control Plane | Estados vacios; agregados con ventana y origen identificados |
+| Timeline ATM -> Switch -> Core -> respuesta | Conectores verticales, iconos y bloque de resultado/RC/monto pendientes con distribucion compacta | Eventos y tiempos reales; estado de observabilidad independiente del resultado transaccional |
+| Inspector solicitud/respuesta, campos/RAW/HEX | Tabla Campo/Descripcion/Valor vacia; pestanas/vista deshabilitadas; referencia CMS y PCAP debajo del resumen | Contrato de evidencia sanitizada fuera del Renderer; diccionario y tramas |
+| Ultimas transacciones y metricas realtime | Tabla de ocho columnas, acceso a Historial y tarjetas TPS/total/resultados con cero ejecuciones, sin ventana activa | Agregados con ventana y origen identificados al implementar el motor |
 | Plantillas / Guardar como caso | Plantillas documentales saldo/retiro por cuenta implementadas, con fuente CMS; casos persistentes pendientes | Templates ISO aprobados y caso asociado a evidencia sanitizada |
 
 ## Correcciones necesarias al convertir el diseno en producto
@@ -69,3 +69,22 @@ La lectura del manual asociado se documenta en
 La preparacion visual/documental ya esta implementada, sin habilitar envios:
 ver [alcance y pruebas](../implementation/TRANSACTION_PREPARATION.md).
 La referencia visual sigue separada del contrato de red.
+
+## Igualacion visual implementada
+
+- Titulo y Plantillas documentales/Guardar como caso/Limpiar borrador en una fila.
+  Guardar como caso sigue deshabilitado; no se simula persistencia.
+- Pasos con circulos/conectores horizontales. Solo Datos Generales activo.
+- Tres paneles principales con proporciones cercanas a 400/383/451 del mockup,
+  campos compactos y tarjeta pendiente con icono, sin PAN ni entidad inventados.
+- Recorrido conectado visualmente, con tiempo/RC/monto sin resultado hasta ejecutar.
+- Inspector con estructura tabular sin datos de ejemplo. Referencia CMS, requisitos
+  y capturas se ubican en una fila independiente debajo de historial/metricas.
+- Tipografia, bordes, fondo y espacios ajustados; estados pendientes con contraste
+  legible. En 1536 x 1024 se comprueba que los tres paneles y resumen inferior
+  entren en la ventana; en 1040 x 760 se comprueba ausencia de overflow horizontal.
+
+No se replica el verde Conectado/5 de 5 online ni transacciones aprobadas de ejemplo.
+El estado local y la conexion Switch se presentan por separado. PREPROD conserva
+su banner y color ambar. El catalogo de saldo mantiene 301000/302000 del manual.
+Captura de verificacion local: `artifacts/mockup-aligned-desktop.png`.

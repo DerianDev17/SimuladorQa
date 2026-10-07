@@ -32,7 +32,7 @@ interface Props {
   client: DesktopClient;
   onRefresh: () => Promise<void>;
   onReviewingChange: (reviewing: boolean) => void;
-  onNavigate: (page: 'atms' | 'settings') => void;
+  onNavigate: (page: 'atms' | 'settings' | 'history') => void;
 }
 export function TransactionWorkspace({
   snapshot,
@@ -145,40 +145,48 @@ export function TransactionWorkspace({
 
   return (
     <div className="transaction-workspace">
-      <div className="transaction-toolbar">
-        <label>
-          Plantilla documental
-          <select
-            aria-label="Plantilla documental"
-            value=""
-            disabled={fieldsDisabled || !snapshot?.documentedOperations.length}
-            onChange={(event) => {
-              const selected = snapshot?.documentedOperations.find(
-                (item) => `${item.transaction}:${item.account}` === event.target.value,
-              );
-              if (!selected) return;
-              invalidate();
-              setTransaction(selected.transaction);
-              setAccount(selected.account);
-              setAmount('');
-            }}
-          >
-            <option value="">Elegir operación y cuenta</option>
-            {snapshot?.documentedOperations.map((item) => (
-              <option
-                key={`${item.transaction}:${item.account}`}
-                value={`${item.transaction}:${item.account}`}
-              >
-                {transactions.find((entry) => entry.id === item.transaction)?.label} ·{' '}
-                {accountTypes.find((entry) => entry.id === item.account)?.label} · {item.code}
-              </option>
-            ))}
-          </select>
-        </label>
-        <p>La plantilla define operación y cuenta. El ATM y escenario se conservan.</p>
-        <button disabled={fieldsDisabled} onClick={reset}>
-          Limpiar borrador
-        </button>
+      <div className="transaction-heading">
+        <div>
+          <h1>Nueva transacción</h1>
+          <p>Prepara el cajero y verifica el recorrido por Switch y Core.</p>
+        </div>
+        <div className="transaction-toolbar">
+          <label>
+            <span className="visually-hidden">Plantilla documental</span>
+            <select
+              aria-label="Plantilla documental"
+              value=""
+              disabled={fieldsDisabled || !snapshot?.documentedOperations.length}
+              onChange={(event) => {
+                const selected = snapshot?.documentedOperations.find(
+                  (item) => `${item.transaction}:${item.account}` === event.target.value,
+                );
+                if (!selected) return;
+                invalidate();
+                setTransaction(selected.transaction);
+                setAccount(selected.account);
+                setAmount('');
+              }}
+            >
+              <option value="">Plantillas documentales</option>
+              {snapshot?.documentedOperations.map((item) => (
+                <option
+                  key={`${item.transaction}:${item.account}`}
+                  value={`${item.transaction}:${item.account}`}
+                >
+                  {transactions.find((entry) => entry.id === item.transaction)?.label} ·{' '}
+                  {accountTypes.find((entry) => entry.id === item.account)?.label} · {item.code}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button disabled title="Requiere casos persistentes con evidencia validada">
+            <Icon name="file" size={16} /> Guardar como caso
+          </button>
+          <button disabled={fieldsDisabled} onClick={reset}>
+            Limpiar borrador
+          </button>
+        </div>
       </div>
       <ol className="transaction-steps" aria-label="Pasos de la transacción">
         {[
@@ -201,55 +209,59 @@ export function TransactionWorkspace({
         <section className="panel transaction-context" aria-labelledby="transaction-context-title">
           <div className="panel-heading">
             <h2 id="transaction-context-title">Datos de la transacción</h2>
-            <span className="pill blue">{snapshot?.environment ?? 'Sin verificar'}</span>
+            <span className={`pill ${snapshot?.environment === 'PREPROD' ? 'amber' : 'blue'}`}>
+              {snapshot?.environment ?? 'Sin verificar'}
+            </span>
           </div>
           <div className="transaction-fields">
-            <label>
-              Escenario
-              <select
-                aria-label="Escenario"
-                value={scenario}
-                disabled={fieldsDisabled}
-                onChange={(event) => {
-                  const selected = scenarios.find((item) => item.id === event.target.value);
-                  if (selected) {
+            <div className="transaction-context-selectors">
+              <label>
+                Perfil ATM
+                <select
+                  aria-label="Perfil ATM"
+                  value={selectedAtm?.id ?? ''}
+                  disabled={fieldsDisabled || loading || !atms.length}
+                  onChange={(event) => {
                     invalidate();
-                    setScenario(selected.id);
-                  }
-                }}
-              >
-                {scenarios.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.label}
+                    setAtmId(event.target.value);
+                  }}
+                >
+                  <option value="">
+                    {loading
+                      ? 'Cargando perfiles…'
+                      : atms.length
+                        ? 'Selecciona un ATM'
+                        : 'Sin ATM activos en este ambiente'}
                   </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Perfil ATM
-              <select
-                aria-label="Perfil ATM"
-                value={selectedAtm?.id ?? ''}
-                disabled={fieldsDisabled || loading || !atms.length}
-                onChange={(event) => {
-                  invalidate();
-                  setAtmId(event.target.value);
-                }}
-              >
-                <option value="">
-                  {loading
-                    ? 'Cargando perfiles…'
-                    : atms.length
-                      ? 'Selecciona un ATM'
-                      : 'Sin ATM activos en este ambiente'}
-                </option>
-                {atms.map((atm) => (
-                  <option key={atm.id} value={atm.id}>
-                    {atm.alias} · Borrador
-                  </option>
-                ))}
-              </select>
-            </label>
+                  {atms.map((atm) => (
+                    <option key={atm.id} value={atm.id}>
+                      {atm.alias} · Borrador
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Escenario
+                <select
+                  aria-label="Escenario"
+                  value={scenario}
+                  disabled={fieldsDisabled}
+                  onChange={(event) => {
+                    const selected = scenarios.find((item) => item.id === event.target.value);
+                    if (selected) {
+                      invalidate();
+                      setScenario(selected.id);
+                    }
+                  }}
+                >
+                  {scenarios.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
             <div className="draft-profile-status">
               <span className="pill amber">
                 {selectedAtm ? 'Perfil en borrador' : 'ATM sin seleccionar'}
@@ -297,9 +309,16 @@ export function TransactionWorkspace({
                   <Icon name="card" size={16} /> Tarjeta configurada
                 </button>
               </div>
-              <p>
-                <Icon name="shield" size={15} /> Sin tarjeta validada · lector sin verificar
-              </p>
+              <div className="card-preview" aria-label="Estado de tarjeta">
+                <span className="card-preview-icon">
+                  <Icon name="card" size={32} />
+                </span>
+                <div>
+                  <strong>Sin tarjeta seleccionada</strong>
+                  <p>Sin tarjeta validada · lector sin verificar</p>
+                  <span>Entidad — · Producto —</span>
+                </div>
+              </div>
             </fieldset>
             <label>
               Transacción
@@ -432,11 +451,15 @@ export function TransactionWorkspace({
               },
               {
                 icon: 'monitor' as const,
-                title: 'Switch Coonecta',
+                title: 'Switch Coonecta (SmartVista)',
                 text: 'Conexión sin configurar',
               },
-              { icon: 'entity' as const, title: 'Core', text: 'Observador sin configurar' },
-              { icon: 'transaction' as const, title: 'Respuesta', text: 'Sin mensaje recibido' },
+              { icon: 'database' as const, title: 'Core', text: 'Observador sin configurar' },
+              {
+                icon: 'transaction' as const,
+                title: 'Respuesta del Switch',
+                text: 'Sin mensaje recibido',
+              },
             ].map((step) => (
               <li key={step.title}>
                 <span className="route-icon">
@@ -459,6 +482,149 @@ export function TransactionWorkspace({
                 habilitado.
               </p>
             </div>
+          </div>
+          <dl className="transaction-result-values">
+            <div>
+              <dt>Código de respuesta</dt>
+              <dd>—</dd>
+            </div>
+            <div>
+              <dt>Monto ejecutado</dt>
+              <dd>—</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section
+          className="panel transaction-inspector"
+          aria-labelledby="transaction-inspector-title"
+        >
+          <div className="panel-heading">
+            <h2 id="transaction-inspector-title">Mensaje ISO8583</h2>
+            <label className="inspector-view-picker">
+              <span className="visually-hidden">Vista del mensaje</span>
+              <select aria-label="Vista del mensaje" disabled>
+                <option>Vista: Campos</option>
+              </select>
+            </label>
+          </div>
+          <div className="inspector-tabs" role="tablist" aria-label="Vistas de evidencia">
+            <button role="tab" aria-selected="false" disabled>
+              Solicitud
+            </button>
+            <button role="tab" aria-selected="false" disabled>
+              Respuesta
+            </button>
+            <button role="tab" aria-selected="false" disabled>
+              RAW
+            </button>
+            <button role="tab" aria-selected="false" disabled>
+              HEX
+            </button>
+          </div>
+          <table className="inspector-table" aria-label="Campos del mensaje">
+            <thead>
+              <tr>
+                <th>Campo</th>
+                <th>Descripción</th>
+                <th>Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td colSpan={3}>
+                  <div className="empty-state compact">
+                    <Icon name="transaction" size={32} />
+                    <h3>Esperando una ejecución</h3>
+                    <p>
+                      Los campos y mensajes sanitizados estarán disponibles con el diccionario ATM y
+                      las tramas validadas.
+                    </p>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="inspector-footnote">
+            <Icon name="shield" size={14} /> Sin mensaje · datos sensibles protegidos
+          </p>
+        </section>
+      </div>
+      <div className="transaction-bottom-grid">
+        <section className="panel" aria-labelledby="transaction-recent-title">
+          <div className="panel-heading">
+            <h2 id="transaction-recent-title">Últimas transacciones</h2>
+            <button className="text-button" onClick={() => onNavigate('history')}>
+              Ver todas <Icon name="arrow" size={14} />
+            </button>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Hora</th>
+                <th>ATM</th>
+                <th>Transacción</th>
+                <th>PAN</th>
+                <th>Monto</th>
+                <th>RC</th>
+                <th>Tiempo</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td colSpan={8} className="transaction-empty-row">
+                  Aún no hay ejecuciones. Las revisiones de borrador no generan transacciones.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+        <section className="panel" aria-labelledby="transaction-metrics-title">
+          <div className="panel-heading">
+            <h2 id="transaction-metrics-title">Métricas de ejecución</h2>
+            <span className="pill neutral">Sin actividad</span>
+          </div>
+          <dl className="transaction-metrics">
+            <div className="metric-tps">
+              <dt>TPS actual</dt>
+              <dd>
+                — <Icon name="load" size={28} />
+              </dd>
+            </div>
+            <div className="metric-total">
+              <dt>Transacciones totales</dt>
+              <dd>
+                0 <Icon name="transaction" size={25} />
+              </dd>
+            </div>
+          </dl>
+          <dl className="transaction-outcomes">
+            {[
+              { label: 'Aprobadas', tone: 'approved' },
+              { label: 'Rechazadas', tone: 'declined' },
+              { label: 'Timeouts', tone: 'timeout' },
+            ].map((item) => (
+              <div className={item.tone} key={item.label}>
+                <dt>{item.label}</dt>
+                <dd>
+                  0<span className="outcome-ring" aria-hidden="true" />
+                </dd>
+                <small>Sin ejecuciones</small>
+              </div>
+            ))}
+          </dl>
+          <p className="metrics-footnote">Sin ventana de medición activa.</p>
+        </section>
+      </div>
+      <div className="transaction-support-grid">
+        <section
+          className="panel transaction-preparation-panel"
+          aria-label="Preparación y requisitos"
+        >
+          <div className="panel-heading">
+            <h2>Preparación y requisitos</h2>
+            <span className="pill amber">Envío bloqueado</span>
           </div>
           <div className="transaction-readiness">
             {review && <DraftSummary review={review} />}
@@ -492,54 +658,30 @@ export function TransactionWorkspace({
                 Completar estos datos prepara el borrador; el envío requiere la evidencia pendiente.
               </small>
             </div>
-            <h3>Requisitos de envío</h3>
-            <ul>
-              {blockers.map((blocker) => (
-                <li key={blocker.id}>
-                  <span className="status-dot amber" />
-                  <div>
-                    <strong>{blocker.label}</strong>
-                    <p>{blocker.description}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-            <button className="text-button" onClick={() => onNavigate('settings')}>
-              Ver configuración pendiente <Icon name="arrow" size={14} />
-            </button>
+            <div className="send-requirements">
+              <h3>Requisitos de envío</h3>
+              <ul>
+                {blockers.map((blocker) => (
+                  <li key={blocker.id}>
+                    <span className="status-dot amber" />
+                    <div>
+                      <strong>{blocker.label}</strong>
+                      <p>{blocker.description}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <button className="text-button" onClick={() => onNavigate('settings')}>
+                Ver configuración pendiente <Icon name="arrow" size={14} />
+              </button>
+            </div>
           </div>
         </section>
-
         <section
-          className="panel transaction-inspector"
-          aria-labelledby="transaction-inspector-title"
+          className="panel transaction-reference-panel"
+          aria-label="Documentación de la operación"
         >
-          <div className="panel-heading">
-            <h2 id="transaction-inspector-title">Mensaje ISO8583</h2>
-            <span className="pill neutral">Sin mensaje</span>
-          </div>
-          <div className="inspector-tabs" role="tablist" aria-label="Vistas de evidencia">
-            <button role="tab" aria-selected="false" disabled>
-              Solicitud
-            </button>
-            <button role="tab" aria-selected="false" disabled>
-              Respuesta
-            </button>
-            <button role="tab" aria-selected="false" disabled>
-              RAW
-            </button>
-            <button role="tab" aria-selected="false" disabled>
-              HEX
-            </button>
-          </div>
-          <div className="empty-state compact">
-            <Icon name="transaction" size={32} />
-            <h3>Esperando una ejecución</h3>
-            <p>
-              Los campos y mensajes sanitizados estarán disponibles con el diccionario ATM y las
-              tramas validadas.
-            </p>
-          </div>
+          {' '}
           <div className="documented-operation" aria-label="Referencia documental">
             <span className="eyebrow">REFERENCIA DOCUMENTAL</span>
             <h3>{original ? 'Reverso asociado al original' : 'Catálogo de la operación'}</h3>
@@ -574,7 +716,6 @@ export function TransactionWorkspace({
               </p>
             )}
           </div>
-          {snapshot?.captureEvidence && <CaptureEvidenceView report={snapshot.captureEvidence} />}
           {original && (
             <div className="document-note">
               <Icon name="shield" size={19} />
@@ -586,52 +727,11 @@ export function TransactionWorkspace({
             </div>
           )}
         </section>
-      </div>
-      <div className="transaction-bottom-grid">
-        <section className="panel" aria-labelledby="transaction-recent-title">
-          <div className="panel-heading">
-            <h2 id="transaction-recent-title">Últimas transacciones</h2>
-            <span className="pill neutral">0 registros</span>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Hora</th>
-                <th>ATM</th>
-                <th>Operación</th>
-                <th>Resultado</th>
-                <th>Tiempo</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td colSpan={5} className="transaction-empty-row">
-                  Aún no hay ejecuciones. Las revisiones de borrador no generan transacciones.
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </section>
-        <section className="panel" aria-labelledby="transaction-metrics-title">
-          <div className="panel-heading">
-            <h2 id="transaction-metrics-title">Métricas de ejecución</h2>
-            <span className="pill neutral">Sin actividad</span>
-          </div>
-          <dl className="transaction-metrics">
-            <div>
-              <dt>Ejecutadas</dt>
-              <dd>0</dd>
-            </div>
-            <div>
-              <dt>TPS actual</dt>
-              <dd>—</dd>
-            </div>
-            <div>
-              <dt>Latencia total</dt>
-              <dd>—</dd>
-            </div>
-          </dl>
-        </section>
+        {snapshot?.captureEvidence && (
+          <section className="panel transaction-captures-panel">
+            <CaptureEvidenceView report={snapshot.captureEvidence} />
+          </section>
+        )}
       </div>
     </div>
   );

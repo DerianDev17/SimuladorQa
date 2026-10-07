@@ -14,6 +14,9 @@ const paths = {
   clock: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0 M12 7v5l3 2',
   check: 'M5 12l4 4L19 6',
   reader: 'M5 3h14v18H5z M8 6h8 M8 9h8 M10 15h4 M11 18h2',
+  file: 'M6 3h8l4 4v14H6z M14 3v5h4 M9 12h6 M9 16h6',
+  database:
+    'M20 5c0 2-4 3-8 3S4 7 4 5s4-3 8-3 8 1 8 3z M4 5v14c0 2 4 3 8 3s8-1 8-3V5 M4 12c0 2 4 3 8 3s8-1 8-3',
 } as const;
 export type IconName = keyof typeof paths;
 export function Icon({ name, size = 20 }: { name: IconName; size?: number }) {

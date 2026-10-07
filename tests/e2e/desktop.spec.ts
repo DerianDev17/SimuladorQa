@@ -32,6 +32,44 @@ test.beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'coonecta-e2e-'));
 });
 
+test('composición del mockup: tres paneles y resumen dentro de la ventana desktop', async () => {
+  const window = await launch();
+  await app?.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0]?.setContentSize(1536, 1024),
+  );
+  await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
+  const composition = await window.evaluate(() => {
+    const bounds = (selector: string) => {
+      const rect = document.querySelector(selector)!.getBoundingClientRect();
+      return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right };
+    };
+    return {
+      context: bounds('.transaction-context'),
+      flow: bounds('.transaction-flow'),
+      inspector: bounds('.transaction-inspector'),
+      recent: bounds('.transaction-bottom-grid'),
+      support: bounds('.transaction-support-grid'),
+      viewport: globalThis.window.innerHeight,
+      overflow: document.documentElement.scrollWidth > globalThis.window.innerWidth,
+    };
+  });
+  expect(composition.context.top).toBe(composition.flow.top);
+  expect(composition.flow.top).toBe(composition.inspector.top);
+  expect(composition.context.right).toBeLessThan(composition.flow.left);
+  expect(composition.flow.right).toBeLessThan(composition.inspector.left);
+  expect(composition.recent.bottom).toBeLessThan(composition.viewport);
+  expect(composition.support.top).toBeGreaterThan(composition.recent.bottom);
+  expect(composition.overflow).toBe(false);
+  await expect(window.getByLabel('Ambiente', { exact: true })).toHaveValue('QA');
+  await expect(
+    window.getByRole('button', { name: 'Guardar como caso', exact: true }),
+  ).toBeDisabled();
+  await mkdir('artifacts', { recursive: true });
+  await window.screenshot({ path: 'artifacts/mockup-aligned-desktop.png', scale: 'css' });
+  await window.getByRole('button', { name: 'Ver todas', exact: true }).click();
+  await expect(window.getByRole('heading', { name: 'Historial', exact: true })).toBeVisible();
+});
+
 test('muestra evidencia de capturas sin habilitar envío ni RAW', async () => {
   const window = await launch();
   await window.getByRole('button', { name: 'Transacciones', exact: false }).click();

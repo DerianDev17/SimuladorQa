@@ -48,6 +48,8 @@ un borrador no completa esos requisitos.
 - [x] catalogo documental por cuenta: saldo 301000/302000 y retiro 011000/012000
 - [x] fuente/version/pagina y adaptador CMS separado del dominio
 - [x] pantalla de transacciones con pasos, formulario, recorrido e inspector vacios
+- [x] igualacion visual del mockup: barra superior/lateral, paneles compactos, conectores, tabla ISO y resumen inferior
+- [x] referencia CMS, preparacion y capturas separadas del inspector; acceso al historial conserva el borrador
 - [x] seleccion ATM/entidad activos por ambiente, conservando estado borrador
 - [x] cuenta ahorros/corriente y validacion de sintaxis de monto sin floats
 - [x] revision de borrador por IPC y revalidacion de ambiente/version ATM en Main

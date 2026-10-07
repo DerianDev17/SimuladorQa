@@ -47,6 +47,8 @@ datos/evidencia externos y solo se marcaran al recibirlos y validarlos.
 - [x] Framing incremental BE16 inclusivo y codec de envolvente BANRED con bitmap de 128 bits.
 - [x] Reconstruccion offline byte a byte de 218 mensajes; errores de longitud/fuente incompleta controlados.
 - [x] Vista de evidencia de capturas en transacciones sin exponer campos, RAW ni endpoints.
+- [x] Composicion visual del mockup compactada: navegacion, cabecera, pasos/recorrido, inspector tabular e historial/metricas.
+- [x] Requisitos/CMS/PCAP separados del area de operacion; estados reales y codigos del manual conservados.
 
 Detalle y pruebas: `docs/implementation/TRANSACTION_PREPARATION.md`.
 
