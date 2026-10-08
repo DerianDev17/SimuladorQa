@@ -96,6 +96,7 @@ Detalle y pruebas: `docs/implementation/TRANSACTION_PREPARATION.md`.
 
 ## Fuentes recibidas y validacion pendiente
 
+- [x] Logs tcpcomms01.out / nwint00_22150.out del 8 de octubre: listener y admision del cajero documentados; PC recibe NO AUTHORIZATION en prueba posterior sin trama. Usuario confirma CB 205 = PID 82052 / 49212 y alcance exclusivo CB. Muestra USD 20 de 82032 apartada; request ATM propio de CB y evento de rechazo contemporaneo pendientes. Ver `docs/protocols/QA_SWITCH_ADMISSION_REVIEW.md`.
 - [x] Mockup `mockup.png`, revisado: `docs/mockups/MOCKUP_REVIEW.md`.
 - [x] Manual local Extreme Mediator CMS v3.6 (24 paginas, revision 13-04-2023).
 - [x] Matriz de evidencia para los cinco flujos: `docs/protocols/EXTREME_MEDIATOR_CMS_REVIEW.md`.

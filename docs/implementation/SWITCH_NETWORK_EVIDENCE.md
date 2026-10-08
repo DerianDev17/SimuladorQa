@@ -82,6 +82,16 @@ Switch, log de denegacion y asociacion al PID QA antes de repetir la transaccion
 No se ha modificado la configuracion del servidor. Detalle y UUID en
 [prueba de captura](QA_CAPTURE_REPLAY.md).
 
+Actualizacion 2026-10-08: el log de startup confirma listener 16100 y admision
+del cajero como dispositivo 80131 por direccion. La prueba local de 10:00:49
+(Ecuador) conecta desde la PC y vuelve a recibir NO AUTHORIZATION sin write.
+Los logs recibidos terminan antes de ese intento. Tambien muestran 82032 en
+49276 y 82052 en 49212, contrario a la asociacion aportada previamente. El usuario
+confirma que CB 205 corresponde a 82052 y limita la prueba a esa entidad.
+El destino documental 49212 ya coincide; se registra el PID en un reporte privado
+sin cambiar el schema. La muestra USD 20 de 82032 queda apartada para CB.
+Ver [analisis de admision](../protocols/QA_SWITCH_ADMISSION_REVIEW.md).
+
 - SWITCH-ATM-ACCESS: IP vista por SmartVista desde la PC/VPN/NAT, vinculacion
   a PID/configuracion autorizada, limites de conexiones y convivencia con cajeros.
 - SWITCH-ATM-FRAMING: significado de longitud de encabezado 2, prefijo/orden de

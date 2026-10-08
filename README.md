@@ -47,6 +47,9 @@ La captura VCP Lite aporta un codec de envolvente VISA de cuatro bytes probado
 offline en 262 frames y un caso privado de reproduccion exacta del retiro USD 20
 STAN 001391. Conserva los campos originales; no crea una transaccion nueva con
 otra tarjeta ni habilita el envio general. Ver el documento del emisor QA.
+El 2026-10-08 el usuario confirma CB 205 como PID 82052 / 49212. La muestra
+001391 ruteaba a 82032 y queda apartada del alcance exclusivo CB; falta una
+muestra ATM de ese destino y resolver la admision de la PC.
 Diez PCAP inspeccionados aportan un codec offline de encapsulado BANRED y una
 vista de evidencia. 218 mensajes se reconstruyen byte a byte; los campos de
 negocio y otros enlaces requieren diccionario y validacion de casos.

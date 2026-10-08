@@ -141,6 +141,14 @@ caso, pero no cambian la configuracion del PID ni prueban llegada al Core.
 Detalle de correlacion y conflicto del enlace Mediator:
 `docs/protocols/VCP_LITE_450_REVIEW.md`.
 
+Actualizacion 2026-10-08: el usuario confirma que CB 205 es el PID 82052 / 49212
+y limita la prueba a CB. La muestra STAN 001391 fue encaminada a 82032; el
+perfil preparado cambia a BLOCKED_SOURCE_ROUTE_MISMATCH y no es elegible para
+esa prueba. La validacion de sus bytes queda como evidencia de envolvente, sin
+atribuirle una entidad distinta. Falta request ATM dirigido a CB 82052 y resolver
+la admision de la PC, que sigue recibiendo NO AUTHORIZATION sin write.
+Ver `docs/protocols/QA_SWITCH_ADMISSION_REVIEW.md`.
+
 Unit: QA obligatorio, entrada invalida sin sockets, conexion pendiente sin write
 ni reintento y error protegido. Integration: servidor TCP local real, bytes
 originales pese a mutacion del consumidor, envio unico, respuesta contada sin

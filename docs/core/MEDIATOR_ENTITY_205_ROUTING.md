@@ -74,3 +74,13 @@ La nueva URL es un destino de servicio, independiente del acceso SQL del
 observador. No resuelve el certificado SQL ni la credencial con minimo privilegio.
 Solo la parte de envio dependiente del acceso al PID y contrato permanece
 bloqueada. El observador SQL PREPROD existente conserva su configuracion y alcance.
+
+## Confirmacion del PID CB, 2026-10-08
+
+El usuario confirma que CB Cooperativa 205 corresponde al PID SmartVista 82052
+y solicita trabajar solo con esa entidad. tcpcomms01.out de QA registra ese PID
+con destino 172.60.60.156:49212; el PID 82032 aparece en 49276 y queda fuera
+del alcance CB confirmado. El simulador conserva entrada ATM 16100; no abre
+directamente el enlace del Mediator. La muestra de retiro USD 20 / STAN 001391,
+encaminada a 82032 en los logs previos, deja de ser un caso elegible para CB.
+Ver [revision de admision y destinos](../protocols/QA_SWITCH_ADMISSION_REVIEW.md).
