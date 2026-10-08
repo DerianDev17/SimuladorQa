@@ -2,6 +2,15 @@
 
 ## TODO-DATA activos de la primera entrega
 
+Actualizacion de fuente ATM Coonecta (2026-10-08): SWATM01 en ADQCLONE
+172.60.60.152 usa PKT_VISA / ISO8583MsgFormat y el archivo
+E:\ExtremePCI\configfiles\ISOBASEI.BIN; inicia CALL a SmartVista 16100.
+172.60.60.171 fue corregido por el usuario como balanceador. PROXY205 en
+Mediator 172.60.60.156 muestra LISTEN con parametros 10.60.0.11 / 49212.
+Falta recibir el archivo de formato ATM o su definicion aprobada y comprobar
+el camino de salida/coexistencia antes de ejecutar desde ADQCLONE. Ver
+`docs/implementation/SWITCH_NETWORK_EVIDENCE.md`.
+
 - **TODO-DATA ISO-SPEC**: recibido ContextoISO.xml del proyecto Simulador Banred (58 definiciones transaccionales y seis de echo). Falta especificacion/perfil ATM aprobado y validar su correspondencia con ese diccionario BANRED. Bloquea construir/parsear campos ATM, PIN/HSM y reglas de negocio; la envolvente observada se verifica offline. Ver `docs/protocols/BANRED_SIMULATOR_REVIEW.md`.
 - **TODO-DATA CMS-ATM-MAPPING / CMS-XML-CONTRACT / CMS-RESULT-MAPPING**: recibido Extreme Mediator CMS v3.6 para XML/REST Mediator-Core. Falta validar su correspondencia con ATM, las diferencias tablas/ejemplos y los codigos por canal; no sustituye ISO-SPEC. Conflictos y solicitudes registrados en `docs/protocols/EXTREME_MEDIATOR_CMS_REVIEW.md`.
 - **TODO-DATA CMS-REVERSAL / CMS-CORRELATION / CMS-TRANSPORT / CMS-POS-MAPPING**: el manual lista familias MTI y campos Core, pero faltan la seleccion del reverso, reglas de correlacion, contrato REST y resolucion de diferencias POS. Bloquean solo sus adaptadores/reglas dependientes.

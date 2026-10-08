@@ -15,18 +15,52 @@ versionan capturas de transacciones ni direcciones operativas en codigo.
 
 | Observacion | Evidencia | Limite de la conclusion |
 | --- | --- | --- |
-| SmartVista escucha en 16100 y tiene un socket con el equipo de cajeros | netstat LISTEN y ESTABLISHED, PID 80131 | Estado de esa captura; no es health check de esta PC |
+| SmartVista escucha en 16100 y tiene un socket con 172.60.60.171, identificado despues como balanceador | netstat LISTEN y ESTABLISHED, PID 80131; correccion del usuario | Estado de esa captura; no es health check de esta PC |
 | Cajeros inician el enlace ATM | PID: puerto local 16100, remoto ANY, iniciador REMOTE; roles confirmados por usuario | Acceso del simulador desde otra PC por validar |
 | SmartVista/Mediator tienen socket por 49212 en ambos extremos | netstat ESTABLISHED | No prueba que el simulador deba abrir ese enlace ni quien lo inicio |
 | PID 80131, instituto 8013 EF ATMRTC, formateador 58, TCP01, VISA, indicador 28 Visa SMS network | pantalla de interfaz | Identificadores del servidor; no definen campos ISO, F22 o plantilla por entidad |
 | Longitud de encabezado configurada 2 y keep alive 1 | pantalla de interfaz | No define byte order, VLI inclusivo/exclusivo, cabecera de negocio o intervalo |
-| Remoto configurado: equipo de cajeros | pantalla de interfaz | No permite asumir que acepta la IP/VPN/NAT del simulador desde la PC |
+| Remoto configurado: balanceador del enlace de cajeros | pantalla de interfaz y correccion del usuario | No permite asumir que acepta la IP/VPN/NAT del simulador desde la PC |
 
 La captura transaccional contiene operaciones y varios estados internos/history.
 No se importa a los contadores de la app ni se deduce un mapeo universal entre
 codigos internos SmartVista, response code ATM y aprobacion Core.
 
 ## Implementacion
+
+### Topologia precisada por el usuario, 2026-10-08
+
+El usuario corrige el rol de 172.60.60.171: es el balanceador, no el nodo que
+ejecuta el proceso ATM. Aporta configuracion de SWATM01 y dos pantallas de
+Echelon. La primera identifica ADQCLONE / 172.60.60.152; la segunda,
+MEDIATORCLONE / 172.60.60.156. Son evidencia de configuracion, no instrucciones
+para ejecutar procesos o cambiar el servidor.
+
+| Componente | Configuracion aportada | Alcance |
+| --- | --- | --- |
+| SWATM01 en ADQCLONE | TCPIPLINK.EXE, SWATM01 GenCommSubsystem CALL 10.60.0.11 16100 | El proceso ATM inicia la conexion hacia SmartVista |
+| Formato SWATM01 | PacketDrv=PKT_VISA; MsgFormat=ISO8583MsgFormat; MsgFormatParam=E:\ExtremePCI\configfiles\ISOBASEI.BIN | Identifica el driver y el archivo de formato reales de Coonecta; no describe todavia su estructura binaria |
+| Adaptador SWATM01 | Extreme.Switch2013PCI.dll; Extreme.Switch2013PCI.SwitchIso | Identificadores aportados; no se deducen reglas de negocio por el nombre |
+| Balanceador | 172.60.60.171, confirmado por usuario | Es tambien el peer que registra SmartVista; el mecanismo de traduccion/balanceo no esta documentado |
+| PROXY205 en MEDIATORCLONE | TCPIPLINK.exe, PROXY205 GenCommSubsystem LISTEN 10.60.0.11 49212 | Complementa el WE_CALL de SmartVista para CB 82052; no se interpreta el argumento de IP como un bind local sin especificacion TCPIPLINK |
+
+El XML configura start=1 y timeout=15000 en execute, ademas de parametros de
+colas y workers. No se convierte ese timeout en plazo de respuesta financiera
+ni se adopta su unidad sin documentacion del ejecutor.
+
+La evidencia distingue dos enlaces: SWATM01 -> SmartVista y
+SmartVista -> PROXY205/Mediator -> servicio Core. Una respuesta de vuelta no
+prueba una segunda conexion TCP iniciada en sentido inverso. Para replicar la
+entrada ATM hace falta recibir ISOBASEI.BIN o su definicion/exportacion aprobada,
+y una muestra CB correlacionada. No se sustituye por ContextoISO.xml de BANRED.
+El archivo ISOBASEI.BIN no se encontro en el workspace durante esta revision.
+
+El rechazo de la PC por direccion sigue confirmado: SmartVista ve 10.10.10.21,
+mientras su dispositivo activo admite al peer del balanceador 172.60.60.171.
+Ejecutar desde ADQCLONE no garantiza que una nueva conexion salga por esa misma
+direccion ni que el PID permita conexiones simultaneas. Antes de elegir ese
+camino, verificar la configuracion de salida del balanceador y las reglas de
+coexistencia del enlace; no se modifica ni interrumpe la sesion activa.
 
 Configuracion muestra **Destino ATM documentado** para el ambiente correspondiente:
 entrada del Switch, enlace observado con Mediator, remoto del PID, origen del
