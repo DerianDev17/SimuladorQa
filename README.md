@@ -44,7 +44,8 @@ habilita el envio general de la app. El rechazo historico NO AUTHORIZATION
 fue confirmado por el log; el 2026-10-08 la PC ya recibe gestion de red 0800.
 La prueba actual identifica codigo 071, distinto del 072 de las capturas.
 Los logs posteriores confirman la PC autorizada como PID 80131. El balanceador
-172.60.60.171 esta siendo rechazado en ese puerto; falta validar coexistencia.
+172.60.60.171 fue rechazado en esa ventana; una captura posterior muestra
+su conexion aceptada. Falta validar coexistencia de sesiones prolongadas.
 Un codec acotado construye 0810 offline con codigo de respuesta obligatorio;
 falta validar la politica del enlace antes de contestar. La herramienta
 `tooling/probe-visa-network.mjs` comprueba recepcion sin transmitir.
@@ -54,8 +55,13 @@ offline en 262 frames y un caso privado de reproduccion exacta del retiro USD 20
 STAN 001391. Conserva los campos originales; no crea una transaccion nueva con
 otra tarjeta ni habilita el envio general. Ver el documento del emisor QA.
 El 2026-10-08 el usuario confirma CB 205 como PID 82052 / 49212. La muestra
-001391 ruteaba a 82032 y queda apartada del alcance exclusivo CB; falta una
-muestra ATM de ese destino y confirmar sesion financiera de la PC.
+001391 ruteaba a 82032 y queda apartada del alcance exclusivo CB. Una nueva
+captura aporta consulta y retiro de CB en ambos enlaces. El codec acotado
+CapturedVisaBalance reconstruye la consulta original sin cambiar sus campos.
+El intento unico desde la PC recibio 0210/F39 91; el usuario confirma llegada
+a SmartVista y Mediator, cuyo TraceId 31580471 devuelve RetCode 8908 y
+WS, PROCESADOR NO RESPONDE. Falta diagnosticar la llamada al procesador/Core.
+Ver `docs/protocols/CB_205_BALANCE_SAMPLE.md`; no se envio un retiro.
 Diez PCAP inspeccionados aportan un codec offline de encapsulado BANRED y una
 vista de evidencia. 218 mensajes se reconstruyen byte a byte; los campos de
 negocio y otros enlaces requieren diccionario y validacion de casos.
@@ -66,7 +72,8 @@ CB. Ver `docs/protocols/BANRED_SIMULATOR_REVIEW.md`.
 ISOBASEI.bin de SWATM01 Coonecta fue recibido e inspeccionado. Un inspector
 offline fuera del Renderer lee cabecera, posiciones ISO y tablas MTI sin
 defaults ni datos de tarjeta. BCD/EBCDIC/BINARY contrastados con el formatter;
-validacion wire y envio siguen pendientes. Ver `docs/protocols/ISOBASEI_REVIEW.md`.
+wire validado para la consulta capturada; generacion de nuevas transacciones
+sigue pendiente. Ver `docs/protocols/ISOBASEI_REVIEW.md`.
 La pantalla se ajusta al mockup con paneles compactos, conectores e inspector
 tabular; documentacion y evidencia se muestran debajo del resumen de ejecucion.
 

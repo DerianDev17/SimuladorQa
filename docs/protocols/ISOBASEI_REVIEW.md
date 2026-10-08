@@ -91,18 +91,25 @@ ISOBASEI declara BCD/BINBITMAP y F41 EBCDIC de parametro 8. Ademas F52 declara
 Las representaciones y perfiles se mantienen separados. No se corrige uno
 copiando reglas del otro ni se mezcla el mock servidor 4946 con PKT_VISA/16100.
 
+Actualizacion 2026-10-08: la nueva captura CB aporta consulta y retiro con
+request/response tanto en 16100 como en 49212. Cabecera, bitmap primario,
+prefijos y longitudes se verificaron para la consulta. CapturedVisaBalance
+reconstruye el request y proyecta solo metadatos seguros. La prueba desde PC
+obtuvo 0210/F39 91 y llegada confirmada por el usuario hasta Mediator.
+Ver [alcance exacto y error del procesador](CB_205_BALANCE_SAMPLE.md).
+
 TODO-DATA acotados:
 
 - ISOBASEI-WIRE: confirmar unidades, padding de nibbles, prefijos de campos
   variables, tabla EBCDIC y cabecera/bitmap mediante formatter o capturas
   pareadas. Ya se recibio y leyo el diccionario binario; no se pide de nuevo.
-- CB-ATM-GOLDEN-SAMPLE: identificar request/response ATM de CB 205 / PID 82052
-  y reglas dinamicas del nuevo intento. La muestra USD 20 de PID 82032 sigue
+- CB-DYNAMIC-REQUEST: muestra CB 205 / PID 82052 recibida; faltan reglas
+  dinamicas para crear un request nuevo. La muestra USD 20 de PID 82032 sigue
   fuera del alcance CB. No se trasladan defaults de una muestra a otra entidad.
 - SWITCH-ATM-ACCESS: rechazo historico de 10.10.10.21 confirmado; el 2026-10-08
   la PC ya recibe 0800 / codigo 071 y los logs confirman PID 80131 autorizado.
-  Precisar estado de sesion financiera y coexistencia con el balanceador,
-  actualmente rechazado. Ver `VISA_NETWORK_MANAGEMENT.md` para el
+  Consulta desde PC comprobada hasta Mediator; falta coexistencia con el
+  balanceador en sesiones prolongadas. Ver `VISA_NETWORK_MANAGEMENT.md` para el
   layout acotado observado y la politica de respuesta pendiente.
 
 ## Implementacion y verificacion

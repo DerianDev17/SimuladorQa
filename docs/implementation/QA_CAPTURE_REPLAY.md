@@ -2,6 +2,15 @@
 
 ## Objetivo y alcance
 
+Actualizacion 2026-10-08: consulta CB 205 reconstruida y enviada una vez desde
+la PC a 16100. Se recibio 0210 / F39 91. El usuario confirma llegada a SmartVista
+y Mediator; msgResponse TraceId 31580471 indica RetCode 8908,
+WS, PROCESADOR NO RESPONDE, MappedRespCode 10096. No se envio retiro ni 0810.
+La siguiente investigacion corresponde a ADPCOREGEN/PROXY205 y la llamada al
+procesador/Core, sin atribuir causa a PIN/EMV o al codigo 91 por convencion.
+Ver [muestra, codec y correlacion del intento](../protocols/CB_205_BALANCE_SAMPLE.md).
+Las denegaciones y los bloqueos descritos abajo son evidencia historica.
+
 El usuario solicito una prueba de USD 20 por cajero -> SmartVista -> Mediator ->
 Core, aunque se rechace, para comprobar llegada. Identifico STAN 007803 y UTRNNO
 del caso original; se localizo un paquete candidato en los PCAP aportados.
@@ -145,8 +154,9 @@ Actualizacion 2026-10-08: el usuario confirma que CB 205 es el PID 82052 / 49212
 y limita la prueba a CB. La muestra STAN 001391 fue encaminada a 82032; el
 perfil preparado cambia a BLOCKED_SOURCE_ROUTE_MISMATCH y no es elegible para
 esa prueba. La validacion de sus bytes queda como evidencia de envolvente, sin
-atribuirle una entidad distinta. Falta request ATM dirigido a CB 82052 y resolver
-la admision de la PC, que sigue recibiendo NO AUTHORIZATION sin write.
+atribuirle una entidad distinta. En esa revision faltaba request ATM dirigido
+a CB 82052 y resolver la admision de la PC. La consulta documentada al inicio
+ya demuestra admision y llegada a Mediator con una muestra propia de CB.
 Ver `docs/protocols/QA_SWITCH_ADMISSION_REVIEW.md`.
 
 Unit: QA obligatorio, entrada invalida sin sockets, conexion pendiente sin write

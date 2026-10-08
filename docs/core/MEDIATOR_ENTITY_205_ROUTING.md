@@ -14,7 +14,8 @@ el servicio Core configurado en el servidor; no se aplica como host TCP del
 simulador. Posteriormente aporto el host/puerto ATM del Switch y capturas del
 PID/netstat, confirmando todos esos enlaces como QA y ejecucion desde su PC.
 Ver [evidencia de red](../implementation/SWITCH_NETWORK_EVIDENCE.md).
-El acceso desde la PC y el contrato/framing siguen pendientes.
+El acceso desde la PC y el framing de consulta fueron comprobados el 2026-10-08;
+el contrato general y la generacion de nuevas transacciones siguen pendientes.
 
 El esquema PREPROD previamente inspeccionado contiene estos nombres/tipos de
 columnas; la captura permite reconocer los campos, pero no certifica el esquema
@@ -57,8 +58,9 @@ datos sensibles en la app.
 ## TODO-DATA acotados
 
 - SWITCH-ATM-ACCESS / SWITCH-ATM-FRAMING: entrada ATM del Switch recibida;
-  faltan acceso desde la PC al PID, transporte/TLS, framing y contrato ISO
-  aprobado. Ambiente QA y recorrido cajero -> Switch -> Core confirmados;
+  acceso desde PC y consulta capturada comprobados. Faltan contrato ISO general,
+  generacion de nuevos mensajes y coexistencia de sesiones prolongadas.
+  Ambiente QA y recorrido cajero -> Switch -> Core confirmados;
   no hay envio directo al Core.
 - CMS-TRANSPORT: metodo, ruta/operacion exacta, Content-Type, cabeceras,
   autenticacion, TLS y unidad/semantica de entEndPointTimeOut.
@@ -84,3 +86,14 @@ del alcance CB confirmado. El simulador conserva entrada ATM 16100; no abre
 directamente el enlace del Mediator. La muestra de retiro USD 20 / STAN 001391,
 encaminada a 82032 en los logs previos, deja de ser un caso elegible para CB.
 Ver [revision de admision y destinos](../protocols/QA_SWITCH_ADMISSION_REVIEW.md).
+
+## Consulta desde PC y error del procesador
+
+El 2026-10-08 se envio una consulta 301000, STAN 007923, terminal ATM20521.
+El usuario confirma que aparece en SmartVista y Mediator. El cliente recibio
+0210/F39 91; msgResponse TraceId 31580471 registra RetCode 8908,
+RetMsg WS, PROCESADOR NO RESPONDE y MappedRespCode 10096 a las 13:04:58.076.
+Esto confirma llegada a Mediator, sin probar llegada efectiva al Core ni el
+mapeo exacto de sus codigos a F39. TODO-DATA CB-PROCESSOR-ERROR: revisar
+ADPCOREGEN/PROXY205 y la llamada HTTP del intento antes de cambiar plazos.
+Ver [captura y evidencia correlacionada](../protocols/CB_205_BALANCE_SAMPLE.md).
