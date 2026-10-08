@@ -99,8 +99,10 @@ TODO-DATA acotados:
 - CB-ATM-GOLDEN-SAMPLE: identificar request/response ATM de CB 205 / PID 82052
   y reglas dinamicas del nuevo intento. La muestra USD 20 de PID 82032 sigue
   fuera del alcance CB. No se trasladan defaults de una muestra a otra entidad.
-- SWITCH-ATM-ACCESS: persiste rechazo de 10.10.10.21 por direccion. Precisar
-  interfaz QA de prueba o salida/coexistencia a traves del balanceador.
+- SWITCH-ATM-ACCESS: rechazo historico de 10.10.10.21 confirmado; el 2026-10-08
+  la PC ya recibe 0800 / codigo 071. Precisar PID, estado de sesion y
+  coexistencia con el balanceador. Ver `VISA_NETWORK_MANAGEMENT.md` para el
+  layout acotado observado y la politica de respuesta pendiente.
 
 ## Implementacion y verificacion
 
