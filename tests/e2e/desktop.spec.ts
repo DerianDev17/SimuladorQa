@@ -7,6 +7,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { Environment } from '../../packages/domain/src/index';
+import type { CardReaderSnapshot } from '../../packages/domain/src/card-reader';
+import type { Result } from '../../packages/shared/src/contracts';
 import { createServer } from 'vite';
 import { removeTestDirectory } from '../helpers/temporary-directory';
 import { networkEvidence } from '../helpers/network-evidence';
@@ -55,6 +57,81 @@ test('lector PC/SC usa IPC protegido y mantiene separada la identidad', async ()
     expect(result?.error.code).toMatch(/SERVICE_UNAVAILABLE|TIMEOUT/);
   }
   await expect(window.getByText('Consultando lector…')).toHaveCount(0);
+  const readerPanel = window.getByRole('region', { name: 'Estado del lector' });
+  await expect(readerPanel.getByRole('heading', { name: 'Datos de la tarjeta' })).toBeVisible();
+  await expect(readerPanel.locator('.detected-card')).toBeVisible();
+  await expect(readerPanel.getByText('No leído', { exact: true })).toHaveCount(3);
+  const refresh = readerPanel.getByRole('button', { name: 'Actualizar', exact: true });
+  await expect(refresh).toBeEnabled();
+  await refresh.click();
+  await expect(refresh).toBeEnabled({ timeout: 15000 });
+  const devices = readerPanel.locator('.reader-device');
+  if (await devices.count()) {
+    await devices.last().click();
+    await expect(devices.last()).toHaveAttribute('aria-pressed', 'true');
+  }
+  await mkdir('artifacts', { recursive: true });
+  await window.screenshot({ path: 'artifacts/card-reader-desktop.png', fullPage: true });
+  await app?.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0]?.setContentSize(1024, 768),
+  );
+  expect(
+    await window.evaluate(
+      () => document.documentElement.scrollWidth <= globalThis.window.innerWidth,
+    ),
+  ).toBe(true);
+  await expect(readerPanel.locator('.detected-card')).toBeVisible();
+});
+
+test('tarjeta visual sigue inserción, retiro y recuperación con IPC sintético', async () => {
+  const window = await launch();
+  const readers: CardReaderSnapshot['readers'] = [
+    { name: 'CI Contact', state: 'EMPTY', atr: null },
+    { name: 'CI Contactless', state: 'CARD_PRESENT', atr: '3B00' },
+  ];
+  const setResult = async (result: Result<CardReaderSnapshot>) => {
+    await app!.evaluate(({ ipcMain }, response) => {
+      ipcMain.removeHandler('reader:inspect');
+      ipcMain.handle('reader:inspect', () => response);
+    }, result);
+  };
+  const success = (devices: CardReaderSnapshot['readers']): Result<CardReaderSnapshot> => ({
+    ok: true,
+    value: { checkedAt: '2026-10-08T20:00:00.000Z', readers: devices, identityStatus: 'NOT_READ' },
+  });
+  await setResult(success(readers));
+  await window.getByRole('button', { name: 'Tarjetas', exact: true }).click();
+  const panel = window.getByRole('region', { name: 'Estado del lector' });
+  await expect(panel.locator('.detected-card.is-present')).toBeVisible();
+  await expect(panel.locator('.card-atr')).toHaveText('3B 00');
+  await panel.getByRole('button', { name: 'CI Contact Sin tarjeta' }).click();
+  await expect(panel.locator('.detected-card.is-empty')).toBeVisible();
+  await expect(panel.locator('.card-atr')).toHaveText('Sin lectura');
+  await panel.getByRole('button', { name: 'CI Contactless Tarjeta presente' }).click();
+  await expect(panel.locator('.card-atr')).toHaveText('3B 00');
+  await mkdir('artifacts', { recursive: true });
+  await window.screenshot({ path: 'artifacts/card-reader-detected.png', fullPage: true });
+  const refresh = panel.getByRole('button', { name: 'Actualizar', exact: true });
+  await setResult(success([{ name: 'CI Contactless', state: 'EMPTY', atr: null }]));
+  await refresh.click();
+  await expect(panel.locator('.detected-card.is-empty')).toBeVisible();
+  await expect(panel.locator('.card-atr')).toHaveText('Sin lectura');
+  await setResult({
+    ok: false,
+    error: { code: 'TIMEOUT', message: 'El lector no respondió a tiempo.' },
+  });
+  await refresh.click();
+  await expect(panel.getByRole('alert')).toHaveText('El lector no respondió a tiempo.');
+  await expect(panel.locator('.reader-device')).toHaveCount(0);
+  await setResult(success(readers));
+  await refresh.click();
+  await expect(panel.getByRole('alert')).toHaveCount(0);
+  await expect(panel.locator('.detected-card.is-present')).toBeVisible();
+  await expect(panel.locator('.card-atr')).toHaveText('3B 00');
+  await setResult(success([]));
+  await refresh.click();
+  await expect(panel.locator('.card-reader-status')).toContainText('No hay lectores conectados');
+  await expect(panel.locator('.card-atr')).toHaveText('Sin lectura');
 });
 
 test('composición del mockup: tres paneles y resumen dentro de la ventana desktop', async () => {

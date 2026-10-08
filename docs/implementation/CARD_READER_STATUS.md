@@ -26,6 +26,21 @@ Una vista desmontada descarta resultados y cancela el siguiente timer.
 Al salir de Electron se cancela el proceso pendiente y se cierra el adaptador.
 Los cambios de presencia se observan por polling, no constituyen identidad.
 
+Dashboard y Tarjetas muestran una representacion visual generica de la tarjeta,
+con estado de deteccion, lector seleccionado, ATR separado por bytes y hora
+local de la consulta. La marca Coonecta pertenece a la app, no identifica al
+emisor de la tarjeta. Numero, titular y vencimiento figuran como No leido;
+entidad/producto permanece sin perfil asociado. Los puntos del numero son un
+placeholder visual, no un PAN recuperado ni una asociacion automatica a 2267.
+No se infiere red, banco, producto ni identidad desde el ATR.
+
+Cada interfaz PC/SC se puede seleccionar; inicialmente se prioriza una con
+tarjeta presente. Se cuentan interfaces, no tarjetas fisicas. Al retirar la
+tarjeta se elimina el ATR de la vista y al fallar una consulta se descarta el
+snapshot anterior. El boton Actualizar comparte el ciclo de consulta sin
+solapamientos y queda deshabilitado mientras hay una consulta pendiente.
+Dashboard usa una version compacta; Tarjetas muestra el detalle completo.
+
 AppSnapshot.reader=CONFIGURED indica adaptador instalado; el estado actual
 de hardware se obtiene por getReaderSnapshot. No equivale a READY financiero.
 SimulatedCardReader es explicito para CI y nunca reemplaza automaticamente al
@@ -43,6 +58,9 @@ Pruebas sinteticas: presencia/ausencia, insercion/retiro simulado, validacion de
 estructura/ATR, privacidad, IPC invalido, consulta concurrente, timeout,
 recuperacion y proceso ausente. E2E verifica el acceso a la vista y el contrato
 IPC. La prueba fisica confirma presencia; no certifica APDU ni transacciones.
+Pruebas de presentacion verifican seleccion de interfaz, retiro, ausencia,
+ATR no disponible y errores/timeout sin mostrar identidad ficticia. E2E
+verifica actualizacion manual, seleccion disponible y ajuste a 1024 px.
 
 Con presencia verificada se ejecuto una consulta QA capturada el 2026-10-08 a
 las 15:46:56 Ecuador, STAN 008103, terminal ATM20521. Se cambio solo F11,

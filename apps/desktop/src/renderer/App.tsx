@@ -494,7 +494,7 @@ export function App() {
                   </div>
                   {transactionForm()}
                 </section>
-                <CardReaderView />
+                <CardReaderView compact />
               </div>
               <div className="dashboard-grid bottom-grid">
                 <section className="panel">
