@@ -139,6 +139,72 @@ errores del procesador, sin probar la causa del intento actual.
 
 ## Verificacion y pendientes
 
+### Comparacion PCAP / envios / nwint recibida el 2026-10-08
+
+La revision offline vuelve a verificar el SHA-256 de la captura y reconstruye
+cada envio contra su hash registrado. Hay **cuatro envios** de 536 bytes y
+**tres preparaciones PREPARED_ONLY**; estas ultimas no transmitieron.
+Esta comprobacion usa registros locales de envio, no una captura nueva del
+trafico de la PC.
+
+| STAN | Envio UTC | Hora Ecuador | Cambio frente a frame 218 | F39 recibido |
+| --- | --- | --- | --- | --- |
+| 007923 | 18:04:37.260 | 13:04:37.260 | Ninguno; reconstruccion identica | 91 |
+| 008101 | 20:28:46.389 | 15:28:46.389 | Solo F11 | 96 |
+| 008102 | 20:29:34.582 | 15:29:34.582 | Solo F11 | 96 |
+| 008103 | 20:46:56.107 | 15:46:56.107 | Solo F11 | 96 |
+
+En los cuatro intentos se conservaron F7=1008124123, F12=124123,
+F13/F15=1008 y F37=628100007923. Cabecera, bitmap, campos privados y datos
+PIN/EMV se conservaron byte a byte. Los intentos con STAN diferente son
+variantes de una captura; **no son transacciones nuevas validadas**. La
+presencia del lector en 008103 no cambia el origen de los datos a lectura del
+chip. No se atribuye el codigo 96 a RRN, fechas, PIN o EMV sin log correlacionado.
+
+El request original y la envolvente se reconstruyen sin diferencias. El
+request historico enviado por SmartVista a Mediator cambia F7, F25, F37 y
+campos privados; pertenece a otro tramo. No se reemplaza el request ATM por
+ese request ni se trasladan sus reglas al simulador.
+
+El nwint00_22150.out adjunto tiene SHA-256
+640c2ac840878efa8776115a23c8186ef3b0e5ee017a9ff8833bbecdcd2f083a.
+Su reloj de fuente va de 16:00:01.747263 a 16:46:32.520847, con zona sin
+confirmar. La proyeccion de org_pid/dest_pid muestra 0, 82262 y 280120;
+no aparecen 80131 ni 82052 en esos registros. Los campos ISO impresos son
+F7/F11/F39/F70; ninguno de los 91 registros reconocidos de F11 corresponde
+a los cuatro STAN de la tabla. No hay un mensaje financiero 0200/0210
+identificado en los encabezados msgtype. Los errores de AUTH_PARAM_TAB y
+la seleccion alternativa de token_scheme_id observados pertenecen a esos
+otros mensajes; no prueban la causa de los rechazos del simulador.
+
+La herramienta reproducible `tooling/review-cb-evidence.mjs` acepta la ruta
+actual de PCAP y nwint, comprueba hashes y metadatos y genera solo la
+proyeccion protegida en artifacts/cb-capture-versus-simulator-comparison.json:
+
+```powershell
+node tooling/review-cb-evidence.mjs 'Tramas transacciones/PruebaSimulador.pcap' 'C:/Users/dnazareno/Downloads/nwint00_22150.out'
+```
+
+No abre sockets. No depende de la antigua ruta Downloads del PCAP ni cuenta
+preparaciones como envios. Bloquea el reporte ante discrepancia de hash,
+STAN/RRN/terminal o registro contradictorio. El inspector de nwint devuelve
+solo tiempos de fuente, PID, tipos y STAN con numero de linea; no devuelve
+lineas RAW, PAN, PIN Block, Track 2, EMV ni textos de error del proveedor.
+Requiere los reportes privados existentes de ISOBASEI, caso y envios bajo
+artifacts, ademas de tshark/esbuild; no es un importador ISO de proposito general.
+Se corrigio la ruta privada del caso a la copia local de igual hash y su
+execution.report apunta al archivo del runId original, en lugar del mutable
+qa-cb-balance-last-attempt.json que ahora corresponde a otro envio.
+
+- TODO-DATA CB-96-SWITCH-LOG: obtener el nwint del proceso que atiende
+  PID 80131 y su recorrido a CB 82052 para STAN 008101/008102/008103,
+  con UTRNNO y reloj confirmado. Ventanas del cliente: 15:28:46,
+  15:29:34 y 15:46:56 Ecuador del 2026-10-08. El adjunto actual no permite
+  localizar la etapa que devuelve 96. Bloquea solo esa correccion causal.
+- TODO-DATA CB-DYNAMIC-REQUEST sigue abierto: no establecer una formula
+  RRN/STAN/fechas ni reutilizacion valida de seguridad por inferencia de los
+  cuatro intentos. No corregirlos cambiando F39 ni ampliando timeouts.
+
 Fixtures sinteticas cubren reconstruccion exacta, copia independiente,
 respuestas 00/14/91, privacidad, transaccion/monto/moneda invalidos, encoding,
 longitudes, bitmap, truncamiento y residuo. La integracion TCP local verifica

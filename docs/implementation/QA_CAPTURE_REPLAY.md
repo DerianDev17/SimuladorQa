@@ -2,6 +2,15 @@
 
 ## Objetivo y alcance
 
+Revision PCAP/nwint del 2026-10-08: cuatro envios reales y tres preparaciones
+sin transmision. El replay identico STAN 007923 recibio 91; variantes que
+cambian solo F11 a 008101/008102/008103 recibieron 96. El nwint adjunto no
+contiene sus STAN/PID en los registros inspeccionados; no se confirma la
+causa del 96 ni llegada de esos tres intentos a Mediator/Core.
+Ver la tabla, hashes y herramienta offline en
+`docs/protocols/CB_205_BALANCE_SAMPLE.md`. Las variantes conservan fechas,
+RRN y seguridad de la captura; no constituyen generacion de trx nuevas.
+
 Actualizacion 2026-10-08: consulta CB 205 reconstruida y enviada una vez desde
 la PC a 16100. Se recibio 0210 / F39 91. El usuario confirma llegada a SmartVista
 y Mediator; msgResponse TraceId 31580471 indica RetCode 8908,
