@@ -9,9 +9,13 @@ y rechaza payloads. La app no instala drivers ni modifica el servicio Windows.
 
 El helper establece contexto de usuario, enumera lectores y consulta su estado
 de forma inmediata con SCardGetStatusChangeW. Libera siempre el contexto.
-No conecta/resetea la tarjeta ni transmite APDU. El dominio proyecta nombre,
+El helper de estado no conecta/resetea la tarjeta ni transmite APDU. El dominio proyecta nombre,
 CARD_PRESENT/EMPTY/UNAVAILABLE y ATR cuando esta disponible. No obtiene ATS,
-PAN, cuenta, Track 2, PIN ni criptogramas; identityStatus=NOT_READ.
+PAN, cuenta, Track 2, PIN ni criptogramas por si mismo; identityStatus=NOT_READ.
+La lectura manual de identidad usa un proceso PC/SC independiente y el contrato
+reader:identity:read. Main incorpora su proyeccion protegida a los siguientes
+snapshots mientras el handle de esa tarjeta siga valido. Ver
+`docs/hardware/EMV_IDENTITY_READING.md` y ADR-010.
 
 Fuentes oficiales:
 - [SCardListReadersW](https://learn.microsoft.com/en-us/windows/win32/api/winscard/nf-winscard-scardlistreadersw).
@@ -29,9 +33,11 @@ Los cambios de presencia se observan por polling, no constituyen identidad.
 Dashboard y Tarjetas muestran una representacion visual generica de la tarjeta,
 con estado de deteccion, lector seleccionado, ATR separado por bytes y hora
 local de la consulta. La marca Coonecta pertenece a la app, no identifica al
-emisor de la tarjeta. Numero, titular y vencimiento figuran como No leido;
-entidad/producto permanece sin perfil asociado. Los puntos del numero son un
-placeholder visual, no un PAN recuperado ni una asociacion automatica a 2267.
+emisor de la tarjeta. Numero, titular y vencimiento figuran como No leido hasta
+usar Leer datos del chip; luego muestran los campos leidos o No disponible en
+el chip. La aplicacion se muestra con la etiqueta devuelta por la tarjeta;
+entidad/producto permanece sin perfil asociado. Los puntos iniciales del numero
+son un placeholder visual, no una asociacion automatica a 2267.
 No se infiere red, banco, producto ni identidad desde el ATR.
 
 Cada interfaz PC/SC se puede seleccionar; inicialmente se prioriza una con
@@ -52,7 +58,12 @@ SCardSvr activo. Se enumeran HID Global OMNIKEY 5422 Smartcard Reader 0 y
 HID Global OMNIKEY 5422CL Smartcard Reader 0; ambas interfaces reportan tarjeta
 presente y ATR. No se infiere que sean dos tarjetas distintas. El usuario
 confirma que la tarjeta fisica es la QA terminada en 2267; esa asociacion es
-declarada por el usuario, no una identidad leida del chip.
+declarada por el usuario en la primera inspeccion de presencia.
+
+Actualizacion a las 22:02:28 UTC: lectura EMV de contacto exitosa con pais 218
+confirmado por el usuario. El chip devuelve aplicacion VISA DEBITO, PAN
+enmascarado terminado en 2267, titular disponible y vencimiento 10/27. Se
+conserva solo esta proyeccion; no se registra el PAN completo ni Track 2.
 
 Pruebas sinteticas: presencia/ausencia, insercion/retiro simulado, validacion de
 estructura/ATR, privacidad, IPC invalido, consulta concurrente, timeout,
@@ -88,8 +99,10 @@ log correlacionado de PROXY205 y datos del proveedor; no se normaliza a 05.
 
 ## TODO-DATA dependientes
 
-- CARD-IDENTITY-APDU: comandos/secuencia del perfil aprobado para leer datos
-  permitidos y asociar la tarjeta a su perfil. ATR no contiene identidad PAN.
+- CARD-IDENTITY-APDU: resuelto para identidad EMV de contacto via PSE y PDOL
+  vacio o 9F1A/2 bytes; probado fisicamente con la tarjeta QA actual. Otros
+  PDOL, tarjetas sin PSE y lectura contactless requieren evidencia adicional.
+  La asociacion al perfil de cuenta/entidad permanece pendiente.
 - CARD-TRANSACTION-SECURITY: PIN/HSM, datos EMV nuevos y campos dinamicos;
   no se inventan desde un ATR ni se atribuyen a una captura historica.
 - CARD-PROFILE-STORAGE: catalogo validado y cifrado antes de guardar datos

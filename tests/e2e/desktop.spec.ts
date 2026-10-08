@@ -7,7 +7,10 @@ import { DatabaseSync } from 'node:sqlite';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { Environment } from '../../packages/domain/src/index';
-import type { CardReaderSnapshot } from '../../packages/domain/src/card-reader';
+import type {
+  CardIdentityReading,
+  CardReaderSnapshot,
+} from '../../packages/domain/src/card-reader';
 import type { Result } from '../../packages/shared/src/contracts';
 import { createServer } from 'vite';
 import { removeTestDirectory } from '../helpers/temporary-directory';
@@ -132,6 +135,62 @@ test('tarjeta visual sigue inserción, retiro y recuperación con IPC sintético
   await refresh.click();
   await expect(panel.locator('.card-reader-status')).toContainText('No hay lectores conectados');
   await expect(panel.locator('.card-atr')).toHaveText('Sin lectura');
+});
+
+test('lectura manual muestra identidad protegida y valida país en la pantalla', async () => {
+  const window = await launch();
+  const reading: CardIdentityReading = {
+    readId: '2b86d181-9efb-4808-b8a8-876a843876b8',
+    readAt: '2026-10-08T20:00:00.000Z',
+    readerName: 'CI Reader',
+    status: 'READ',
+    applications: [],
+    applicationId: null,
+    applicationLabel: 'QA CARD',
+    panMasked: '*'.repeat(12) + '4444',
+    cardholderName: 'QA TESTER',
+    expiry: '12/29',
+  };
+  await app!.evaluate(({ ipcMain }, identity) => {
+    let current: typeof identity | null = null;
+    ipcMain.removeHandler('reader:inspect');
+    ipcMain.handle('reader:inspect', () => ({
+      ok: true,
+      value: {
+        checkedAt: identity.readAt,
+        identityStatus: current ? 'READ' : 'NOT_READ',
+        readers: [{ name: identity.readerName, state: 'CARD_PRESENT', atr: '3B00' }],
+        identity: current,
+      },
+    }));
+    ipcMain.removeHandler('reader:identity:read');
+    ipcMain.handle('reader:identity:read', (_event, request) => {
+      if (request.terminalCountryCode !== '218' || request.readerName !== identity.readerName)
+        return { ok: false, error: { code: 'VALIDATION_ERROR', message: 'País inválido.' } };
+      current = identity;
+      return { ok: true, value: identity };
+    });
+  }, reading);
+  await window.getByRole('button', { name: 'Tarjetas', exact: true }).click();
+  const panel = window.getByRole('region', { name: 'Estado del lector' });
+  const country = panel.getByLabel('País del terminal (ISO numérico)');
+  await expect(country).toHaveValue('218');
+  const read = panel.getByRole('button', { name: 'Leer datos del chip', exact: true });
+  await country.fill('xx');
+  await read.click();
+  await expect(panel.getByRole('alert')).toContainText('tres dígitos');
+  await expect(panel.getByText('QA TESTER', { exact: true })).toHaveCount(0);
+  await country.fill('218');
+  await read.click();
+  await expect(panel.getByRole('alert')).toHaveCount(0);
+  await expect(panel.getByText('Leído del chip', { exact: true })).toBeVisible();
+  await expect(panel.locator('.detected-card')).toContainText('QA TESTER');
+  await expect(panel.locator('.detected-card')).toContainText('12/29');
+  await expect(panel.locator('.detected-card')).toContainText(reading.panMasked!);
+  await panel.getByRole('button', { name: 'Actualizar', exact: true }).click();
+  await expect(panel.locator('.detected-card')).toContainText(reading.panMasked!);
+  await mkdir('artifacts', { recursive: true });
+  await window.screenshot({ path: 'artifacts/card-identity-synthetic.png', fullPage: true });
 });
 
 test('composición del mockup: tres paneles y resumen dentro de la ventana desktop', async () => {

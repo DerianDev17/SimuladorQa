@@ -14,6 +14,8 @@ import { CapturedEvidenceCatalog } from './adapters/captured-evidence-catalog';
 import { MediatorObserver } from './adapters/mediator-observer';
 import { FileNetworkEvidence } from './adapters/file-network-evidence';
 import { WindowsPcscReader, inspectReader } from './adapters/windows-pcsc-reader';
+import { WindowsCardSession } from './adapters/windows-card-session';
+import { CardIdentityService } from './card-identity-service';
 
 const development = process.argv.includes('--dev');
 const rendererFile = join(__dirname, 'renderer', 'index.html');
@@ -22,6 +24,7 @@ let window: BrowserWindow | null = null;
 let catalogs: WorkerCatalogStore | undefined;
 let observer: MediatorObserver | undefined;
 let cardReader: WindowsPcscReader | undefined;
+let cardIdentity: CardIdentityService | undefined;
 let quitting = false;
 
 app.setName('Coonecta ATM Simulator');
@@ -77,6 +80,16 @@ void app
       join(app.getPath('userData'), 'mediator-observer.json'),
     );
     cardReader = new WindowsPcscReader(join(__dirname, 'pcsc-status.ps1'));
+    cardIdentity = new CardIdentityService(cardReader, async (readerName) => {
+      const session = new WindowsCardSession(join(__dirname, 'pcsc-card.ps1'));
+      try {
+        await session.open(readerName);
+        return session;
+      } catch (error) {
+        session.close();
+        throw error;
+      }
+    });
     const application = new DesktopApplication(
       new FilePreferencesStore(join(app.getPath('userData'), 'preferences.json')),
       {
@@ -113,7 +126,23 @@ void app
         switch (channel) {
           case channels.reader:
             return cardReader
-              ? inspectReader(cardReader, payload)
+              ? inspectReader(cardReader, payload).then(async (result) => {
+                  if (!result.ok) return result;
+                  const identity = (await cardIdentity?.current()) ?? null;
+                  return {
+                    ok: true as const,
+                    value: {
+                      ...result.value,
+                      identity,
+                      identityStatus:
+                        identity?.status === 'READ' ? ('READ' as const) : ('NOT_READ' as const),
+                    },
+                  };
+                })
+              : failure('SERVICE_UNAVAILABLE', 'El lector no está configurado.');
+          case channels.readCardIdentity:
+            return cardIdentity
+              ? cardIdentity.read(payload)
               : failure('SERVICE_UNAVAILABLE', 'El lector no está configurado.');
           case channels.snapshot:
             return payload === undefined
@@ -164,6 +193,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', (event) => {
   observer?.close();
   cardReader?.close();
+  cardIdentity?.close();
   if (quitting || !catalogs) return;
   event.preventDefault();
   quitting = true;

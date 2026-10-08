@@ -2429,6 +2429,44 @@ td {
   color: #8b2920;
   font-size: 12px;
 }
+.card-reader-controls {
+  display: grid;
+  justify-items: start;
+  gap: 9px;
+  margin-top: 16px;
+}
+.card-chip-read {
+  background: #245eae;
+  color: white;
+  font-size: 12px;
+}
+.card-country-field {
+  font-size: 11px;
+  color: var(--muted);
+}
+.card-country-field input {
+  margin-top: 6px;
+  max-width: 100px;
+}
+.card-reader-controls .card-chip-read:hover:not(:disabled) {
+  background: #194b91;
+}
+.card-reader-controls small,
+.card-reader-controls p {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.card-application-choice {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+.card-application-choice button {
+  font-size: 11px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .card-reader-view .document-note {
   margin-top: 16px;
 }

@@ -3,18 +3,28 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { CardReaderPanel } from '../../apps/desktop/src/renderer/CardReaderView';
 import { decodeReaderStatus } from '../../apps/desktop/src/main/adapters/windows-pcsc-reader';
-import type { CardReaderSnapshot, ReaderDevice } from '../../packages/domain/src/card-reader';
+import type {
+  CardIdentityReading,
+  CardReaderSnapshot,
+  ReaderDevice,
+} from '../../packages/domain/src/card-reader';
 
 const present: ReaderDevice = { name: 'CI Reader', state: 'CARD_PRESENT', atr: '3B00' };
 const empty: ReaderDevice = { name: 'CI Other Reader', state: 'EMPTY', atr: null };
 function render(
   readers: ReaderDevice[] | undefined,
-  options: { error?: string; selectedName?: string; compact?: boolean } = {},
+  options: {
+    error?: string;
+    selectedName?: string;
+    compact?: boolean;
+    identity?: CardIdentityReading;
+  } = {},
 ) {
   const snapshot: CardReaderSnapshot | undefined = readers && {
     checkedAt: '2026-10-08T20:00:00.000Z',
     readers,
     identityStatus: 'NOT_READ',
+    ...(options.identity ? { identity: options.identity } : {}),
   };
   return renderToStaticMarkup(
     createElement(CardReaderPanel, {
@@ -101,5 +111,27 @@ describe('presentación de tarjeta detectada', () => {
     expect(markup).toContain('card-reader-compact');
     expect(markup).toContain('<code>3B 00</code>');
     expect(markup).not.toContain('<dt>Titular</dt>');
+  });
+  it('muestra los datos leídos y no los atribuye a una interfaz distinta', () => {
+    const identity: CardIdentityReading = {
+      readId: '2b86d181-9efb-4808-b8a8-876a843876b8',
+      readAt: '2026-10-08T20:00:00.000Z',
+      readerName: present.name,
+      status: 'READ',
+      applications: [],
+      applicationId: null,
+      applicationLabel: 'QA CARD',
+      panMasked: '*'.repeat(12) + '4444',
+      cardholderName: 'QA TESTER',
+      expiry: '12/29',
+    };
+    const markup = render([present, empty], { identity });
+    expect(markup).toContain('QA TESTER');
+    expect(markup).toContain('12/29');
+    expect(markup).toContain(identity.panMasked);
+    expect(markup).toContain('Leído del chip');
+    const other = render([present, empty], { identity, selectedName: empty.name });
+    expect(other).not.toContain('QA TESTER');
+    expect(other).not.toContain('12/29');
   });
 });

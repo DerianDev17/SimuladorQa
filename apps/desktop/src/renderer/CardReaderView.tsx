@@ -17,6 +17,11 @@ interface CardReaderPanelProps {
   onSelect: (name: string) => void;
   onRefresh: () => void;
   compact: boolean;
+  reading?: boolean;
+  readError?: string | undefined;
+  onRead?: (readerName: string, applicationId?: string) => void;
+  countryCode?: string;
+  onCountryChange?: (value: string) => void;
 }
 
 export function CardReaderPanel({
@@ -27,12 +32,21 @@ export function CardReaderPanel({
   onSelect,
   onRefresh,
   compact,
+  reading = false,
+  readError,
+  onRead,
+  countryCode = '',
+  onCountryChange,
 }: CardReaderPanelProps) {
   const reader =
     snapshot?.readers.find((device) => device.name === selectedName) ??
     snapshot?.readers.find((device) => device.state === 'CARD_PRESENT') ??
     snapshot?.readers[0];
   const present = reader?.state === 'CARD_PRESENT';
+  const identity =
+    present && snapshot?.identity?.readerName === reader.name ? snapshot.identity : undefined;
+  const read = identity?.status === 'READ';
+  const unavailable = read ? 'No disponible en el chip' : 'No leído';
   const status = error
     ? 'Conexión no disponible'
     : !snapshot
@@ -102,15 +116,28 @@ export function CardReaderPanel({
               <span />
               <span />
             </div>
-            <div className="detected-card-number" aria-label="Número de tarjeta no leído">
-              •••• &nbsp; •••• &nbsp; •••• &nbsp; ••••
+            <div
+              className="detected-card-number"
+              aria-label={
+                identity?.panMasked ? 'Número de tarjeta enmascarado' : 'Número de tarjeta no leído'
+              }
+            >
+              {identity?.panMasked ?? '••••　••••　••••　••••'}
             </div>
             <div className="detected-card-bottom">
               <div>
-                <small>IDENTIDAD DE TARJETA</small>
-                <strong>{present ? 'Pendiente de lectura' : 'Sin tarjeta detectada'}</strong>
+                <small>{read ? 'TITULAR' : 'IDENTIDAD DE TARJETA'}</small>
+                <strong>
+                  {read
+                    ? (identity.cardholderName ?? 'No disponible en el chip')
+                    : present
+                      ? 'Pendiente de lectura'
+                      : 'Sin tarjeta detectada'}
+                </strong>
               </div>
-              <span>{present ? 'DETECTADA' : 'EN ESPERA'}</span>
+              <span>
+                {read ? (identity.expiry ?? 'CHIP LEÍDO') : present ? 'DETECTADA' : 'EN ESPERA'}
+              </span>
             </div>
           </div>
           <div className="card-preview-caption">
@@ -121,7 +148,9 @@ export function CardReaderPanel({
         <div className="card-reader-data">
           <div className="card-data-heading">
             <h3>Datos de la tarjeta</h3>
-            <span className="pill neutral">{present ? 'Presencia confirmada' : 'Sin lectura'}</span>
+            <span className="pill neutral">
+              {read ? 'Leído del chip' : present ? 'Presencia confirmada' : 'Sin lectura'}
+            </span>
           </div>
           <dl className="card-data-list">
             <div>
@@ -146,17 +175,27 @@ export function CardReaderPanel({
             </div>
             <div>
               <dt>Número de tarjeta</dt>
-              <dd className="card-data-pending">No leído</dd>
+              <dd className={identity?.panMasked ? '' : 'card-data-pending'}>
+                {identity?.panMasked ?? unavailable}
+              </dd>
             </div>
             {!compact && (
               <>
                 <div>
                   <dt>Titular</dt>
-                  <dd className="card-data-pending">No leído</dd>
+                  <dd className={identity?.cardholderName ? '' : 'card-data-pending'}>
+                    {identity?.cardholderName ?? unavailable}
+                  </dd>
                 </div>
                 <div>
                   <dt>Vencimiento</dt>
-                  <dd className="card-data-pending">No leído</dd>
+                  <dd className={identity?.expiry ? '' : 'card-data-pending'}>
+                    {identity?.expiry ?? unavailable}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Aplicación del chip</dt>
+                  <dd>{identity?.applicationLabel ?? identity?.applicationId ?? 'Sin lectura'}</dd>
                 </div>
                 <div>
                   <dt>Entidad / producto</dt>
@@ -165,6 +204,68 @@ export function CardReaderPanel({
               </>
             )}
           </dl>
+          {onRead && (
+            <div className="card-reader-controls">
+              {onCountryChange && (
+                <label className="card-country-field">
+                  País del terminal (ISO numérico)
+                  <input
+                    aria-label="País del terminal (ISO numérico)"
+                    inputMode="numeric"
+                    maxLength={3}
+                    value={countryCode}
+                    onChange={(event) => onCountryChange(event.target.value)}
+                    disabled={reading}
+                  />
+                </label>
+              )}
+              <button
+                className="card-chip-read"
+                disabled={!present || reading || refreshing}
+                onClick={() => reader && onRead(reader.name)}
+              >
+                <Icon name="card" size={16} />
+                {reading ? 'Leyendo chip…' : 'Leer datos del chip'}
+              </button>
+              <small>Inserta la tarjeta por contacto. Lectura EMV manual.</small>
+              {read && <small>Lectura: {new Date(identity.readAt).toLocaleTimeString()}</small>}
+              {identity?.status === 'DIRECTORY_UNAVAILABLE' && (
+                <p>
+                  Esta tarjeta no expone el directorio EMV de contacto. Se necesita su AID
+                  documentado.
+                </p>
+              )}
+              {identity?.status === 'TERMINAL_DATA_REQUIRED' && (
+                <p>
+                  La tarjeta solicita parámetros del terminal (PDOL):{' '}
+                  {identity.requiredTerminalData
+                    ?.map((entry) => `${entry.tag} (${entry.length} bytes)`)
+                    .join(', ')}
+                  . Completa el país si solicita 9F1A; otros parámetros requieren un perfil
+                  validado.
+                </p>
+              )}
+              {identity?.status === 'SELECT_APPLICATION' && (
+                <div className="card-application-choice">
+                  <p>Selecciona la aplicación que deseas leer:</p>
+                  {identity.applications.map((application) => (
+                    <button
+                      key={application.id}
+                      disabled={reading}
+                      onClick={() => reader && onRead(reader.name, application.id)}
+                    >
+                      {application.label ?? 'Aplicación EMV'} · {application.id}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {readError && (
+                <p role="alert" className="card-reader-error">
+                  {readError}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
       {!!snapshot?.readers.length && (
@@ -179,6 +280,7 @@ export function CardReaderPanel({
               key={`${device.name}-${index}`}
               aria-pressed={reader?.name === device.name}
               onClick={() => onSelect(device.name)}
+              disabled={reading}
             >
               <Icon name="reader" size={18} />
               <span>
@@ -202,8 +304,9 @@ export function CardReaderPanel({
       <div className="document-note card-reader-note">
         <Icon name="shield" size={18} />
         <p>
-          La presencia de la tarjeta no identifica su número ni su cuenta. La lectura de identidad
-          requiere el perfil APDU aprobado. El PAN se mostrará enmascarado cuando esté disponible.
+          La presencia de la tarjeta no identifica su número ni su cuenta. Leer datos del chip
+          muestra los campos EMV disponibles con el PAN enmascarado. Los datos no expuestos
+          requieren un perfil validado.
         </p>
       </div>
     </section>
@@ -215,8 +318,15 @@ export function CardReaderView({ compact = false }: { compact?: boolean }) {
   const [error, setError] = useState<string>();
   const [refreshing, setRefreshing] = useState(true);
   const [selectedName, setSelectedName] = useState<string>();
+  const [reading, setReading] = useState(false);
+  const [readError, setReadError] = useState<string>();
+  // Ecuador was explicitly selected by the user for this QA station.
+  const [countryCode, setCountryCode] = useState('218');
+  const mounted = useRef(false);
+  const readPending = useRef(false);
   const refreshRef = useRef<(() => void) | undefined>(undefined);
   useEffect(() => {
+    mounted.current = true;
     const client = new DesktopClient(window.desktop, 10000);
     let active = true;
     let pending = false;
@@ -243,10 +353,41 @@ export function CardReaderView({ compact = false }: { compact?: boolean }) {
     void refresh();
     return () => {
       active = false;
+      mounted.current = false;
       refreshRef.current = undefined;
       clearTimeout(timer);
     };
   }, []);
+  const readChip = async (readerName: string, applicationId?: string) => {
+    if (readPending.current) return;
+    if (!/^(?!000)\d{3}$/.test(countryCode)) {
+      setReadError('Ingresa un código de país ISO numérico de tres dígitos.');
+      return;
+    }
+    readPending.current = true;
+    setReading(true);
+    setReadError(undefined);
+    setSnapshot((current) => current && { ...current, identity: null, identityStatus: 'NOT_READ' });
+    const request = applicationId
+      ? { readerName, applicationId, terminalCountryCode: countryCode }
+      : { readerName, terminalCountryCode: countryCode };
+    const result = await new DesktopClient(window.desktop, 25000).call((api) =>
+      api.readCardIdentity(request),
+    );
+    readPending.current = false;
+    if (!mounted.current) return;
+    setReading(false);
+    if (result.ok) {
+      setSnapshot(
+        (current) =>
+          current && {
+            ...current,
+            identity: result.value,
+            identityStatus: result.value.status === 'READ' ? 'READ' : 'NOT_READ',
+          },
+      );
+    } else setReadError(result.error.message);
+  };
   return (
     <CardReaderPanel
       snapshot={snapshot}
@@ -256,6 +397,11 @@ export function CardReaderView({ compact = false }: { compact?: boolean }) {
       onSelect={setSelectedName}
       onRefresh={() => refreshRef.current?.()}
       compact={compact}
+      reading={reading}
+      readError={readError}
+      onRead={(name, applicationId) => void readChip(name, applicationId)}
+      countryCode={countryCode}
+      onCountryChange={setCountryCode}
     />
   );
 }

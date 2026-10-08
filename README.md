@@ -78,8 +78,12 @@ La pantalla se ajusta al mockup con paneles compactos, conectores e inspector
 tabular; documentacion y evidencia se muestran debajo del resumen de ejecucion.
 Dashboard y Tarjetas consultan PC/SC en Windows para mostrar lectores, presencia
 y ATR. El OMNIKEY 5422 conectado reporta tarjeta presente en ambas interfaces.
-La lectura de identidad/APDU y generacion PIN/EMV permanecen pendientes; no se
-atribuyen datos de capturas al chip. Ver `docs/implementation/CARD_READER_STATUS.md`.
+Tarjetas permite leer manualmente la identidad EMV por contacto: PAN enmascarado,
+titular, vencimiento y aplicacion cuando el chip los expone. La tarjeta QA
+terminada en 2267 fue leida fisicamente con pais de terminal Ecuador (218)
+seleccionado por el usuario. Otros perfiles/PDOL, lectura contactless y generacion
+PIN/EMV transaccional siguen pendientes. Ver `docs/hardware/EMV_IDENTITY_READING.md`
+y `docs/implementation/CARD_READER_STATUS.md`.
 
 Requiere Windows y Node.js 22.20 o una LTS posterior compatible.
 

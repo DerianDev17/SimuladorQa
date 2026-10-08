@@ -23,6 +23,7 @@ export async function buildMain() {
     'mediator-redaction.ps1',
     'mediator-command.ps1',
     'pcsc-status.ps1',
+    'pcsc-card.ps1',
   ]) {
     await copyFile(`apps/desktop/src/main/adapters/${name}`, `dist/${name}`);
   }
