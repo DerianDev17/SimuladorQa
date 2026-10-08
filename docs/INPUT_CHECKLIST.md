@@ -5,8 +5,15 @@
 Actualizacion de gestion ATM QA (2026-10-08 17:12:32 UTC): la PC ya recibe
 0800 / codigo 071 / STAN 481360, 60 bytes completos, sin transmitir. Las
 capturas anteriores contienen 072 y no contienen 0810. La denegacion por
-direccion registrada antes es historica; falta confirmar PID/sesion, no
+direccion registrada antes es historica; falta sesion financiera/coexistencia, no
 demostrar otra vez apertura TCP. Ver `docs/protocols/VISA_NETWORK_MANAGEMENT.md`.
+
+Los logs posteriores entregados por el usuario confirman autorizacion de la PC
+y asociacion al PID 80131 en ese intento. El cierre fue observado como recv=0,
+coherente con el probe que cierra tras el primer frame, antes del timer de 30 s.
+El balanceador 172.60.60.171 es rechazado 713 veces en la ventana 12:00-12:26;
+falta coexistencia/configuracion de prueba, no identificar nuevamente el PID.
+No se envio request financiero ni se recibio una regla F39 para el 071.
 
 - **TODO-DATA VISA-NETWORK-RESPONSE-POLICY / VISA-NETWORK-RESPONSE-WIRE**: construccion offline 0810 implementada con F39 obligatorio, sin default ni respuesta automatica. El modulo proveedor asigna NetResponse, no fija 00. Usuario no conoce la regla para 072; la solicitud actual es 071. Faltan significado/politica de ambos codigos, par real y criterio de sesion lista. Bloquea solo respuesta automatica y veredicto de sesion, sin impedir inspeccion ni diagnostico TCP.
 
@@ -24,10 +31,10 @@ antes de ejecutar desde ADQCLONE. Ver `docs/protocols/ISOBASEI_REVIEW.md` y
 - **TODO-DATA ISO-SPEC**: recibidos ContextoISO.xml de BANRED e ISOBASEI.bin de SWATM01 Coonecta. Inspector offline lee todos los registros de ISOBASEI y excluye defaults; encoding contrastado con GetStrType del formatter. Falta validar unidades/prefijos/padding/tabla EBCDIC/cabecera y reglas dinamicas contra muestras ATM de CB. Bloquea solo codecs wire y reglas dependientes, PIN/HSM y negocio; no falta recibir otra vez el diccionario. Ver `docs/protocols/ISOBASEI_REVIEW.md` y `docs/protocols/BANRED_SIMULATOR_REVIEW.md`.
 - **TODO-DATA CMS-ATM-MAPPING / CMS-XML-CONTRACT / CMS-RESULT-MAPPING**: recibido Extreme Mediator CMS v3.6 para XML/REST Mediator-Core. Falta validar su correspondencia con ATM, las diferencias tablas/ejemplos y los codigos por canal; no sustituye ISO-SPEC. Conflictos y solicitudes registrados en `docs/protocols/EXTREME_MEDIATOR_CMS_REVIEW.md`.
 - **TODO-DATA CMS-REVERSAL / CMS-CORRELATION / CMS-TRANSPORT / CMS-POS-MAPPING**: el manual lista familias MTI y campos Core, pero faltan la seleccion del reverso, reglas de correlacion, contrato REST y resolucion de diferencias POS. Bloquean solo sus adaptadores/reglas dependientes.
-- **TODO-DATA SWITCH-ATM-ACCESS / SWITCH-ATM-FRAMING / CMS-TRANSPORT**: recibida URL HTTPS Core de CB Cooperativa 205/canales 1/21, entrada ATM SmartVista 16100 y enlace Mediator 49212. Usuario confirmo todos esos enlaces QA y simulador desde su PC. La PC ya recibe gestion 0800; faltan confirmar PID/sesion/coexistencia, perfil financiero ISO, TLS/timeouts/conexiones y contrato HTTP/XML/unidad del timeout Core 20000. Ver `docs/implementation/SWITCH_NETWORK_EVIDENCE.md` y `docs/core/MEDIATOR_ENTITY_205_ROUTING.md`; el perfil SQL PREPROD existente no cambia.
+- **TODO-DATA SWITCH-ATM-ACCESS / SWITCH-ATM-FRAMING / CMS-TRANSPORT**: recibida URL HTTPS Core de CB Cooperativa 205/canales 1/21, entrada ATM SmartVista 16100 y enlace Mediator 49212. Usuario confirmo todos esos enlaces QA y simulador desde su PC. Gestion 0800 y autorizacion de la PC en PID 80131 confirmadas; faltan sesion financiera/coexistencia, perfil financiero ISO, TLS/timeouts/conexiones y contrato HTTP/XML/unidad del timeout Core 20000. Ver `docs/implementation/SWITCH_NETWORK_EVIDENCE.md` y `docs/core/MEDIATOR_ENTITY_205_ROUTING.md`; el perfil SQL PREPROD existente no cambia.
 - **TODO-DATA GOLDEN-SAMPLES / PCAP-CASE-MAPPING**: recibidos diez PCAP, con 218 envolventes BANRED reconstruidas byte a byte. Falta identificar/aprobar request/response de cada flujo MVP y correlacionar originales/reversos. Bloquea validacion de campos, codigos de respuesta y resultados de negocio. Ver `docs/protocols/PCAP_REVIEW.md`.
 - **TODO-DATA PCAP-LINK-PROFILES**: BE16 inclusivo/header/bitmap confirmados solo para enlace capturado 4946. Usuario identifico roles/QA de enlaces actuales 16100 y 49212; no certifica el perfil de sus PCAP. Persisten framing/diccionario, validacion de capturas completas y explicacion de solapamientos. No se aplica 4946 automaticamente a ATM.
-- **TODO-DATA ENVIRONMENT**: recibida entrada ATM QA y enlace con Mediator; gestion de red ya recibida desde PC. Faltan PID/sesion, perfil financiero, TLS, limites y timeouts por escenario. PREPROD tiene configuracion independiente. Bloquea solo los transportes/envios dependientes.
+- **TODO-DATA ENVIRONMENT**: recibida entrada ATM QA y enlace con Mediator; gestion de red y autorizacion en PID 80131 confirmadas desde PC. Faltan sesion financiera/coexistencia, perfil financiero, TLS, limites y timeouts por escenario. PREPROD tiene configuracion independiente. Bloquea solo los transportes/envios dependientes.
 - **TODO-DATA PROFILES**: faltan ATM y tarjeta completos/validados. Bloquea configurar ejecuciones reales; el shell desktop y la seleccion de ambiente funcionan de forma independiente.
 - **TODO-DATA AMOUNT-RULES**: faltan moneda, limites, monto minimo/maximo, denominaciones y reglas por cuenta/escenario para retirar. El borrador solo valida la sintaxis decimal del manual; no aprueba elegibilidad financiera.
 - **TODO-DATA ENTITY-CLASSIFICATION**: ENTITY_MODEL propone red/membresia separadas y ENTITY_TEMPLATE mezcla FRONT/BACK/EXTERNA/BANRED como Tipo. Se solicito validacion; el CRUD usa los campos comunes y difiere membresia, BIN/Core y deteccion automatica de escenarios.

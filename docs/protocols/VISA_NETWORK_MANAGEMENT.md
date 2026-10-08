@@ -90,6 +90,55 @@ y se agrego esa variante junto con pruebas. Esto no era otro fallo de conexion.
 La recepcion actual supera el rechazo textual historico, pero no confirma el
 PID asociado, estado operativo de la sesion ni llegada a Mediator/Core.
 
+## Logs posteriores que confirman el PID
+
+El usuario entrega nuevas versiones de tcpcomms01.out y nwint00_22150.out.
+Se inspeccionan en lectura; sus textos no se ejecutan como instrucciones.
+Los hashes son cb4ee444635877c688583550d4275eb0d07156fc4336f47039c88c4eac84864b
+y f14ecf93c4eb02f5a47a0cc17d981109ed5d5720c5a58a92056e2123071a3990,
+respectivamente. El primero cubre 12:00:02-12:26:20, el segundo
+12:00:02-12:12:32 del 2026-10-08, hora local declarada en el log. Esa hora
+coincide con los intentos de Ecuador registrados en UTC por el cliente.
+
+La evidencia resuelve la asociacion de la PC con el PID:
+
+| Fuente/linea | Evidencia del intento 12:12:32 |
+| --- | --- |
+| tcpcomms01:64128 / 64136 | Acepta 10.10.10.21:63511; Device 80131 is authorized |
+| tcpcomms01:64172 | Incorpora 80131 / fd 82 a dispositivos activos |
+| nwint:2502 / 2506 | Recibe COMMS_STARTUP y registra NE_LINE_UP |
+| nwint:2765 | Estado literal NETWORK ONLINE / NETWORK LINE UP |
+| nwint:3038 / 3064 / 3119 | STAN 481360, netmanage 71, F70 0071 |
+| tcpcomms01:64244 / 64259 | Envia MTI 800, cuerpo 56, envolvente 60 bytes al fd 82 |
+| nwint:2772 / 3160 | Timeout Value ID 5 / PID 80131 = 30; inicia timer 40481360 por 30 segundos |
+| tcpcomms01:64306-64310 | recv devuelve 0: disconnect occurred, no error; luego informa Failed to read the message format code |
+| nwint:3350 / 3357 / 3388 | COMMS_SHUTDOWN, NE_LINE_DOWN y cancelacion de timers SIGN ON/OFF |
+
+Los otros intentos 12:10:55 / puerto 57622 y 12:11:28 / puerto 63482
+tambien fueron autorizados como 80131 (tcpcomms01:54894 / 57546).
+El diagnostico del cliente destruye el socket al recibir el primer frame y
+registraba cero bytes escritos. La secuencia del servidor es coherente con
+ese cierre local, aproximadamente 0.2 segundos despues del envio. No es
+evidencia de una trama mal formada ni de vencimiento del timer de 30 segundos.
+El estado LINE UP no se convierte en aprobacion o certificacion de sesion
+financiera; el log no aporta F39 para responder al 071.
+
+nwint contiene tres secuencias de tipos internos 898 / 800 / 899; no contiene
+un 0810 ni un request financiero 0200 en esos intentos. El 0800 se genera en
+SmartVista tras COMMS_STARTUP: no es un retiro enviado por el simulador.
+
+La configuracion actual rechaza al balanceador 172.60.60.171 en 16100: **713**
+eventos de direccion invalida entre 12:00:02.261728 y 12:26:20.275182
+(tcpcomms01:53 / 133645). La PC esta admitida, pero no queda demostrada
+coexistencia con el camino del cajero. Antes de pruebas simultaneas se requiere
+configuracion de interfaz de prueba aprobada; al terminar la sustitucion temporal
+se debe restablecer el remoto original para recuperar ese camino. No se modifica
+la configuracion del servidor desde esta revision ni se abre otra conexion.
+
+Reporte privado acotado: artifacts/qa-80131-session-confirmation.json. La
+asociacion se actualiza tambien en los planes privados de CB 205; siguen sin
+confirmacion financiera ni respuesta automatica habilitada.
+
 ## TODO-DATA dependientes
 
 - **VISA-NETWORK-RESPONSE-POLICY**: significado de F70 071/072, si cada solicitud
@@ -99,9 +148,10 @@ PID asociado, estado operativo de la sesion ni llegada a Mediator/Core.
   Bloquea solo la respuesta automatica y el veredicto de sesion lista.
 - **VISA-NETWORK-RESPONSE-WIRE**: contrastar 0810 construido y extension de
   transporte con un par real. Las capturas actuales no contienen ese par.
-- **SWITCH-ATM-ACCESS**: confirmar PID asociado a la PC y coexistencia con el
-  balanceador; ahora llega gestion de red y no persiste evidencia actual de
-  NO AUTHORIZATION. No modificar el PID activo sin su configuracion de prueba.
+- **SWITCH-ATM-ACCESS**: PID 80131 y autorizacion de la PC confirmados por los
+  logs posteriores. Falta estado de sesion financiera y coexistencia con el
+  balanceador, actualmente rechazado. No modificar el PID activo sin su
+  configuracion de prueba.
 - **CB-ATM-GOLDEN-SAMPLE**: request ATM/response de CB 205 / PID 82052 y reglas
   dinamicas de retiro. El USD 20 de PID 82032 sigue apartado. Comunicacion de
   red y resultado financiero se validan de forma separada.

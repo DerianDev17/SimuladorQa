@@ -43,6 +43,8 @@ plazos y metricas protegidas fuera del Renderer. Ver
 habilita el envio general de la app. El rechazo historico NO AUTHORIZATION
 fue confirmado por el log; el 2026-10-08 la PC ya recibe gestion de red 0800.
 La prueba actual identifica codigo 071, distinto del 072 de las capturas.
+Los logs posteriores confirman la PC autorizada como PID 80131. El balanceador
+172.60.60.171 esta siendo rechazado en ese puerto; falta validar coexistencia.
 Un codec acotado construye 0810 offline con codigo de respuesta obligatorio;
 falta validar la politica del enlace antes de contestar. La herramienta
 `tooling/probe-visa-network.mjs` comprueba recepcion sin transmitir.
@@ -53,7 +55,7 @@ STAN 001391. Conserva los campos originales; no crea una transaccion nueva con
 otra tarjeta ni habilita el envio general. Ver el documento del emisor QA.
 El 2026-10-08 el usuario confirma CB 205 como PID 82052 / 49212. La muestra
 001391 ruteaba a 82032 y queda apartada del alcance exclusivo CB; falta una
-muestra ATM de ese destino y confirmar PID/sesion de la PC.
+muestra ATM de ese destino y confirmar sesion financiera de la PC.
 Diez PCAP inspeccionados aportan un codec offline de encapsulado BANRED y una
 vista de evidencia. 218 mensajes se reconstruyen byte a byte; los campos de
 negocio y otros enlaces requieren diccionario y validacion de casos.

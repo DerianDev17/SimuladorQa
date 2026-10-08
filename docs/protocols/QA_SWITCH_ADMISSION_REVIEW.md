@@ -148,7 +148,8 @@ qa-cb-205-routing.json y el plan de tarjeta ficticia se limita al mismo destino.
 
 - SWITCH-ATM-ACCESS: rechazo historico por direccion confirmado. La prueba
   posterior del 2026-10-08 a las 17:12:32 UTC recibe gestion 0800 / codigo 071
-  desde la PC. Falta confirmar PID/estado de sesion y destino CB 82052,
+  desde la PC; nuevos logs confirman autorizacion en PID 80131. Falta estado
+  de sesion financiera y coexistencia (balanceador rechazado), con destino CB 82052,
   conservando la conexion del cajero. Ver `VISA_NETWORK_MANAGEMENT.md`.
 - CB-ATM-GOLDEN-SAMPLE: muestra ATM request/response dirigida al PID CB 82052,
   con correlacion STAN/RRN/UTRNNO; la muestra USD 20 elegida de 82032 queda
