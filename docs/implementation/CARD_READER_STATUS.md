@@ -48,8 +48,25 @@ Con presencia verificada se ejecuto una consulta QA capturada el 2026-10-08 a
 las 15:46:56 Ecuador, STAN 008103, terminal ATM20521. Se cambio solo F11,
 preservando RRN/fechas/campos privados de la muestra; el cliente recibio
 0210/F39 96 en unos 1.14 segundos. No se le atribuye a la tarjeta fisica una
-lectura nueva de datos financieros. Llegada a Mediator/Core de este intento
-sigue pendiente de evidencia; no se genero F38 ni ID de autorizacion interno.
+lectura nueva de datos financieros. No se genero F38 ni ID de autorizacion
+interno.
+
+La revision directa de History SmartVista confirma UTRNNO 262812046562412550
+para STAN 008103: PID 82052 registra Auth entity resp=5 y codigo interno 939
+(No such response code from network); PID 80131 registra 96. STAN 008101 y
+008102 muestran el mismo patron. La consulta historica aprobada de las 12:41
+usa esos mismos PID y registra 00; el intento del simulador de las 13:04 muestra
+timeout 801/91, asociado en Mediator al TraceId 31580471 y RetCode 8908.
+
+Con excepcion puntual autorizada por el usuario, un SELECT protegido del dia
+2026-10-08 en Mediator 172.60.60.172:55893, entidad 205/canal 1/ATM20521/301000,
+devuelve tres registros historicos y ninguno de secuencia 8101/8102/8103.
+La etiqueta existente del perfil SQL es PREPROD; el usuario confirma el destino
+y clasifica el circuito como QA. La consulta no cambia ese perfil ni el
+observador. La ausencia corresponde a los filtros consultados, no prueba
+ausencia global en Mediator ni llegada al Core. El panel ISO8583 Messages de
+008103 muestra Sin datos. Origen/semantica/mapeo de la respuesta 5 requiere
+log correlacionado de PROXY205 y datos del proveedor; no se normaliza a 05.
 
 ## TODO-DATA dependientes
 
@@ -59,6 +76,10 @@ sigue pendiente de evidencia; no se genero F38 ni ID de autorizacion interno.
   no se inventan desde un ATR ni se atribuyen a una captura historica.
 - CARD-PROFILE-STORAGE: catalogo validado y cifrado antes de guardar datos
   sensibles. Se conserva solo evidencia de presencia con metadatos tecnicos.
+- CB205-PROXY-RETURN-5: falta respuesta original y log correlacionado de
+  PROXY205 para UTRNNO 262812046562412550 / STAN 008103, y mapeo aprobado de
+  codigo 5 en PID 82052. Bloquea corregir ese retorno; la comunicacion ATM con
+  SmartVista y la presencia PC/SC estan verificadas independientemente.
 
 La columna de autorizacion SmartVista no se rellena en el simulador: la consulta
 historica aprobada no incluia F38 en su request y el campo tampoco aparece en
