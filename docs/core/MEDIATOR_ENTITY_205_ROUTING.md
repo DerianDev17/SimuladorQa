@@ -94,6 +94,9 @@ El usuario confirma que aparece en SmartVista y Mediator. El cliente recibio
 0210/F39 91; msgResponse TraceId 31580471 registra RetCode 8908,
 RetMsg WS, PROCESADOR NO RESPONDE y MappedRespCode 10096 a las 13:04:58.076.
 Esto confirma llegada a Mediator, sin probar llegada efectiva al Core ni el
-mapeo exacto de sus codigos a F39. TODO-DATA CB-PROCESSOR-ERROR: revisar
-ADPCOREGEN/PROXY205 y la llamada HTTP del intento antes de cambiar plazos.
+mapeo exacto de sus codigos a F39. Un log adicional registra ISOREQUEST a las
+13:04:37.544 y timeout esperando AUTHTD/AUTHTD a las 13:04:52.545, RC=8908.
+TODO-DATA CB-PROCESSOR-ERROR: identificar proceso/servidor emisor, configuracion
+y ruta AUTHTD, y correlacionar con ADPCOREGEN/PROXY205 antes de atribuir el
+fallo a HTTP/TLS o cambiar plazos. La espera de esa fuente dura 15.001 segundos.
 Ver [captura y evidencia correlacionada](../protocols/CB_205_BALANCE_SAMPLE.md).

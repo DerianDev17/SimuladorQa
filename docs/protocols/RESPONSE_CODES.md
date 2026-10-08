@@ -23,8 +23,10 @@ Ver [fuente, paginas y pendientes](EXTREME_MEDIATOR_CMS_REVIEW.md).
 Consulta 301000/STAN 007923: el cliente recibio F39 91 y el usuario confirmo
 llegada a Mediator. Su msgResponse, TraceId 31580471, indica RetCode 8908,
 RetMsg WS, PROCESADOR NO RESPONDE y MappedRespCode 10096. Se registra como
-caso observado; no demuestra una equivalencia universal entre esos codigos,
-un timeout concreto ni el punto de fallo HTTP/TLS del Core.
+caso observado; no demuestra una equivalencia universal entre esos codigos.
+Un log posterior aportado muestra ISOREQUEST 13:04:37.544 y timeout de espera
+AUTHTD/AUTHTD 13:04:52.545, RC=8908: intervalo 15.001 segundos. Confirma esa
+espera agotada; no identifica aun el emisor del log ni el punto de fallo del Core.
 Ver [captura y prueba](CB_205_BALANCE_SAMPLE.md).
 
 ## Modelo de catalogo

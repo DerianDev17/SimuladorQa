@@ -84,6 +84,29 @@ y el instante exacto de respuesta financiera. No se declaran equivalentes esos
 codigos a F39 ni se incorpora un mapeo universal. La comunicacion hasta Mediator
 esta confirmada; llegada efectiva al Core y aprobacion no estan demostradas.
 
+### Log adicional de espera AUTHTD
+
+El usuario aporta dos registros ISOREQUEST a las 13:04:37.544 y un registro
+ISORESPONSE a las 13:04:52.545: Time Out esperando respuesta (AUTHTD/AUTHTD),
+RC=8908. El intervalo dentro de esa misma fuente es 15.001 segundos.
+Se confirma una espera agotada hacia AUTHTD/AUTHTD, sin precisar si su origen
+es una cola, procesamiento interno o llamada a una dependencia. Falta nombre
+del archivo, proceso y servidor emisor, configuracion de AUTHTD y su relacion
+con ADPCOREGEN/Core. No se atribuye automaticamente el timeout a HTTP/TLS.
+
+El contenido aportado permite reconocer codigo 301000, STAN 007923 y terminal
+ATM20521. No se conserva el HEX ni el identificador del log: contienen campos
+privados o identificadores cuyo tipo no ha sido confirmado. Tampoco se deduce
+UTRNNO del sufijo de ISOREQUEST. La fuente registra dos variantes O/M; no se
+inventa el significado de esas etiquetas.
+
+Si los relojes coinciden, el cliente ya habia finalizado con F39 91 a las
+13:04:46.607, antes del timeout AUTHTD a las 13:04:52.545 y del RealDate XML
+13:04:58.076. Son puntos de observacion distintos. No se confunde la ventana
+del simulador con la espera interna ni se aumenta una para corregir la otra.
+El timeout de execute=15000 del XML SWATM01 tampoco se identifica con este
+intervalo: su unidad y funcion siguen sin documentar.
+
 Otra consulta de la captura, STAN 007921, sale a Mediator (frame 208), carece de
 respuesta correlacionada en el archivo y recibe F39 91 hacia ATM (frame 212)
 aproximadamente diez segundos despues. Es una pista para revisar tiempos y
@@ -97,9 +120,11 @@ longitudes, bitmap, truncamiento y residuo. La integracion TCP local verifica
 una unica entrega y respuesta fragmentada. QaTcpReplay cubre errores y timeouts
 del transporte en sus pruebas existentes.
 
-- TODO-DATA CB-PROCESSOR-ERROR: revisar ADPCOREGEN/PROXY205 para TraceId 31580471
-  alrededor de 13:04:37-13:04:58. Correlacionar request/response HTTP, error
-  TLS/conexion/servicio y plazos efectivos; no cambiar timeouts sin evidencia.
+- TODO-DATA CB-PROCESSOR-ERROR: espera AUTHTD de 15.001 segundos confirmada.
+  Identificar archivo/proceso/servidor emisor y configuracion/ruta AUTHTD;
+  correlacionar con ADPCOREGEN/PROXY205, TraceId 31580471 y su dependencia Core
+  alrededor de 13:04:37-13:04:58. Precisar recepcion, cola, procesamiento,
+  request/response HTTP y plazos efectivos; no cambiar timeouts sin evidencia.
 - TODO-DATA CB-CURRENT-CORRELATION: UTRNNO nuevo de este intento y relojes;
   el UTRNNO historico no identifica el replay.
 - TODO-DATA CB-DYNAMIC-REQUEST: reglas nuevas de fechas/STAN/RRN, PIN/HSM/EMV
