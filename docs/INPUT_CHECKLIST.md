@@ -58,7 +58,7 @@ antes de ejecutar desde ADQCLONE. Ver `docs/protocols/ISOBASEI_REVIEW.md` y
 - **TODO-DATA PROFILES**: faltan ATM y tarjeta completos/validados. Bloquea configurar ejecuciones reales; el shell desktop y la seleccion de ambiente funcionan de forma independiente.
 - **TODO-DATA AMOUNT-RULES**: faltan moneda, limites, monto minimo/maximo, denominaciones y reglas por cuenta/escenario para retirar. El borrador solo valida la sintaxis decimal del manual; no aprueba elegibilidad financiera.
 - **TODO-DATA ENTITY-CLASSIFICATION**: ENTITY_MODEL propone red/membresia separadas y ENTITY_TEMPLATE mezcla FRONT/BACK/EXTERNA/BANRED como Tipo. Se solicito validacion; el CRUD usa los campos comunes y difiere membresia, BIN/Core y deteccion automatica de escenarios.
-- **TODO-DATA HARDWARE**: falta prueba PC/SC en Windows con OMNIKEY 5422. Bloquea lectura fisica; no se presume lector conectado.
+- **TODO-DATA HARDWARE / CARD-IDENTITY-APDU / CARD-TRANSACTION-SECURITY**: OMNIKEY 5422 detectado en Windows, ambas interfaces con tarjeta presente y ATR. Adaptador PC/SC de estado y vista instalados; usuario confirma tarjeta QA terminada en 2267. Faltan secuencia APDU aprobada para identidad, perfil de tarjeta/cuenta y PIN/HSM/EMV nuevo. Presencia no identifica PAN ni habilita envio desde chip. Ver `docs/implementation/CARD_READER_STATUS.md`.
 - **TODO-DATA OBSERVERS**: faltan SQL/API y reglas de correlacion aprobadas de SmartVista/Core. Consulta Journal/Message aportada por el usuario e implementada para Mediator; no completa validacion de resultados ni SmartVista.
 - **TODO-DATA MEDIATOR-OBSERVER-ACCESS / MEDIATOR-JOURNAL-CORRELATION**: implementada consulta acotada PREPROD por TraceId a partir del SQL del usuario (2026-10-07). Falta cuenta de lectura, TLS con CA/nombre aprobado, mapeo entidad/canal y correlacion con ISO/runId/transactionId. La prueba segura actual devuelve TLS_ERROR, sin autenticar ni leer registros. Ver `docs/implementation/MEDIATOR_OBSERVER.md` y ADR-009; ADR-006 sigue limitado a metadatos.
 - **TODO-DATA MEDIATOR-SQL-TIMEZONE / MEDIATOR-MESSAGE-PROJECTION**: confirmar zona de fechas SQL y aprobar allowlist de valores XML visibles. La consulta conserva hora SQL sin inferir UTC y protege todos los valores XML.
@@ -96,6 +96,7 @@ Estos checks registran implementacion local. Los checks P0/P1 siguientes son
 datos/evidencia externos y solo se marcaran al recibirlos y validarlos.
 
 - [x] Shell Electron seguro, TypeScript strict y navegacion.
+- [x] Adaptador PC/SC Windows fuera del Renderer, estado/ATR de lector en Dashboard/Tarjetas, simulacion CI explicita y prueba fisica de presencia. Identidad/APDU y seguridad transaccional pendientes.
 - [x] Codec acotado de consulta VISA 301000 capturada, reconstruccion exacta, metadatos protegidos y pruebas TCP locales; intento unico QA confirmado hasta Mediator con error del procesador documentado. Generacion de nuevos mensajes pendiente.
 - [x] Codec acotado de gestion VISA 071/072 y construccion offline 0810 con F39 explicito; probe QA solo lectura con UUID/UTC/STAN, limites y errores protegidos. Politica de respuesta/sesion real pendiente.
 - [x] Seleccion QA/PREPROD persistida y auditoria de cambios; PROD bloqueado.

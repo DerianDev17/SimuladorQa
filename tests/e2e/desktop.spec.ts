@@ -34,6 +34,27 @@ test.beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'coonecta-e2e-'));
 });
 
+test('lector PC/SC usa IPC protegido y mantiene separada la identidad', async () => {
+  const window = await launch();
+  await window.getByRole('button', { name: 'Tarjetas', exact: true }).click();
+  await expect(window.getByRole('region', { name: 'Estado del lector' })).toBeVisible();
+  await expect(window.getByText('La presencia de la tarjeta', { exact: false })).toBeVisible();
+  const api = await window.evaluate(() => ({
+    available: typeof globalThis.window.desktop?.getReaderSnapshot === 'function',
+    nodeAvailable: 'require' in globalThis.window,
+  }));
+  expect(api).toEqual({ available: true, nodeAvailable: false });
+  const result = await window.evaluate(() => globalThis.window.desktop?.getReaderSnapshot());
+  if (result?.ok) {
+    expect(result.value.identityStatus).toBe('NOT_READ');
+    expect(result.value).not.toHaveProperty('pan');
+    expect(result.value.readers.length).toBeLessThanOrEqual(16);
+  } else {
+    expect(result?.error.code).toMatch(/SERVICE_UNAVAILABLE|TIMEOUT/);
+  }
+  await expect(window.getByText('Consultando lector…')).toHaveCount(0);
+});
+
 test('composición del mockup: tres paneles y resumen dentro de la ventana desktop', async () => {
   const window = await launch();
   await app?.evaluate(({ BrowserWindow }) =>

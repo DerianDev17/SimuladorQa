@@ -2147,3 +2147,14 @@ td {
 .network-evidence-view dd {
   overflow-wrap: anywhere;
 }
+.card-reader-view {
+  padding: 24px;
+  overflow-wrap: anywhere;
+}
+.card-reader-view article {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.card-reader-view .document-note {
+  margin-top: 16px;
+}

@@ -13,6 +13,7 @@ import { MediatorSchemaInspector } from './adapters/mediator-schema-inspector';
 import { CapturedEvidenceCatalog } from './adapters/captured-evidence-catalog';
 import { MediatorObserver } from './adapters/mediator-observer';
 import { FileNetworkEvidence } from './adapters/file-network-evidence';
+import { WindowsPcscReader, inspectReader } from './adapters/windows-pcsc-reader';
 
 const development = process.argv.includes('--dev');
 const rendererFile = join(__dirname, 'renderer', 'index.html');
@@ -20,6 +21,7 @@ const rendererUrl = development ? 'http://127.0.0.1:5173/' : pathToFileURL(rende
 let window: BrowserWindow | null = null;
 let catalogs: WorkerCatalogStore | undefined;
 let observer: MediatorObserver | undefined;
+let cardReader: WindowsPcscReader | undefined;
 let quitting = false;
 
 app.setName('Coonecta ATM Simulator');
@@ -74,6 +76,7 @@ void app
       join(__dirname, 'mediator-query.ps1'),
       join(app.getPath('userData'), 'mediator-observer.json'),
     );
+    cardReader = new WindowsPcscReader(join(__dirname, 'pcsc-status.ps1'));
     const application = new DesktopApplication(
       new FilePreferencesStore(join(app.getPath('userData'), 'preferences.json')),
       {
@@ -90,6 +93,7 @@ void app
       new CapturedEvidenceCatalog(),
       observer,
       await FileNetworkEvidence.load(join(app.getPath('userData'), 'network-evidence.json')),
+      cardReader,
     );
     for (const channel of Object.values(channels)) {
       ipcMain.handle(channel, (event, payload: unknown) => {
@@ -107,6 +111,10 @@ void app
         )
           return failure('FORBIDDEN', 'Solicitud no autorizada.');
         switch (channel) {
+          case channels.reader:
+            return cardReader
+              ? inspectReader(cardReader, payload)
+              : failure('SERVICE_UNAVAILABLE', 'El lector no está configurado.');
           case channels.snapshot:
             return payload === undefined
               ? application.getSnapshot()
@@ -155,6 +163,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', (event) => {
   observer?.close();
+  cardReader?.close();
   if (quitting || !catalogs) return;
   event.preventDefault();
   quitting = true;

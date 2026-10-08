@@ -4,6 +4,7 @@ import type { DesktopApi } from '../../../packages/shared/src/contracts';
 
 const api: DesktopApi = Object.freeze<DesktopApi>({
   getSnapshot: () => ipcRenderer.invoke(channels.snapshot),
+  getReaderSnapshot: () => ipcRenderer.invoke(channels.reader),
   setEnvironment: (environment) => ipcRenderer.invoke(channels.environment, { environment }),
   prepareTransaction: (request) => ipcRenderer.invoke(channels.prepare, request),
   reviewDraft: (request) => ipcRenderer.invoke(channels.reviewDraft, request),

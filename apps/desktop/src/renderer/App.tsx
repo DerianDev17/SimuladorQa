@@ -20,6 +20,7 @@ import { NetworkEvidenceView } from './NetworkEvidenceView';
 import type { CatalogMutation } from './CatalogView';
 import { DesktopClient } from './desktop-client';
 import { Icon } from './Icon';
+import { CardReaderView } from './CardReaderView';
 import type { IconName } from './Icon';
 
 const navigation: { id: string; label: string; icon: IconName; group: string }[] = [
@@ -493,31 +494,7 @@ export function App() {
                   </div>
                   {transactionForm()}
                 </section>
-                <section className="panel reader-panel">
-                  <div className="panel-heading">
-                    <h2>Lector de tarjetas</h2>
-                    <span className="pill neutral">Sin configurar</span>
-                  </div>
-                  <div className="reader-content">
-                    <div className="reader-illustration">
-                      <Icon name="reader" size={78} />
-                    </div>
-                    <div>
-                      <h3>HID OMNIKEY 5422</h3>
-                      <p>
-                        La integración PC/SC requiere validar el lector y la tarjeta en esta
-                        estación.
-                      </p>
-                      <span className="reader-info">
-                        <span className="status-dot" /> Hardware sin verificar
-                      </span>
-                    </div>
-                  </div>
-                  <div className="reader-footer">
-                    <Icon name="shield" size={16} />
-                    <span>Los datos de tarjeta se mostrarán enmascarados.</span>
-                  </div>
-                </section>
+                <CardReaderView />
               </div>
               <div className="dashboard-grid bottom-grid">
                 <section className="panel">
@@ -688,34 +665,21 @@ export function App() {
             />
           )}
 
-          {['cards', 'load'].includes(page) && (
+          {page === 'cards' && <CardReaderView />}
+          {page === 'load' && (
             <section className="panel">
               <div className="empty-state">
                 <span className="empty-icon">
                   <Icon name={current?.icon ?? 'dashboard'} size={36} />
                 </span>
-                <span className="eyebrow">
-                  {page === 'load' ? 'GATE FUNCIONAL' : 'ESTACIÓN LOCAL'}
-                </span>
-                <h2>
-                  {page === 'cards'
-                    ? 'Aún no hay tarjetas de prueba'
-                    : page === 'load'
-                      ? 'Primero, valida los flujos funcionales'
-                      : 'Aún no hay ejecuciones'}
-                </h2>
+                <span className="eyebrow">GATE FUNCIONAL</span>
+                <h2>Primero, valida los flujos funcionales</h2>
                 <p>
-                  {page === 'cards'
-                    ? 'Se requiere el catálogo validado y el almacenamiento cifrado antes de guardar datos sensibles.'
-                    : page === 'load'
-                      ? 'La carga requiere que los cinco flujos MVP pasen pruebas deterministas y que existan límites autorizados por ambiente.'
-                      : 'El historial estará disponible cuando el motor transaccional pueda generar evidencia real.'}
+                  La carga requiere que los cinco flujos MVP pasen pruebas deterministas y que
+                  existan límites autorizados por ambiente.
                 </p>
-                <button
-                  className="primary"
-                  onClick={() => setPage(page === 'history' ? 'transactions' : 'settings')}
-                >
-                  {page === 'history' ? 'Preparar transacción' : 'Ver requisitos pendientes'}
+                <button className="primary" onClick={() => setPage('settings')}>
+                  Ver requisitos pendientes
                   <Icon name="arrow" size={16} />
                 </button>
               </div>

@@ -25,6 +25,7 @@ import { parseObservationRequest } from '../../../../packages/domain/src/observa
 import type { ObservationSearch } from '../../../../packages/domain/src/observations';
 import type { TransactionObserver } from './observation-port';
 import type { NetworkEvidenceCatalog } from '../../../../packages/domain/src/network-evidence';
+import type { CardReaderAdapter } from '../../../../packages/domain/src/card-reader';
 
 // Las operaciones locales comparten cola. El observador verifica el ambiente antes
 // y después de consultar, sin retener esa cola durante la espera de red.
@@ -41,6 +42,7 @@ export class DesktopApplication {
     private readonly captureEvidence?: CaptureEvidenceCatalog,
     private readonly observer?: TransactionObserver,
     private readonly networkEvidence?: NetworkEvidenceCatalog,
+    private readonly readerAdapter?: CardReaderAdapter,
   ) {}
 
   private serialize<T>(operation: () => Promise<T>): Promise<T> {
@@ -56,7 +58,7 @@ export class DesktopApplication {
       hostname: this.identity.hostname,
       environment: preferences.environment,
       storage: 'AVAILABLE',
-      reader: 'NOT_CONFIGURED',
+      reader: this.readerAdapter ? 'CONFIGURED' : 'NOT_CONFIGURED',
       connection: 'NOT_CONFIGURED',
       controlPlane: 'NOT_CONFIGURED',
       blockers: dataBlockers,

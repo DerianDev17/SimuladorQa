@@ -76,6 +76,10 @@ wire validado para la consulta capturada; generacion de nuevas transacciones
 sigue pendiente. Ver `docs/protocols/ISOBASEI_REVIEW.md`.
 La pantalla se ajusta al mockup con paneles compactos, conectores e inspector
 tabular; documentacion y evidencia se muestran debajo del resumen de ejecucion.
+Dashboard y Tarjetas consultan PC/SC en Windows para mostrar lectores, presencia
+y ATR. El OMNIKEY 5422 conectado reporta tarjeta presente en ambas interfaces.
+La lectura de identidad/APDU y generacion PIN/EMV permanecen pendientes; no se
+atribuyen datos de capturas al chip. Ver `docs/implementation/CARD_READER_STATUS.md`.
 
 Requiere Windows y Node.js 22.20 o una LTS posterior compatible.
 

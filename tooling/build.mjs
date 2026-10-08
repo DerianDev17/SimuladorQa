@@ -18,7 +18,12 @@ export async function buildMain() {
     target: 'node22',
     sourcemap: true,
   });
-  for (const name of ['mediator-query.ps1', 'mediator-redaction.ps1', 'mediator-command.ps1']) {
+  for (const name of [
+    'mediator-query.ps1',
+    'mediator-redaction.ps1',
+    'mediator-command.ps1',
+    'pcsc-status.ps1',
+  ]) {
     await copyFile(`apps/desktop/src/main/adapters/${name}`, `dist/${name}`);
   }
 }

@@ -19,9 +19,11 @@ import type { CaptureEvidence } from '../../domain/src/capture-evidence';
 import type { SaveCaseRequest } from '../../domain/src/saved-cases';
 import type { ObservationRequest, ObservationSearch } from '../../domain/src/observations';
 import type { NetworkEvidenceSnapshot } from '../../domain/src/network-evidence';
+import type { CardReaderSnapshot } from '../../domain/src/card-reader';
 
 export const channels = {
   snapshot: 'app:snapshot',
+  reader: 'reader:inspect',
   environment: 'app:environment',
   prepare: 'app:prepare',
   reviewDraft: 'transaction:draft:review',
@@ -63,7 +65,7 @@ export interface AppSnapshot {
   hostname: string;
   environment: Environment;
   storage: 'AVAILABLE';
-  reader: 'NOT_CONFIGURED';
+  reader: 'NOT_CONFIGURED' | 'CONFIGURED';
   connection: 'NOT_CONFIGURED';
   controlPlane: 'NOT_CONFIGURED';
   blockers: readonly DataBlocker[];
@@ -80,6 +82,7 @@ export interface ReviewedDraft extends DraftReview {
 
 export interface DesktopApi {
   getSnapshot(): Promise<Result<AppSnapshot>>;
+  getReaderSnapshot(): Promise<Result<CardReaderSnapshot>>;
   setEnvironment(environment: Environment): Promise<Result<AppSnapshot>>;
   prepareTransaction(request: PreparationRequest): Promise<Result<Preparation>>;
   reviewDraft(request: DraftRequest): Promise<Result<ReviewedDraft>>;
