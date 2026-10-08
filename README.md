@@ -57,6 +57,10 @@ El proyecto legacy Simulador Banred aporta ContextoISO.xml y ejemplos de echo
 y mensajes financieros de su mock servidor 4946. Se reviso sin ejecutarlo;
 diccionario y reglas mock quedan separados del perfil cliente ATM y del Core
 CB. Ver `docs/protocols/BANRED_SIMULATOR_REVIEW.md`.
+ISOBASEI.bin de SWATM01 Coonecta fue recibido e inspeccionado. Un inspector
+offline fuera del Renderer lee cabecera, posiciones ISO y tablas MTI sin
+defaults ni datos de tarjeta. BCD/EBCDIC/BINARY contrastados con el formatter;
+validacion wire y envio siguen pendientes. Ver `docs/protocols/ISOBASEI_REVIEW.md`.
 La pantalla se ajusta al mockup con paneles compactos, conectores e inspector
 tabular; documentacion y evidencia se muestran debajo del resumen de ejecucion.
 

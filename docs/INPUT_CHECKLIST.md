@@ -7,11 +7,13 @@ Actualizacion de fuente ATM Coonecta (2026-10-08): SWATM01 en ADQCLONE
 E:\ExtremePCI\configfiles\ISOBASEI.BIN; inicia CALL a SmartVista 16100.
 172.60.60.171 fue corregido por el usuario como balanceador. PROXY205 en
 Mediator 172.60.60.156 muestra LISTEN con parametros 10.60.0.11 / 49212.
-Falta recibir el archivo de formato ATM o su definicion aprobada y comprobar
-el camino de salida/coexistencia antes de ejecutar desde ADQCLONE. Ver
+ISOBASEI.bin recibido e inspeccionado: 12 campos de cabecera, 128 posiciones,
+27 MTI y encoding BCD/EBCDIC/BINARY contrastado con el modulo de formato.
+Falta validar detalles wire y comprobar el camino de salida/coexistencia
+antes de ejecutar desde ADQCLONE. Ver `docs/protocols/ISOBASEI_REVIEW.md` y
 `docs/implementation/SWITCH_NETWORK_EVIDENCE.md`.
 
-- **TODO-DATA ISO-SPEC**: recibido ContextoISO.xml del proyecto Simulador Banred (58 definiciones transaccionales y seis de echo). Falta especificacion/perfil ATM aprobado y validar su correspondencia con ese diccionario BANRED. Bloquea construir/parsear campos ATM, PIN/HSM y reglas de negocio; la envolvente observada se verifica offline. Ver `docs/protocols/BANRED_SIMULATOR_REVIEW.md`.
+- **TODO-DATA ISO-SPEC**: recibidos ContextoISO.xml de BANRED e ISOBASEI.bin de SWATM01 Coonecta. Inspector offline lee todos los registros de ISOBASEI y excluye defaults; encoding contrastado con GetStrType del formatter. Falta validar unidades/prefijos/padding/tabla EBCDIC/cabecera y reglas dinamicas contra muestras ATM de CB. Bloquea solo codecs wire y reglas dependientes, PIN/HSM y negocio; no falta recibir otra vez el diccionario. Ver `docs/protocols/ISOBASEI_REVIEW.md` y `docs/protocols/BANRED_SIMULATOR_REVIEW.md`.
 - **TODO-DATA CMS-ATM-MAPPING / CMS-XML-CONTRACT / CMS-RESULT-MAPPING**: recibido Extreme Mediator CMS v3.6 para XML/REST Mediator-Core. Falta validar su correspondencia con ATM, las diferencias tablas/ejemplos y los codigos por canal; no sustituye ISO-SPEC. Conflictos y solicitudes registrados en `docs/protocols/EXTREME_MEDIATOR_CMS_REVIEW.md`.
 - **TODO-DATA CMS-REVERSAL / CMS-CORRELATION / CMS-TRANSPORT / CMS-POS-MAPPING**: el manual lista familias MTI y campos Core, pero faltan la seleccion del reverso, reglas de correlacion, contrato REST y resolucion de diferencias POS. Bloquean solo sus adaptadores/reglas dependientes.
 - **TODO-DATA SWITCH-ATM-ACCESS / SWITCH-ATM-FRAMING / CMS-TRANSPORT**: recibida URL HTTPS Core de CB Cooperativa 205/canales 1/21, entrada ATM SmartVista 16100 y enlace Mediator 49212. Usuario confirmo todos esos enlaces QA y simulador desde su PC. Faltan acceso desde la PC al PID (remoto configurado: equipo de cajeros), ISO/framing, TLS/timeouts/conexiones y contrato HTTP/XML/unidad del timeout Core 20000. Ver `docs/implementation/SWITCH_NETWORK_EVIDENCE.md` y `docs/core/MEDIATOR_ENTITY_205_ROUTING.md`; el perfil SQL PREPROD existente no cambia.
@@ -91,6 +93,7 @@ Detalle y pruebas: `docs/implementation/TRANSACTION_PREPARATION.md`.
 ## P0 - Bloqueante para primer flujo real
 
 - [x] `ContextoISO.xml` recibido en Simulador Banred; alcance legacy BANRED. Correspondencia con ATM 16100 pendiente.
+- [x] `ISOBASEI.bin` de SWATM01 Coonecta recibido y sus secciones/parametros inspeccionados offline; validacion wire/casos pendiente.
 - [ ] Especificacion ISO ATM Coonecta.
 - [ ] Trama consulta saldo request/response aprobada.
 - [ ] PCAP consulta saldo.

@@ -53,7 +53,11 @@ SmartVista -> PROXY205/Mediator -> servicio Core. Una respuesta de vuelta no
 prueba una segunda conexion TCP iniciada en sentido inverso. Para replicar la
 entrada ATM hace falta recibir ISOBASEI.BIN o su definicion/exportacion aprobada,
 y una muestra CB correlacionada. No se sustituye por ContextoISO.xml de BANRED.
-El archivo ISOBASEI.BIN no se encontro en el workspace durante esta revision.
+En una primera busqueda el archivo no estaba en el workspace. Posteriormente
+el usuario aporta Y:/ExtremePCI/ConfigFiles/ISOBASEI.bin y se inspecciona su
+estructura completa: [revision ISOBASEI](../protocols/ISOBASEI_REVIEW.md).
+El diccionario deja de ser una fuente ausente; faltan las verificaciones wire
+y las reglas por escenario que no se deducen de una tabla de campos.
 
 El rechazo de la PC por direccion sigue confirmado: SmartVista ve 10.10.10.21,
 mientras su dispositivo activo admite al peer del balanceador 172.60.60.171.
