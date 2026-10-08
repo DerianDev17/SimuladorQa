@@ -96,7 +96,12 @@ RetMsg WS, PROCESADOR NO RESPONDE y MappedRespCode 10096 a las 13:04:58.076.
 Esto confirma llegada a Mediator, sin probar llegada efectiva al Core ni el
 mapeo exacto de sus codigos a F39. Un log adicional registra ISOREQUEST a las
 13:04:37.544 y timeout esperando AUTHTD/AUTHTD a las 13:04:52.545, RC=8908.
-TODO-DATA CB-PROCESSOR-ERROR: identificar proceso/servidor emisor, configuracion
-y ruta AUTHTD, y correlacionar con ADPCOREGEN/PROXY205 antes de atribuir el
-fallo a HTTP/TLS o cambiar plazos. La espera de esa fuente dura 15.001 segundos.
+El usuario identifica el emisor como PROXY205 en Mediator 172.60.60.156. AUTHTD
+registra WakeUpClientFromAuth: Transaccion #15 en TimeOut a las 13:04:58.091;
+EXTREMELOG registra error de recepcion de IECLIPSOFT WS a las 13:04:59.716.
+TODO-DATA CB-PROCESSOR-ERROR: configuracion/ruta AUTHTD y evento WS completo
+con StackTrace/InnerException/entidad para correlacionarlo con TraceId 31580471.
+No se prueba la causa TLS/HTTP ni se cambia plazo por ese texto generico.
+La espera de PROXY205 dura 15.001 segundos. El stack adjunto de ClearDeamonNet
+corresponde a claves de configuracion ausentes, sin correlacion con esta consulta.
 Ver [captura y evidencia correlacionada](../protocols/CB_205_BALANCE_SAMPLE.md).

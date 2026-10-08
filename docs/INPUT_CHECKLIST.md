@@ -9,8 +9,12 @@ usuario. TraceId 31580471 devuelve RetCode 8908, WS, PROCESADOR NO RESPONDE,
 MappedRespCode 10096. No falta volver a demostrar apertura TCP ni aportar
 otra muestra de consulta CB. El log adicional muestra una espera AUTHTD/AUTHTD
 de 15.001 segundos (13:04:37.544-13:04:52.545), RC=8908.
-TODO-DATA CB-PROCESSOR-ERROR: archivo/proceso/servidor emisor, configuracion/ruta
-AUTHTD y log correlacionado de ADPCOREGEN/PROXY205 hacia el procesador/Core.
+Emisor identificado: PROXY205 en Mediator 172.60.60.156. AUTHTD registra la
+transaccion vencida y EXTREMELOG un error de recepcion del WS a las 13:04:59.716.
+TODO-DATA CB-PROCESSOR-ERROR: configuracion/ruta AUTHTD y evento WS completo
+con StackTrace/InnerException/entidad para correlacionar con ADPCOREGEN/Core.
+El adjunto ClearDeamonNet tiene cuatro claves ausentes, sin vinculo probado
+con la consulta; no sustituye el stack del error WS.
 Faltan UTRNNO nuevo y confirmacion de relojes, reglas de generacion de nuevos
 mensajes, PIN/HSM/EMV y sesiones prolongadas/coexistencia. Ver
 `docs/protocols/CB_205_BALANCE_SAMPLE.md`. Las notas de admision siguientes

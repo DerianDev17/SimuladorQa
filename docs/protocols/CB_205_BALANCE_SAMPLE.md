@@ -90,9 +90,10 @@ El usuario aporta dos registros ISOREQUEST a las 13:04:37.544 y un registro
 ISORESPONSE a las 13:04:52.545: Time Out esperando respuesta (AUTHTD/AUTHTD),
 RC=8908. El intervalo dentro de esa misma fuente es 15.001 segundos.
 Se confirma una espera agotada hacia AUTHTD/AUTHTD, sin precisar si su origen
-es una cola, procesamiento interno o llamada a una dependencia. Falta nombre
-del archivo, proceso y servidor emisor, configuracion de AUTHTD y su relacion
-con ADPCOREGEN/Core. No se atribuye automaticamente el timeout a HTTP/TLS.
+es una cola, procesamiento interno o llamada a una dependencia. El usuario
+identifica despues el servidor Mediator 172.60.60.156 y PROXY205 como emisor.
+Faltan archivo/configuracion de AUTHTD y su relacion con ADPCOREGEN/Core.
+No se atribuye automaticamente ese timeout a HTTP/TLS.
 
 El contenido aportado permite reconocer codigo 301000, STAN 007923 y terminal
 ATM20521. No se conserva el HEX ni el identificador del log: contienen campos
@@ -107,6 +108,30 @@ del simulador con la espera interna ni se aumenta una para corregir la otra.
 El timeout de execute=15000 del XML SWATM01 tampoco se identifica con este
 intervalo: su unidad y funcion siguen sin documentar.
 
+### Eventos identificados en Mediator
+
+El usuario aporta los siguientes eventos de 172.60.60.156, fecha 2026-10-08:
+
+| Hora de fuente | Componente | Evidencia |
+| --- | --- | --- |
+| 13:04:52.545 | W-PROXY205 | Time Out esperando respuesta AUTHTD/AUTHTD, RC=8908 |
+| 13:04:58.091 | E-AUTHTD | WakeUpClientFromAuth: Transaccion #15 en TimeOut |
+| 13:04:59.716 | E-EXTREMELOG | IECLIPSOFT WS, NO SE PUEDE PROCESAR: The underlying connection was closed: An unexpected error occurred on a receive. |
+
+Esto ubica la espera en PROXY205 y un intento posterior de despertar una
+transaccion vencida en AUTHTD. El numero interno 15 no reemplaza el TraceId,
+STAN, transactionId UUID ni UTRNNO. El evento WS confirma un error al recibir
+en una conexion, pero carece de entidad/TraceId y excepcion interna; su
+asociacion al intento CB 205 requiere correlacion. No demuestra protocolo TLS
+incompatible, certificado invalido, cierre remoto, proxy o causa financiera.
+
+El archivo Texto pegado.txt adjunto tiene 5779 bytes y eventos de
+ClearDeamonNet.exe / GetConfigFile en MEDIATORCLONE a las 13:04:44. Reporta
+claves ausentes MaximoTCR91, GeneraTC90, ReprocONUS y FechaFin en
+E:/ExtremePci/ConfigFiles/ClearDeamonNet.exe.config. No contiene el stack del
+error WS ni una referencia a esta consulta. Se registra como incidencia de
+configuracion separada, sin inventar valores ni atribuirle el timeout.
+
 Otra consulta de la captura, STAN 007921, sale a Mediator (frame 208), carece de
 respuesta correlacionada en el archivo y recibe F39 91 hacia ATM (frame 212)
 aproximadamente diez segundos despues. Es una pista para revisar tiempos y
@@ -120,11 +145,15 @@ longitudes, bitmap, truncamiento y residuo. La integracion TCP local verifica
 una unica entrega y respuesta fragmentada. QaTcpReplay cubre errores y timeouts
 del transporte en sus pruebas existentes.
 
-- TODO-DATA CB-PROCESSOR-ERROR: espera AUTHTD de 15.001 segundos confirmada.
-  Identificar archivo/proceso/servidor emisor y configuracion/ruta AUTHTD;
-  correlacionar con ADPCOREGEN/PROXY205, TraceId 31580471 y su dependencia Core
-  alrededor de 13:04:37-13:04:58. Precisar recepcion, cola, procesamiento,
-  request/response HTTP y plazos efectivos; no cambiar timeouts sin evidencia.
+- TODO-DATA CB-PROCESSOR-ERROR: servidor/proceso identificados como
+  172.60.60.156 / PROXY205; espera AUTHTD de 15.001 segundos confirmada.
+  Falta configuracion/ruta AUTHTD y evento WS completo con StackTrace,
+  InnerException y entidad/TraceId. Correlacionar con ADPCOREGEN, TraceId
+  31580471 y dependencia Core en 13:04:37-13:04:59; no cambiar plazos/TLS
+  ni generar reintentos sin resolver causa y correlacion.
+- TODO-DATA CLEARDAEMON-CONFIG: contrastar las cuatro claves ausentes con
+  configuracion/version aprobada de ClearDeamonNet. Su efecto y vinculacion
+  con esta consulta no estan establecidos; no bloquea la inspeccion del caso.
 - TODO-DATA CB-CURRENT-CORRELATION: UTRNNO nuevo de este intento y relojes;
   el UTRNNO historico no identifica el replay.
 - TODO-DATA CB-DYNAMIC-REQUEST: reglas nuevas de fechas/STAN/RRN, PIN/HSM/EMV
