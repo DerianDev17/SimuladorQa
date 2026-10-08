@@ -8,6 +8,11 @@ import { parseObservationRequest } from '../../../../../packages/domain/src/obse
 import { failure } from '../../../../../packages/shared/src/contracts';
 import type { Result } from '../../../../../packages/shared/src/contracts';
 import type { TransactionObserver } from '../observation-port';
+import {
+  isProtectedCmsStructure,
+  reviewFinancialStructure,
+  supportsFinancialReview,
+} from './cms-financial-contract';
 
 export function decodeResponse(output: string, limit: number): Result<ObservationBatch> {
   try {
@@ -61,7 +66,9 @@ export function decodeResponse(output: string, limit: number): Result<Observatio
         [row.messageType, row.returnCode].some(
           (value) => value !== null && !Number.isInteger(value),
         ) ||
-        [row.requestStructure, row.responseStructure].some((value) => !isProtectedStructure(value))
+        [row.requestStructure, row.responseStructure].some(
+          (value) => !isProtectedCmsStructure(value),
+        )
       )
         throw new Error();
     }
@@ -80,6 +87,12 @@ export function decodeResponse(output: string, limit: number): Result<Observatio
           returnCode: row.returnCode,
           requestStructure: row.requestStructure,
           responseStructure: row.responseStructure,
+          ...(supportsFinancialReview(row.transactionCode)
+            ? {
+                requestContract: reviewFinancialStructure(row.requestStructure, 'request'),
+                responseContract: reviewFinancialStructure(row.responseStructure, 'response'),
+              }
+            : {}),
         })),
       },
     };
@@ -89,24 +102,6 @@ export function decodeResponse(output: string, limit: number): Result<Observatio
       'Mediator devolvió datos que no cumplen el contrato de observación.',
     );
   }
-}
-
-function isProtectedStructure(value: unknown): boolean {
-  if (typeof value !== 'string' || value.length > 16384) return false;
-  if (
-    [
-      '[Mensaje ausente o protegido por longitud]',
-      '[Mensaje protegido: limite excedido]',
-      '[Mensaje protegido: XML no validado]',
-    ].includes(value)
-  )
-    return true;
-  const names = 'Campo|ExtremeMsg|ExtremeMsgReply|Header|Data|FxTable|HField|DField';
-  const fields =
-    'TraceId|EntityId|EntityIdDest|ChannelId|RealDate|TerminalID|TerminalId|TerminalSeq|MsgType|TrnCode|ValueTrn|BussDate|RetCode|Reverse|AccountId1|AccountId2|AccountNum1|AccountNum2|SubTrnCode|CodigoProceso|Mensaje|FechaContable|SaldoTotal|SaldoDisponible|ValorDebitadoParcial|MappedRespCode|MsgErr';
-  return new RegExp(`^(?:<\\/?(?:${names})(?: name="(?:${fields})")?>|\\[PROTEGIDO\\])+$`).test(
-    value,
-  );
 }
 
 export class MediatorObserver implements TransactionObserver {

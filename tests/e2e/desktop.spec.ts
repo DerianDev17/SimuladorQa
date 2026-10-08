@@ -15,6 +15,8 @@ import type { Result } from '../../packages/shared/src/contracts';
 import { createServer } from 'vite';
 import { removeTestDirectory } from '../helpers/temporary-directory';
 import { networkEvidence } from '../helpers/network-evidence';
+import { decodeResponse } from '../../apps/desktop/src/main/adapters/mediator-observer';
+import { observationBatch } from '../helpers/observations';
 
 let directory: string;
 let app: ElectronApplication | undefined;
@@ -330,6 +332,53 @@ test('Historial: consulta Mediator validada, QA bloqueado y dependencia no confi
   await mkdir('artifacts', { recursive: true });
   await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
   await window.screenshot({ path: 'artifacts/mediator-observer.png', fullPage: true });
+});
+
+test('Historial muestra mandatorios CMS y variantes sin exponer valores', async () => {
+  const window = await launch();
+  const batch = observationBatch();
+  const decoded = decodeResponse(
+    JSON.stringify({
+      ok: true,
+      value: {
+        ...batch,
+        rows: [
+          {
+            ...batch.rows[0],
+            transactionCode: '301000',
+            requestStructure:
+              '<ExtremeMsg><Header><HField name="TerminalId">[PROTEGIDO]</HField></Header><Data><DField name="Pais">[PROTEGIDO]</DField><DField name="EsPos" type="b">[PROTEGIDO]</DField></Data></ExtremeMsg>',
+            responseStructure:
+              '<ExtremeMsg><Header></Header><Data><DField name="MensajeRetorno">[PROTEGIDO]</DField></Data></ExtremeMsg>',
+          },
+        ],
+      },
+    }),
+    50,
+  );
+  if (!decoded.ok) throw new Error('SYNTHETIC_CONTRACT_INVALID');
+  await app!.evaluate(({ ipcMain }, value) => {
+    ipcMain.removeHandler('observations:search');
+    ipcMain.handle('observations:search', () => ({
+      ok: true,
+      value: { ...value, queryId: 'synthetic-cms-review', queriedAt: '2026-10-08T22:00:00.000Z' },
+    }));
+  }, decoded.value);
+  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
+  await window.getByRole('button', { name: 'Historial', exact: false }).click();
+  const observer = window.getByLabel('Consulta de Mediator', { exact: true });
+  await observer.getByRole('button', { name: 'Consultar Mediator' }).click();
+  await observer.getByRole('button', { name: `Ver mensajes de ${batch.rows[0]!.traceId}` }).click();
+  const reviews = observer.getByLabel('Revisión de campos CMS');
+  await expect(reviews).toHaveCount(2);
+  await expect(reviews.first()).toContainText('26 campos mandatorios');
+  await expect(reviews.first()).toContainText('Header.TraceId');
+  await expect(reviews.first()).toContainText('TerminalId (tabla: TerminalID)');
+  await expect(reviews.first()).toContainText('Pais (tabla: País)');
+  await expect(reviews.first()).toContainText('Data.EsPos: b (tabla: string)');
+  await expect(reviews.last()).toContainText('MensajeRetorno (tabla: Mensaje de Retorno)');
+  await expect(observer.locator('pre').first()).toContainText('[PROTEGIDO]');
+  await window.screenshot({ path: 'artifacts/cms-contract-observer.png', fullPage: true });
 });
 
 test('dashboard real, aislamiento, navegación y gate transaccional', async () => {

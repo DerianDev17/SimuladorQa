@@ -7,6 +7,22 @@ Documento Tecnico Extreme Mediator Message Format Interfaces CMS, RTC Coonecta,
 24 paginas. El historial de cambios identifica v3.6 con fecha 13-04-2023 (p. 3).
 SHA-256: `C335C64DFA9CE10AAEEC72F5E29576846488602406589D08ED0F51E6386CFDC4`.
 
+Adjunto adicional revisado el 2026-10-08:
+`Extreme MediatorII Message Interface CMS v3.6.2 4 1 1.pdf`, 24 paginas,
+SHA-256 `928466324816ced446af2b5b63e7b5f3196a496343b4c68168969b3ca66a74d5`.
+Su historial interno tambien identifica version 3.6 / 13-04-2023. Las tablas
+financieras de las pp. 16-19 fueron comprobadas visualmente; el nombre del
+archivo no prueba una revision normativa 3.6.2.
+
+Correccion implementada: el observador reconoce los campos completos y las
+variantes de nombre de tablas/ejemplos, conserva tipos documentados observados
+y muestra mandatorios ausentes sin publicar valores. Request: 13 mandatorios
+Header + 13 Data, 5 opcionales Header + 23 Data. Response: 13 mandatorios
+Header + 8 Data y MsgErr opcional. Implementacion y limites:
+`docs/implementation/MEDIATOR_OBSERVER.md`.
+El reconocimiento de variantes en la inspeccion no aprueba un nombre/tipo de
+salida para un futuro emisor ni resuelve la discrepancia de las fuentes.
+
 Revision realizada el 2026-10-06: texto de las 24 paginas y comprobacion visual de
 las convenciones, formatos, interfaz financiera y tablas de las pp. 4-5 y 16-24.
 La tabla de MTI de p. 23 es una imagen: la extraccion de texto sola no la recupera.

@@ -2,6 +2,23 @@
 
 ## TODO-DATA activos de la primera entrega
 
+Correccion CMS (2026-10-08): campos completos y variantes de nombre reconocidos
+en el observador; revision de presencia/tipos para saldo y retiro, con 26
+mandatorios request y 21 response, valores protegidos y UTF-8. No existen
+emisor XML CMS ni conversiones inventadas de tipos/nombres en el recorrido
+financiero. CMS-XML-CONTRACT mantiene pendientes la serializacion de salida,
+tipos contradictorios y reglas por resultado; CB-96-SWITCH-LOG permanece abierto.
+Ver `docs/implementation/MEDIATOR_OBSERVER.md`.
+
+Revision PCAP/envios/nwint (2026-10-08): cuatro consultas transmitidas y tres
+preparaciones sin envio. STAN 007923 recibe 91; 008101/008102/008103 reciben
+96 y difieren solo en F11, con fechas/RRN/seguridad capturados conservados.
+El nwint adjunto registra otros PID (82262/280120), sin los STAN de los
+intentos ni PID 80131/82052 en sus encabezados. TODO-DATA CB-96-SWITCH-LOG:
+log correlacionado de ese proceso/recorrido y relojes/UTRNNO para localizar
+el 96. No inferir causas ni reglas dinamicas. Detalle y revision reproducible:
+`docs/protocols/CB_205_BALANCE_SAMPLE.md`.
+
 Estado actual CB 205 (2026-10-08): recibida captura de consulta y retiro con
 ambos enlaces 16100/49212 y pares XML. Consulta reconstruida y enviada una vez
 desde la PC: 0210/F39 91; llegada a SmartVista y Mediator confirmada por el

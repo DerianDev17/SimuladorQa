@@ -1,3 +1,4 @@
+$script:MediatorCmsFields = $null
 function Protect-MediatorXml([string] $Xml) {
     if ([string]::IsNullOrEmpty($Xml)) { return '[Mensaje ausente o protegido por longitud]' }
     if ($Xml.Length -gt 65536) { return '[Mensaje protegido: limite excedido]' }
@@ -12,7 +13,12 @@ function Protect-MediatorXml([string] $Xml) {
         $nodes = 0
         # Sólo estructura documentada; ningún texto, atributo libre, comentario o namespace.
         $elements = @('ExtremeMsg', 'ExtremeMsgReply', 'Header', 'Data', 'FxTable', 'HField', 'DField')
-        $fields = @('TraceId', 'EntityId', 'EntityIdDest', 'ChannelId', 'RealDate', 'TerminalID', 'TerminalId', 'TerminalSeq', 'MsgType', 'TrnCode', 'ValueTrn', 'BussDate', 'RetCode', 'Reverse', 'AccountId1', 'AccountId2', 'AccountNum1', 'AccountNum2', 'SubTrnCode', 'CodigoProceso', 'Mensaje', 'FechaContable', 'SaldoTotal', 'SaldoDisponible', 'ValorDebitadoParcial', 'MappedRespCode', 'MsgErr')
+        if ($null -eq $script:MediatorCmsFields) {
+            $manifestPath = Join-Path $PSScriptRoot 'cms-financial-fields.json'
+            $manifest = [System.IO.File]::ReadAllText($manifestPath, [System.Text.Encoding]::UTF8) | ConvertFrom-Json
+            $script:MediatorCmsFields = @($manifest.fields | ForEach-Object { $_.name; $_.aliases })
+        }
+        $types = @('b', 'i8', 'i16', 'i32', 'i64', 'f', 'd', 't')
         while ($reader.Read()) {
             $nodes++
             if ($nodes -gt 512 -or $reader.Depth -gt 20) { return '[Mensaje protegido: limite excedido]' }
@@ -21,7 +27,11 @@ function Protect-MediatorXml([string] $Xml) {
             if ($reader.NodeType -eq [System.Xml.XmlNodeType]::Element) {
                 [void] $output.Append('<').Append($name)
                 $fieldName = $reader.GetAttribute('name')
-                if ($fields -ccontains $fieldName) { [void] $output.Append(' name="').Append($fieldName).Append('"') }
+                if ($name -cin @('HField', 'DField') -and $script:MediatorCmsFields -ccontains $fieldName) {
+                    [void] $output.Append(' name="').Append($fieldName).Append('"')
+                    $fieldType = $reader.GetAttribute('type')
+                    if ($types -ccontains $fieldType) { [void] $output.Append(' type="').Append($fieldType).Append('"') }
+                }
                 if ($reader.IsEmptyElement) { [void] $output.Append('>[PROTEGIDO]</').Append($name).Append('>') }
                 else { [void] $output.Append('>') }
             } elseif ($reader.NodeType -eq [System.Xml.XmlNodeType]::EndElement) {

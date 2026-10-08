@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -8,8 +8,13 @@ import { FilePreferencesStore } from '../../apps/desktop/src/main/infrastructure
 import type { TransactionObserver } from '../../apps/desktop/src/main/observation-port';
 import { removeTestDirectory } from '../helpers/temporary-directory';
 import { observationRequest, observationBatch } from '../helpers/observations';
-import { MediatorObserver } from '../../apps/desktop/src/main/adapters/mediator-observer';
-import { spawn } from 'node:child_process';
+import {
+  decodeResponse,
+  MediatorObserver,
+} from '../../apps/desktop/src/main/adapters/mediator-observer';
+import { cmsFinancialFields } from '../../apps/desktop/src/main/adapters/cms-financial-contract';
+import { execFile, spawn } from 'node:child_process';
+import { promisify } from 'node:util';
 
 describe('observador y ambiente persistido', () => {
   let directory: string;
@@ -219,9 +224,21 @@ describe('observador y ambiente persistido', () => {
       );
       await writeFile(
         script,
-        `[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)\n. '${sanitizer}'\n$inputs = [Console]::In.ReadToEnd() | ConvertFrom-Json\n$output = @($inputs | ForEach-Object { Protect-MediatorXml $_ })\n[Console]::WriteLine((ConvertTo-Json -InputObject $output -Compress))\n`,
+        `[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)\n[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)\n. '${sanitizer}'\n$inputs = [Console]::In.ReadToEnd() | ConvertFrom-Json\n$output = @($inputs | ForEach-Object { Protect-MediatorXml $_ })\n[Console]::WriteLine((ConvertTo-Json -InputObject $output -Compress))\n`,
       );
       const pan = '4'.repeat(16);
+      const financialXml = (direction: 'request' | 'response') => {
+        const section = (name: string, tag: string) =>
+          cmsFinancialFields
+            .filter((field) => field.section === name && field.required.includes(direction))
+            .map((field) => {
+              const observedName = field.aliases[0] ?? field.name;
+              const type = field.name === 'EsPos' ? 'b' : field.type;
+              return `<${tag} name="${observedName}" value="${pan}"${type === 'string' ? '' : ` type="${type}"`}/>`;
+            })
+            .join('');
+        return `<ExtremeMsg><Header>${section('Header', 'HField')}</Header><Data>${section('Data', 'DField')}</Data></ExtremeMsg>`;
+      };
       const inputs = [
         `<ExtremeMsg><Header><HField name="AccountNum1" value="${pan}"/></Header><Data>private-secret<![CDATA[cvv-secret]]><!--comment-secret--></Data></ExtremeMsg>`,
         '<ExtremeMsgReply><Header><HField name="RetCode" value="0"/></Header></ExtremeMsgReply>',
@@ -231,6 +248,16 @@ describe('observador y ambiente persistido', () => {
         '<x>'.repeat(22) + '</x>'.repeat(22),
         '<x>' + 's'.repeat(65536) + '</x>',
         '',
+        financialXml('request'),
+        financialXml('response'),
+        '<ExtremeMsg><Data><DField name="EsPos" value="PRIVATE_VALUE" type="PRIVATE_TYPE"/></Data></ExtremeMsg>',
+        `<ExtremeMsg><Header>${cmsFinancialFields
+          .filter((field) => field.section === 'Header')
+          .map((field) => `<HField name="${field.name}" value="PRIVATE_VALUE"/>`)
+          .join('')}</Header><Data>${cmsFinancialFields
+          .filter((field) => field.section === 'Data')
+          .map((field) => `<DField name="${field.name}" value="PRIVATE_VALUE"/>`)
+          .join('')}</Data></ExtremeMsg>`,
       ];
       const output = await new Promise<string>((resolveOutput, reject) => {
         const child = spawn(
@@ -258,13 +285,53 @@ describe('observador y ambiente persistido', () => {
       );
       expect(values[1]).toContain('name="RetCode"');
       expect(values[2]).toBe('<Campo>[PROTEGIDO]</Campo>');
-      expect(values.slice(3)).toEqual([
+      expect(values.slice(3, 8)).toEqual([
         '[Mensaje protegido: XML no validado]',
         '[Mensaje protegido: XML no validado]',
         '[Mensaje protegido: limite excedido]',
         '[Mensaje protegido: limite excedido]',
         '[Mensaje ausente o protegido por longitud]',
       ]);
+      const batch = observationBatch();
+      const decoded = decodeResponse(
+        JSON.stringify({
+          ok: true,
+          value: {
+            ...batch,
+            rows: [
+              {
+                ...batch.rows[0],
+                transactionCode: '301000',
+                requestStructure: values[8],
+                responseStructure: values[9],
+              },
+            ],
+          },
+        }),
+        50,
+      );
+      expect(decoded).toMatchObject({
+        ok: true,
+        value: {
+          rows: [
+            {
+              requestContract: {
+                status: 'REVIEWED',
+                requiredFieldCount: 26,
+                missingRequired: [],
+                typeDifferences: [
+                  { section: 'Data', name: 'EsPos', observed: 'b', documented: 'string' },
+                ],
+              },
+              responseContract: { status: 'REVIEWED', requiredFieldCount: 21, missingRequired: [] },
+            },
+          ],
+        },
+      });
+      expect(values[10]).toContain('name="EsPos"');
+      expect(output).not.toContain('PRIVATE_TYPE');
+      expect(output).not.toContain('PRIVATE_VALUE');
+      for (const field of cmsFinancialFields) expect(values[11]).toContain(`name="${field.name}"`);
       for (const secret of [
         pan,
         'private-secret',
@@ -276,6 +343,28 @@ describe('observador y ambiente persistido', () => {
         'private-file',
       ])
         expect(output).not.toContain(secret);
+    },
+  );
+  it.runIf(process.platform === 'win32')(
+    'mantiene XML protegido si falta el manifiesto CMS',
+    async () => {
+      const redactor = join(directory, 'redaction-without-manifest.ps1');
+      await copyFile(resolve('apps/desktop/src/main/adapters/mediator-redaction.ps1'), redactor);
+      const wrapper = join(directory, 'missing-manifest-test.ps1');
+      await writeFile(
+        wrapper,
+        `[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)\n. '${redactor.replace(/'/g, "''")}'\n[Console]::WriteLine((Protect-MediatorXml '<ExtremeMsg><Header><HField name="TraceId" value="PRIVATE_VALUE"/></Header></ExtremeMsg>'))`,
+      );
+      const { stdout } = await promisify(execFile)(
+        join(
+          process.env.SystemRoot ?? 'C:\\Windows',
+          'System32/WindowsPowerShell/v1.0/powershell.exe',
+        ),
+        ['-NoProfile', '-NonInteractive', '-File', wrapper],
+        { windowsHide: true, timeout: 4000 },
+      );
+      expect(stdout.trim()).toBe('[Mensaje protegido: XML no validado]');
+      expect(stdout).not.toContain('PRIVATE_VALUE');
     },
   );
 });

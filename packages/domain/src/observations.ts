@@ -23,6 +23,18 @@ export interface ObservedTransaction {
   returnCode: number | null;
   requestStructure: string;
   responseStructure: string;
+  requestContract?: MessageContractReview;
+  responseContract?: MessageContractReview;
+}
+
+// Structural evidence only; names/types are public, values remain outside this contract.
+export interface MessageContractReview {
+  status: 'REVIEWED' | 'UNAVAILABLE';
+  requiredFieldCount: number;
+  missingRequired: { section: string; name: string }[];
+  aliases: { section: string; observedName: string; documentedName: string }[];
+  typeDifferences: { section: string; name: string; observed: string; documented: string }[];
+  duplicates: { section: string; name: string }[];
 }
 
 export interface ObservationBatch {

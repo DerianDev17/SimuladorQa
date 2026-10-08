@@ -2,6 +2,7 @@ param([Parameter(Mandatory = $true)][string] $ConfigurationPath)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+[Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
 . (Join-Path $PSScriptRoot 'mediator-redaction.ps1')
 . (Join-Path $PSScriptRoot 'mediator-command.ps1')
 $connection = $null

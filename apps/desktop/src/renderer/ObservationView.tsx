@@ -4,6 +4,7 @@ import { parseObservationRequest } from '../../../../packages/domain/src/observa
 import type {
   ObservationRequest,
   ObservationSearch,
+  MessageContractReview,
 } from '../../../../packages/domain/src/observations';
 import { DesktopClient } from './desktop-client';
 
@@ -211,10 +212,57 @@ export function ObservationView({
           </p>
           <h4>Request</h4>
           <pre>{row.requestStructure}</pre>
+          {row.requestContract && <ContractReview review={row.requestContract} />}
           <h4>Response</h4>
           <pre>{row.responseStructure}</pre>
+          {row.responseContract && <ContractReview review={row.responseContract} />}
         </section>
       )}
     </section>
+  );
+}
+
+function ContractReview({ review }: { review: MessageContractReview }) {
+  if (review.status === 'UNAVAILABLE')
+    return <p>El mensaje no está disponible para revisar sus campos.</p>;
+  return (
+    <div aria-label="Revisión de campos CMS">
+      <p>
+        Revisión de presencia y tipos según CMS, páginas 16–19: {review.requiredFieldCount} campos
+        mandatorios. Esta revisión no determina el resultado financiero.
+      </p>
+      <p>
+        {review.missingRequired.length
+          ? `Mandatorios ausentes: ${review.missingRequired.map((field) => `${field.section}.${field.name}`).join(', ')}.`
+          : 'Todos los nombres mandatorios están presentes; sus valores permanecen protegidos.'}
+      </p>
+      {review.aliases.length > 0 && (
+        <p>
+          Variantes de nombre observadas:{' '}
+          {review.aliases
+            .map((field) => `${field.observedName} (tabla: ${field.documentedName})`)
+            .join(', ')}
+          .
+        </p>
+      )}
+      {review.typeDifferences.length > 0 && (
+        <p>
+          Diferencias de tipo:{' '}
+          {review.typeDifferences
+            .map(
+              (field) =>
+                `${field.section}.${field.name}: ${field.observed} (tabla: ${field.documented})`,
+            )
+            .join(', ')}
+          .
+        </p>
+      )}
+      {review.duplicates.length > 0 && (
+        <p>
+          Campos repetidos:{' '}
+          {review.duplicates.map((field) => `${field.section}.${field.name}`).join(', ')}.
+        </p>
+      )}
+    </div>
   );
 }

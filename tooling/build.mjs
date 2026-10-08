@@ -22,6 +22,7 @@ export async function buildMain() {
     'mediator-query.ps1',
     'mediator-redaction.ps1',
     'mediator-command.ps1',
+    'cms-financial-fields.json',
     'pcsc-status.ps1',
     'pcsc-card.ps1',
   ]) {

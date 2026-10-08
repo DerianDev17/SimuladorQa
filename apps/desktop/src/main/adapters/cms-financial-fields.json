@@ -1,0 +1,447 @@
+{
+  "document": "docs/protocols/EXTREME_MEDIATOR_CMS_REVIEW.md",
+  "pages": [16, 17, 18, 19],
+  "fields": [
+    {
+      "section": "Header",
+      "name": "TraceId",
+      "type": "i64",
+      "required": ["request", "response"],
+      "aliases": []
+    },
+    {
+      "section": "Header",
+      "name": "TerminalSeq",
+      "type": "i64",
+      "required": ["request", "response"],
+      "aliases": []
+    },
+    {
+      "section": "Header",
+      "name": "EntityId",
+      "type": "i16",
+      "required": ["request", "response"],
+      "aliases": []
+    },
+    {
+      "section": "Header",
+      "name": "EntityIdDest",
+      "type": "i16",
+      "required": ["request", "response"],
+      "aliases": []
+    },
+    {
+      "section": "Header",
+      "name": "ChannelId",
+      "type": "i16",
+      "required": ["request", "response"],
+      "aliases": []
+    },
+    {
+      "section": "Header",
+      "name": "MsgType",
+      "type": "i16",
+      "required": ["request", "response"],
+      "aliases": []
+    },
+    {
+      "section": "Header",
+      "name": "RealDate",
+      "type": "d",
+      "required": ["request", "response"],
+      "aliases": []
+    },
+    {
+      "section": "Header",
+      "name": "BussDate",
+      "type": "d",
+      "required": ["request", "response"],
+      "aliases": []
+    },
+    {
+      "section": "Header",
+      "name": "TerminalID",
+      "type": "string",
+      "required": ["request", "response"],
+      "aliases": ["TerminalId"]
+    },
+    {
+      "section": "Header",
+      "name": "TrnCode",
+      "type": "string",
+      "required": ["request", "response"],
+      "aliases": []
+    },
+    {
+      "section": "Header",
+      "name": "ValueTrn",
+      "type": "f",
+      "required": ["request", "response"],
+      "aliases": []
+    },
+    {
+      "section": "Header",
+      "name": "RetCode",
+      "type": "i32",
+      "required": ["request", "response"],
+      "aliases": []
+    },
+    {
+      "section": "Header",
+      "name": "Reverse",
+      "type": "b",
+      "required": ["request", "response"],
+      "aliases": []
+    },
+    {
+      "section": "Header",
+      "name": "SubTrnCode",
+      "type": "string",
+      "required": [],
+      "aliases": []
+    },
+    {
+      "section": "Header",
+      "name": "AccountId1",
+      "type": "string",
+      "required": [],
+      "aliases": []
+    },
+    {
+      "section": "Header",
+      "name": "AccountId2",
+      "type": "string",
+      "required": [],
+      "aliases": []
+    },
+    {
+      "section": "Header",
+      "name": "AccountNum1",
+      "type": "string",
+      "required": [],
+      "aliases": []
+    },
+    {
+      "section": "Header",
+      "name": "AccountNum2",
+      "type": "string",
+      "required": [],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "EntidadOrigen",
+      "type": "string",
+      "required": ["request"],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "ChannelName",
+      "type": "string",
+      "required": ["request"],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "RedOrigen",
+      "type": "string",
+      "required": ["request"],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "CodigoAdquiriente",
+      "type": "string",
+      "required": ["request"],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "IdTransaccion",
+      "type": "string",
+      "required": ["request"],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "NumIdentificacion",
+      "type": "string",
+      "required": ["request"],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "Moneda",
+      "type": "string",
+      "required": ["request"],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "País",
+      "type": "string",
+      "required": ["request"],
+      "aliases": ["Pais"]
+    },
+    {
+      "section": "Data",
+      "name": "LugarTran",
+      "type": "string",
+      "required": ["request"],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "EsPos",
+      "type": "string",
+      "required": ["request"],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "TipoComercio",
+      "type": "string",
+      "required": ["request"],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "ReferenceNumber",
+      "type": "string",
+      "required": ["request"],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "Impreso",
+      "type": "string",
+      "required": ["request"],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "ComSwitch",
+      "type": "f",
+      "required": [],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "ComEntidad",
+      "type": "f",
+      "required": [],
+      "aliases": ["ComEmisor"]
+    },
+    {
+      "section": "Data",
+      "name": "TieneCosto",
+      "type": "f",
+      "required": [],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "ValorParcial",
+      "type": "f",
+      "required": [],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "ComisionExterna",
+      "type": "f",
+      "required": [],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "DobleSurcharge",
+      "type": "f",
+      "required": [],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "Token",
+      "type": "string",
+      "required": [],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "BinEmisor",
+      "type": "string",
+      "required": [],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "CostoExterno",
+      "type": "string",
+      "required": [],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "TerminalNumerico",
+      "type": "string",
+      "required": [],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "DatosAdicionalesSwitch",
+      "type": "string",
+      "required": [],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "DatosPrivados",
+      "type": "string",
+      "required": [],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "ActionCode",
+      "type": "string",
+      "required": [],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "PosEntryMode",
+      "type": "string",
+      "required": [],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "PosConditionCode",
+      "type": "string",
+      "required": [],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "AuthParcial",
+      "type": "string",
+      "required": [],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "CardAccepIDCode",
+      "type": "string",
+      "required": [],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "ProCode",
+      "type": "string",
+      "required": [],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "OtraMoneda",
+      "type": "string",
+      "required": [],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "MTI",
+      "type": "string",
+      "required": [],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "IdIncremental",
+      "type": "string",
+      "required": [],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "EsIncremental",
+      "type": "b",
+      "required": [],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "Field60",
+      "type": "i32",
+      "required": [],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "CodigoProceso",
+      "type": "string",
+      "required": ["response"],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "FechaContable",
+      "type": "string",
+      "required": ["response"],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "Mensaje de Retorno",
+      "type": "string",
+      "required": ["response"],
+      "aliases": ["MensajeRetorno"]
+    },
+    {
+      "section": "Data",
+      "name": "MappedRespCode",
+      "type": "string",
+      "required": ["response"],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "Mensaje",
+      "type": "i16",
+      "required": ["response"],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "SaldoTotal",
+      "type": "f",
+      "required": ["response"],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "SaldoDisponible",
+      "type": "f",
+      "required": ["response"],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "ValorDebitadoParcial",
+      "type": "f",
+      "required": ["response"],
+      "aliases": []
+    },
+    {
+      "section": "Data",
+      "name": "MsgErr",
+      "type": "string",
+      "required": [],
+      "aliases": []
+    }
+  ]
+}
