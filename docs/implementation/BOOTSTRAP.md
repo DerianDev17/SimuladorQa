@@ -11,6 +11,14 @@ npm run dev
 
 `dev` inicia Vite en http://127.0.0.1:5173 y abre Electron. React tiene HMR; cambios en Main/preload requieren reiniciar el comando. Cerrar Electron detiene Vite.
 
+El comando permanece activo mientras la app esta abierta. La ventana deberia
+aparecer en pocos segundos. El lanzador inicia Electron con windowsHide=false:
+en Windows, SW_HIDE tambien ocultaba la ventana de la app aunque Vite y el
+Renderer estuvieran activos. Una prueba E2E ejecuta el lanzador real y comprueba
+la ventana nativa visible; las pruebas de Renderer por si solas no detectaban
+ese fallo. Para aislar los datos del test, el lanzador admite el argumento
+--user-data-dir de Electron, ya soportado por Main.
+
 Para ejecutar la compilación local:
 
 ```powershell

@@ -9,11 +9,17 @@ await server.listen();
 server.printUrls();
 const env = { ...process.env };
 delete env.ELECTRON_RUN_AS_NODE;
-const child = spawn(electronPath, ['dist/main.cjs', '--dev'], {
-  stdio: 'inherit',
-  env,
-  windowsHide: true,
-});
+const dataArgument = process.argv.find((argument) => argument.startsWith('--user-data-dir='));
+const child = spawn(
+  electronPath,
+  ['dist/main.cjs', '--dev', ...(dataArgument ? [dataArgument] : [])],
+  {
+    stdio: 'inherit',
+    env,
+    // Electron es la app visible: SW_HIDE tambien oculta su ventana en Windows.
+    windowsHide: false,
+  },
+);
 let stopping = false;
 async function stop(code = 0) {
   if (stopping) return;
