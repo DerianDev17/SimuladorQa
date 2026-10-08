@@ -22,18 +22,23 @@ La documentacion describe los flujos, pero no aporta evidencia suficiente para e
 
 Actualizacion de acceso ATM QA (2026-10-07): TCP 16100 ya conecta desde la PC,
 pero el extremo responde NO AUTHORIZATION y cierra incluso sin enviar trama.
-SWITCH-ATM-ACCESS queda pendiente de autorizacion/asociacion al PID y de confirmar
-la IP vista por SmartVista, no de apertura TCP general. El usuario no encuentra
+SWITCH-ATM-ACCESS queda pendiente de autorizacion/asociacion al PID. El bloque
+del servidor aportado el 2026-10-08 confirma origen 10.10.10.21 y cierre por
+direccion invalida tras find_device_using_address; ya no falta identificar el
+peer visto. No es un bloqueo de apertura TCP general. El usuario no encuentra
 el intento de captura en los monitores. Ver `docs/implementation/QA_CAPTURE_REPLAY.md`.
 
 Nueva evidencia VCP Lite 450 Diebold: PCAP y 39 logs de 11:00-12:00. El log VISA
 lee cuatro bytes de cabecera e ignora la longitud configurada; 262 envolventes
 de 16100 se reconstruyen sin residuo. Se localiza retiro USD 20, STAN 001391,
 y dos reversos emparejados con sus originales. ISO-SPEC permanece pendiente.
-Los logs enrutan al PID 82032, confirmado por el usuario como Mediator 49212,
-pero ese PCAP no contiene payload financiero en 49212. Falta resolver esta
-diferencia y recibir el tramo horario de nuestra denegacion antes de atribuir
-una causa de configuracion precisa. Ver `docs/protocols/VCP_LITE_450_REVIEW.md`.
+Los logs enrutan al PID 82032; la asociacion inicial con Mediator 49212 fue
+corregida el 2026-10-08: 82032 figura en 49276 y el usuario confirma CB 205 como
+82052 / 49212. Ese PCAP no contiene payload financiero en 49212. El bloque
+horario de nuestra denegacion ya fue recibido y confirma rechazo por direccion.
+Falta muestra ATM propia de CB para ejecutar el retiro y correlacionar su
+llegada al Core. Ver `docs/protocols/VCP_LITE_450_REVIEW.md` y
+`docs/protocols/QA_SWITCH_ADMISSION_REVIEW.md`.
 El manual recibido aporta reglas parciales de Mediator/Core: no se considera trama ATM ni mock aprobado.
 Ver `docs/implementation/BOOTSTRAP.md` para el alcance ya implementado.
 El CRUD local de entidades/ATM funciona con configuracion en borrador; no completa ni valida automaticamente los items del checklist. Ver `docs/implementation/LOCAL_CATALOGS.md`.
@@ -96,7 +101,7 @@ Detalle y pruebas: `docs/implementation/TRANSACTION_PREPARATION.md`.
 
 ## Fuentes recibidas y validacion pendiente
 
-- [x] Logs tcpcomms01.out / nwint00_22150.out del 8 de octubre: listener y admision del cajero documentados; PC recibe NO AUTHORIZATION en prueba posterior sin trama. Usuario confirma CB 205 = PID 82052 / 49212 y alcance exclusivo CB. Muestra USD 20 de 82032 apartada; request ATM propio de CB y evento de rechazo contemporaneo pendientes. Ver `docs/protocols/QA_SWITCH_ADMISSION_REVIEW.md`.
+- [x] Logs tcpcomms01.out / nwint00_22150.out del 8 de octubre y bloque contemporaneo de la PC: listener/cajero autorizados, origen PC 10.10.10.21 rechazado como direccion invalida tras busqueda de dispositivo. Usuario confirma CB 205 = PID 82052 / 49212 y alcance exclusivo CB. Muestra USD 20 de 82032 apartada; admision ATM QA para PC y request ATM propio de CB pendientes. Ver `docs/protocols/QA_SWITCH_ADMISSION_REVIEW.md`.
 - [x] Mockup `mockup.png`, revisado: `docs/mockups/MOCKUP_REVIEW.md`.
 - [x] Manual local Extreme Mediator CMS v3.6 (24 paginas, revision 13-04-2023).
 - [x] Matriz de evidencia para los cinco flujos: `docs/protocols/EXTREME_MEDIATOR_CMS_REVIEW.md`.

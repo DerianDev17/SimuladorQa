@@ -62,12 +62,48 @@ Tras analizar los archivos se prueba de nuevo sin escribir bytes financieros:
 
 El acceso TCP vuelve a estar disponible; el bloqueo actual ocurre en la
 admision, antes de evaluar ISO, tarjeta, monto o Core. La configuracion por
-direccion del dispositivo 80131 respalda fuertemente la hipotesis de un origen
-sin dispositivo autorizado. Aun falta el evento contemporaneo de rechazo para
-confirmar IP vista por servidor (NAT posible), dispositivo seleccionado y regla
-exacta; no se descartan silenciosamente limites de conexiones u otras reglas.
+direccion del dispositivo 80131 respalda la hipotesis de un origen sin
+dispositivo autorizado. El bloque posterior aportado por el usuario confirma
+el rechazo por direccion descrito abajo; ya no falta identificar el peer visto.
 No se cambia el PID activo, no se suplanta la IP del cajero y no se reenvia una
 transaccion financiera durante estas pruebas.
+
+## Decision de rechazo confirmada por el servidor
+
+El usuario aporta el bloque de sed 2580-2620 del archivo activo del servidor.
+Es otra fuente, posterior a los archivos descargados y sus hashes anteriores;
+no se atribuyen estos numeros de linea a los originales de Downloads.
+
+A las 10:00:48.973418 el servidor acepta 10.10.10.21:52922 sobre
+10.60.0.11:16100, crea fd 87 y ejecuta find_incoming_device y
+find_device_using_address. Luego registra la decision:
+
+> Call received, but address (10.10.10.21:52922 on 10.60.0.11:16100) is invalid, closing new conn_fd 87
+
+bpc_close confirma shutdown de socket 87. El mismo par de endpoints y puerto
+efimero correlaciona con el runId 380452b8-7803-4c1e-9b51-2f553fb651e2. Se
+conservan ambos relojes originales; su pequena diferencia no se interpreta como
+latencia ni se modifica el timestamp del servidor.
+
+Queda confirmado que tcpcomms01 rechaza la direccion entrante al identificar el
+dispositivo; no se ha asociado esta conexion a un PID ATM autorizado. No es una
+denegacion financiera de tarjeta/monto/Core. El origen visto por el servidor
+es la IP de la PC 10.10.10.21. El dispositivo 80131 activo conserva el peer
+172.60.60.171; el enlace CB 82052 aparece activo en fd 77 en ese mismo bloque.
+
+El texto indica que bpc_msglog no guardara ese mensaje porque su logging esta
+desactivado, pero el debug muestra la decision. No se deduce que todos los logs
+del Switch esten deshabilitados ni se atribuye el rechazo al estado de logging.
+La salida previa de proceso 26399 con status 255 no identifica la causa de este
+socket nuevo; no se asocia silenciosamente a fd 87.
+
+La siguiente dependencia es configurar un dispositivo/interfaz ATM QA que admita
+el origen 10.10.10.21 para un listener acordado, con perfil aprobado y destino
+CB 82052. Preservar el enlace activo del cajero. No se inventan un PID, puerto,
+atributo de subnet, coexistencia de dispositivos o regla de seleccion del
+proveedor. Hace falta la configuracion aprobada y el endpoint efectivo de esa
+interfaz para aplicar la conexion al simulador; no otro diagnostico de IP/NAT.
+Evidencia privada: artifacts/qa-confirmed-admission-denial.json.
 
 nwint00_22150.out contiene mensajes de red MTI 800/810 y startup; no se
 encuentran MTI 200/210/420/430 en las representaciones MTI o msgtype revisadas.
@@ -110,9 +146,9 @@ qa-cb-205-routing.json y el plan de tarjeta ficticia se limita al mismo destino.
 
 ## TODO-DATA dependientes
 
-- SWITCH-ATM-ACCESS: evento tcpcomms01 de 10:00:49 del 8 de octubre, con peer
-  visto y decision de find_incoming_device / autorizacion. Definir interfaz QA
-  para el origen de la PC conservando la conexion del cajero; no inventar PID.
+- SWITCH-ATM-ACCESS: rechazo por direccion confirmado. Configurar interfaz ATM
+  QA que admita 10.10.10.21 y confirmar su PID/endpoint/perfil y destino CB 82052,
+  conservando la conexion del cajero. No inventar reglas de coexistencia.
 - CB-ATM-GOLDEN-SAMPLE: muestra ATM request/response dirigida al PID CB 82052,
   con correlacion STAN/RRN/UTRNNO; la muestra USD 20 elegida de 82032 queda
   apartada. La asociacion actual 205 / 82052 / 49212 fue confirmada por el usuario.

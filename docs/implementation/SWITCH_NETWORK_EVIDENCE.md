@@ -92,8 +92,15 @@ El destino documental 49212 ya coincide; se registra el PID en un reporte privad
 sin cambiar el schema. La muestra USD 20 de 82032 queda apartada para CB.
 Ver [analisis de admision](../protocols/QA_SWITCH_ADMISSION_REVIEW.md).
 
-- SWITCH-ATM-ACCESS: IP vista por SmartVista desde la PC/VPN/NAT, vinculacion
-  a PID/configuracion autorizada, limites de conexiones y convivencia con cajeros.
+El bloque posterior aportado del log activo confirma: tcpcomms01 acepta el
+socket de 10.10.10.21:52922, ejecuta la busqueda de dispositivo por direccion y
+lo cierra como address (...) is invalid, fd 87. SWITCH-ATM-ACCESS ya tiene
+origen y decision identificados; queda pendiente configurar una interfaz ATM
+QA admitida para la PC, con endpoint/perfil aprobados y destino CB 82052.
+
+- SWITCH-ATM-ACCESS: IP 10.10.10.21 vista por SmartVista y rechazo por direccion
+  confirmados. Pendiente vinculacion a dispositivo/interfaz ATM QA autorizado
+  con endpoint/perfil aprobados y convivencia con el cajero activo.
 - SWITCH-ATM-FRAMING: significado de longitud de encabezado 2, prefijo/orden de
   bytes, cabecera, keepalive y muestra completa pareada del enlace ATM 16100.
 - ISO-SPEC/GOLDEN-SAMPLES: diccionario ATM y request/response de saldo/retiro,
