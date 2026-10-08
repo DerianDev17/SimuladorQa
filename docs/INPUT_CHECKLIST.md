@@ -2,7 +2,7 @@
 
 ## TODO-DATA activos de la primera entrega
 
-- **TODO-DATA ISO-SPEC**: faltan ContextoISO.xml y especificacion ATM aprobada. Bloquea construir/parsear campos de negocio ISO, PIN/HSM y reglas de negocio; la envolvente observada se verifica offline sin interpretar esos campos.
+- **TODO-DATA ISO-SPEC**: recibido ContextoISO.xml del proyecto Simulador Banred (58 definiciones transaccionales y seis de echo). Falta especificacion/perfil ATM aprobado y validar su correspondencia con ese diccionario BANRED. Bloquea construir/parsear campos ATM, PIN/HSM y reglas de negocio; la envolvente observada se verifica offline. Ver `docs/protocols/BANRED_SIMULATOR_REVIEW.md`.
 - **TODO-DATA CMS-ATM-MAPPING / CMS-XML-CONTRACT / CMS-RESULT-MAPPING**: recibido Extreme Mediator CMS v3.6 para XML/REST Mediator-Core. Falta validar su correspondencia con ATM, las diferencias tablas/ejemplos y los codigos por canal; no sustituye ISO-SPEC. Conflictos y solicitudes registrados en `docs/protocols/EXTREME_MEDIATOR_CMS_REVIEW.md`.
 - **TODO-DATA CMS-REVERSAL / CMS-CORRELATION / CMS-TRANSPORT / CMS-POS-MAPPING**: el manual lista familias MTI y campos Core, pero faltan la seleccion del reverso, reglas de correlacion, contrato REST y resolucion de diferencias POS. Bloquean solo sus adaptadores/reglas dependientes.
 - **TODO-DATA SWITCH-ATM-ACCESS / SWITCH-ATM-FRAMING / CMS-TRANSPORT**: recibida URL HTTPS Core de CB Cooperativa 205/canales 1/21, entrada ATM SmartVista 16100 y enlace Mediator 49212. Usuario confirmo todos esos enlaces QA y simulador desde su PC. Faltan acceso desde la PC al PID (remoto configurado: equipo de cajeros), ISO/framing, TLS/timeouts/conexiones y contrato HTTP/XML/unidad del timeout Core 20000. Ver `docs/implementation/SWITCH_NETWORK_EVIDENCE.md` y `docs/core/MEDIATOR_ENTITY_205_ROUTING.md`; el perfil SQL PREPROD existente no cambia.
@@ -81,7 +81,7 @@ Detalle y pruebas: `docs/implementation/TRANSACTION_PREPARATION.md`.
 
 ## P0 - Bloqueante para primer flujo real
 
-- [ ] `ContextoISO.xml`.
+- [x] `ContextoISO.xml` recibido en Simulador Banred; alcance legacy BANRED. Correspondencia con ATM 16100 pendiente.
 - [ ] Especificacion ISO ATM Coonecta.
 - [ ] Trama consulta saldo request/response aprobada.
 - [ ] PCAP consulta saldo.
@@ -101,6 +101,7 @@ Detalle y pruebas: `docs/implementation/TRANSACTION_PREPARATION.md`.
 
 ## Fuentes recibidas y validacion pendiente
 
+- [x] Proyecto Simulador Banred revisado estaticamente: EXE/PDB .NET, ContextoISO.xml y 15 logs. Rol servidor 4946 confirmado; 12 pares echo y un par financiero recorridos con el diccionario sin residuo, otros dos eventos no reconocidos. No es cliente ATM ni evidencia Core CB. Ver `docs/protocols/BANRED_SIMULATOR_REVIEW.md`.
 - [x] Logs tcpcomms01.out / nwint00_22150.out del 8 de octubre y bloque contemporaneo de la PC: listener/cajero autorizados, origen PC 10.10.10.21 rechazado como direccion invalida tras busqueda de dispositivo. Usuario confirma CB 205 = PID 82052 / 49212 y alcance exclusivo CB. Muestra USD 20 de 82032 apartada; admision ATM QA para PC y request ATM propio de CB pendientes. Ver `docs/protocols/QA_SWITCH_ADMISSION_REVIEW.md`.
 - [x] Mockup `mockup.png`, revisado: `docs/mockups/MOCKUP_REVIEW.md`.
 - [x] Manual local Extreme Mediator CMS v3.6 (24 paginas, revision 13-04-2023).

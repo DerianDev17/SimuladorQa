@@ -24,7 +24,8 @@ muestra evidencia documental por ambiente. Ver
 [evidencia de red](../implementation/SWITCH_NETWORK_EVIDENCE.md).
 El PID muestra longitud de encabezado 2 y keep alive habilitado; no define por
 si solo encoding, inclusion del prefijo ni contenido de cabecera de negocio.
-El framing del enlace 16100 sigue sin validarse con un stream completo.
+La evidencia posterior VCP Lite valida su envolvente de cuatro bytes en 262
+frames; ver `VCP_LITE_450_REVIEW.md`. El perfil ISO de negocio sigue pendiente.
 
 Por escenario/ambiente:
 
@@ -52,3 +53,12 @@ Ver [revision PCAP](PCAP_REVIEW.md) para hashes, variantes y comprobacion byte a
 Estos puntos dejan de estar pendientes para ese enlace capturado. Ambiente,
 autorizacion, TLS, timeout, reconexion y los otros perfiles siguen pendientes.
 El endpoint previo es solo referencia; no se crea ninguna conexion TCP.
+
+## Entrega legacy Simulador Banred
+
+El 2026-10-08 se recibe ContextoISO.xml, EXE/PDB .NET y logs de un mock que
+escucha en 4946 y responde al Switch. Aporta un diccionario BANRED y ejemplos
+echo/financieros. La lectura IL detecta conversion VLI sin padding y ausencia
+de reensamblado incremental en su manejador; no se copia ese transporte.
+No convierte al mock servidor en un cliente cajero hacia 16100 ni resuelve
+la denegacion por direccion de la PC. Ver `BANRED_SIMULATOR_REVIEW.md`.

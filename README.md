@@ -53,6 +53,10 @@ muestra ATM de ese destino y resolver la admision de la PC.
 Diez PCAP inspeccionados aportan un codec offline de encapsulado BANRED y una
 vista de evidencia. 218 mensajes se reconstruyen byte a byte; los campos de
 negocio y otros enlaces requieren diccionario y validacion de casos.
+El proyecto legacy Simulador Banred aporta ContextoISO.xml y ejemplos de echo
+y mensajes financieros de su mock servidor 4946. Se reviso sin ejecutarlo;
+diccionario y reglas mock quedan separados del perfil cliente ATM y del Core
+CB. Ver `docs/protocols/BANRED_SIMULATOR_REVIEW.md`.
 La pantalla se ajusta al mockup con paneles compactos, conectores e inspector
 tabular; documentacion y evidencia se muestran debajo del resumen de ejecucion.
 
