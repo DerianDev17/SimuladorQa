@@ -1,6 +1,9 @@
 import { Buffer } from 'node:buffer';
+import { parseBalanceValues } from './coonecta-balance-rules';
+import type { BalanceValue } from '../../../../../packages/domain/src/balance-inquiry';
 
-// ISOBASEI + captured QA balance requests/responses. This is not a general ISO codec.
+// ISOBASEI + QA frames 218/224 (balance), 248/254 (withdrawal).
+// Operation selection is explicit; this is not a general ISO codec.
 const profile: Record<
   number,
   { encoding: 'BCD' | 'EBCDIC' | 'BINARY'; length: number; variable?: true }
@@ -23,10 +26,13 @@ const profile: Record<
   32: { encoding: 'BCD', length: 11, variable: true },
   35: { encoding: 'BCD', length: 37, variable: true },
   37: { encoding: 'EBCDIC', length: 12 },
+  38: { encoding: 'EBCDIC', length: 6 },
   39: { encoding: 'EBCDIC', length: 2 },
   41: { encoding: 'EBCDIC', length: 8 },
   42: { encoding: 'EBCDIC', length: 15 },
   43: { encoding: 'EBCDIC', length: 40 },
+  // ISOBASEI V044_AddRespData; binary length prefix confirmed by NWINT 2026-10-16.
+  44: { encoding: 'EBCDIC', length: 25, variable: true },
   48: { encoding: 'BINARY', length: 255, variable: true },
   49: { encoding: 'BCD', length: 3 },
   52: { encoding: 'BINARY', length: 8 },
@@ -41,11 +47,11 @@ const requestFields = [
   2, 3, 4, 7, 11, 12, 13, 14, 15, 18, 19, 22, 23, 25, 28, 32, 35, 37, 41, 42, 43, 48, 49, 52, 53,
   55, 60, 62,
 ];
-const responseFields = [2, 3, 7, 11, 15, 19, 25, 32, 37, 39, 41, 42, 48, 49, 54, 55, 63];
+const responseFields = [2, 3, 7, 11, 15, 19, 25, 32, 37, 39, 41, 42, 44, 48, 49, 54, 55, 63];
 
 export interface CapturedBalanceMetadata {
   mti: '0200' | '0210';
-  processingCode: '301000';
+  processingCode: '301000' | '011000';
   stan: string;
   rrn: string;
   terminalId: string;
@@ -53,7 +59,7 @@ export interface CapturedBalanceMetadata {
   panMask: string;
   bodyBytes: number;
   fields: number[];
-  amount?: '0';
+  amount?: string;
   responseCode?: string;
 }
 function invalid(): never {
@@ -77,12 +83,47 @@ function ebcdic(bytes: Buffer): string {
 }
 
 export class CapturedVisaBalance {
+  constructor(private readonly operation: 'BALANCE' | 'WITHDRAWAL' = 'BALANCE') {}
   inspect(source: Uint8Array): CapturedBalanceMetadata {
     return this.parse(source).metadata;
   }
 
+  response(source: Uint8Array): {
+    metadata: CapturedBalanceMetadata;
+    balances: readonly BalanceValue[];
+  } {
+    const parsed = this.parse(source);
+    if (parsed.metadata.mti !== '0210') invalid();
+    if (parsed.metadata.responseCode !== '00') return { metadata: parsed.metadata, balances: [] };
+    const position = parsed.metadata.fields.indexOf(54);
+    // CB frame 254 carries the same F54 layout as balance frame 224. Preserve
+    // source types without inferring available balance or a Core debit. Unlike
+    // a balance inquiry, an authorized withdrawal may omit F54 altogether.
+    if (position < 0 && this.operation === 'WITHDRAWAL')
+      return { metadata: parsed.metadata, balances: [] };
+    if (position < 0) throw new Error('BALANCE_VALUES_MISSING');
+    const span = parsed.spans[position]!;
+    const body = Buffer.from(source.buffer, source.byteOffset, source.byteLength);
+    const text = [...body.subarray(span[0] + 1, span[1])]
+      .map((byte) => {
+        if (byte >= 0xf0 && byte <= 0xf9) return String(byte - 0xf0);
+        if (byte === 0xc3) return 'C';
+        if (byte === 0xc4) return 'D';
+        throw new Error('BALANCE_VALUES_ENCODING_INVALID');
+      })
+      .join('');
+    const balances = parseBalanceValues(text);
+    if (
+      balances.some(
+        (value) => value.accountCode !== '10' || value.currency !== parsed.metadata.currency,
+      )
+    )
+      throw new Error('BALANCE_VALUES_PROFILE_MISMATCH');
+    return { metadata: parsed.metadata, balances };
+  }
+
   // Reassemble original spans; preserve dates, STAN, PIN/EMV and all private bytes.
-  // No field generation, card substitution or withdrawal is supported.
+  // No field generation or card substitution. Rebuild is for offline inspection.
   rebuildRequest(source: Uint8Array): Buffer {
     const parsed = this.parse(source);
     if (parsed.metadata.mti !== '0200') invalid();
@@ -106,7 +147,12 @@ export class CapturedVisaBalance {
     const fields: number[] = [];
     for (let bit = 1; bit < 64; bit++)
       if (body[24 + Math.floor(bit / 8)]! & (0x80 >> (bit % 8))) fields.push(bit + 1);
-    const allowed = mti === '0200' ? requestFields : responseFields;
+    const allowed =
+      mti === '0200'
+        ? requestFields
+        : this.operation === 'WITHDRAWAL'
+          ? [...responseFields, 4, 38]
+          : responseFields;
     if (
       mti === '0200'
         ? fields.join(',') !== allowed.join(',')
@@ -135,8 +181,15 @@ export class CapturedVisaBalance {
     const pan = digits(values.get(2)!, 16),
       processingCode = digits(values.get(3)!, 6);
     const currency = digits(values.get(49)!, 3);
-    if (processingCode !== '301000' || currency !== '840') invalid();
-    if (mti === '0200' && digits(values.get(4)!, 12) !== '0'.repeat(12)) invalid();
+    if (
+      processingCode !== (this.operation === 'WITHDRAWAL' ? '011000' : '301000') ||
+      currency !== '840'
+    )
+      invalid();
+    const amount = values.has(4) ? digits(values.get(4)!, 12) : undefined;
+    if (this.operation === 'BALANCE' && mti === '0200' && amount !== '0'.repeat(12)) invalid();
+    if (this.operation === 'WITHDRAWAL' && mti === '0200' && (!amount || /^0+$/.test(amount)))
+      invalid();
     const stan = digits(values.get(11)!, 6),
       rrn = ebcdic(values.get(37)!);
     const terminalId = ebcdic(values.get(41)!);
@@ -147,7 +200,7 @@ export class CapturedVisaBalance {
     return {
       metadata: {
         mti,
-        processingCode,
+        processingCode: processingCode as CapturedBalanceMetadata['processingCode'],
         stan,
         rrn,
         terminalId,
@@ -155,7 +208,14 @@ export class CapturedVisaBalance {
         panMask: pan.slice(0, 6) + 'X'.repeat(6) + pan.slice(-4),
         bodyBytes: body.length,
         fields,
-        ...(responseCode !== undefined ? { responseCode } : { amount: '0' as const }),
+        ...(responseCode !== undefined ? { responseCode } : {}),
+        ...(this.operation === 'WITHDRAWAL'
+          ? amount
+            ? { amount }
+            : {}
+          : mti === '0200'
+            ? { amount: '0' }
+            : {}),
       },
       spans,
     };

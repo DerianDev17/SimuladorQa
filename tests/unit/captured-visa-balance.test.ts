@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer';
 import { describe, expect, it } from 'vitest';
 import { CapturedVisaBalance } from '../../apps/desktop/src/main/adapters/captured-visa-balance';
 import { capturedBalanceRequest, capturedBalanceResponse } from '../helpers/captured-visa-balance';
+import { balanceResponse } from '../helpers/balance-inquiry';
 
 describe('consulta ATM VISA basada en la muestra CB', () => {
   const codec = new CapturedVisaBalance();
@@ -42,6 +43,49 @@ describe('consulta ATM VISA basada en la muestra CB', () => {
     expect(() => codec.rebuildRequest(capturedBalanceResponse())).toThrow(
       'BALANCE_SOURCE_UNSUPPORTED',
     );
+  });
+  it.each([1, 5, 25])(
+    'acepta F44 de %i bytes sin publicar ni interpretar su contenido',
+    (length) => {
+      const metadata = codec.inspect(capturedBalanceRequest());
+      const response = balanceResponse(metadata, '96', (fields) => {
+        fields.delete(54);
+        fields.set(44, Buffer.concat([Buffer.of(length), Buffer.alloc(length, 0x40)]));
+      });
+      const parsed = codec.response(response);
+      expect(parsed.metadata).toMatchObject({ responseCode: '96', rrn: metadata.rrn });
+      expect(parsed.metadata.fields).toContain(44);
+      expect(parsed.balances).toEqual([]);
+      expect(Object.keys(parsed)).toEqual(['metadata', 'balances']);
+      expect(parsed.metadata).not.toHaveProperty('additionalResponseData');
+    },
+  );
+  it('mantiene la lectura del saldo cuando la respuesta aprobada incluye F44', () => {
+    const response = balanceResponse(codec.inspect(capturedBalanceRequest()), '00', (fields) => {
+      fields.set(44, Buffer.of(5, 0x40, 0x40, 0x40, 0x40, 0xf2));
+    });
+    expect(codec.response(response).balances).toMatchObject([
+      { type: '02', amount: '123.45' },
+      { type: '01', amount: '234.56' },
+    ]);
+  });
+  it.each<[string, Buffer]>([
+    ['vacio', Buffer.of(0)],
+    ['excesivo', Buffer.concat([Buffer.of(26), Buffer.alloc(26, 0x40)])],
+    ['truncado', Buffer.of(25, 0x40)],
+  ])('rechaza F44 %s con error estable', (_name, value) => {
+    const response = balanceResponse(codec.inspect(capturedBalanceRequest()), '96', (fields) => {
+      fields.delete(54);
+      fields.set(44, value);
+    });
+    expect(() => codec.response(response)).toThrow(/^BALANCE_SOURCE_UNSUPPORTED$/);
+  });
+  it('conserva la lista cerrada de campos aunque F44 este permitido', () => {
+    const response = balanceResponse(codec.inspect(capturedBalanceRequest()), '96', (fields) => {
+      fields.set(44, Buffer.of(1, 0x40));
+      fields.set(45, Buffer.of(1, 0x40));
+    });
+    expect(() => codec.response(response)).toThrow('BALANCE_SOURCE_UNSUPPORTED');
   });
   it('rechaza retiro aunque conserve el layout de la consulta', () => {
     const source = capturedBalanceRequest();
