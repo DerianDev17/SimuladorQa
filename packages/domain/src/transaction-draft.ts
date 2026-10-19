@@ -146,7 +146,7 @@ export function draftBlockers(
       id: 'ORIGINAL_TRANSACTION',
       label: 'Retiro original y evento de tarjeta retenida',
       description:
-        'La captura QA confirma 0420/0430, pero faltan el evento confirmado del ATM y las reglas para F28, F48, F55, F60, F90 y F95.',
+        'La captura QA y la DLL ATM respaldan 0420/0430. Falta recibir el evento de tarjeta retenida del ATM y vincularlo a un retiro original seguro; el builder de timeout es una ruta distinta.',
       document: 'docs/transactions/REVERSAL.md',
     });
   else if (transaction === 'TIMEOUT_REVERSAL')

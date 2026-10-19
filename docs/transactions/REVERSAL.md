@@ -41,6 +41,15 @@ conserva un snapshot de wire seguro para ese flujo y su transporte solo acepta
 reverso: F48 y F55 cambian, F38/F39 vienen de la respuesta original y faltan
 las reglas aprobadas de F28, F48, F55, F60, F90 y F95.
 
+La revision estatica de las DLL entregadas el 2026-10-19 confirma que
+`ATMIso8583` tiene builders separados para un reverso general y uno por
+timeout, ambos con MTI `0420`. El builder de timeout copia un conjunto de
+campos de la solicitud previa; no debe reutilizarse automaticamente para una
+retencion, porque no es la misma ruta de negocio. `SetInitialTransactionCoonecta`
+solo aporta inicializacion de parametros y no identifica el evento de
+retencion. Versiones, hashes y alcance estan en
+[`QA_REVERSAL_DLL_REVIEW_20261019.md`](../protocols/QA_REVERSAL_DLL_REVIEW_20261019.md).
+
 El flujo debe conservar el retiro original y registrar el reverso como una
 ejecucion separada, vinculada a ese retiro. Para estos dos casos del enlace ATM
 16100 queda observado `0420/0430`; no se generaliza a otros canales. Antes de

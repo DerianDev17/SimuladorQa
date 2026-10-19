@@ -39,8 +39,9 @@ describe('bloqueos de reverso', () => {
     );
 
     expect(retainedCard?.label).toBe('Retiro original y evento de tarjeta retenida');
-    expect(retainedCard?.description).toContain('F48, F55');
-    expect(retainedCard?.description).not.toContain('timeout');
+    expect(retainedCard?.description).toContain('evento de tarjeta retenida');
+    expect(retainedCard?.description).toContain('retiro original seguro');
+    expect(retainedCard?.description).toContain('builder de timeout es una ruta distinta');
     expect(timeout?.label).toBe('Retiro original y política de timeout');
     expect(timeout?.description).toContain('respuestas tardías');
   });
