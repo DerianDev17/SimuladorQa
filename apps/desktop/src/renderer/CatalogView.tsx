@@ -31,6 +31,9 @@ interface Props {
   onRefresh(): Promise<void>;
   onMutate(command: CatalogMutation): Promise<boolean>;
   onEditingChange(editing: boolean): void;
+  quickCreate?: boolean;
+  initialEntityId?: string | undefined;
+  onCancelCreation?: (() => void) | undefined;
 }
 type EntityForm = Omit<EntityValues, 'networkType'> & { networkType: NetworkType | '' };
 interface Editor {
@@ -58,8 +61,28 @@ export function CatalogView({
   onRefresh,
   onMutate,
   onEditingChange,
+  quickCreate = false,
+  initialEntityId,
+  onCancelCreation,
 }: Props) {
-  const [editor, setEditor] = useState<Editor>();
+  const [editor, setEditor] = useState<Editor | undefined>(() =>
+    quickCreate
+      ? {
+          id: null,
+          revision: null,
+          entity: { ...blankEntity },
+          atm: {
+            ...blankAtm,
+            entityId:
+              catalog?.entities.find((entity) => entity.id === initialEntityId && entity.active)
+                ?.id ?? '',
+          },
+        }
+      : undefined,
+  );
+  const baseline = useRef(editor);
+  const [confirmRefresh, setConfirmRefresh] = useState(false);
+  const refreshDialog = useRef<HTMLDialogElement>(null);
   const [deleting, setDeleting] = useState<Entity | AtmProfile>();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('ALL');
@@ -71,6 +94,7 @@ export function CatalogView({
   const blocked =
     disabled ||
     loading ||
+    confirmRefresh ||
     !catalog ||
     !environment ||
     Boolean(
@@ -80,13 +104,30 @@ export function CatalogView({
       ),
     );
   useEffect(() => {
-    onEditingChange(Boolean(editor || deleting));
+    onEditingChange(Boolean(editor || deleting || confirmRefresh));
     return () => onEditingChange(false);
-  }, [editor, deleting, onEditingChange]);
+  }, [editor, deleting, confirmRefresh, onEditingChange]);
   useEffect(() => {
     if (deleting) dialog.current?.showModal();
     else dialog.current?.close();
   }, [deleting]);
+
+  useEffect(() => {
+    if (confirmRefresh) refreshDialog.current?.showModal();
+    else refreshDialog.current?.close();
+  }, [confirmRefresh]);
+  const editorDirty =
+    !!editor &&
+    JSON.stringify(entitiesView ? editor.entity : editor.atm) !==
+      JSON.stringify(entitiesView ? baseline.current?.entity : baseline.current?.atm);
+  function closeRefreshDialog() {
+    refreshDialog.current?.close();
+    setConfirmRefresh(false);
+  }
+  function requestRefresh() {
+    if (editorDirty) setConfirmRefresh(true);
+    else void refresh();
+  }
 
   const rows = (entitiesView ? (catalog?.entities ?? []) : (catalog?.atms ?? [])).filter((item) => {
     const text =
@@ -104,7 +145,7 @@ export function CatalogView({
   function edit(item?: Entity | AtmProfile) {
     setNotice('');
     setFormError('');
-    setEditor({
+    const next: Editor = {
       id: item?.id ?? null,
       revision: item?.revision ?? null,
       entity:
@@ -121,7 +162,9 @@ export function CatalogView({
               active: item.active,
             }
           : { ...blankAtm },
-    });
+    };
+    baseline.current = next;
+    setEditor(next);
   }
 
   function textField(
@@ -183,6 +226,9 @@ export function CatalogView({
   }
 
   async function refresh() {
+    closeRefreshDialog();
+    baseline.current = undefined;
+    setFormError('');
     setEditor(undefined);
     setDeleting(undefined);
     setNotice('');
@@ -191,8 +237,8 @@ export function CatalogView({
 
   return (
     <>
-      <section className="panel catalog-panel">
-        <div className="catalog-heading">
+      <section className={`panel catalog-panel ${editor ? 'is-editing' : ''}`}>
+        <div className="catalog-heading" hidden={!!editor}>
           <div>
             <h2>
               {entitiesView
@@ -206,7 +252,7 @@ export function CatalogView({
             </p>
           </div>
           <div className="catalog-actions">
-            <button onClick={() => void refresh()} disabled={loading || disabled}>
+            <button onClick={requestRefresh} disabled={loading || disabled}>
               Recargar
             </button>
             <button
@@ -223,9 +269,9 @@ export function CatalogView({
             </button>
           </div>
         </div>
-        <div className="catalog-draft">
+        <div className="catalog-draft" hidden={!!editor}>
           <Icon name="shield" size={17} />
-          <span>Configuración en borrador. Guardar perfiles no habilita transacciones ISO.</span>
+          <span>Catálogo local · validación pendiente</span>
         </div>
         {error && (
           <div className="error-banner" role="alert">
@@ -256,7 +302,17 @@ export function CatalogView({
                     ? 'Crear entidad'
                     : 'Crear perfil ATM'}
               </h2>
-              <span className="pill blue">{environment}</span>
+              <div className="catalog-actions">
+                <span className="pill blue">{environment} · Borrador</span>
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={requestRefresh}
+                  disabled={loading || disabled}
+                >
+                  Recargar
+                </button>
+              </div>
             </div>
             <fieldset disabled={blocked}>
               <div className="form-grid">
@@ -389,18 +445,22 @@ export function CatalogView({
                 {formError}
               </p>
             )}
-            <p className="form-note">
-              {entitiesView
-                ? 'La membresía FRONT/BACK/EXTERNAL está pendiente de validar entre las fuentes del proyecto.'
-                : 'Los identificadores se guardan como los introduces, sin padding ni validación de formato ISO.'}{' '}
-              Cierra la edición para cambiar de ambiente.
-            </p>
+            <p className="form-note">Guarda o cancela antes de salir.</p>
+            <details className="inline-details">
+              <summary>Detalles del perfil</summary>
+              <p className="form-note">
+                {entitiesView
+                  ? 'La membresía FRONT/BACK/EXTERNAL está pendiente de validar entre las fuentes del proyecto.'
+                  : 'Los identificadores se guardan como los introduces, sin padding ni validación de formato ISO.'}{' '}
+              </p>
+            </details>
             <div className="catalog-actions editor-actions">
               <button
                 type="button"
                 onClick={() => {
                   setEditor(undefined);
                   setFormError('');
+                  onCancelCreation?.();
                 }}
                 disabled={loading}
               >
@@ -417,151 +477,153 @@ export function CatalogView({
             {formError}
           </p>
         )}
-        <div className="catalog-filters">
-          <label className="search-field">
-            <span>Buscar {entitiesView ? 'entidad' : 'ATM'}</span>
-            <input
-              type="search"
-              maxLength={catalogLimits.text}
-              value={search}
-              placeholder={entitiesView ? 'Código o nombre' : 'Alias, terminal o entidad'}
-              onChange={(event) => {
-                if (isRestrictedCatalogText(event.target.value)) {
-                  setFormError(
-                    'No incluyas datos de tarjeta ni caracteres de control en la búsqueda.',
-                  );
-                  return;
-                }
-                setFormError('');
-                setSearch(event.target.value);
-                setPage(0);
-              }}
-            />
-          </label>
-          <label>
-            Estado
-            <select
-              value={status}
-              onChange={(event) => {
-                setStatus(event.target.value);
-                setPage(0);
-              }}
-            >
-              <option value="ALL">Todos</option>
-              <option value="ACTIVE">Activos</option>
-              <option value="INACTIVE">Inactivos</option>
-            </select>
-          </label>
-          <span className="catalog-count">
-            {rows.length} {rows.length === 1 ? 'registro' : 'registros'}
-          </span>
-        </div>
-        {loading && (
-          <p className="form-note" role="status">
-            Cargando catálogo…
-          </p>
-        )}
-        {!loading && catalog && rows.length === 0 && (
-          <div className="empty-state compact">
-            <span className="empty-icon">
-              <Icon name={entitiesView ? 'entity' : 'atm'} size={30} />
+        <div hidden={!!editor}>
+          <div className="catalog-filters">
+            <label className="search-field">
+              <span>Buscar {entitiesView ? 'entidad' : 'ATM'}</span>
+              <input
+                type="search"
+                maxLength={catalogLimits.text}
+                value={search}
+                placeholder={entitiesView ? 'Código o nombre' : 'Alias, terminal o entidad'}
+                onChange={(event) => {
+                  if (isRestrictedCatalogText(event.target.value)) {
+                    setFormError(
+                      'No incluyas datos de tarjeta ni caracteres de control en la búsqueda.',
+                    );
+                    return;
+                  }
+                  setFormError('');
+                  setSearch(event.target.value);
+                  setPage(0);
+                }}
+              />
+            </label>
+            <label>
+              Estado
+              <select
+                value={status}
+                onChange={(event) => {
+                  setStatus(event.target.value);
+                  setPage(0);
+                }}
+              >
+                <option value="ALL">Todos</option>
+                <option value="ACTIVE">Activos</option>
+                <option value="INACTIVE">Inactivos</option>
+              </select>
+            </label>
+            <span className="catalog-count">
+              {rows.length} {rows.length === 1 ? 'registro' : 'registros'}
             </span>
-            <h3>
-              {search || status !== 'ALL'
-                ? 'Sin resultados para este filtro'
-                : entitiesView
-                  ? 'Crea tu primera entidad de prueba'
-                  : 'Aún no hay perfiles ATM en este ambiente'}
-            </h3>
-            <p>
-              {entitiesView
-                ? 'Usa datos del catálogo aprobado del proyecto.'
-                : catalog.entities.some((entity) => entity.active)
-                  ? 'Selecciona Nuevo perfil ATM para añadirlo.'
-                  : 'Crea una entidad activa antes de añadir perfiles ATM.'}
+          </div>
+          {loading && (
+            <p className="form-note" role="status">
+              Cargando catálogo…
             </p>
-          </div>
-        )}
-        {rows.length > 0 && (
-          <div className="catalog-table-wrap">
-            <table className="catalog-table">
-              <thead>
-                <tr>
-                  <th>{entitiesView ? 'Código' : 'Alias'}</th>
-                  <th>{entitiesView ? 'Entidad' : 'Terminal ID'}</th>
-                  <th>{entitiesView ? 'Red' : 'Entidad'}</th>
-                  {!entitiesView && <th>Acquirer ID</th>}
-                  <th>Estado</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.slice(currentPage * 15, (currentPage + 1) * 15).map((item) => (
-                  <tr key={item.id}>
-                    <td>
-                      <strong>{'name' in item ? item.code : item.alias}</strong>
-                      <small>Borrador · v{item.revision}</small>
-                    </td>
-                    <td>{'name' in item ? item.name : item.terminalId}</td>
-                    <td>
-                      {'name' in item ? (
-                        <span className="pill blue">{item.networkType}</span>
-                      ) : (
-                        catalog?.entities.find((entity) => entity.id === item.entityId)?.name
-                      )}
-                    </td>
-                    {'alias' in item && <td>{item.acquirerId}</td>}
-                    <td>
-                      <span className={`pill ${item.active ? 'green' : 'neutral'}`}>
-                        {item.active ? 'Activo' : 'Inactivo'}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="row-actions">
-                        <button
-                          disabled={blocked || Boolean(editor)}
-                          onClick={() => edit(item)}
-                          aria-label={`Editar ${'name' in item ? item.code : item.alias}`}
-                        >
-                          Editar
-                        </button>
-                        <button
-                          className="danger-text"
-                          disabled={blocked || Boolean(editor)}
-                          onClick={() => {
-                            setNotice('');
-                            setDeleting(item);
-                          }}
-                          aria-label={`Eliminar ${'name' in item ? item.code : item.alias}`}
-                        >
-                          Eliminar
-                        </button>
-                      </div>
-                    </td>
+          )}
+          {!loading && catalog && rows.length === 0 && (
+            <div className="empty-state compact">
+              <span className="empty-icon">
+                <Icon name={entitiesView ? 'entity' : 'atm'} size={30} />
+              </span>
+              <h3>
+                {search || status !== 'ALL'
+                  ? 'Sin resultados para este filtro'
+                  : entitiesView
+                    ? 'Crea tu primera entidad de prueba'
+                    : 'Aún no hay perfiles ATM en este ambiente'}
+              </h3>
+              <p>
+                {entitiesView
+                  ? 'Usa datos del catálogo aprobado del proyecto.'
+                  : catalog.entities.some((entity) => entity.active)
+                    ? 'Selecciona Nuevo perfil ATM para añadirlo.'
+                    : 'Crea una entidad activa antes de añadir perfiles ATM.'}
+              </p>
+            </div>
+          )}
+          {rows.length > 0 && (
+            <div className="catalog-table-wrap">
+              <table className="catalog-table">
+                <thead>
+                  <tr>
+                    <th>{entitiesView ? 'Código' : 'Alias'}</th>
+                    <th>{entitiesView ? 'Entidad' : 'Terminal ID'}</th>
+                    <th>{entitiesView ? 'Red' : 'Entidad'}</th>
+                    {!entitiesView && <th>Acquirer ID</th>}
+                    <th>Estado</th>
+                    <th>Acciones</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {totalPages > 1 && (
-          <div className="catalog-pagination">
-            <span>
-              Página {currentPage + 1} de {totalPages}
-            </span>
-            <button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>
-              Anterior
-            </button>
-            <button
-              disabled={currentPage + 1 >= totalPages}
-              onClick={() => setPage(currentPage + 1)}
-            >
-              Siguiente
-            </button>
-          </div>
-        )}
+                </thead>
+                <tbody>
+                  {rows.slice(currentPage * 15, (currentPage + 1) * 15).map((item) => (
+                    <tr key={item.id}>
+                      <td>
+                        <strong>{'name' in item ? item.code : item.alias}</strong>
+                        <small>Borrador · v{item.revision}</small>
+                      </td>
+                      <td>{'name' in item ? item.name : item.terminalId}</td>
+                      <td>
+                        {'name' in item ? (
+                          <span className="pill blue">{item.networkType}</span>
+                        ) : (
+                          catalog?.entities.find((entity) => entity.id === item.entityId)?.name
+                        )}
+                      </td>
+                      {'alias' in item && <td>{item.acquirerId}</td>}
+                      <td>
+                        <span className={`pill ${item.active ? 'green' : 'neutral'}`}>
+                          {item.active ? 'Activo' : 'Inactivo'}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="row-actions">
+                          <button
+                            disabled={blocked || Boolean(editor)}
+                            onClick={() => edit(item)}
+                            aria-label={`Editar ${'name' in item ? item.code : item.alias}`}
+                          >
+                            Editar
+                          </button>
+                          <button
+                            className="danger-text"
+                            disabled={blocked || Boolean(editor)}
+                            onClick={() => {
+                              setNotice('');
+                              setDeleting(item);
+                            }}
+                            aria-label={`Eliminar ${'name' in item ? item.code : item.alias}`}
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {totalPages > 1 && (
+            <div className="catalog-pagination">
+              <span>
+                Página {currentPage + 1} de {totalPages}
+              </span>
+              <button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>
+                Anterior
+              </button>
+              <button
+                disabled={currentPage + 1 >= totalPages}
+                onClick={() => setPage(currentPage + 1)}
+              >
+                Siguiente
+              </button>
+            </div>
+          )}
+        </div>
       </section>
-      <section className="panel audit-panel catalog-audit">
+      <section className="panel audit-panel catalog-audit" hidden={!!editor}>
         <div className="panel-heading">
           <h2>Actividad del catálogo</h2>
           <span className="pill neutral">Auditoría local</span>
@@ -607,6 +669,28 @@ export function CatalogView({
           <p className="form-note">Sin cambios registrados en el catálogo.</p>
         )}
       </section>
+      <dialog
+        className="catalog-dialog"
+        ref={refreshDialog}
+        aria-labelledby="catalog-refresh-title"
+        onCancel={(event) => {
+          event.preventDefault();
+          closeRefreshDialog();
+        }}
+      >
+        <h2 id="catalog-refresh-title">¿Descartar cambios y recargar?</h2>
+        <p>
+          Se perderán los cambios sin guardar del formulario. Los registros guardados se conservan.
+        </p>
+        <div className="catalog-actions">
+          <button autoFocus onClick={closeRefreshDialog}>
+            Seguir editando
+          </button>
+          <button className="danger" disabled={loading || disabled} onClick={() => void refresh()}>
+            Descartar y recargar
+          </button>
+        </div>
+      </dialog>
       <dialog
         className="catalog-dialog"
         ref={dialog}

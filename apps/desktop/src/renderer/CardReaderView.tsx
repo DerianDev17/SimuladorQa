@@ -1,7 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CardReaderSnapshot, ReaderDevice } from '../../../../packages/domain/src/card-reader';
+import type { Result } from '../../../../packages/shared/src/contracts';
 import { DesktopClient } from './desktop-client';
 import { Icon } from './Icon';
+import { selectedReader, matchingCardIdentity } from './card-reader-state';
+import { availableTransactionCard } from './transaction-card';
+import type { TransactionCard } from './transaction-card';
 
 const stateLabels = {
   CARD_PRESENT: 'Tarjeta presente',
@@ -38,13 +42,9 @@ export function CardReaderPanel({
   countryCode = '',
   onCountryChange,
 }: CardReaderPanelProps) {
-  const reader =
-    snapshot?.readers.find((device) => device.name === selectedName) ??
-    snapshot?.readers.find((device) => device.state === 'CARD_PRESENT') ??
-    snapshot?.readers[0];
-  const present = reader?.state === 'CARD_PRESENT';
-  const identity =
-    present && snapshot?.identity?.readerName === reader.name ? snapshot.identity : undefined;
+  const reader = selectedReader(snapshot, selectedName);
+  const present = !error && reader?.state === 'CARD_PRESENT';
+  const identity = error ? undefined : matchingCardIdentity(snapshot, reader?.name);
   const read = identity?.status === 'READ';
   const unavailable = read ? 'No disponible en el chip' : 'No leído';
   const status = error
@@ -58,7 +58,22 @@ export function CardReaderPanel({
     ? 'Tarjeta detectada'
     : error
       ? 'Revisa la conexión'
-      : 'Esperando tu tarjeta';
+      : !snapshot
+        ? 'Consultando lector…'
+        : reader?.state === 'UNAVAILABLE'
+          ? 'Lector no disponible'
+          : !reader
+            ? 'Conecta un lector'
+            : 'Esperando tu tarjeta';
+  const cardPlaceholder = error
+    ? 'Sin conexión con el lector'
+    : !snapshot
+      ? 'Consulta pendiente'
+      : reader?.state === 'UNAVAILABLE'
+        ? 'Lector no disponible'
+        : !reader
+          ? 'Sin lector conectado'
+          : 'Sin tarjeta detectada';
   const hint = present
     ? 'Estos son los datos disponibles de la tarjeta en esta interfaz.'
     : error
@@ -81,10 +96,14 @@ export function CardReaderPanel({
           </span>
           <div>
             <h2>Lector de tarjetas</h2>
-            <p>Detección en tiempo real · PC/SC</p>
+            <p>Detección PC/SC</p>
           </div>
         </div>
-        <button className="card-reader-refresh" onClick={onRefresh} disabled={refreshing}>
+        <button
+          className="card-reader-refresh"
+          onClick={onRefresh}
+          disabled={refreshing || reading}
+        >
           <Icon name="history" size={15} />
           {refreshing ? 'Consultando…' : 'Actualizar'}
         </button>
@@ -103,11 +122,17 @@ export function CardReaderPanel({
         <div className="card-preview-stage">
           <div
             className={`detected-card ${present ? 'is-present' : 'is-empty'}`}
-            aria-label={present ? 'Tarjeta detectada' : 'Sin tarjeta detectada'}
+            aria-label={
+              present
+                ? 'Tarjeta detectada'
+                : reader?.state === 'EMPTY' && !error
+                  ? 'Sin tarjeta detectada'
+                  : 'Estado de la tarjeta'
+            }
           >
             <div className="detected-card-top">
               <span>
-                COONECTA <small>QA · TARJETAS</small>
+                COONECTA <small>LECTURA DE TARJETA</small>
               </span>
               <Icon name="card" size={27} />
             </div>
@@ -132,7 +157,7 @@ export function CardReaderPanel({
                     ? (identity.cardholderName ?? 'No disponible en el chip')
                     : present
                       ? 'Pendiente de lectura'
-                      : 'Sin tarjeta detectada'}
+                      : cardPlaceholder}
                 </strong>
               </div>
               <span>
@@ -221,7 +246,7 @@ export function CardReaderPanel({
               )}
               <button
                 className="card-chip-read"
-                disabled={!present || reading || refreshing}
+                disabled={!present || reading}
                 onClick={() => reader && onRead(reader.name)}
               >
                 <Icon name="card" size={16} />
@@ -251,7 +276,7 @@ export function CardReaderPanel({
                   {identity.applications.map((application) => (
                     <button
                       key={application.id}
-                      disabled={reading}
+                      disabled={reading || refreshing}
                       onClick={() => reader && onRead(reader.name, application.id)}
                     >
                       {application.label ?? 'Aplicación EMV'} · {application.id}
@@ -313,30 +338,48 @@ export function CardReaderPanel({
   );
 }
 
-export function CardReaderView({ compact = false }: { compact?: boolean }) {
+interface CardReaderViewProps {
+  compact?: boolean;
+  transaction?: boolean;
+  disabled?: boolean;
+  selectedReadId?: string | undefined;
+  onUseCard?: (card: TransactionCard) => void;
+  onClearCard?: () => void;
+  onAvailableCardChange?: (card: TransactionCard | undefined) => void;
+  onReadingChange?: (reading: boolean) => void;
+}
+
+export function CardReaderView({
+  compact = false,
+  transaction = false,
+  disabled = false,
+  selectedReadId,
+  onUseCard,
+  onClearCard,
+  onAvailableCardChange,
+  onReadingChange,
+}: CardReaderViewProps) {
   const [snapshot, setSnapshot] = useState<CardReaderSnapshot>();
   const [error, setError] = useState<string>();
   const [refreshing, setRefreshing] = useState(true);
   const [selectedName, setSelectedName] = useState<string>();
   const [reading, setReading] = useState(false);
   const [readError, setReadError] = useState<string>();
+  const [manualSelection, setManualSelection] = useState<string>();
   // Ecuador was explicitly selected by the user for this QA station.
   const [countryCode, setCountryCode] = useState('218');
   const mounted = useRef(false);
   const readPending = useRef(false);
+  const statusRequest = useRef<Promise<Result<CardReaderSnapshot>> | undefined>(undefined);
+  const lastReaderEvent = useRef<Result<CardReaderSnapshot> | undefined>(undefined);
   const refreshRef = useRef<(() => void) | undefined>(undefined);
   useEffect(() => {
     mounted.current = true;
     const client = new DesktopClient(window.desktop, 10000);
     let active = true;
     let pending = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const refresh = async () => {
-      if (!active || pending) return;
-      pending = true;
-      clearTimeout(timer);
-      setRefreshing(true);
-      const result = await client.call((api) => api.getReaderSnapshot());
+    let eventRevision = 0;
+    const apply = (result: Result<CardReaderSnapshot>) => {
       if (!active) return;
       if (result.ok) {
         setSnapshot(result.value);
@@ -345,9 +388,28 @@ export function CardReaderView({ compact = false }: { compact?: boolean }) {
         setSnapshot(undefined);
         setError(result.error.message);
       }
+      setRefreshing(false);
+    };
+    // Subscribe before the initial snapshot; a late IPC reply cannot erase an
+    // insertion/removal delivered meanwhile. Idle views have no refresh timer.
+    const unsubscribe = window.desktop?.onReaderSnapshot?.((result) => {
+      eventRevision++;
+      lastReaderEvent.current = result;
+      apply(result);
+    });
+    const refresh = async () => {
+      if (!active || pending || readPending.current) return;
+      pending = true;
+      setRefreshing(true);
+      const revision = eventRevision;
+      const request = client.call((api) => api.getReaderSnapshot());
+      statusRequest.current = request;
+      const result = await request;
+      if (statusRequest.current === request) statusRequest.current = undefined;
+      if (!active) return;
+      if (revision === eventRevision) apply(result);
       pending = false;
       setRefreshing(false);
-      timer = setTimeout(() => void refresh(), 5000);
     };
     refreshRef.current = () => void refresh();
     void refresh();
@@ -355,39 +417,260 @@ export function CardReaderView({ compact = false }: { compact?: boolean }) {
       active = false;
       mounted.current = false;
       refreshRef.current = undefined;
-      clearTimeout(timer);
+      unsubscribe?.();
     };
   }, []);
+  const reader = selectedReader(snapshot, selectedName);
+  const identity = error ? undefined : matchingCardIdentity(snapshot, reader?.name);
+  useEffect(() => {
+    if (
+      snapshot &&
+      selectedName &&
+      !snapshot.readers.some((device) => device.name === selectedName)
+    )
+      setSelectedName(reader?.name);
+  }, [snapshot, selectedName, reader?.name]);
+  useEffect(() => {
+    setReadError(undefined);
+  }, [reader?.name, reader?.state]);
+  useEffect(() => {
+    if (identity?.status === 'READ') setReadError(undefined);
+  }, [identity?.readId, identity?.status]);
+  const availableCard = useMemo(
+    () => availableTransactionCard(error ? undefined : snapshot, reader?.name),
+    [snapshot, reader?.name, error],
+  );
+  useEffect(() => {
+    if (refreshing || reading) return;
+    onAvailableCardChange?.(availableCard);
+    // Select only after the successful manual read is committed to this snapshot.
+    // A previous status effect must not invalidate a newly selected identity.
+    if (manualSelection) {
+      setManualSelection(undefined);
+      if (availableCard?.readId === manualSelection) onUseCard?.(availableCard);
+    }
+  }, [availableCard, refreshing, reading, manualSelection, onAvailableCardChange, onUseCard]);
+  useEffect(() => {
+    onReadingChange?.(reading);
+  }, [reading, onReadingChange]);
+  useEffect(() => () => onReadingChange?.(false), [onReadingChange]);
   const readChip = async (readerName: string, applicationId?: string) => {
-    if (readPending.current) return;
+    if (
+      readPending.current ||
+      disabled ||
+      error ||
+      reader?.name !== readerName ||
+      reader.state !== 'CARD_PRESENT'
+    )
+      return;
     if (!/^(?!000)\d{3}$/.test(countryCode)) {
       setReadError('Ingresa un código de país ISO numérico de tres dígitos.');
       return;
     }
     readPending.current = true;
+    setManualSelection(undefined);
     setReading(true);
     setReadError(undefined);
     setSnapshot((current) => current && { ...current, identity: null, identityStatus: 'NOT_READ' });
+    // Wait for an explicit refresh already in flight before reading the chip.
+    const pendingStatus = statusRequest.current;
+    if (pendingStatus) {
+      const status = await pendingStatus;
+      if (!mounted.current) {
+        readPending.current = false;
+        return;
+      }
+      if (
+        !status.ok ||
+        !status.value.readers.some(
+          (device) => device.name === readerName && device.state === 'CARD_PRESENT',
+        )
+      ) {
+        readPending.current = false;
+        setReading(false);
+        setReadError('No se pudo confirmar la tarjeta en el lector. Vuelve a consultar su estado.');
+        return;
+      }
+    }
     const request = applicationId
       ? { readerName, applicationId, terminalCountryCode: countryCode }
       : { readerName, terminalCountryCode: countryCode };
+    const eventBeforeRead = lastReaderEvent.current;
     const result = await new DesktopClient(window.desktop, 25000).call((api) =>
       api.readCardIdentity(request),
     );
     readPending.current = false;
     if (!mounted.current) return;
     setReading(false);
-    if (result.ok) {
-      setSnapshot(
-        (current) =>
-          current && {
-            ...current,
-            identity: result.value,
-            identityStatus: result.value.status === 'READ' ? 'READ' : 'NOT_READ',
-          },
+    const changedEvent = lastReaderEvent.current;
+    if (
+      result.ok &&
+      changedEvent &&
+      changedEvent !== eventBeforeRead &&
+      (!changedEvent.ok || changedEvent.value.identity?.readId !== result.value.readId)
+    ) {
+      setReadError('La tarjeta cambió durante la lectura. Vuelve a leer la tarjeta presente.');
+      return;
+    }
+    if (result.ok && result.value.readerName !== readerName) {
+      setReadError('La lectura no corresponde al lector seleccionado. Vuelve a leer la tarjeta.');
+    } else if (result.ok) {
+      setSnapshot((current) =>
+        current &&
+        current.readers.some(
+          (device) => device.name === readerName && device.state === 'CARD_PRESENT',
+        )
+          ? {
+              ...current,
+              identity: result.value,
+              identityStatus: result.value.status === 'READ' ? 'READ' : 'NOT_READ',
+            }
+          : current,
       );
-    } else setReadError(result.error.message);
+      if (transaction && result.value.status === 'READ') setManualSelection(result.value.readId);
+    } else {
+      setReadError(result.error.message);
+      if (['NOT_FOUND', 'SERVICE_UNAVAILABLE', 'TIMEOUT'].includes(result.error.code))
+        refreshRef.current?.();
+    }
   };
+  if (transaction)
+    return (
+      <div className="transaction-card-picker" aria-label="Elegir tarjeta">
+        <div className="reader-input-row">
+          <label>
+            Lector
+            <select
+              aria-label="Lector para la transacción"
+              value={reader?.name ?? ''}
+              disabled={disabled || refreshing || reading || !snapshot?.readers.length}
+              onChange={(event) => setSelectedName(event.target.value)}
+            >
+              {!snapshot?.readers.length && (
+                <option value="">{refreshing ? 'Buscando lector…' : 'Sin lector conectado'}</option>
+              )}
+              {snapshot?.readers.map((device) => (
+                <option key={device.name} value={device.name}>
+                  {device.name} · {stateLabels[device.state]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            disabled={disabled || reading || !!error || reader?.state !== 'CARD_PRESENT'}
+            onClick={() => reader && void readChip(reader.name)}
+          >
+            <Icon name="reader" size={16} />
+            {reading ? 'Leyendo tarjeta…' : 'Leer tarjeta'}
+          </button>
+        </div>
+        <div className="transaction-card-status" role="status">
+          <Icon name="card" size={24} />
+          <div>
+            <strong>
+              {reading
+                ? 'Leyendo tarjeta…'
+                : refreshing && !snapshot
+                  ? 'Buscando lector…'
+                  : error || reader?.state === 'UNAVAILABLE'
+                    ? 'Lector no disponible'
+                    : !reader
+                      ? 'Sin lectores conectados'
+                      : identity?.status === 'SELECT_APPLICATION'
+                        ? 'Selecciona una aplicación'
+                        : (availableCard?.panMasked ??
+                          (availableCard
+                            ? 'Número no disponible en el chip'
+                            : reader.state === 'CARD_PRESENT'
+                              ? 'Tarjeta detectada · falta leerla'
+                              : 'Inserta una tarjeta por contacto'))}
+            </strong>
+            <span>
+              {refreshing
+                ? 'Consultando estado del lector'
+                : (availableCard?.applicationLabel ??
+                  (reader
+                    ? reader.state === 'EMPTY'
+                      ? 'Detección automática activa'
+                      : stateLabels[reader.state]
+                    : 'Conecta un lector; se detectará automáticamente'))}
+            </span>
+          </div>
+          {!refreshing &&
+            !reading &&
+            selectedReadId &&
+            selectedReadId === availableCard?.readId && (
+              <button className="text-button" disabled={disabled || reading} onClick={onClearCard}>
+                Cambiar tarjeta
+              </button>
+            )}
+        </div>
+        {error && (
+          <p className="inline-error" role="alert">
+            {error}
+          </p>
+        )}
+        {readError && (
+          <p className="inline-error" role="alert">
+            {readError}
+          </p>
+        )}
+        {identity?.status === 'SELECT_APPLICATION' && (
+          <div className="card-application-choice">
+            <p>Elige la aplicación de la tarjeta:</p>
+            {identity.applications.map((application) => (
+              <button
+                key={application.id}
+                disabled={disabled || reading || refreshing}
+                onClick={() => reader && void readChip(reader.name, application.id)}
+              >
+                {application.label ?? 'Aplicación EMV'} · {application.id}
+              </button>
+            ))}
+          </div>
+        )}
+        {identity?.status === 'DIRECTORY_UNAVAILABLE' && (
+          <p className="form-note">Esta tarjeta necesita un perfil de aplicación documentado.</p>
+        )}
+        {identity?.status === 'TERMINAL_DATA_REQUIRED' && (
+          <p className="form-note">
+            Faltan parámetros del terminal para leer esta tarjeta. Revisa los detalles del lector.
+          </p>
+        )}
+        {availableCard && selectedReadId !== availableCard.readId && (
+          <button
+            className="text-button"
+            disabled={disabled || reading || refreshing}
+            onClick={() => onUseCard?.(availableCard)}
+          >
+            Seleccionar tarjeta leída
+          </button>
+        )}
+        <div className="reader-secondary-actions">
+          <button
+            className="text-button"
+            disabled={disabled || refreshing || reading}
+            onClick={() => refreshRef.current?.()}
+          >
+            {refreshing ? 'Buscando…' : 'Buscar lector'}
+          </button>
+        </div>
+        <details className="inline-details">
+          <summary>Opciones de lectura</summary>
+          <label className="card-country-field">
+            País del terminal (ISO numérico)
+            <input
+              inputMode="numeric"
+              maxLength={3}
+              value={countryCode}
+              disabled={disabled || reading}
+              onChange={(event) => setCountryCode(event.target.value)}
+            />
+          </label>
+          <p>La identidad leída no define la cuenta ni habilita el envío financiero.</p>
+        </details>
+      </div>
+    );
   return (
     <CardReaderPanel
       snapshot={snapshot}

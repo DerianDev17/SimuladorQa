@@ -1,5 +1,20 @@
 # Revision del mockup de transacciones
 
+## Rediseño aprobado por el usuario — 2026-10-14
+
+La aprobación del nuevo concepto sustituye la composición anterior de tres paneles
+y los pasos de preparación. La implementación vigente reúne formulario y tarjeta
+a la izquierda, resultado a la derecha y actividad de la sesión debajo. La revisión
+documental es opcional y la lectura manual válida selecciona la tarjeta sin otro paso.
+La navegación usa azul oscuro y las acciones principales azul sobre paneles claros.
+
+Ver [UX vigente](../ux/UX_SPEC.md). La captura de comprobación
+`artifacts/redesign-prepared-desktop.png` usa perfiles y lector sintéticos, antes de
+cualquier intento. No es evidencia financiera. También se comprueba una ventana
+de 1024 × 768 en `artifacts/redesign-transaction-small.png`.
+
+Los apartados siguientes conservan la revisión histórica del concepto anterior.
+
 Fuente: `mockup.png`, 1536 x 1024, revisada visualmente el 2026-10-06.
 SHA-256: `EA79671B34C201C1D766E878F6F16D05BD54E45F3CDA7470D988AD4D38A1DFC3`.
 

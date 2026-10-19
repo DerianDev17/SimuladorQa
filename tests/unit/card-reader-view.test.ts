@@ -18,12 +18,14 @@ function render(
     selectedName?: string;
     compact?: boolean;
     identity?: CardIdentityReading;
+    identityStatus?: CardReaderSnapshot['identityStatus'];
   } = {},
 ) {
   const snapshot: CardReaderSnapshot | undefined = readers && {
     checkedAt: '2026-10-08T20:00:00.000Z',
     readers,
-    identityStatus: 'NOT_READ',
+    identityStatus:
+      options.identityStatus ?? (options.identity?.status === 'READ' ? 'READ' : 'NOT_READ'),
     ...(options.identity ? { identity: options.identity } : {}),
   };
   return renderToStaticMarkup(
@@ -133,5 +135,37 @@ describe('presentación de tarjeta detectada', () => {
     const other = render([present, empty], { identity, selectedName: empty.name });
     expect(other).not.toContain('QA TESTER');
     expect(other).not.toContain('12/29');
+  });
+  it('no muestra identidad incoherente ni datos de una consulta fallida', () => {
+    const identity: CardIdentityReading = {
+      readId: '2b86d181-9efb-4808-b8a8-876a843876b8',
+      readAt: '2026-10-08T20:00:00.000Z',
+      readerName: present.name,
+      status: 'READ',
+      applications: [],
+      applicationId: null,
+      applicationLabel: 'QA CARD',
+      panMasked: '*'.repeat(12) + '4444',
+      cardholderName: 'QA TESTER',
+      expiry: '12/29',
+    };
+    for (const markup of [
+      render([present], { identity, identityStatus: 'NOT_READ' }),
+      render([present], { identity, error: 'Consulta no disponible.' }),
+    ]) {
+      expect(markup).not.toContain(identity.panMasked);
+      expect(markup).not.toContain('QA TESTER');
+      expect(markup).not.toContain('Leído del chip');
+    }
+    expect(render([present], { identity, error: 'Consulta no disponible.' })).not.toContain(
+      '<code>3B 00</code>',
+    );
+  });
+  it('distingue un lector no disponible de una tarjeta ausente y no fija el ambiente QA en la ilustración', () => {
+    const unavailable = render([{ ...empty, state: 'UNAVAILABLE' }]);
+    expect(unavailable).toContain('Lector no disponible');
+    expect(unavailable).not.toContain('Sin tarjeta detectada');
+    expect(unavailable).not.toContain('QA · TARJETAS');
+    expect(render(undefined)).toContain('Consulta pendiente');
   });
 });

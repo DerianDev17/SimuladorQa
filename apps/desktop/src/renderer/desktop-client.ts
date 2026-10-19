@@ -8,7 +8,11 @@ export class DesktopClient {
     private readonly timeoutMs = 5_000,
   ) {}
 
-  async call<T>(operation: (api: DesktopApi) => Promise<Result<T>>): Promise<Result<T>> {
+  async call<T>(
+    operation: (api: DesktopApi) => Promise<Result<T>>,
+    timeoutMs = this.timeoutMs,
+    timeoutMessage = 'El servicio local no respondió a tiempo. Vuelve a intentarlo.',
+  ): Promise<Result<T>> {
     if (!this.api)
       return failure(
         'SERVICE_UNAVAILABLE',
@@ -19,13 +23,7 @@ export class DesktopClient {
       return await Promise.race([
         operation(this.api),
         new Promise<Result<T>>((resolve) => {
-          timer = setTimeout(
-            () =>
-              resolve(
-                failure('TIMEOUT', 'El servicio local no respondió a tiempo. Vuelve a intentarlo.'),
-              ),
-            this.timeoutMs,
-          );
+          timer = setTimeout(() => resolve(failure('TIMEOUT', timeoutMessage)), timeoutMs);
         }),
       ]);
     } catch {

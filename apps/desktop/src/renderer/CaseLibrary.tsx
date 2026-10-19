@@ -1,9 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CatalogSnapshot } from '../../../../packages/domain/src/catalogs';
-import { caseAtmAvailable, parseCaseValues } from '../../../../packages/domain/src/saved-cases';
+import {
+  caseAtmAvailable,
+  isRestrictedCaseText,
+  parseCaseValues,
+} from '../../../../packages/domain/src/saved-cases';
 import type { SavedCase } from '../../../../packages/domain/src/saved-cases';
 import type { DraftRequest } from '../../../../packages/domain/src/transaction-draft';
-import { transactions } from '../../../../packages/domain/src/index';
+import { scenarios, transactions } from '../../../../packages/domain/src/index';
+import { accountTypes } from '../../../../packages/domain/src/transaction-draft';
+import { filterCases } from './case-filters';
+import type { CaseFilters } from './case-filters';
 import type { DesktopClient } from './desktop-client';
 import { Icon } from './Icon';
 
@@ -35,6 +42,18 @@ export function CaseLibrary({
   const [error, setError] = useState('');
   const [deleting, setDeleting] = useState<SavedCase>();
   const [needsReload, setNeedsReload] = useState(false);
+  const [filters, setFilters] = useState<CaseFilters>({
+    query: '',
+    transaction: 'ALL',
+    atm: 'ALL',
+  });
+  const [filterError, setFilterError] = useState('');
+  const filteredCases = catalog ? filterCases(catalog, filters) : [];
+  const filtersActive = !!filters.query || filters.transaction !== 'ALL' || filters.atm !== 'ALL';
+  function clearFilters() {
+    setFilters({ query: '', transaction: 'ALL', atm: 'ALL' });
+    setFilterError('');
+  }
   const dialog = useRef<HTMLDialogElement>(null);
   const active = useRef(true);
   useEffect(() => {
@@ -59,6 +78,7 @@ export function CaseLibrary({
     setError('');
     setMessage('');
     setDeleting(undefined);
+    clearFilters();
     setMode(next);
     onOpenChange(true);
     if (next === 'save') {
@@ -231,6 +251,77 @@ export function CaseLibrary({
                 Cerrar
               </button>
             </div>
+            {!deleting && !!catalog?.cases.length && (
+              <div className="case-filters" aria-label="Filtros de casos">
+                <label>
+                  Buscar caso
+                  <input
+                    type="search"
+                    maxLength={80}
+                    value={filters.query}
+                    disabled={busy}
+                    placeholder="Nombre, ATM, cuenta o monto"
+                    onChange={(event) => {
+                      if (isRestrictedCaseText(event.target.value)) {
+                        setFilters({ ...filters, query: '' });
+                        setFilterError('No incluyas datos de tarjeta ni secretos en la búsqueda.');
+                      } else {
+                        setFilterError('');
+                        setFilters({ ...filters, query: event.target.value });
+                      }
+                    }}
+                  />
+                </label>
+                <label>
+                  Operación del caso
+                  <select
+                    value={filters.transaction}
+                    disabled={busy}
+                    onChange={(event) => {
+                      const transaction =
+                        transactions.find((item) => item.id === event.target.value)?.id ?? 'ALL';
+                      setFilters({ ...filters, transaction });
+                    }}
+                  >
+                    <option value="ALL">Todas</option>
+                    {transactions.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Perfil ATM del caso
+                  <select
+                    value={filters.atm}
+                    disabled={busy}
+                    onChange={(event) => {
+                      const atm = event.target.value;
+                      if (atm === 'ALL' || atm === 'CURRENT' || atm === 'STALE')
+                        setFilters({ ...filters, atm });
+                    }}
+                  >
+                    <option value="ALL">Todos</option>
+                    <option value="CURRENT">Vigente en catálogo</option>
+                    <option value="STALE">Pendiente de actualizar</option>
+                  </select>
+                </label>
+                <div className="case-filter-count" role="status">
+                  {filteredCases.length} de {catalog?.cases.length ?? 0} casos
+                  {filtersActive && (
+                    <button className="text-button" disabled={busy} onClick={clearFilters}>
+                      Limpiar filtros
+                    </button>
+                  )}
+                </div>
+                {filterError && (
+                  <p className="catalog-form-error" role="alert">
+                    {filterError}
+                  </p>
+                )}
+              </div>
+            )}
             {deleting ? (
               <div className="document-note">
                 <div>
@@ -248,15 +339,28 @@ export function CaseLibrary({
               </div>
             ) : !catalog?.cases.length ? (
               <p>{busy ? 'Cargando casos…' : 'Aún no hay casos guardados en este ambiente.'}</p>
+            ) : !filteredCases.length ? (
+              <div className="case-filter-empty">
+                <h3>Sin casos para estos filtros</h3>
+                <button className="text-button" disabled={busy} onClick={clearFilters}>
+                  Mostrar todos los casos
+                </button>
+              </div>
             ) : (
               <ul className="saved-case-list">
-                {catalog.cases.map((saved) => (
+                {filteredCases.map((saved) => (
                   <li key={saved.id}>
                     <div>
                       <strong>{saved.name}</strong>
                       <small>
                         {transactions.find((item) => item.id === saved.draft.transaction)?.label} ·{' '}
-                        {saved.draft.scenario} · Borrador · v{saved.revision}
+                        {scenarios.find((item) => item.id === saved.draft.scenario)?.label} ·
+                        Borrador · v{saved.revision}
+                      </small>
+                      <small>
+                        {accountTypes.find((item) => item.id === saved.draft.account)?.label ??
+                          'Original pendiente'}
+                        {saved.draft.amount ? ' · ' + saved.draft.amount : ''}
                       </small>
                       <small>{new Date(saved.updatedAt).toLocaleString('es-EC')}</small>
                       {!caseAtmAvailable(saved, catalog) && (

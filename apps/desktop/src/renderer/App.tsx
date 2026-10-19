@@ -1,18 +1,9 @@
 import { useEffect, useState } from 'react';
-import {
-  dataBlockers,
-  isEnvironment,
-  scenarios,
-  transactions,
-} from '../../../../packages/domain/src/index';
-import type {
-  Environment,
-  Preparation,
-  Scenario,
-  TransactionType,
-} from '../../../../packages/domain/src/index';
+import { dataBlockers, isEnvironment } from '../../../../packages/domain/src/index';
+import type { Environment } from '../../../../packages/domain/src/index';
 import type { AppSnapshot, ErrorCode, Result } from '../../../../packages/shared/src/contracts';
 import type { CatalogSnapshot } from '../../../../packages/domain/src/catalogs';
+import { SendConfigurationView } from './SendConfigurationView';
 import { CatalogView } from './CatalogView';
 import { TransactionWorkspace } from './TransactionWorkspace';
 import { ObservationView } from './ObservationView';
@@ -21,13 +12,15 @@ import type { CatalogMutation } from './CatalogView';
 import { DesktopClient } from './desktop-client';
 import { Icon } from './Icon';
 import { CardReaderView } from './CardReaderView';
+import { SwitchConnectionView, connectionTitle, useSwitchConnection } from './SwitchConnectionView';
 import type { IconName } from './Icon';
+import type { AtmSelection } from './transaction-setup';
 
 const navigation: { id: string; label: string; icon: IconName; group: string }[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', group: 'ESTACIÓN DE PRUEBAS' },
+  { id: 'dashboard', label: 'Inicio', icon: 'dashboard', group: 'ESTACIÓN DE PRUEBAS' },
   { id: 'transactions', label: 'Transacciones', icon: 'transaction', group: '' },
   { id: 'load', label: 'Carga y estrés', icon: 'load', group: '' },
-  { id: 'atms', label: 'Perfiles ATM', icon: 'atm', group: '' },
+  { id: 'atms', label: 'Perfiles ATM', icon: 'atm', group: 'CATÁLOGOS' },
   { id: 'cards', label: 'Tarjetas', icon: 'card', group: '' },
   { id: 'entities', label: 'Entidades', icon: 'entity', group: '' },
   { id: 'monitor', label: 'Monitor', icon: 'monitor', group: 'OBSERVABILIDAD' },
@@ -41,14 +34,18 @@ export function App() {
   const [snapshot, setSnapshot] = useState<AppSnapshot>();
   const [error, setError] = useState<{ code: string; message: string }>();
   const [busy, setBusy] = useState(true);
-  const [transaction, setTransaction] = useState<TransactionType>('BALANCE');
-  const [scenario, setScenario] = useState<Scenario>('LOCAL');
-  const [preparation, setPreparation] = useState<Preparation>();
   const [catalog, setCatalog] = useState<CatalogSnapshot>();
   const [catalogError, setCatalogError] = useState<{ code: ErrorCode; message: string }>();
   const [catalogBusy, setCatalogBusy] = useState(false);
   const [catalogEditing, setCatalogEditing] = useState(false);
   const [transactionBusy, setTransactionBusy] = useState(false);
+  const [sendConfigurationEditing, setSendConfigurationEditing] = useState(false);
+  const [transactionSetup, setTransactionSetup] = useState<{
+    environment: Environment;
+    stage: 'entities' | 'atms';
+    entityId?: string;
+  }>();
+  const [pendingAtmSelection, setPendingAtmSelection] = useState<AtmSelection>();
 
   function applySnapshot(result: Result<AppSnapshot>) {
     if (result.ok) {
@@ -127,7 +124,42 @@ export function App() {
     });
     if (result.ok) {
       setCatalog(result.value);
-      setPreparation(undefined);
+      if (transactionSetup?.environment === result.value.environment) {
+        if (command.kind === 'saveEntity' && transactionSetup.stage === 'entities') {
+          const entity = result.value.entities.find((item) =>
+            command.request.id
+              ? item.id === command.request.id
+              : item.code === command.request.values.code,
+          );
+          if (entity) {
+            setTransactionSetup({
+              ...transactionSetup,
+              entityId: entity.id,
+              stage: entity.active ? 'atms' : 'entities',
+            });
+            if (entity.active) setPage('atms');
+          }
+        }
+        if (command.kind === 'saveAtm' && transactionSetup.stage === 'atms') {
+          const atm = result.value.atms.find((item) =>
+            command.request.id
+              ? item.id === command.request.id
+              : item.terminalId === command.request.values.terminalId,
+          );
+          if (
+            atm?.active &&
+            result.value.entities.some((entity) => entity.id === atm.entityId && entity.active)
+          ) {
+            setPendingAtmSelection({
+              environment: result.value.environment,
+              id: atm.id,
+              revision: atm.revision,
+            });
+            setTransactionSetup(undefined);
+            setPage('transactions');
+          }
+        }
+      }
     } else setCatalogError(result.error);
     setCatalogBusy(false);
     return result.ok;
@@ -139,8 +171,9 @@ export function App() {
   }
 
   async function changeEnvironment(environment: Environment) {
+    setTransactionSetup(undefined);
+    setPendingAtmSelection(undefined);
     setBusy(true);
-    setPreparation(undefined);
     const result = await client.call((api) => api.setEnvironment(environment));
     if (!result.ok && result.error.code === 'TIMEOUT') {
       // Un timeout IPC no cancela una escritura ya iniciada. Reconciliar con Main.
@@ -151,25 +184,22 @@ export function App() {
     }
   }
 
-  async function prepare() {
-    setBusy(true);
-    setPreparation(undefined);
-    const result = await client.call((api) => api.prepareTransaction({ transaction, scenario }));
-    if (result.ok) {
-      setPreparation(result.value);
-      setError(undefined);
-    } else {
-      setError(result.error);
-    }
-    setBusy(false);
-  }
-
   const environment = snapshot?.environment;
+  const link = useSwitchConnection(client, environment);
+  const linkTitle =
+    environment === 'QA' ? connectionTitle(link.connection) : 'Conexión QA inactiva';
   const current = navigation.find((item) => item.id === page);
   const blockers = snapshot?.blockers ?? dataBlockers;
 
   function goToTransactions() {
+    setTransactionSetup(undefined);
     setPage('transactions');
+  }
+  function navigateFromTransaction(next: 'entities' | 'atms' | 'settings' | 'history') {
+    if ((next === 'entities' || next === 'atms') && environment) {
+      setTransactionSetup({ environment, stage: next });
+    } else setTransactionSetup(undefined);
+    setPage(next);
   }
 
   function blockerList() {
@@ -179,97 +209,15 @@ export function App() {
           <div className="blocker" key={blocker.id}>
             <span className="step-number">{String(index + 1).padStart(2, '0')}</span>
             <div>
-              <strong>{blocker.label}</strong>
-              <p>{blocker.description}</p>
+              <details className="inline-details">
+                <summary>{blocker.label}</summary>
+                <p>{blocker.description}</p>
+              </details>
             </div>
             <span className="pill amber">Pendiente</span>
           </div>
         ))}
       </div>
-    );
-  }
-
-  function transactionForm() {
-    return (
-      <>
-        <div className="form-grid">
-          <label>
-            Escenario
-            <select
-              value={scenario}
-              disabled={busy}
-              onChange={(event) => {
-                const selected = scenarios.find((item) => item.id === event.target.value);
-                if (selected) {
-                  setScenario(selected.id);
-                  setPreparation(undefined);
-                }
-              }}
-            >
-              {scenarios.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Transacción
-            <select
-              value={transaction}
-              disabled={busy}
-              onChange={(event) => {
-                const selected = transactions.find((item) => item.id === event.target.value);
-                if (selected) {
-                  setTransaction(selected.id);
-                  setPreparation(undefined);
-                }
-              }}
-            >
-              {transactions.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Perfil ATM
-            <select disabled aria-label="Perfil ATM">
-              <option>
-                {catalog?.atms.length
-                  ? `${catalog.atms.length} perfiles en borrador`
-                  : 'Sin perfiles validados'}
-              </option>
-            </select>
-          </label>
-          <label>
-            Tarjeta de prueba
-            <select disabled aria-label="Tarjeta de prueba">
-              <option>Sin tarjetas validadas</option>
-            </select>
-          </label>
-        </div>
-        <p className="form-note">{scenarios.find((item) => item.id === scenario)?.description}</p>
-        <div className="form-actions">
-          <button className="primary" onClick={() => void prepare()} disabled={busy || !snapshot}>
-            Revisar requisitos <Icon name="arrow" size={16} />
-          </button>
-          <button disabled title="Requiere evidencia y perfiles validados">
-            Enviar transacción
-          </button>
-        </div>
-        {preparation && (
-          <div className="preparation" role="status">
-            <strong>Envío bloqueado · {preparation.environment}</strong>
-            <p>
-              Faltan {preparation.blockers.length} grupos de requisitos. No se ha enviado ninguna
-              trama.
-            </p>
-            <span className="source">Especificación: {preparation.specification}</span>
-          </div>
-        )}
-      </>
     );
   }
 
@@ -289,42 +237,28 @@ export function App() {
         </div>
         <nav aria-label="Navegación principal">
           {navigation.map((item) => (
-            <div key={item.id}>
+            <div key={item.id} className={item.id === 'settings' ? 'nav-settings' : undefined}>
               {item.group && <p className="nav-group">{item.group}</p>}
               <button
                 className={`nav-item ${page === item.id ? 'active' : ''}`}
                 aria-current={page === item.id ? 'page' : undefined}
-                onClick={() => setPage(item.id)}
+                disabled={catalogEditing || catalogBusy || sendConfigurationEditing}
+                onClick={() => {
+                  setTransactionSetup(undefined);
+                  setPage(item.id);
+                }}
               >
                 <Icon name={item.icon} />
                 <span>{item.label}</span>
-                {item.id === 'transactions' && <span className="nav-count">5</span>}
               </button>
             </div>
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <div className="sidebar-system">
-            <strong>Estado del sistema</strong>
-            <div className="local-status">
-              <span className={`status-dot ${snapshot ? 'green' : ''}`} />
-              {snapshot
-                ? 'Servicios locales activos'
-                : busy
-                  ? 'Iniciando servicios…'
-                  : 'Servicios no disponibles'}
-            </div>
-            <span className="sidebar-network">
-              <span className="status-dot" /> Switch sin configurar
-            </span>
-            <small>Control Plane sin configurar</small>
-          </div>
           <div className="sidebar-station">
             <span className="user-avatar">QA</span>
-            <span>Estación local</span>
-            <span>
-              v{snapshot?.version ?? '0.1.0'} <span className="version-separator">·</span> MVP 1
-            </span>
+            <span>Estación QA</span>
+            <span>v{snapshot?.version ?? '0.1.0'}</span>
           </div>
           <div className="sidebar-security">
             <Icon name="shield" size={15} /> Producción bloqueada
@@ -334,13 +268,23 @@ export function App() {
 
       <div className={`main-area ${environment === 'PREPROD' ? 'preprod' : ''}`}>
         <header className="topbar">
+          <div className="breadcrumb">
+            Operación <span>/</span> <strong>{current?.label}</strong>
+          </div>
           <div className="topbar-actions">
             <label className="environment-label">
-              Ambiente
+              <span className="visually-hidden">Ambiente</span>
               <select
                 aria-label="Ambiente"
                 value={environment ?? ''}
-                disabled={busy || !snapshot || catalogBusy || catalogEditing || transactionBusy}
+                disabled={
+                  busy ||
+                  !snapshot ||
+                  catalogBusy ||
+                  catalogEditing ||
+                  transactionBusy ||
+                  sendConfigurationEditing
+                }
                 onChange={(event) => {
                   if (isEnvironment(event.target.value)) void changeEnvironment(event.target.value);
                 }}
@@ -352,18 +296,45 @@ export function App() {
             </label>
             <span className="topbar-divider" />
             <span className="topbar-network">
-              <span className="status-dot" /> Switch sin configurar
+              <span
+                className={`status-dot ${link.connection?.state === 'CONNECTED' ? 'green' : ''}`}
+              />{' '}
+              {linkTitle}
             </span>
-          </div>
-          <div className="topbar-identity">
-            <Icon name="shield" size={18} />
-            <span className="topbar-divider" />
-            <div className="user-avatar">QA</div>
-            <span>Estación QA</span>
+            <button
+              className="topbar-connect"
+              disabled={
+                busy ||
+                environment !== 'QA' ||
+                transactionBusy ||
+                link.pending ||
+                catalogEditing ||
+                sendConfigurationEditing
+              }
+              onClick={() =>
+                void link.change(
+                  link.connection?.state === 'CONNECTED' || link.connection?.state === 'CONNECTING'
+                    ? 'disconnect'
+                    : 'connect',
+                )
+              }
+            >
+              <Icon name="monitor" size={16} />
+              {link.pending
+                ? 'Conectando…'
+                : link.connection?.state === 'CONNECTED' || link.connection?.state === 'CONNECTING'
+                  ? 'Desconectar'
+                  : 'Conectar'}
+            </button>
           </div>
         </header>
 
         <main>
+          {link.error && page !== 'dashboard' && (
+            <p className="inline-error" role="alert">
+              {link.error}
+            </p>
+          )}
           {environment === 'PREPROD' && (
             <div className="preprod-banner" role="status">
               <Icon name="shield" size={17} /> Ambiente PREPROD · Configuración y límites
@@ -387,54 +358,25 @@ export function App() {
           {page !== 'transactions' && (
             <div className="page-heading">
               <div>
-                <span className="eyebrow">
-                  COONECTA / {environment ?? 'AMBIENTE SIN VERIFICAR'}
-                </span>
-                <h1>{page === 'dashboard' ? 'Tu estación de pruebas' : current?.label}</h1>
-                <p>
-                  {page === 'dashboard'
-                    ? 'Prepara, ejecuta y observa tus pruebas ATM desde un solo lugar.'
-                    : 'Información y estado de tu laboratorio de QA.'}
-                </p>
+                <h1>{page === 'dashboard' ? 'Inicio' : current?.label}</h1>
               </div>
-              <span className="pill outline">
-                <span className="status-dot" />
-                {snapshot ? 'Configuración inicial' : 'Servicios sin verificar'}
+            </div>
+          )}
+
+          {transactionSetup && ['entities', 'atms'].includes(page) && (
+            <div className="transaction-setup-banner" role="status">
+              <span>
+                <Icon name="transaction" size={18} /> Configurar{' '}
+                {page === 'entities' ? 'entidad' : 'ATM'} para tu transacción
               </span>
+              <button disabled={catalogBusy || catalogEditing} onClick={goToTransactions}>
+                Volver a transacción <Icon name="arrow" size={15} />
+              </button>
             </div>
           )}
 
           {page === 'dashboard' && (
             <>
-              <section className="intro-card">
-                <div>
-                  <span className="intro-label">
-                    <span className="status-dot blue" /> PRIMEROS PASOS
-                  </span>
-                  <h2>Todo listo para empezar a configurar.</h2>
-                  <p>
-                    La estación está preparada. Añade la evidencia del proyecto y los perfiles de
-                    prueba para habilitar el primer flujo real.
-                  </p>
-                  <button className="primary" onClick={() => setPage('settings')}>
-                    Ver configuración pendiente <Icon name="arrow" size={16} />
-                  </button>
-                </div>
-                <div className="intro-visual" aria-hidden="true">
-                  <div className="orbit orbit-one" />
-                  <div className="orbit orbit-two" />
-                  <div className="visual-node node-one">
-                    <Icon name="atm" size={22} />
-                  </div>
-                  <div className="visual-center">
-                    <Icon name="transaction" size={34} />
-                  </div>
-                  <div className="visual-node node-two">
-                    <Icon name="shield" size={22} />
-                  </div>
-                  <span className="visual-caption">ATM → Switch → Core</span>
-                </div>
-              </section>
               <section className="metrics-grid" aria-label="Métricas de la estación">
                 {[
                   {
@@ -453,14 +395,10 @@ export function App() {
                   },
                   {
                     label: 'Conexión al Switch',
-                    value:
-                      snapshot?.networkEvidence.status === 'DOCUMENTED'
-                        ? 'Sin comprobar'
-                        : 'Sin configurar',
-                    note:
-                      snapshot?.networkEvidence.status === 'DOCUMENTED'
-                        ? 'Destino documentado; acceso pendiente'
-                        : 'Endpoint pendiente',
+                    value: linkTitle,
+                    note: link.connection?.endpoint
+                      ? `${link.connection.endpoint.host}:${link.connection.endpoint.port}`
+                      : 'Conecta desde el panel de enlace',
                     icon: 'monitor' as const,
                     color: 'amber',
                   },
@@ -486,13 +424,36 @@ export function App() {
                   </article>
                 ))}
               </section>
+              <SwitchConnectionView
+                connection={link.connection}
+                error={link.error}
+                pending={link.pending}
+                disabled={
+                  busy || environment !== 'QA' || transactionBusy || sendConfigurationEditing
+                }
+                endpoint={
+                  snapshot?.networkEvidence.status === 'DOCUMENTED'
+                    ? snapshot.networkEvidence.evidence.ingress
+                    : undefined
+                }
+                onChange={(action) => void link.change(action)}
+              />
               <div className="dashboard-grid">
                 <section className="panel">
                   <div className="panel-heading">
                     <h2>Preparar una transacción</h2>
                     <span className="pill neutral">Funcional</span>
                   </div>
-                  {transactionForm()}
+                  <div className="new-transaction-action">
+                    <button
+                      className="primary"
+                      disabled={busy || !snapshot}
+                      onClick={goToTransactions}
+                    >
+                      Nueva transacción <Icon name="arrow" size={16} />
+                    </button>
+                    <span>Completa los datos, elige una tarjeta y revisa el resumen.</span>
+                  </div>
                 </section>
                 <CardReaderView compact />
               </div>
@@ -504,7 +465,10 @@ export function App() {
                       Ver detalle <Icon name="arrow" size={14} />
                     </button>
                   </div>
-                  {blockerList()}
+                  <details className="section-details">
+                    <summary>Ver requisitos pendientes</summary>
+                    {blockerList()}
+                  </details>
                 </section>
                 <section className="panel">
                   <div className="panel-heading">
@@ -521,8 +485,7 @@ export function App() {
                     <span className="empty-icon">
                       <Icon name="history" size={27} />
                     </span>
-                    <h3>Tu primera prueba empieza aquí</h3>
-                    <p>Las ejecuciones y su evidencia aparecerán en este espacio.</p>
+                    <h3>Sin transacciones ejecutadas</h3>
                     <button className="text-button" onClick={goToTransactions}>
                       Preparar transacción <Icon name="arrow" size={15} />
                     </button>
@@ -534,6 +497,7 @@ export function App() {
 
           <div hidden={page !== 'transactions'}>
             <TransactionWorkspace
+              visible={page === 'transactions'}
               key={environment ?? 'unavailable'}
               snapshot={snapshot}
               catalog={catalog}
@@ -543,13 +507,22 @@ export function App() {
               client={client}
               onRefresh={refreshCatalog}
               onReviewingChange={setTransactionBusy}
-              onNavigate={setPage}
+              onNavigate={navigateFromTransaction}
+              pendingAtmSelection={pendingAtmSelection}
+              onAtmSelectionApplied={() => setPendingAtmSelection(undefined)}
               onCatalogChange={setCatalog}
             />
           </div>
 
           {page === 'settings' && (
             <>
+              <SendConfigurationView
+                key={environment ?? 'unavailable'}
+                environment={environment}
+                client={client}
+                disabled={busy || !snapshot}
+                onEditingChange={setSendConfigurationEditing}
+              />
               <NetworkEvidenceView state={snapshot?.networkEvidence} environment={environment} />
               <section className="panel settings-panel">
                 <div className="panel-heading">
@@ -654,6 +627,9 @@ export function App() {
               onRefresh={refreshCatalog}
               onMutate={mutateCatalog}
               onEditingChange={setCatalogEditing}
+              quickCreate={transactionSetup?.stage === page}
+              initialEntityId={transactionSetup?.entityId}
+              onCancelCreation={transactionSetup ? goToTransactions : undefined}
             />
           )}
 

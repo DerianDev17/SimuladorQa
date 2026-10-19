@@ -6,9 +6,11 @@
    Para retiro, introduce un monto con punto y dos decimales.
 2. Pulsa **Guardar como caso**, escribe un nombre sin datos sensibles y guarda.
 3. Abre **Casos guardados** para listar los borradores QA o PREPROD. Sus
-   referencias documentales se pueden expandir en el dialogo.
+   referencias documentales se pueden expandir en el dialogo. Busca por nombre,
+   alias ATM, escenario, operacion, cuenta o monto; la busqueda ignora acentos y
+   mayusculas. Combina filtros de operacion y perfil vigente/pendiente de actualizar.
 4. Pulsa **Cargar**. Se recuperan operacion, cuenta, escenario, monto y ATM;
-   solicita **Revisar requisitos** para obtener una revision nueva desde Main.
+   solicita **Revisar transaccion** para obtener una revision nueva desde Main.
 5. **Eliminar** pide confirmacion en el dialogo y audita la eliminacion.
 
 Los casos sobreviven al cierre/reinicio. La biblioteca consulta el catalogo al
@@ -26,6 +28,7 @@ guarda nuevas copias y permite eliminar, sin editor de casos en esta entrega.
 SQLite schema v2 migra v1 conservando entidades, ATM y auditoria. Guarda solo
 nombre, DraftRequest, UUID/revision/UTC y referencias generadas por dominio.
 No guarda el resumen ReviewedDraft, tarjeta, RAW/HEX, resultados ni campos ISO.
+Cargar un caso limpia la referencia de tarjeta de la UI y exige elegirla de nuevo.
 Las referencias no fijan una version del contenido de los documentos.
 
 Crear/eliminar y su auditoria se confirman juntos. La auditoria no incluye el
@@ -54,3 +57,13 @@ validacion de nombre, reinicio, recuperacion del contexto, ATM editado y borrado
 Captura sintetica ignorada: `artifacts/saved-cases-library.png`.
 
 Decision: [ADR-008](../adr/ADR-008-LOCAL-SAVED-CASES.md).
+
+Los filtros son locales, conservan el orden del catalogo y no modifican casos ni
+revisiones. Limpiar filtros o Mostrar todos los casos recupera la lista. Se
+reinician al abrir y se conservan al recargar. El contador expresa resultados
+visibles del ambiente. Una busqueda sensible se elimina con un aviso; el filtro
+no borra errores de recarga ni habilita Cargar/Eliminar tras un fallo.
+
+Regresion: `tests/unit/transaction-ui-tools.test.ts` y pruebas Electron de
+busqueda, filtros combinados, vigencia, datos sensibles y recarga fallida.
+Captura sintetica: `artifacts/filtered-cases.png`.

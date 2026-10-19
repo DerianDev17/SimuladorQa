@@ -1,7 +1,8 @@
 :root {
-  --ink: #12244b;
-  --muted: #657b9f;
-  --canvas: #f5f8fd;
-  --border: #e3e9f2;
-  --nav: #131c29;
+  --ink: #202b3c;
+  --muted: #607086;
+  --canvas: #f7f8fa;
+  --border: #e2e6ec;
+  --nav: #ffffff;
+  --accent: #245eae;
 }

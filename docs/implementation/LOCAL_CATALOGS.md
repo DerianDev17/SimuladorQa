@@ -6,7 +6,7 @@
 2. Abrir **Entidades**, crear código/nombre y seleccionar explícitamente una red.
 3. Abrir **Perfiles ATM**, seleccionar una entidad activa y capturar alias, Terminal ID y Acquirer ID.
 4. Guardar como borrador. Buscar, filtrar activos/inactivos, editar o eliminar desde la tabla.
-5. Cerrar cualquier editor/diálogo para cambiar entre QA y PREPROD.
+5. Guardar o cancelar el editor antes de navegar o cambiar entre QA y PREPROD.
 
 Las entidades son compartidas; los ATM se consultan y modifican solo en el ambiente activo.
 Los filtros son locales y la tabla muestra 15 filas por página. El catálogo inicia vacío.
@@ -28,7 +28,9 @@ Las entidades referenciadas no se pueden eliminar. Entidades inactivas conservan
 no permiten crear/activar nuevos perfiles. Los registros tienen una revisión creciente;
 un editor obsoleto no puede sobrescribir ni eliminar la versión actual.
 
-Ante conflicto o timeout, pulsar **Recargar** antes de volver a editar. El refresco cierra
+Ante conflicto o timeout, pulsar **Recargar** antes de volver a editar. Si hay cambios
+sin guardar, se pide confirmar **Descartar y recargar**; **Seguir editando** y Escape
+conservan el formulario. Sin cambios, la recarga es directa. El refresco confirmado cierra
 el editor y muestra lo que efectivamente quedó guardado; un timeout no cancela una mutación
 que ya se haya confirmado. Una base corrupta se conserva y produce un error seguro; el shell
 y las preferencias siguen funcionando. Cerrar la app termina el Worker y libera la base.
@@ -43,9 +45,18 @@ disponible cuando llega su respuesta, incluso si termina en timeout.
 
 ## Alcance pendiente
 
-Guardar un perfil **DRAFT** no valida los campos ISO ni habilita envío. El panel transaccional
-solo informa la cantidad de borradores del ambiente; la selección funcional queda pendiente
-de enlazar el motor y los perfiles validados. Todos los flujos ISO permanecen bloqueados.
+Guardar un perfil **DRAFT** no valida los campos ISO ni habilita envío. Transacciones
+permite seleccionar ATM y entidad activos del ambiente y revalida su revisión desde Main.
+Si no hay perfiles, **Crear entidad/Crear ATM** abre directamente el formulario. Guardar
+una entidad activa continúa con el ATM y preselecciona esa entidad; guardar un ATM activo
+vuelve al borrador con el UUID y revisión devueltos por Main, conservando operación,
+escenario, cuenta y monto. Cancelar vuelve sin crear ni seleccionar un perfil.
+
+La navegación lateral se bloquea durante la edición o escritura para evitar perder datos.
+Un fallo mantiene el formulario y no avanza el recorrido. Ante conflicto/timeout se debe
+recargar; el refresco cierra el editor y permite volver al borrador mediante **Volver a
+transacción**. Perfiles/entidades inactivos no se seleccionan automáticamente.
+Todos los flujos ISO permanecen bloqueados.
 
 Membresía, BIN/rangos, Core, fixedFields/red ATM, endpoints, framing, timeouts y tarjetas
 permanecen pendientes de fuentes aprobadas. El conflicto de clasificación está registrado
@@ -65,3 +76,9 @@ como **TODO-DATA ENTITY-CLASSIFICATION** y se solicitó validación al usuario.
   el valor anterior y Escape durante eliminación bajo bloqueo SQLite real.
 
 Diseño y límites: `docs/adr/ADR-004-LOCAL-CATALOGS.md`.
+
+Durante la edicion se ocultan filtros, tabla y auditoria; se muestran al guardar,
+cancelar o confirmar la recarga. Campos y acciones caben en una ventana de 1024 px.
+El E2E verifica conservar/cancelar, cambios revertidos, conflicto concurrente y
+recarga fallida por timeout con recuperacion. Captura sintetica:
+`artifacts/focused-catalog-editor.png`.

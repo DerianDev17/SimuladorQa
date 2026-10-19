@@ -2,6 +2,7 @@ import { _electron as electron, expect, test } from '@playwright/test';
 import type { ElectronApplication, Page } from '@playwright/test';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { randomUUID } from 'node:crypto';
 import { resolve, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { execFile, spawn } from 'node:child_process';
@@ -12,11 +13,13 @@ import type {
   CardReaderSnapshot,
 } from '../../packages/domain/src/card-reader';
 import type { Result } from '../../packages/shared/src/contracts';
+import type { BalanceExecution } from '../../packages/domain/src/balance-inquiry';
 import { createServer } from 'vite';
 import { removeTestDirectory } from '../helpers/temporary-directory';
 import { networkEvidence } from '../helpers/network-evidence';
 import { decodeResponse } from '../../apps/desktop/src/main/adapters/mediator-observer';
 import { observationBatch } from '../helpers/observations';
+import { approvedWithdrawalExecution } from '../helpers/withdrawal';
 
 let directory: string;
 let app: ElectronApplication | undefined;
@@ -30,12 +33,13 @@ async function launch(development = false) {
     args: [
       resolve('dist/main.cjs'),
       `--user-data-dir=${directory}`,
+      '--simulate-reader',
       ...(development ? ['--dev'] : []),
     ],
     env,
   });
   const window = await app.firstWindow();
-  await expect(window.getByRole('heading', { name: 'Tu estación de pruebas' })).toBeVisible();
+  await expect(window.getByRole('heading', { name: 'Inicio' })).toBeVisible();
   return window;
 }
 
@@ -195,50 +199,991 @@ test('lectura manual muestra identidad protegida y valida país en la pantalla',
   await window.screenshot({ path: 'artifacts/card-identity-synthetic.png', fullPage: true });
 });
 
-test('composición del mockup: tres paneles y resumen dentro de la ventana desktop', async () => {
+test('interfaz minimalista: acción principal, requisitos y detalles accesibles', async () => {
   const window = await launch();
   await app?.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0]?.setContentSize(1536, 1024),
   );
-  await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
+  await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
   await expect(
     window.getByRole('button', { name: 'Recargar perfiles', exact: true }),
   ).toBeEnabled();
+  await expect(window.getByRole('region', { name: 'Resultado' })).toBeVisible();
+  await expect(window.getByLabel('Referencia documental')).not.toBeVisible();
+  await expect(window.getByRole('heading', { name: 'Mensaje ISO8583' })).not.toBeVisible();
   const composition = await window.evaluate(() => {
-    const bounds = (selector: string) => {
-      const rect = document.querySelector(selector)!.getBoundingClientRect();
-      return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right };
-    };
+    const context = document.querySelector('.transaction-context')!.getBoundingClientRect();
+    const readiness = document.querySelector('.transaction-result-panel')!.getBoundingClientRect();
+    const action = document.querySelector('.transaction-send-actions')!.getBoundingClientRect();
     return {
-      context: bounds('.transaction-context'),
-      flow: bounds('.transaction-flow'),
-      inspector: bounds('.transaction-inspector'),
-      recent: bounds('.transaction-bottom-grid'),
-      support: bounds('.transaction-support-grid'),
-      viewport: globalThis.window.innerHeight,
+      aligned: context.top === readiness.top,
+      separate: context.right < readiness.left,
+      actionVisible: action.bottom < globalThis.window.innerHeight,
       overflow: document.documentElement.scrollWidth > globalThis.window.innerWidth,
     };
   });
-  expect(composition.context.top).toBe(composition.flow.top);
-  expect(composition.flow.top).toBe(composition.inspector.top);
-  expect(composition.context.right).toBeLessThan(composition.flow.left);
-  expect(composition.flow.right).toBeLessThan(composition.inspector.left);
-  expect(composition.recent.bottom).toBeLessThan(composition.viewport);
-  expect(composition.support.top).toBeGreaterThan(composition.recent.bottom);
-  expect(composition.overflow).toBe(false);
-  await expect(window.getByLabel('Ambiente', { exact: true })).toHaveValue('QA');
+  expect(composition).toEqual({
+    aligned: true,
+    separate: true,
+    actionVisible: true,
+    overflow: false,
+  });
   await expect(
     window.getByRole('button', { name: 'Guardar como caso', exact: true }),
   ).toBeDisabled();
+  const documentation = window.locator('.transaction-documentation-details');
+  await documentation.locator('summary').first().focus();
+  await window.keyboard.press('Enter');
+  await expect(window.getByLabel('Referencia documental')).toBeVisible();
+  await documentation.locator('summary').first().press('Enter');
+  await expect(window.getByLabel('Referencia documental')).not.toBeVisible();
+  await window.getByText('Flujo e inspector', { exact: false }).click();
+  await expect(window.getByRole('heading', { name: 'Mensaje ISO8583' })).toBeVisible();
+  await expect(window.getByRole('tab', { name: 'RAW', exact: true })).toBeDisabled();
+  await window.getByText('Flujo e inspector', { exact: false }).click();
+  await app?.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0]?.setContentSize(1024, 768),
+  );
+  expect(
+    await window.evaluate(
+      () => document.documentElement.scrollWidth <= globalThis.window.innerWidth,
+    ),
+  ).toBe(true);
   await mkdir('artifacts', { recursive: true });
-  await window.screenshot({ path: 'artifacts/mockup-aligned-desktop.png', scale: 'css' });
-  await window.getByRole('button', { name: 'Ver todas', exact: true }).click();
+  await window.evaluate(() => globalThis.window.scrollTo(0, 0));
+  await window.screenshot({ path: 'artifacts/redesign-transaction-small.png', scale: 'css' });
+  await app?.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0]?.setContentSize(1536, 1024),
+  );
+  await window.screenshot({ path: 'artifacts/redesign-transaction-desktop.png', scale: 'css' });
+  await window.getByRole('button', { name: 'Ver historial', exact: true }).click();
   await expect(window.getByRole('heading', { name: 'Historial', exact: true })).toBeVisible();
+});
+
+const transactionIdentity: CardIdentityReading = {
+  readId: 'aec7f38a-5e1c-490d-9636-c6d7e4b060d6',
+  readAt: '2026-10-11T23:00:00.000Z',
+  readerName: 'Synthetic Contact',
+  status: 'READ',
+  applications: [],
+  applicationId: null,
+  applicationLabel: 'TEST CARD',
+  panMasked: '*'.repeat(12) + '4444',
+  cardholderName: null,
+  expiry: null,
+};
+
+async function prepareBalanceSubmission() {
+  await writeFile(join(directory, 'network-evidence.json'), JSON.stringify(networkEvidence()));
+  const window = await launch();
+  await installTransactionReader();
+  await createTestEntity(window);
+  await createTestAtm(window, 'ATM de saldo');
+  await window.getByRole('button', { name: 'Editar ATM de saldo', exact: true }).click();
+  await window.getByLabel('Terminal ID', { exact: true }).fill('ATM20521');
+  await window.getByRole('button', { name: 'Guardar borrador', exact: true }).click();
+  await window.getByRole('button', { name: 'Configuración', exact: true }).click();
+  const settings = window.getByRole('region', { name: 'Configuración de envío', exact: true });
+  await settings.getByLabel('Espera de conexión (ms)').fill('1000');
+  await settings.getByLabel('Ventana de respuesta (ms)').fill('2000');
+  await settings
+    .getByRole('button', { name: 'Guardar configuración de envío', exact: true })
+    .click();
+  await expect(settings.getByRole('status')).toBeVisible();
+  await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
+  await window.getByLabel('Perfil ATM', { exact: true }).selectOption({ label: 'ATM de saldo' });
+  return window;
+}
+
+test('consulta terminada sin respuesta permite iniciar un retiro nuevo conservando el historial', async () => {
+  test.setTimeout(60000);
+  const window = await prepareBalanceSubmission();
+  await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await app!.evaluate(({ ipcMain }) => {
+    const state = globalThis as typeof globalThis & {
+      sentTransactions?: {
+        requestId: string;
+        operation: string;
+        amount: string | null;
+        cardReadId: string;
+      }[];
+    };
+    state.sentTransactions = [];
+    for (const operation of ['balance', 'withdrawal']) {
+      ipcMain.removeHandler(`transaction:${operation}:execute`);
+      ipcMain.handle(`transaction:${operation}:execute`, (_event, request) => {
+        state.sentTransactions!.push({
+          requestId: request.requestId,
+          operation,
+          amount: request.draft.amount,
+          cardReadId: request.cardReadId,
+        });
+        return {
+          ok: true,
+          value: {
+            requestId: request.requestId,
+            runId: request.requestId,
+            transactionId: request.requestId,
+            environment: 'QA',
+            atmId: request.draft.atmId,
+            atmRevision: request.draft.atmRevision,
+            configurationRevision: request.configurationRevision,
+            cardReadId: request.cardReadId,
+            startedAt: '2026-10-19T16:16:12.000Z',
+            finishedAt: '2026-10-19T16:16:26.000Z',
+            scenario: 'LOCAL',
+            outcome: operation === 'balance' ? 'PEER_CLOSED' : 'APPROVED',
+            frameGenerated: true,
+            transmissionAttempted: true,
+            bytesQueued: 451,
+            elapsedMs: 248,
+            correlation: {
+              stan: operation === 'balance' ? '650101' : '650102',
+              rrn: '6292' + (operation === 'balance' ? '650101' : '650102').padStart(8, '0'),
+              terminalId: 'ATM20521',
+            },
+            responseCode: operation === 'balance' ? null : '00',
+            balances: [],
+            blockers: [],
+            ...(operation === 'withdrawal'
+              ? {
+                  withdrawal: {
+                    transaction: request.draft.transaction,
+                    amount: request.draft.amount,
+                    account: 'SAVINGS',
+                    currency: '840',
+                  },
+                }
+              : {}),
+          },
+        };
+      });
+    }
+  });
+  const send = window.getByRole('button', { name: 'Enviar transacción', exact: true });
+  const result = window.getByRole('region', { name: 'Resultado', exact: true });
+  await send.click();
+  await expect(result).toContainText('El destino cerró la conexión');
+  await expect(send).toBeDisabled();
+  await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
+  await window.getByLabel('Monto de prueba').fill('50.00');
+  await expect(result).toContainText('Operación: Consulta de saldo');
+  await expect(send).toBeDisabled();
+  await result.getByRole('button', { name: 'Nueva transacción', exact: true }).click();
+  await expect(result).toContainText('Aún no hay resultado');
+  await expect(
+    result.getByRole('button', { name: 'Consultar resultado de saldo', exact: true }),
+  ).toHaveCount(0);
+  await expect(send).toBeDisabled(); // requires a fresh card read
+  await expect(window.getByLabel('Monto de prueba')).toHaveValue('50.00');
+  await expect(window.locator('.session-activity tbody tr')).toHaveCount(1);
+  await expect(window.locator('.session-activity')).toContainText('El destino cerró la conexión');
+  const nextReadId = randomUUID();
+  await installTransactionReader(false, nextReadId);
+  await window.getByRole('button', { name: 'Buscar lector', exact: true }).click();
+  await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await expect(send).toBeEnabled();
+  await send.click();
+  await expect(result).toContainText('Retiro autorizado por el host');
+  await expect(result).toContainText('Monto solicitado: USD 50.00');
+  await expect(window.locator('.session-activity tbody tr')).toHaveCount(2);
+  await expect(window.locator('.session-activity')).toContainText('El destino cerró la conexión');
+  const sent = await app!.evaluate(
+    () =>
+      (
+        globalThis as typeof globalThis & {
+          sentTransactions?: {
+            requestId: string;
+            operation: string;
+            amount: string | null;
+            cardReadId: string;
+          }[];
+        }
+      ).sentTransactions!,
+  );
+  expect(sent).toHaveLength(2);
+  expect(sent[1]).toMatchObject({
+    operation: 'withdrawal',
+    amount: '50.00',
+    cardReadId: nextReadId,
+  });
+  expect(sent[1]!.requestId).not.toBe(sent[0]!.requestId);
+  expect(sent[1]!.cardReadId).not.toBe(sent[0]!.cardReadId);
+});
+
+test('retiro 91 historico y actual finalizan sin paso de conciliacion y permiten otra solicitud', async () => {
+  test.setTimeout(60000);
+  const window = await prepareBalanceSubmission();
+  const previous: BalanceExecution = {
+    requestId: randomUUID(),
+    runId: randomUUID(),
+    transactionId: randomUUID(),
+    environment: 'QA',
+    atmId: await window.getByLabel('Perfil ATM', { exact: true }).inputValue(),
+    atmRevision: 1,
+    configurationRevision: 1,
+    cardReadId: transactionIdentity.readId,
+    startedAt: '2026-10-19T16:59:01.000Z',
+    finishedAt: '2026-10-19T16:59:25.000Z',
+    scenario: 'LOCAL',
+    outcome: 'REQUIRES_REVIEW',
+    frameGenerated: true,
+    transmissionAttempted: true,
+    bytesQueued: 451,
+    elapsedMs: 9713,
+    correlation: { stan: '650114', rrn: '629200' + '650114', terminalId: 'ATM20521' },
+    responseCode: '91',
+    balances: [],
+    blockers: [],
+    withdrawal: {
+      transaction: 'WITHDRAWAL_APPROVED',
+      amount: '20.00',
+      currency: '840',
+      account: 'SAVINGS',
+    },
+  };
+  // Seed only the isolated application's historical public journal.
+  const journal = join(directory, 'withdrawal-executions.json');
+  await writeFile(journal, JSON.stringify({ version: 1, executions: [previous] }));
+  await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
+  await window.getByLabel('Monto de prueba').fill('20.00');
+  const result = window.getByRole('region', { name: 'Resultado', exact: true });
+  const send = window.getByRole('button', { name: 'Enviar transacción', exact: true });
+  await expect(result).toContainText('Código de respuesta: 91');
+  await expect(result).toContainText('Retiro no aprobado');
+  await expect(result).not.toContainText('conciliación');
+  await expect(result.getByRole('button', { name: 'Nueva prueba QA', exact: true })).toHaveCount(0);
+  await expect(send).toBeDisabled();
+  await app!.evaluate(({ ipcMain }) => {
+    const state = globalThis as typeof globalThis & { nextWithdrawalRequests?: unknown[] };
+    state.nextWithdrawalRequests = [];
+    ipcMain.removeHandler('transaction:withdrawal:execute');
+    ipcMain.handle('transaction:withdrawal:execute', (_event, request) => {
+      state.nextWithdrawalRequests!.push({
+        requestId: request.requestId,
+        cardReadId: request.cardReadId,
+      });
+      return {
+        ok: true,
+        value: {
+          ...request,
+          runId: request.requestId,
+          transactionId: request.requestId,
+          environment: 'QA',
+          atmId: request.draft.atmId,
+          atmRevision: request.draft.atmRevision,
+          startedAt: '2026-10-19T17:30:00.000Z',
+          finishedAt: '2026-10-19T17:30:01.000Z',
+          scenario: 'LOCAL',
+          outcome: 'NOT_APPROVED',
+          frameGenerated: true,
+          transmissionAttempted: true,
+          bytesQueued: 451,
+          elapsedMs: 10,
+          correlation: { stan: '650115', rrn: '629200' + '650115', terminalId: 'ATM20521' },
+          responseCode: '91',
+          balances: [],
+          blockers: [],
+          withdrawal: {
+            transaction: request.draft.transaction,
+            amount: request.draft.amount,
+            account: 'SAVINGS',
+            currency: '840',
+          },
+        },
+      };
+    });
+  });
+  await expect(send).toBeDisabled();
+  const saved = JSON.parse(await readFile(journal, 'utf8')).executions;
+  expect(saved).toHaveLength(1);
+  expect(saved[0]).toMatchObject({ ...previous });
+  expect(saved[0].qaContinuation).toBeUndefined();
+  const sent = () =>
+    app!.evaluate(
+      () =>
+        (globalThis as typeof globalThis & { nextWithdrawalRequests?: unknown[] })
+          .nextWithdrawalRequests!,
+    );
+  expect(await sent()).toEqual([]);
+  const readId = randomUUID();
+  await installTransactionReader(false, readId);
+  await window.getByRole('button', { name: 'Buscar lector', exact: true }).click();
+  await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await expect(send).toBeEnabled();
+  await send.click();
+  await expect(result).toContainText('Retiro no aprobado');
+  await expect(result).not.toContainText('conciliación');
+  await expect(
+    result.getByRole('button', { name: 'Consultar resultado de retiro', exact: true }),
+  ).toHaveCount(0);
+  await expect(result.getByRole('button', { name: 'Nueva prueba QA', exact: true })).toHaveCount(0);
+  await expect(send).toBeDisabled(); // only a fresh card read is required
+  const requests = await sent();
+  expect(requests).toHaveLength(1);
+  expect(requests[0]).toMatchObject({ cardReadId: readId });
+  expect(requests[0]).not.toMatchObject({ requestId: previous.requestId });
+  await expect(window.locator('.session-activity tbody tr')).toHaveCount(2);
+  await expect(window.locator('.session-activity')).toContainText('Retiro no aprobado');
+});
+
+test('retiro QA: monto, bloqueo real y recuperación conservan la operación original', async () => {
+  test.setTimeout(60000);
+  const window = await prepareBalanceSubmission();
+  const send = window.getByRole('button', { name: 'Enviar transacción', exact: true });
+  await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
+  await window.getByLabel('Monto de prueba').fill('0.00');
+  await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await expect(send).toBeDisabled();
+  await window.getByLabel('Monto de prueba').fill('20.00');
+  await expect(send).toBeEnabled();
+  await send.click();
+  const blocked = window.getByLabel('Resultado de retiro', { exact: true });
+  await expect(blocked).toContainText('Retiro bloqueado');
+  await expect(blocked).toContainText('No se transmitió el retiro.');
+  await expect(blocked).toContainText('perfil de ejecución QA aprobado');
+  await expect(blocked).toContainText('Monto solicitado: USD 20.00');
+  await mkdir('artifacts', { recursive: true });
+  await window.screenshot({
+    path: 'artifacts/withdrawal-qa-blocked.png',
+    scale: 'css',
+    fullPage: true,
+  });
+
+  // The real Main completion publishes the empty simulated reader. Reinsert
+  // the IPC reader fixture explicitly before the next isolated UI attempt.
+  await installTransactionReader();
+  await window.getByRole('button', { name: 'Buscar lector', exact: true }).click();
+  await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+
+  // Replace only the isolated test application's IPC. No real PIN, chip or TCP.
+  await app!.evaluate(({ ipcMain }) => {
+    let saved: Record<string, unknown> | undefined;
+    ipcMain.removeHandler('transaction:withdrawal:execute');
+    ipcMain.handle('transaction:withdrawal:execute', (_event, request) => {
+      saved = {
+        requestId: request.requestId,
+        runId: request.requestId,
+        transactionId: request.requestId,
+        environment: 'QA',
+        atmId: request.draft.atmId,
+        atmRevision: request.draft.atmRevision,
+        configurationRevision: request.configurationRevision,
+        cardReadId: request.cardReadId,
+        startedAt: '2026-10-16T20:00:00.000Z',
+        finishedAt: '2026-10-16T20:00:01.000Z',
+        scenario: 'LOCAL',
+        outcome: 'REQUIRES_REVIEW',
+        frameGenerated: true,
+        transmissionAttempted: true,
+        bytesQueued: 548,
+        elapsedMs: 10,
+        correlation: null,
+        responseCode: '96',
+        balances: [],
+        blockers: [],
+        withdrawal: {
+          transaction: request.draft.transaction,
+          amount: request.draft.amount,
+          account: 'SAVINGS',
+          currency: '840',
+        },
+      };
+      return { ok: true, value: saved };
+    });
+    ipcMain.removeHandler('transaction:withdrawal:result');
+    ipcMain.handle('transaction:withdrawal:result', (_event, request) => ({
+      ok: true,
+      value:
+        saved?.requestId === request.requestId
+          ? { ...saved, outcome: 'APPROVED', responseCode: '00' }
+          : null,
+    }));
+    ipcMain.removeHandler('transaction:balance:result');
+    ipcMain.handle('transaction:balance:result', () => ({
+      ok: false,
+      error: { code: 'CONFLICT', message: 'Canal equivocado.' },
+    }));
+  });
+  await send.click();
+  await expect(blocked).toContainText('Respuesta del host por revisar');
+  await expect(send).toBeDisabled();
+  await expect(
+    window
+      .getByRole('region', { name: 'Resultado', exact: true })
+      .getByRole('button', { name: 'Nueva transacción', exact: true }),
+  ).toHaveCount(0);
+  await window.getByLabel('Transacción', { exact: true }).selectOption('BALANCE');
+  await window.getByRole('button', { name: 'Consultar resultado de retiro', exact: true }).click();
+  await expect(blocked).toContainText('Retiro autorizado por el host');
+  await expect(blocked).toContainText('Monto solicitado: USD 20.00');
+  await expect(blocked).not.toContainText('Consulta aprobada');
+  await expect(
+    window.getByRole('button', { name: 'Consultar resultado de retiro', exact: true }),
+  ).toHaveCount(0);
+  await expect(send).toBeDisabled(); // new operation requires a new card read
+});
+
+for (const withPrint of [false, true]) {
+  test(`comprobante local de retiro: ${withPrint ? 'con' : 'sin'} impresión, vista previa y reimpresión sin otro envío`, async () => {
+    test.setTimeout(60000);
+    const window = await prepareBalanceSubmission();
+    await app!.evaluate(({ app, ipcMain }, seed) => {
+      const state = globalThis as typeof globalThis & {
+        receiptTest?: {
+          sends: number;
+          prints: number;
+          saved: typeof seed | null;
+          html: string;
+          sandbox: boolean;
+        };
+      };
+      state.receiptTest = { sends: 0, prints: 0, saved: null, html: '', sandbox: false };
+      ipcMain.removeHandler('transaction:withdrawal:execute');
+      ipcMain.handle('transaction:withdrawal:execute', (_event, request) => {
+        state.receiptTest!.sends++;
+        const value = {
+          ...seed,
+          requestId: request.requestId,
+          atmId: request.draft.atmId,
+          atmRevision: request.draft.atmRevision,
+          configurationRevision: request.configurationRevision,
+          cardReadId: request.cardReadId,
+          withdrawal: { ...seed.withdrawal!, amount: request.draft.amount },
+        };
+        state.receiptTest!.saved = value;
+        return { ok: true, value };
+      });
+      // Only the isolated test app: exercise the real receipt service/HTML/window,
+      // substituting the final printer call so no paper or native dialog is used.
+      app.on('web-contents-created', (_event, contents) => {
+        contents.print = (options, callback) => {
+          if (options?.silent !== false) throw Error('TEST_UNEXPECTED_SILENT_PRINT');
+          state.receiptTest!.prints++;
+          state.receiptTest!.html = decodeURIComponent(
+            contents.getURL().split(',').slice(1).join(','),
+          );
+          state.receiptTest!.sandbox = app
+            .getAppMetrics()
+            .filter((metric) => metric.type === 'Tab')
+            .every((metric) => metric.sandboxed === true);
+          if (state.receiptTest!.prints === 1) callback?.(false, 'Print job canceled');
+          else if (state.receiptTest!.prints === 2) callback?.(false, 'PRIVATE_DRIVER_ERROR');
+          else callback?.(true, '');
+        };
+      });
+    }, approvedWithdrawalExecution());
+    await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
+    await window.getByLabel('Monto de prueba').fill('20.00');
+    await expect(window.getByRole('radio', { name: /^Sin impresión/ })).toBeChecked();
+    if (withPrint) await window.getByRole('radio', { name: /^Con impresión/ }).check();
+    await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+    await window.getByRole('button', { name: 'Enviar transacción', exact: true }).click();
+    const dialog = window.getByRole('dialog', { name: 'Vista previa del comprobante' });
+    if (withPrint) await expect(dialog).toBeVisible();
+    else await expect(dialog).toHaveCount(0);
+    const state = await app!.evaluate(
+      () =>
+        (
+          globalThis as typeof globalThis & {
+            receiptTest: { saved: BalanceExecution; sends: number; prints: number };
+          }
+        ).receiptTest,
+    );
+    expect(state.sends).toBe(1);
+    expect(state.prints).toBe(0);
+    await writeFile(
+      join(directory, 'withdrawal-executions.json'),
+      JSON.stringify({ version: 1, executions: [state.saved] }),
+    );
+    if (withPrint) await dialog.getByRole('button', { name: 'Cerrar', exact: true }).click();
+    const result = window.getByLabel('Resultado de retiro', { exact: true });
+    await expect(result).toContainText('USD 123.45');
+    await expect(result).toContainText('USD 234.56');
+    await expect(result.getByLabel('Importes del retiro')).toContainText('No confirmado');
+    await expect(result.getByLabel('Importes del retiro')).toContainText('Sin identificar');
+    await app!.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setContentSize(1440, 980),
+    );
+    await window.evaluate(() => globalThis.window.scrollTo(0, 0));
+    await window.screenshot({
+      path: `artifacts/withdrawal-result-${withPrint ? 'print' : 'screen'}.png`,
+      scale: 'css',
+    });
+    await result.getByRole('button', { name: 'Ver comprobante', exact: true }).click();
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('USD 20.00');
+    await expect(dialog).toContainText('USD 123.45');
+    await window.screenshot({ path: 'artifacts/withdrawal-receipt-preview.png', scale: 'css' });
+    const print = dialog.getByRole('button', { name: 'Imprimir comprobante', exact: true });
+    await print.click();
+    await expect(dialog.getByRole('status')).toContainText('Impresión cancelada');
+    await print.click();
+    await expect(dialog.getByRole('alert')).toContainText('No se pudo imprimir');
+    await expect(dialog).not.toContainText('PRIVATE_DRIVER_ERROR');
+    await print.click();
+    await expect(dialog.getByRole('status')).toContainText('cola de impresión');
+    const printed = await app!.evaluate(
+      () =>
+        (
+          globalThis as typeof globalThis & {
+            receiptTest: { sends: number; prints: number; html: string; sandbox: boolean };
+          }
+        ).receiptTest,
+    );
+    expect(printed).toMatchObject({ sends: 1, prints: 3, sandbox: true });
+    expect(printed.html).toContain(state.saved.transactionId);
+    expect(printed.html).toContain('USD 123.45');
+    expect(printed.html).not.toContain('PRIVATE_DRIVER_ERROR');
+    await window.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await app!.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setContentSize(1040, 768),
+    );
+    expect(
+      await window.evaluate(() => document.documentElement.scrollWidth <= globalThis.innerWidth),
+    ).toBe(true);
+    await result.getByRole('button', { name: 'Ver comprobante', exact: true }).click();
+    await expect(
+      dialog.getByRole('button', { name: 'Imprimir comprobante', exact: true }),
+    ).toBeInViewport();
+    await window.screenshot({ path: 'artifacts/withdrawal-receipt-compact.png', scale: 'css' });
+    await window.keyboard.press('Escape');
+    expect(
+      JSON.parse(await readFile(join(directory, 'withdrawal-executions.json'), 'utf8')).executions,
+    ).toEqual([state.saved]);
+  });
+}
+
+test('consulta de saldo: envío directo, dependencia ausente y resultado mediante IPC sintético', async () => {
+  test.setTimeout(60000);
+  const window = await prepareBalanceSubmission();
+  const send = window.getByRole('button', { name: 'Enviar transacción', exact: true });
+  await expect(send).toBeDisabled();
+  const picker = window.getByLabel('Elegir tarjeta', { exact: true });
+  await picker.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await expect(picker.getByRole('button', { name: 'Cambiar tarjeta', exact: true })).toBeVisible();
+  await app?.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0]?.setContentSize(1536, 1024),
+  );
+  await window.evaluate(() => globalThis.window.scrollTo(0, 0));
+  await window.screenshot({ path: 'artifacts/redesign-prepared-desktop.png', scale: 'css' });
+  await expect(window.getByRole('region', { name: 'Actividad de esta sesión' })).toBeInViewport();
+  await window.getByRole('radio', { name: 'Corriente', exact: true }).check();
+  await expect(send).toBeDisabled();
+  await window.getByRole('radio', { name: 'Ahorros', exact: true }).check();
+  await expect(send).toBeEnabled();
+  await expect(window.locator('.composer-options')).not.toHaveAttribute('open');
+  await expect(
+    window.getByRole('button', { name: 'Revisar transacción', exact: true }),
+  ).not.toBeVisible();
+  // Real Main has no financial provider in this isolated userData. Clicking
+  // submits the request, but its validation must stop before PIN or transport.
+  await send.click();
+  const blocked = window.getByLabel('Resultado de consulta de saldo', { exact: true });
+  await expect(blocked).toContainText('Consulta bloqueada');
+  await expect(blocked).toContainText('No se transmitió la consulta.');
+  await expect(blocked).toContainText('perfil de ejecución QA aprobado');
+  await expect(window.locator('.session-activity tbody tr')).toHaveCount(1);
+  await expect(window.locator('.session-activity')).toContainText('Consulta bloqueada');
+  // Main's completion event reports its empty simulated hardware, independently
+  // of the reader IPC fixture. Restore that fixture before another UI attempt.
+  await installTransactionReader();
+  await picker.getByRole('button', { name: 'Buscar lector', exact: true }).click();
+  await picker.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await expect(send).toBeEnabled();
+  await expect(
+    window.getByRole('button', { name: 'Consultar resultado de saldo', exact: true }),
+  ).toHaveCount(0);
+  // UI verification only. These handlers never construct or transmit a wire request.
+  await app!.evaluate(
+    ({ ipcMain }, ids) => {
+      const state = globalThis as typeof globalThis & {
+        balanceUiCalls?: number;
+        finishBalanceUi?: () => void;
+        lastBalanceUi?: unknown;
+      };
+      state.balanceUiCalls = 0;
+      ipcMain.removeHandler('transaction:balance:readiness');
+      ipcMain.handle('transaction:balance:readiness', () => ({
+        ok: true,
+        value: { ready: true, blockers: [] },
+      }));
+      ipcMain.removeHandler('transaction:balance:execute');
+      ipcMain.handle('transaction:balance:execute', (_event, request) => {
+        state.balanceUiCalls!++;
+        const value = {
+          requestId: request.requestId,
+          runId: ids.runId,
+          transactionId: ids.transactionId,
+          environment: 'QA',
+          atmId: request.draft.atmId,
+          atmRevision: request.draft.atmRevision,
+          configurationRevision: request.configurationRevision,
+          cardReadId: request.cardReadId,
+          scenario: request.draft.scenario,
+          startedAt: '2026-10-12T20:00:00.000Z',
+          finishedAt: '2026-10-12T20:00:01.000Z',
+          outcome: 'APPROVED',
+          frameGenerated: true,
+          transmissionAttempted: true,
+          bytesQueued: 536,
+          elapsedMs: 1000,
+          correlation: {
+            stan: '007923',
+            rrn: '6' + '281' + String(7923).padStart(8, '0'),
+            terminalId: 'ATM20521',
+          },
+          responseCode: '00',
+          balances: [{ accountCode: '10', type: '02', currency: '840', amount: '123.45' }],
+          blockers: [],
+        };
+        return new Promise((resolve) => {
+          state.finishBalanceUi = () => {
+            state.lastBalanceUi = value;
+            resolve({ ok: true, value });
+          };
+        });
+      });
+      ipcMain.removeHandler('transaction:balance:result');
+      ipcMain.handle('transaction:balance:result', () => ({
+        ok: true,
+        value: state.lastBalanceUi,
+      }));
+      ipcMain.removeHandler('transaction:balance:history');
+      ipcMain.handle('transaction:balance:history', () => ({
+        ok: true,
+        value: state.lastBalanceUi ? [state.lastBalanceUi] : [],
+      }));
+    },
+    { runId: randomUUID(), transactionId: randomUUID() },
+  );
+  await expect(send).toBeEnabled();
+  await expect(window.getByLabel('Disponibilidad de la transacción')).not.toBeVisible();
+  await expect(window.getByRole('textbox', { name: /PIN/i })).toHaveCount(0);
+  await send.click();
+  await expect(
+    window.getByRole('button', { name: 'Consultando saldo…', exact: true }),
+  ).toBeDisabled();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toBeDisabled();
+  await app!.evaluate(() => {
+    (globalThis as typeof globalThis & { finishBalanceUi?: () => void }).finishBalanceUi?.();
+  });
+  const result = window.getByLabel('Resultado de consulta de saldo', { exact: true });
+  await expect(result).toContainText('Consulta aprobada');
+  await expect(result).toContainText('123.45');
+  await expect(result).toContainText('USD');
+  await expect(window.getByLabel('Plan de envío', { exact: true })).toHaveCount(0);
+  await expect(send).toBeDisabled();
+  expect(
+    await app!.evaluate(
+      () => (globalThis as typeof globalThis & { balanceUiCalls?: number }).balanceUiCalls,
+    ),
+  ).toBe(1);
+  await expect(
+    window.getByRole('button', { name: 'Consultar resultado de saldo', exact: true }),
+  ).toHaveCount(0);
+  await expect(window.locator('#send-blocked-note')).toContainText('Operación finalizada');
+  await expect(result).toContainText('Código de respuesta: 00');
+  await expect(window.locator('.session-activity tbody tr')).toHaveCount(2);
+  await expect(window.locator('.session-activity')).toContainText('Consulta aprobada');
+  await result.scrollIntoViewIfNeeded();
+  await mkdir('artifacts', { recursive: true });
+  await window.screenshot({ path: 'artifacts/balance-inquiry-result.png' });
+  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
+  await expect(window.locator('.session-activity')).not.toContainText('Consulta aprobada');
+  await expect(window.locator('.session-empty')).toBeVisible();
+});
+
+for (const outcome of [
+  'VALIDATION_ERROR',
+  'STORAGE_UNAVAILABLE',
+  'CONTEXT_ERROR',
+  'CONNECT_TIMEOUT',
+  'RESPONSE_TIMEOUT',
+  'IPC_REJECTED',
+] as const) {
+  test(`consulta directa recupera bloqueos previos y conserva entrega incierta: ${outcome}`, async () => {
+    test.setTimeout(60000);
+    const window = await prepareBalanceSubmission();
+    await window
+      .getByLabel('Elegir tarjeta', { exact: true })
+      .getByRole('button', { name: 'Leer tarjeta', exact: true })
+      .click();
+    await app!.evaluate(({ ipcMain }, outcome) => {
+      const state = globalThis as typeof globalThis & { submissionIds?: string[] };
+      state.submissionIds = [];
+      ipcMain.removeHandler('transaction:balance:execute');
+      ipcMain.handle('transaction:balance:execute', (_event, request) => {
+        state.submissionIds!.push(request.requestId);
+        if (outcome === 'IPC_REJECTED') throw Error('Synthetic IPC failure');
+        if (outcome === 'VALIDATION_ERROR' || outcome === 'STORAGE_UNAVAILABLE')
+          return {
+            ok: false,
+            error: { code: outcome, message: 'Fallo previo al envío sintético' },
+          };
+        return {
+          ok: true,
+          value: {
+            requestId: request.requestId,
+            runId: request.requestId,
+            transactionId: request.requestId,
+            environment: 'QA',
+            atmId: request.draft.atmId,
+            atmRevision: request.draft.atmRevision,
+            configurationRevision: request.configurationRevision,
+            cardReadId: request.cardReadId,
+            scenario: 'LOCAL',
+            startedAt: '2026-10-14T00:00:00.000Z',
+            finishedAt: '2026-10-14T00:00:01.000Z',
+            outcome,
+            frameGenerated: outcome !== 'CONTEXT_ERROR',
+            transmissionAttempted: outcome === 'RESPONSE_TIMEOUT',
+            bytesQueued: outcome === 'RESPONSE_TIMEOUT' ? 536 : 0,
+            elapsedMs: 1000,
+            correlation: null,
+            responseCode: null,
+            balances: [],
+            blockers: [{ id: 'SYNTHETIC', label: 'Diagnóstico de prueba local' }],
+          },
+        };
+      });
+    }, outcome);
+    const send = window.getByRole('button', { name: 'Enviar transacción', exact: true });
+    await expect(send).toBeEnabled();
+    await send.click();
+    await expect(send).toBeVisible();
+    if (outcome === 'IPC_REJECTED' || outcome === 'RESPONSE_TIMEOUT') {
+      await expect(send).toBeDisabled();
+      await window.getByRole('radio', { name: 'Corriente', exact: true }).check();
+      await window.getByRole('radio', { name: 'Ahorros', exact: true }).check();
+      await expect(send).toBeDisabled();
+      await expect(
+        window.getByRole('button', { name: 'Consultar resultado de saldo', exact: true }),
+      ).toBeVisible();
+    } else {
+      await expect(send).toBeEnabled();
+      await expect(
+        window.getByRole('button', { name: 'Consultar resultado de saldo', exact: true }),
+      ).toHaveCount(0);
+      await send.click();
+      await expect(send).toBeEnabled();
+    }
+    const ids = await app!.evaluate(
+      () => (globalThis as typeof globalThis & { submissionIds?: string[] }).submissionIds!,
+    );
+    expect(ids).toHaveLength(outcome === 'IPC_REJECTED' || outcome === 'RESPONSE_TIMEOUT' ? 1 : 2);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+}
+
+test('consulta directa conserva la referencia tras timeout y no reenvía al editar', async () => {
+  test.setTimeout(60000);
+  const window = await prepareBalanceSubmission();
+  const picker = window.getByLabel('Elegir tarjeta', { exact: true });
+  await picker.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await expect(picker.getByRole('button', { name: 'Cambiar tarjeta', exact: true })).toBeVisible();
+  await app!.evaluate(({ ipcMain }) => {
+    const state = globalThis as typeof globalThis & { uncertainBalanceCalls?: number };
+    state.uncertainBalanceCalls = 0;
+    ipcMain.removeHandler('transaction:balance:execute');
+    ipcMain.handle('transaction:balance:execute', () => {
+      state.uncertainBalanceCalls!++;
+      return new Promise(() => undefined);
+    });
+  });
+  await window.clock.install();
+  await window.getByRole('button', { name: 'Enviar transacción', exact: true }).click();
+  await expect(
+    window.getByRole('button', { name: 'Consultando saldo…', exact: true }),
+  ).toBeDisabled();
+  await window.clock.fastForward(180001);
+  await expect(window.getByRole('alert')).toContainText('No se conoce el resultado.');
+  await expect(
+    window
+      .getByRole('region', { name: 'Resultado', exact: true })
+      .getByRole('button', { name: 'Nueva transacción', exact: true }),
+  ).toHaveCount(0);
+  const send = window.getByRole('button', { name: 'Enviar transacción', exact: true });
+  await expect(send).toBeDisabled();
+  await window.getByRole('radio', { name: 'Corriente', exact: true }).check();
+  await window.getByRole('radio', { name: 'Ahorros', exact: true }).check();
+  await expect(send).toBeDisabled();
+  await expect(
+    window.getByRole('button', { name: 'Consultar resultado de saldo', exact: true }),
+  ).toBeVisible();
+  expect(
+    await app!.evaluate(
+      () =>
+        (globalThis as typeof globalThis & { uncertainBalanceCalls?: number })
+          .uncertainBalanceCalls,
+    ),
+  ).toBe(1);
+});
+async function installTransactionReader(failRead = false, readId = transactionIdentity.readId) {
+  await app!.evaluate(
+    ({ ipcMain }, args) => {
+      let identity: typeof args.identity | null = null;
+      ipcMain.removeHandler('reader:inspect');
+      ipcMain.handle('reader:inspect', () => ({
+        ok: true,
+        value: {
+          checkedAt: args.identity.readAt,
+          identityStatus: identity ? 'READ' : 'NOT_READ',
+          readers: [{ name: args.identity.readerName, state: 'CARD_PRESENT', atr: '3B00' }],
+          identity,
+        },
+      }));
+      ipcMain.removeHandler('reader:identity:read');
+      ipcMain.handle('reader:identity:read', (_event, request) => {
+        if (args.failRead)
+          return {
+            ok: false,
+            error: { code: 'TIMEOUT', message: 'La lectura de tarjeta agotó el tiempo de espera.' },
+          };
+        if (
+          request.readerName !== args.identity.readerName ||
+          request.terminalCountryCode !== '218'
+        )
+          return {
+            ok: false,
+            error: { code: 'VALIDATION_ERROR', message: 'Selección de lector inválida.' },
+          };
+        identity = args.identity;
+        return { ok: true, value: identity };
+      });
+    },
+    { identity: { ...transactionIdentity, readId }, failRead },
+  );
+}
+
+test('formulario directo: lectura selecciona la tarjeta, revisión opcional e invalidación al retirar', async () => {
+  const window = await launch();
+  await installTransactionReader();
+  await createTestEntity(window);
+  await createTestAtm(window, 'ATM de preparación guiada');
+  await window.getByRole('button', { name: 'Inicio', exact: true }).click();
+  await window.getByRole('button', { name: 'Nueva transacción', exact: true }).click();
+  await window
+    .getByLabel('Perfil ATM', { exact: true })
+    .selectOption({ label: 'ATM de preparación guiada' });
+  await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
+  await window.getByRole('radio', { name: 'Corriente', exact: true }).check();
+  await window.getByLabel('Monto de prueba').fill('100.50');
+  await expect(window.getByRole('heading', { name: 'Tarjeta', exact: true })).toBeVisible();
+  const picker = window.getByLabel('Elegir tarjeta', { exact: true });
+  await expect(picker.getByRole('button', { name: 'Leer tarjeta', exact: true })).toBeEnabled();
+  await expect(picker.getByRole('button', { name: 'Cambiar tarjeta', exact: true })).toHaveCount(0);
+  await picker.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await expect(picker.getByText(transactionIdentity.panMasked!, { exact: true })).toBeVisible();
+  await expect(picker.getByRole('button', { name: 'Cambiar tarjeta', exact: true })).toBeVisible();
+  const preview = window.getByLabel('Resumen de la transacción');
+  await expect(preview).toContainText('ATM de preparación guiada');
+  await expect(preview).toContainText('Corriente');
+  await expect(preview).toContainText('100.50');
+  await expect(preview).toContainText(transactionIdentity.panMasked!);
+  await reviewDraft(window);
+  await expect(window.getByLabel('Contexto revisado', { exact: true })).toBeVisible();
+  await expect(
+    window.getByRole('button', { name: 'Enviar transacción', exact: true }),
+  ).toBeDisabled();
+  await expect(window.locator('.transaction-steps')).toHaveCount(0);
+  await window.getByRole('button', { name: 'Historial', exact: true }).click();
+  await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
+  await expect(window.getByLabel('Monto de prueba')).toHaveValue('100.50');
+  await expect(preview).toContainText(transactionIdentity.panMasked!);
+  await mkdir('artifacts', { recursive: true });
+  await window.evaluate(() => globalThis.window.scrollTo(0, 0));
+  await window.screenshot({
+    path: 'artifacts/guided-transaction.png',
+    fullPage: true,
+    scale: 'css',
+  });
+  await app!.evaluate(({ ipcMain }, identity) => {
+    ipcMain.removeHandler('reader:inspect');
+    ipcMain.handle('reader:inspect', () => ({
+      ok: true,
+      value: {
+        checkedAt: identity.readAt,
+        identityStatus: 'NOT_READ',
+        readers: [{ name: identity.readerName, state: 'EMPTY', atr: null }],
+        identity: null,
+      },
+    }));
+  }, transactionIdentity);
+  await picker.getByRole('button', { name: 'Buscar lector', exact: true }).click();
+  await expect(preview).toContainText('Pendiente de seleccionar');
+  await expect(window.getByLabel('Contexto revisado', { exact: true })).toHaveCount(0);
+  await expect(
+    window.getByRole('button', { name: 'Enviar transacción', exact: true }),
+  ).toBeDisabled();
+  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
+  await expect(window.getByLabel('Perfil ATM', { exact: true })).toHaveValue('');
+  await expect(preview).toContainText('Pendiente de seleccionar');
+});
+
+test('formulario directo valida entradas y recupera un timeout de lectura', async () => {
+  const window = await launch();
+  await installTransactionReader(true);
+  await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
+  await expect(window.locator('#send-blocked-note')).toContainText('Selecciona un perfil ATM');
+  await expect(
+    window.getByRole('button', { name: 'Enviar transacción', exact: true }),
+  ).toBeDisabled();
+  await expect(window.getByRole('button', { name: 'Crear entidad', exact: true })).toBeVisible();
+  await createTestEntity(window);
+  await createTestAtm(window, 'ATM para validación guiada');
+  await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
+  await window
+    .getByLabel('Perfil ATM', { exact: true })
+    .selectOption({ label: 'ATM para validación guiada' });
+  await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
+  await window.getByLabel('Monto de prueba').fill('100,50');
+  await reviewDraft(window);
+  await expect(window.getByLabel('Monto de prueba')).toBeFocused();
+  await expect(window.getByRole('alert')).toContainText('punto y dos decimales');
+  await window.getByLabel('Monto de prueba').fill('100.50');
+  const picker = window.getByLabel('Elegir tarjeta', { exact: true });
+  await picker.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await expect(picker.getByRole('alert')).toContainText('tiempo de espera');
+  await expect(picker.getByRole('button', { name: 'Cambiar tarjeta', exact: true })).toHaveCount(0);
+  await expect(window.getByLabel('Resumen de la transacción')).toContainText(
+    'Pendiente de seleccionar',
+  );
+  await installTransactionReader(false);
+  await picker.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await expect(picker.getByRole('alert')).toHaveCount(0);
+  await expect(picker.getByRole('button', { name: 'Cambiar tarjeta', exact: true })).toBeEnabled();
+});
+
+test('revisión documental opcional con lector no disponible', async () => {
+  const window = await launch();
+  await app!.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('reader:inspect');
+    ipcMain.handle('reader:inspect', () => ({
+      ok: false,
+      error: { code: 'SERVICE_UNAVAILABLE', message: 'Lector no disponible.' },
+    }));
+  });
+  await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
+  const picker = window.getByLabel('Elegir tarjeta', { exact: true });
+  await expect(picker.getByRole('alert')).toContainText('Lector no disponible');
+  await expect(picker.getByRole('button', { name: 'Leer tarjeta', exact: true })).toBeDisabled();
+  await expect(picker.getByRole('button', { name: 'Cambiar tarjeta', exact: true })).toHaveCount(0);
+  await reviewDraft(window);
+  await expect(window.getByLabel('Resumen de la transacción')).toContainText(
+    'Pendiente de seleccionar',
+  );
+  await expect(window.getByLabel('Contexto revisado', { exact: true })).toBeVisible();
+  await expect(
+    window.getByRole('button', { name: 'Enviar transacción', exact: true }),
+  ).toBeDisabled();
 });
 
 test('muestra evidencia de capturas sin habilitar envío ni RAW', async () => {
   const window = await launch();
   await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
+  await window.getByText('Documentación y capturas', { exact: true }).click();
   const evidence = window.getByLabel('Evidencia de capturas');
   await expect(evidence.getByRole('heading', { name: '10 archivos · 218 mensajes' })).toBeVisible();
   await expect(evidence.getByText('2 bytes, big endian; incluye el prefijo')).toBeVisible();
@@ -248,9 +1193,11 @@ test('muestra evidencia de capturas sin habilitar envío ni RAW', async () => {
   await expect(
     evidence.getByText('CertificacionMandatoVisa29092026_CRBanred.pcap', { exact: true }),
   ).toBeVisible();
+  await window.getByText('Flujo e inspector', { exact: false }).click();
   await expect(window.getByRole('tab', { name: 'RAW', exact: true })).toBeDisabled();
   await expect(window.getByRole('button', { name: 'Enviar transacción' })).toBeDisabled();
   await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
+  await window.getByText('Documentación y capturas', { exact: true }).click();
   await expect(evidence.getByRole('heading', { name: '10 archivos · 218 mensajes' })).toBeVisible();
   await expect(window.getByRole('button', { name: 'Enviar transacción' })).toBeDisabled();
   await mkdir('artifacts', { recursive: true });
@@ -383,7 +1330,7 @@ test('Historial muestra mandatorios CMS y variantes sin exponer valores', async 
 
 test('dashboard real, aislamiento, navegación y gate transaccional', async () => {
   const window = await launch();
-  await expect(window.getByText('Servicios locales activos', { exact: true })).toBeVisible();
+  await expect(window.locator('.sidebar-station')).toContainText('Estación QA');
   await expect(window.getByLabel('Ambiente', { exact: true })).toHaveValue('QA');
   const csp = await window
     .locator('meta[http-equiv="Content-Security-Policy"]')
@@ -412,14 +1359,15 @@ test('dashboard real, aislamiento, navegación y gate transaccional', async () =
   await mkdir('artifacts', { recursive: true });
   await window.screenshot({ path: 'artifacts/dashboard.png', fullPage: true });
   await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
-  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
-  await expect(window.getByText('Envío bloqueado · QA')).toBeVisible();
+  await reviewDraft(window);
+  await expect(window.getByText('Revisión documental · QA')).toBeVisible();
   await expect(window.getByRole('button', { name: 'Enviar transacción' })).toBeDisabled();
   await window
     .getByRole('combobox', { name: 'Transacción', exact: true })
     .selectOption('TIMEOUT_REVERSAL');
-  await expect(window.getByText('Envío bloqueado · QA')).toHaveCount(0);
-  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
+  await expect(window.getByText('Revisión documental · QA')).toHaveCount(0);
+  await reviewDraft(window);
+  await window.getByText('Ver revisión detallada', { exact: true }).click();
   await expect(
     window.getByText('Especificación: docs/transactions/TIMEOUT_REVERSAL.md'),
   ).toBeVisible();
@@ -443,9 +1391,28 @@ test('dashboard real, aislamiento, navegación y gate transaccional', async () =
   const pageErrors: string[] = [];
   window.on('pageerror', (error) => pageErrors.push(error.message));
   await window.reload();
-  await expect(window.getByText('Servicios locales activos', { exact: true })).toBeVisible();
+  await expect(window.locator('.sidebar-station')).toContainText('Estación QA');
   expect(pageErrors).toEqual([]);
 });
+
+async function openComposerOptions(window: Page) {
+  const options = window.locator('.composer-options');
+  if ((await options.getAttribute('open')) === null)
+    await options.locator('summary').first().click();
+}
+async function reviewDraft(window: Page) {
+  await expect(window.getByLabel('Ambiente', { exact: true })).toBeEnabled();
+  await expect(
+    window.getByRole('button', { name: 'Recargar perfiles', exact: true }),
+  ).toBeEnabled();
+  await openComposerOptions(window);
+  await window.getByRole('button', { name: 'Revisar transacción', exact: true }).click();
+}
+async function openPreparationDetails(window: Page) {
+  await openComposerOptions(window);
+  if ((await window.locator('.preparation-details').getAttribute('open')) === null)
+    await window.getByText('Preparación y pendientes documentales', { exact: true }).click();
+}
 
 async function createTestEntity(window: Page) {
   await window.getByRole('button', { name: 'Entidades', exact: true }).click();
@@ -478,15 +1445,13 @@ test('casos locales: validación, reinicio, carga, separación de ambientes y el
   await createTestEntity(window);
   await createTestAtm(window, 'ATM de casos');
   await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
-  await window
-    .getByLabel('Perfil ATM', { exact: true })
-    .selectOption({ label: 'ATM de casos · Borrador' });
+  await window.getByLabel('Perfil ATM', { exact: true }).selectOption({ label: 'ATM de casos' });
   await window.getByLabel('Escenario', { exact: true }).selectOption('BANRED');
   await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
   await expect(
     window.getByRole('button', { name: 'Guardar como caso', exact: true }),
   ).toBeDisabled();
-  await window.getByLabel('Cuenta', { exact: true }).selectOption('CURRENT');
+  await window.getByRole('radio', { name: 'Corriente', exact: true }).check();
   await window.getByLabel('Monto de prueba').fill('100.50');
   await window.getByRole('button', { name: 'Guardar como caso', exact: true }).click();
   let dialog = window.getByRole('dialog');
@@ -518,14 +1483,14 @@ test('casos locales: validación, reinicio, carga, separación de ambientes y el
   await expect(window.getByLabel('Transacción', { exact: true })).toHaveValue(
     'WITHDRAWAL_APPROVED',
   );
-  await expect(window.getByLabel('Cuenta', { exact: true })).toHaveValue('CURRENT');
+  await expect(window.getByRole('radio', { name: 'Corriente', exact: true })).toBeChecked();
   await expect(window.getByLabel('Escenario', { exact: true })).toHaveValue('BANRED');
   await expect(window.getByLabel('Monto de prueba')).toHaveValue('100.50');
   await expect(window.getByLabel('Perfil ATM', { exact: true })).not.toHaveValue('');
   await expect(window.getByRole('button', { name: 'Enviar transacción' })).toBeDisabled();
   await expect(window.getByLabel('Contexto revisado', { exact: true })).toHaveCount(0);
-  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
-  await expect(window.getByText('Envío bloqueado · QA')).toBeVisible();
+  await reviewDraft(window);
+  await expect(window.getByText('Revisión documental · QA')).toBeVisible();
   await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
   await window.getByRole('button', { name: 'Casos guardados (0)', exact: true }).click();
   await expect(dialog.getByText('Aún no hay casos guardados en este ambiente.')).toBeVisible();
@@ -550,7 +1515,7 @@ test('un caso con ATM editado conserva cuenta/monto y exige seleccionar el perfi
   await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
   await window
     .getByLabel('Perfil ATM', { exact: true })
-    .selectOption({ label: 'ATM de caso obsoleto · Borrador' });
+    .selectOption({ label: 'ATM de caso obsoleto' });
   await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_DECLINED');
   await window.getByLabel('Monto de prueba').fill('50.00');
   await window.getByRole('button', { name: 'Guardar como caso', exact: true }).click();
@@ -592,8 +1557,8 @@ test('un caso con ATM editado conserva cuenta/monto y exige seleccionar el perfi
   );
   await window
     .getByLabel('Perfil ATM', { exact: true })
-    .selectOption({ label: 'ATM de caso actualizado · Borrador' });
-  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
+    .selectOption({ label: 'ATM de caso actualizado' });
+  await reviewDraft(window);
   await expect(window.getByLabel('Contexto revisado', { exact: true })).toContainText('versión 2');
   await expect(window.getByRole('button', { name: 'Enviar transacción' })).toBeDisabled();
 });
@@ -605,7 +1570,7 @@ test('fallo al guardar un caso exige recargar antes de reintentar', async () => 
   await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
   await window
     .getByLabel('Perfil ATM', { exact: true })
-    .selectOption({ label: 'ATM de guardado concurrente · Borrador' });
+    .selectOption({ label: 'ATM de guardado concurrente' });
   await window.getByRole('button', { name: 'Guardar como caso', exact: true }).click();
   const dialog = window.getByRole('dialog');
   await dialog.getByLabel('Nombre del caso').fill('Caso concurrente');
@@ -648,7 +1613,7 @@ test('una recarga fallida de casos bloquea la lista anterior hasta recuperar la 
   await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
   await window
     .getByLabel('Perfil ATM', { exact: true })
-    .selectOption({ label: 'ATM de recuperación de casos · Borrador' });
+    .selectOption({ label: 'ATM de recuperación de casos' });
   await window.getByRole('button', { name: 'Guardar como caso', exact: true }).click();
   const dialog = window.getByRole('dialog');
   await dialog.getByLabel('Nombre del caso').fill('Caso de recuperación');
@@ -729,35 +1694,36 @@ test('pantalla del mockup: contexto ATM, catálogo CMS, monto y cambio de ambien
   await createTestAtm(window, 'ATM de preparación QA');
   await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
   await expect(window.getByRole('heading', { name: 'Nueva transacción' })).toBeVisible();
-  await expect(window.locator('.transaction-steps [aria-current="step"]')).toContainText(
-    'Datos Generales',
-  );
+  await expect(window.locator('.transaction-steps')).toHaveCount(0);
+  await window.getByText('Documentación y capturas', { exact: true }).click();
+  await window.getByText('Flujo e inspector', { exact: false }).click();
   const reference = window.locator('.documented-operation');
   await expect(reference.getByText('301000', { exact: true })).toBeVisible();
   await expect(reference).toContainText('Extreme Mediator CMS v3.6 · p. 20');
-  await window.getByLabel('Cuenta', { exact: true }).selectOption('CURRENT');
+  await window.getByRole('radio', { name: 'Corriente', exact: true }).check();
   await expect(reference.getByText('302000', { exact: true })).toBeVisible();
   await window
     .getByLabel('Perfil ATM', { exact: true })
-    .selectOption({ label: 'ATM de preparación QA · Borrador' });
-  await expect(window.getByText('Perfil en borrador', { exact: true })).toBeVisible();
-  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
-  await expect(window.getByText('Envío bloqueado · QA')).toBeVisible();
+    .selectOption({ label: 'ATM de preparación QA' });
+  await expect(window.getByLabel('Perfil ATM', { exact: true })).not.toHaveValue('');
+  await reviewDraft(window);
+  await expect(window.getByText('Revisión documental · QA')).toBeVisible();
   await expect(window.getByRole('button', { name: 'Enviar transacción' })).toBeDisabled();
   await expect(window.getByRole('tab', { name: 'RAW', exact: true })).toBeDisabled();
   await expect(window.getByRole('tab', { name: 'HEX', exact: true })).toBeDisabled();
   await expect(window.getByText('Sin mensaje recibido', { exact: true })).toBeVisible();
   await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
-  await expect(window.getByText('Envío bloqueado · QA')).toHaveCount(0);
+  await expect(window.getByText('Revisión documental · QA')).toHaveCount(0);
   await expect(reference.getByText('012000', { exact: true })).toBeVisible();
   await window.getByLabel('Monto de prueba').fill('100,50');
-  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
+  await reviewDraft(window);
   await expect(window.getByRole('alert')).toContainText('punto y dos decimales');
   await window.getByLabel('Monto de prueba').fill('100.50');
-  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
-  await expect(window.getByText('Envío bloqueado · QA')).toBeVisible();
+  await reviewDraft(window);
+  await expect(window.getByText('Revisión documental · QA')).toBeVisible();
+  await openPreparationDetails(window);
   await expect(window.getByText('Reglas financieras del monto', { exact: true })).toBeVisible();
-  await window.getByLabel('Cuenta', { exact: true }).selectOption('SAVINGS');
+  await window.getByRole('radio', { name: 'Ahorros', exact: true }).check();
   await expect(reference.getByText('011000', { exact: true })).toBeVisible();
   await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_DECLINED');
   await expect(reference.getByText('011000', { exact: true })).toBeVisible();
@@ -776,20 +1742,21 @@ test('pantalla del mockup: contexto ATM, catálogo CMS, monto y cambio de ambien
   await expect(window.getByLabel('Perfil ATM', { exact: true })).toHaveValue('');
   await expect(window.getByLabel('Transacción', { exact: true })).toHaveValue('BALANCE');
   await expect(window.getByLabel('Monto de prueba')).toHaveCount(0);
-  await expect(window.getByText('Envío bloqueado · QA')).toHaveCount(0);
+  await expect(window.getByText('Revisión documental · QA')).toHaveCount(0);
   await expect(window.getByLabel('Perfil ATM', { exact: true })).toBeDisabled();
-  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
-  await expect(window.getByText('Envío bloqueado · PREPROD')).toBeVisible();
-  await expect(window.locator('.transaction-empty-row')).toContainText('Aún no hay ejecuciones');
+  await reviewDraft(window);
+  await expect(window.getByText('Revisión documental · PREPROD')).toBeVisible();
+  await expect(window.locator('.session-empty')).toContainText('No se han enviado transacciones');
   await window.getByLabel('Ambiente', { exact: true }).selectOption('QA');
   await window.getByLabel('Transacción', { exact: true }).selectOption('TIMEOUT_REVERSAL');
-  await expect(window.getByLabel('Cuenta', { exact: true })).toBeDisabled();
+  await expect(window.getByRole('radio', { name: 'Ahorros', exact: true })).toBeDisabled();
   await expect(reference.getByText('TrnCode CMS', { exact: true })).toHaveCount(0);
-  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
+  await reviewDraft(window);
+  await openPreparationDetails(window);
   await expect(
     window.getByText('Transacción original y reglas de reverso', { exact: true }),
   ).toBeVisible();
-  await expect(window.locator('.transaction-steps [aria-current="step"]')).toHaveCount(1);
+  await expect(window.locator('.transaction-steps')).toHaveCount(0);
 });
 
 test('preparación rechaza ATM editado y recupera el contexto al recargar', async () => {
@@ -799,7 +1766,7 @@ test('preparación rechaza ATM editado y recupera el contexto al recargar', asyn
   await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
   await window
     .getByLabel('Perfil ATM', { exact: true })
-    .selectOption({ label: 'ATM para concurrencia · Borrador' });
+    .selectOption({ label: 'ATM para concurrencia' });
   const changed = await window.evaluate(async () => {
     const api = globalThis.window.desktop!;
     const catalog = await api.getCatalog('QA');
@@ -819,17 +1786,16 @@ test('preparación rechaza ATM editado y recupera el contexto al recargar', asyn
     });
   });
   expect(changed).toMatchObject({ ok: true });
-  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
-  await expect(window.getByRole('alert')).toContainText('El ATM cambió');
-  await expect(window.getByText('Envío bloqueado · QA')).toHaveCount(0);
+  await reviewDraft(window);
+  const confirmation = window.getByRole('region', { name: 'Resultado' });
+  await expect(confirmation.getByRole('alert')).toContainText('El ATM cambió');
+  await expect(window.getByText('Revisión documental · QA')).toHaveCount(0);
   await window.getByRole('button', { name: 'Recargar perfiles' }).click();
-  await expect(window.getByRole('alert')).toHaveCount(0);
+  await expect(confirmation.getByRole('alert')).toHaveCount(0);
   await expect(window.getByLabel('Perfil ATM', { exact: true })).toHaveValue('');
-  await window
-    .getByLabel('Perfil ATM', { exact: true })
-    .selectOption({ label: 'ATM actualizado · Borrador' });
-  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
-  await expect(window.getByText('Envío bloqueado · QA')).toBeVisible();
+  await window.getByLabel('Perfil ATM', { exact: true }).selectOption({ label: 'ATM actualizado' });
+  await reviewDraft(window);
+  await expect(window.getByText('Revisión documental · QA')).toBeVisible();
 });
 
 test('plantillas documentales, resumen revisado y borrador conservado al navegar', async () => {
@@ -839,50 +1805,53 @@ test('plantillas documentales, resumen revisado y borrador conservado al navegar
   await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
   await window
     .getByLabel('Perfil ATM', { exact: true })
-    .selectOption({ label: 'ATM de plantillas · Borrador' });
+    .selectOption({ label: 'ATM de plantillas' });
   await window.getByLabel('Escenario', { exact: true }).selectOption('RTC');
+  await openComposerOptions(window);
   await window.getByLabel('Plantilla documental').selectOption('WITHDRAWAL_APPROVED:CURRENT');
   await expect(window.getByLabel('Transacción', { exact: true })).toHaveValue(
     'WITHDRAWAL_APPROVED',
   );
-  await expect(window.getByLabel('Cuenta', { exact: true })).toHaveValue('CURRENT');
+  await expect(window.getByRole('radio', { name: 'Corriente', exact: true })).toBeChecked();
   await expect(window.getByLabel('Escenario', { exact: true })).toHaveValue('RTC');
   await expect(window.getByLabel('Perfil ATM', { exact: true })).not.toHaveValue('');
+  await openPreparationDetails(window);
   await expect(window.getByText('Reglas financieras del monto', { exact: true })).toBeVisible();
   await window.getByLabel('Monto de prueba').fill('100,50');
   await expect(window.getByLabel('Monto de prueba')).toHaveAttribute('aria-invalid', 'true');
-  await expect(
-    window.getByText('Usa punto y dos decimales, por ejemplo 100.50. No se modifica tu entrada.'),
-  ).toBeVisible();
-  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
+  await expect(window.getByText('Usa punto y dos decimales, por ejemplo 100.50.')).toBeVisible();
+  await reviewDraft(window);
   await expect(window.getByLabel('Monto de prueba')).toBeFocused();
   await window.getByLabel('Monto de prueba').fill('100.50');
   await expect(window.getByLabel('Monto de prueba')).toHaveAttribute('aria-invalid', 'false');
-  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
+  await reviewDraft(window);
   const summary = window.getByRole('region', { name: 'Contexto revisado' });
   await expect(summary).toContainText('012000');
   await expect(summary).toContainText('100.50');
   await expect(summary).toContainText('ATM de plantillas · versión 1 · borrador');
+  await summary.getByText('Ver revisión detallada', { exact: true }).click();
   await summary.getByText('Referencia de revisión').click();
   await expect(summary.locator('code')).toHaveText(/^[0-9a-f-]{36}$/);
-  await window.getByRole('button', { name: 'Ver configuración pendiente', exact: true }).click();
+  await window.getByRole('button', { name: 'Configurar envío', exact: true }).click();
   await expect(window.getByRole('heading', { name: 'Configuración', exact: true })).toBeVisible();
   await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
   await expect(window.getByLabel('Monto de prueba')).toHaveValue('100.50');
   await expect(summary).toBeVisible();
   await window.getByLabel('Monto de prueba').fill('120.00');
   await expect(summary).toHaveCount(0);
-  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
+  await reviewDraft(window);
   await expect(summary).toContainText('120.00');
   await summary.scrollIntoViewIfNeeded();
   await mkdir('artifacts', { recursive: true });
   await window.screenshot({ path: 'artifacts/transaction-review-summary.png' });
   await window.getByRole('button', { name: 'Limpiar borrador' }).click();
+  await window.getByRole('dialog').getByRole('button', { name: 'Confirmar limpieza' }).click();
   await expect(window.getByLabel('Transacción', { exact: true })).toHaveValue('BALANCE');
   await expect(window.getByLabel('Escenario', { exact: true })).toHaveValue('LOCAL');
   await expect(window.getByLabel('Perfil ATM', { exact: true })).toHaveValue('');
   await expect(summary).toHaveCount(0);
   await window.getByLabel('Transacción', { exact: true }).selectOption('REVERSAL');
+  await openPreparationDetails(window);
   await expect(
     window.getByText('Transacción original y reglas de reverso', { exact: true }),
   ).toBeVisible();
@@ -896,8 +1865,8 @@ test('compatibilidad Mediator PREPROD desde evidencia del esquema, sin conexión
   await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
   await window
     .getByLabel('Perfil ATM', { exact: true })
-    .selectOption({ label: 'ATM para Mediator · Borrador' });
-  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
+    .selectOption({ label: 'ATM para Mediator' });
+  await reviewDraft(window);
   const compatibility = window.getByRole('region', { name: 'Compatibilidad del destino' });
   await expect(compatibility).toContainText('Esquema Mediator PREPROD');
   await expect(compatibility).toContainText('Terminal ID · Incompatible');
@@ -914,10 +1883,10 @@ test('compatibilidad Mediator PREPROD desde evidencia del esquema, sin conexión
   await window.getByRole('button', { name: 'Guardar borrador' }).click();
   await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
   await expect(compatibility).toHaveCount(0);
-  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
+  await reviewDraft(window);
   await expect(compatibility).toContainText('Terminal ID · Longitud compatible');
   await window.getByLabel('Ambiente', { exact: true }).selectOption('QA');
-  await window.getByRole('button', { name: 'Revisar requisitos' }).click();
+  await reviewDraft(window);
   await expect(compatibility).toHaveCount(0);
 });
 
@@ -1013,6 +1982,10 @@ test('una edición concurrente se conserva y los contratos rechazan producción/
   await expect(window.getByRole('alert')).toContainText('El registro cambió');
   await expect(window.getByRole('button', { name: 'Guardar borrador' })).toBeDisabled();
   await window.getByRole('button', { name: 'Recargar', exact: true }).click();
+  await window
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Descartar y recargar', exact: true })
+    .click();
   await expect(
     window.getByRole('cell', { name: 'Cambio concurrente E2E', exact: true }),
   ).toBeVisible();
@@ -1055,7 +2028,12 @@ test('configuración corrupta muestra error seguro y bloquea preparación', asyn
   const window = await launch();
   await expect(window.getByRole('alert')).toContainText('No se pudo leer la configuración local');
   await expect(window.getByLabel('Ambiente', { exact: true })).toBeDisabled();
-  await expect(window.getByRole('button', { name: 'Revisar requisitos' })).toBeDisabled();
+  await expect(
+    window.getByRole('button', { name: 'Nueva transacción', exact: true }),
+  ).toBeDisabled();
+  await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
+  await openComposerOptions(window);
+  await expect(window.getByRole('button', { name: 'Revisar transacción' })).toBeDisabled();
   await expect(window.getByText('private-secret')).toHaveCount(0);
   await window.getByRole('button', { name: 'Reintentar' }).click();
   await expect(window.getByRole('alert')).toBeVisible();
@@ -1069,9 +2047,9 @@ test('modo desarrollo carga React y el puente IPC con Vite', async () => {
     const window = await launch(true);
     const errors: string[] = [];
     window.on('pageerror', (error) => errors.push(error.message));
-    await expect(window.getByText('Servicios locales activos', { exact: true })).toBeVisible();
+    await expect(window.locator('.sidebar-station')).toContainText('Estación QA');
     await window.reload();
-    await expect(window.getByText('Servicios locales activos', { exact: true })).toBeVisible();
+    await expect(window.locator('.sidebar-station')).toContainText('Estación QA');
     expect(errors).toEqual([]);
     await expect(window.getByLabel('Ambiente', { exact: true })).toHaveValue('QA');
   } finally {
@@ -1137,4 +2115,864 @@ test('el lanzador dev muestra la ventana nativa de Electron en Windows', async (
       );
     if (launcher.exitCode === null) await exited;
   }
+});
+
+test('mejoras UI: configuración rápida conserva datos y selecciona el ATM creado', async () => {
+  const window = await launch();
+  await window.getByRole('button', { name: 'Nueva transacción', exact: true }).click();
+  await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
+  await window.getByLabel('Escenario', { exact: true }).selectOption('BANRED');
+  await window.getByRole('radio', { name: 'Corriente', exact: true }).check();
+  await window.getByLabel('Monto de prueba').fill('100.50');
+  await window.getByRole('button', { name: 'Crear entidad', exact: true }).click();
+  await expect(window.getByLabel('Código de entidad')).toBeVisible();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toBeDisabled();
+  await expect(window.getByRole('button', { name: 'Inicio', exact: true })).toBeDisabled();
+  await window.getByLabel('Código de entidad').fill('CANCELLED');
+  await window.getByRole('button', { name: 'Cancelar', exact: true }).click();
+  await expect(
+    window.getByRole('heading', { name: 'Nueva transacción', exact: true }),
+  ).toBeVisible();
+  await expect(window.getByLabel('Monto de prueba')).toHaveValue('100.50');
+  await expect(window.getByLabel('Perfil ATM', { exact: true })).toHaveValue('');
+  await window.getByRole('button', { name: 'Crear entidad', exact: true }).click();
+  await window.getByLabel('Código de entidad').fill('TEST-QUICK');
+  await window.getByLabel('Nombre de entidad').fill('Entidad sintética rápida');
+  await window.getByLabel('Red de entidad').selectOption('COONECTA');
+  await window.getByRole('button', { name: 'Guardar borrador', exact: true }).click();
+  await expect(
+    window.getByRole('heading', { name: 'Crear perfil ATM', exact: true }),
+  ).toBeVisible();
+  const entityId = await window.getByLabel('Entidad del ATM').inputValue();
+  expect(entityId).toMatch(/^[0-9a-f-]{36}$/);
+  await expect(window.getByLabel('Entidad del ATM').locator('option:checked')).toHaveText(
+    'TEST-QUICK · Entidad sintética rápida',
+  );
+  await window.getByLabel('Alias ATM').fill('0000 0000 0000 0000');
+  await expect(window.getByLabel('Alias ATM')).toHaveValue('');
+  await expect(window.getByRole('alert')).toContainText('No incluyas datos de tarjeta');
+  await window.getByLabel('Alias ATM').fill('ATM sintético rápido');
+  await window.getByLabel('Terminal ID', { exact: true }).fill('TEST-QUICK-TERM');
+  await window.getByLabel('Acquirer ID', { exact: true }).fill('TEST-QUICK-ACQ');
+  await mkdir('artifacts', { recursive: true });
+  await window.screenshot({ path: 'artifacts/quick-atm-setup.png', scale: 'css' });
+  await window.getByRole('button', { name: 'Guardar borrador', exact: true }).click();
+  await expect(
+    window.getByRole('heading', { name: 'Nueva transacción', exact: true }),
+  ).toBeVisible();
+  await expect(
+    window.getByLabel('Perfil ATM', { exact: true }).locator('option:checked'),
+  ).toHaveText('ATM sintético rápido');
+  expect(await window.getByLabel('Perfil ATM', { exact: true }).inputValue()).toMatch(
+    /^[0-9a-f-]{36}$/,
+  );
+  await expect(window.getByLabel('Transacción', { exact: true })).toHaveValue(
+    'WITHDRAWAL_APPROVED',
+  );
+  await expect(window.getByLabel('Escenario', { exact: true })).toHaveValue('BANRED');
+  await expect(window.getByRole('radio', { name: 'Corriente', exact: true })).toBeChecked();
+  await expect(window.getByLabel('Monto de prueba')).toHaveValue('100.50');
+  await expect(window.getByRole('heading', { name: 'Tarjeta', exact: true })).toBeVisible();
+  await expect(
+    window.getByRole('button', { name: 'Enviar transacción', exact: true }),
+  ).toBeDisabled();
+});
+
+test('mejoras UI: fallo del catálogo no pierde el borrador ni selecciona un ATM', async () => {
+  const window = await launch();
+  await createTestEntity(window);
+  await app!.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('catalog:atm:save');
+    ipcMain.handle('catalog:atm:save', () => ({
+      ok: false,
+      error: { code: 'SERVICE_UNAVAILABLE', message: 'Catálogo temporalmente no disponible.' },
+    }));
+  });
+  await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
+  await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
+  await window.getByLabel('Monto de prueba').fill('50.00');
+  await window.getByRole('button', { name: 'Crear ATM', exact: true }).click();
+  await window.getByLabel('Alias ATM').fill('ATM sintético fallido');
+  await window
+    .getByLabel('Entidad del ATM')
+    .selectOption({ label: 'TEST-E2E · Entidad sintética E2E' });
+  await window.getByLabel('Terminal ID', { exact: true }).fill('TEST-FAIL-TERM');
+  await window.getByLabel('Acquirer ID', { exact: true }).fill('TEST-FAIL-ACQ');
+  await window.getByRole('button', { name: 'Guardar borrador', exact: true }).click();
+  await expect(window.getByRole('alert')).toContainText('Catálogo temporalmente no disponible.');
+  await expect(window.getByLabel('Alias ATM')).toHaveValue('ATM sintético fallido');
+  await expect(
+    window.getByRole('button', { name: 'Guardar borrador', exact: true }),
+  ).toBeDisabled();
+  await window.getByRole('button', { name: 'Cancelar', exact: true }).click();
+  await expect(window.getByLabel('Monto de prueba')).toHaveValue('50.00');
+  await expect(window.getByLabel('Perfil ATM', { exact: true })).toHaveValue('');
+  await expect(
+    window.getByRole('button', { name: 'Enviar transacción', exact: true }),
+  ).toBeDisabled();
+});
+
+test('mejoras UI: limpiar requiere confirmación y conserva los casos guardados', async () => {
+  const window = await launch();
+  await installTransactionReader();
+  await createTestEntity(window);
+  await createTestAtm(window, 'ATM de limpieza');
+  await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
+  await window.getByLabel('Perfil ATM', { exact: true }).selectOption({ label: 'ATM de limpieza' });
+  await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
+  await window.getByLabel('Monto de prueba').fill('25.00');
+  await window.getByRole('button', { name: 'Guardar como caso', exact: true }).click();
+  const dialog = window.getByRole('dialog');
+  await dialog.getByLabel('Nombre del caso').fill('Caso de limpieza sintético');
+  await dialog.getByRole('button', { name: 'Guardar caso', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  const picker = window.getByLabel('Elegir tarjeta', { exact: true });
+  await picker.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await expect(picker.getByRole('button', { name: 'Cambiar tarjeta', exact: true })).toBeVisible();
+  await reviewDraft(window);
+  const summary = window.getByLabel('Contexto revisado', { exact: true });
+  await expect(summary).toBeVisible();
+  await window.getByRole('button', { name: 'Limpiar borrador', exact: true }).click();
+  await expect(
+    dialog.getByRole('heading', { name: '¿Limpiar este borrador?', exact: true }),
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole('button', { name: 'Conservar borrador', exact: true }),
+  ).toBeFocused();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toBeDisabled();
+  await mkdir('artifacts', { recursive: true });
+  await window.screenshot({ path: 'artifacts/discard-draft-confirmation.png', scale: 'css' });
+  await dialog.getByRole('button', { name: 'Conservar borrador', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(summary).toBeVisible();
+  await expect(window.getByLabel('Resumen de la transacción')).toContainText(
+    transactionIdentity.panMasked!,
+  );
+  await window.getByRole('button', { name: 'Limpiar borrador', exact: true }).click();
+  await window.keyboard.press('Escape');
+  await expect(window.getByLabel('Monto de prueba')).toHaveValue('25.00');
+  await expect(window.getByLabel('Ambiente', { exact: true })).toBeEnabled();
+  await window.getByRole('button', { name: 'Limpiar borrador', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Confirmar limpieza', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(window.getByLabel('Transacción', { exact: true })).toHaveValue('BALANCE');
+  await expect(window.getByLabel('Perfil ATM', { exact: true })).toHaveValue('');
+  await expect(summary).toHaveCount(0);
+  await expect(window.getByLabel('Resumen de la transacción')).toContainText(
+    'Pendiente de seleccionar',
+  );
+  await window.getByRole('button', { name: 'Casos guardados (1)', exact: true }).click();
+  await expect(dialog.getByText('Caso de limpieza sintético', { exact: true })).toBeVisible();
+});
+
+test('mejoras UI: buscar y filtrar casos conserva controles de vigencia y errores', async () => {
+  const window = await launch();
+  await createTestEntity(window);
+  await createTestAtm(window, 'ATM para filtros');
+  await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
+  await window
+    .getByLabel('Perfil ATM', { exact: true })
+    .selectOption({ label: 'ATM para filtros' });
+  const saveCase = async (name: string) => {
+    await window.getByRole('button', { name: 'Guardar como caso', exact: true }).click();
+    await window.getByRole('dialog').getByLabel('Nombre del caso').fill(name);
+    await window
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Guardar caso', exact: true })
+      .click();
+    await expect(window.getByRole('dialog')).not.toBeVisible();
+  };
+  await saveCase('Consulta sintética central');
+  await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
+  await window.getByRole('radio', { name: 'Corriente', exact: true }).check();
+  await window.getByLabel('Monto de prueba').fill('100.50');
+  await saveCase('Retiro sintético corriente');
+  await window.getByRole('button', { name: 'Casos guardados (2)', exact: true }).click();
+  const dialog = window.getByRole('dialog');
+  await expect(dialog.locator('.saved-case-list > li')).toHaveCount(2);
+  await dialog.getByLabel('Buscar caso').fill('CONSULTA SINTETICA');
+  await expect(dialog.locator('.saved-case-list > li')).toHaveCount(1);
+  await expect(dialog.locator('.case-filter-count')).toContainText('1 de 2 casos');
+  await dialog.getByRole('button', { name: 'Limpiar filtros', exact: true }).click();
+  await dialog.getByLabel('Operación del caso').selectOption('WITHDRAWAL_APPROVED');
+  await dialog.getByLabel('Buscar caso').fill('100.50');
+  await expect(dialog.locator('.saved-case-list > li')).toHaveCount(1);
+  await app!.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0]?.setContentSize(1024, 768),
+  );
+  await mkdir('artifacts', { recursive: true });
+  await window.screenshot({ path: 'artifacts/filtered-cases.png', scale: 'css' });
+  expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await dialog.getByLabel('Perfil ATM del caso').selectOption('STALE');
+  await expect(dialog.getByRole('heading', { name: 'Sin casos para estos filtros' })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Mostrar todos los casos', exact: true }).click();
+  await dialog.getByLabel('Buscar caso').fill('0000 0000 0000 0000');
+  await expect(dialog.getByLabel('Buscar caso')).toHaveValue('');
+  await expect(dialog.getByRole('alert')).toContainText('No incluyas datos de tarjeta');
+  await dialog.getByLabel('Buscar caso').fill('Retiro');
+  await dialog
+    .getByRole('button', { name: 'Cargar Retiro sintético corriente', exact: true })
+    .click();
+  await expect(dialog).not.toBeVisible();
+  await expect(window.getByLabel('Monto de prueba')).toHaveValue('100.50');
+  await window.getByRole('button', { name: 'Perfiles ATM', exact: true }).click();
+  await window.getByRole('button', { name: 'Editar ATM para filtros', exact: true }).click();
+  await window.getByLabel('Alias ATM').fill('ATM para filtros actualizado');
+  await window.getByRole('button', { name: 'Guardar borrador', exact: true }).click();
+  await expect(
+    window.getByRole('button', { name: 'Editar ATM para filtros actualizado', exact: true }),
+  ).toBeVisible();
+  await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
+  await window.getByRole('button', { name: 'Casos guardados (2)', exact: true }).click();
+  await dialog.getByLabel('Perfil ATM del caso').selectOption('STALE');
+  await expect(dialog.locator('.saved-case-list > li')).toHaveCount(2);
+  await app!.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('catalog:list');
+    ipcMain.handle('catalog:list', () => ({
+      ok: false,
+      error: { code: 'TIMEOUT', message: 'El catálogo no respondió a tiempo.' },
+    }));
+  });
+  await dialog.getByRole('button', { name: 'Recargar casos', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('El catálogo no respondió a tiempo.');
+  await dialog.getByLabel('Buscar caso').fill('Retiro');
+  await expect(dialog.getByRole('alert')).toContainText('El catálogo no respondió a tiempo.');
+  await expect(
+    dialog.getByRole('button', { name: 'Cargar Retiro sintético corriente', exact: true }),
+  ).toBeDisabled();
+  await expect(
+    dialog.getByRole('button', { name: 'Eliminar caso Retiro sintético corriente', exact: true }),
+  ).toBeDisabled();
+});
+
+test('mejoras UI: revisión ocupada mantiene el ambiente bloqueado al salir del lector', async () => {
+  const window = await launch();
+  await installTransactionReader();
+  await createTestEntity(window);
+  await createTestAtm(window, 'ATM de revisión pendiente');
+  await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
+  await window
+    .getByLabel('Perfil ATM', { exact: true })
+    .selectOption({ label: 'ATM de revisión pendiente' });
+  await app!.evaluate(({ ipcMain }) => {
+    const state = globalThis as typeof globalThis & { finishUiReview?: () => void };
+    ipcMain.removeHandler('transaction:draft:review');
+    ipcMain.handle(
+      'transaction:draft:review',
+      () =>
+        new Promise((resolve) => {
+          state.finishUiReview = () =>
+            resolve({
+              ok: false,
+              error: {
+                code: 'SERVICE_UNAVAILABLE',
+                message: 'Dependencia de revisión no disponible.',
+              },
+            });
+        }),
+    );
+  });
+  await reviewDraft(window);
+  await expect(window.getByRole('button', { name: 'Revisando…', exact: true })).toBeDisabled();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toBeDisabled();
+  await window.getByRole('button', { name: 'Historial', exact: true }).click();
+  await expect(window.getByRole('heading', { name: 'Historial', exact: true })).toBeVisible();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toBeDisabled();
+  await app!.evaluate(() => {
+    const state = globalThis as typeof globalThis & { finishUiReview?: () => void };
+    state.finishUiReview?.();
+    delete state.finishUiReview;
+  });
+  await expect(window.getByLabel('Ambiente', { exact: true })).toBeEnabled();
+  await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
+  await expect(window.getByRole('alert')).toContainText('Dependencia de revisión no disponible.');
+  await expect(
+    window.getByRole('button', { name: 'Enviar transacción', exact: true }),
+  ).toBeDisabled();
+});
+
+test('pulido UI: recargar protege la edición, permite cancelar y recupera un timeout', async () => {
+  const window = await launch();
+  await createTestEntity(window);
+  await window.getByRole('button', { name: 'Editar TEST-E2E', exact: true }).click();
+  await expect(window.getByLabel('Buscar entidad')).not.toBeVisible();
+  await expect(
+    window.getByRole('heading', { name: 'Actividad del catálogo', exact: true }),
+  ).not.toBeVisible();
+  await window.getByLabel('Nombre de entidad').fill('Edición sintética temporal');
+  await app!.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0]?.setContentSize(1024, 768),
+  );
+  await expect(
+    window.getByRole('button', { name: 'Guardar borrador', exact: true }),
+  ).toBeInViewport();
+  await mkdir('artifacts', { recursive: true });
+  await window.screenshot({ path: 'artifacts/focused-catalog-editor.png', scale: 'css' });
+  await window.getByRole('button', { name: 'Recargar', exact: true }).click();
+  const dialog = window.getByRole('dialog');
+  await expect(
+    dialog.getByRole('heading', { name: '¿Descartar cambios y recargar?', exact: true }),
+  ).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Seguir editando', exact: true })).toBeFocused();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toBeDisabled();
+  await dialog.getByRole('button', { name: 'Seguir editando', exact: true }).click();
+  await expect(window.getByLabel('Nombre de entidad')).toHaveValue('Edición sintética temporal');
+  await window.getByRole('button', { name: 'Recargar', exact: true }).click();
+  await window.keyboard.press('Escape');
+  await expect(window.getByLabel('Nombre de entidad')).toHaveValue('Edición sintética temporal');
+  await window.getByRole('button', { name: 'Recargar', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Descartar y recargar', exact: true }).click();
+  await expect(
+    window.getByRole('cell', { name: 'Entidad sintética E2E', exact: true }),
+  ).toBeVisible();
+  await expect(window.getByLabel('Nombre de entidad')).not.toBeVisible();
+  await window.getByRole('button', { name: 'Editar TEST-E2E', exact: true }).click();
+  await window.getByLabel('Nombre de entidad').fill('Cambio revertido');
+  await window.getByLabel('Nombre de entidad').fill('Entidad sintética E2E');
+  await window.getByRole('button', { name: 'Recargar', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(window.getByRole('button', { name: 'Editar TEST-E2E', exact: true })).toBeVisible();
+  const catalog = await window.evaluate(() => globalThis.window.desktop!.getCatalog('QA'));
+  expect(catalog.ok).toBe(true);
+  await app!.evaluate(({ ipcMain }, response) => {
+    let fail = true;
+    ipcMain.removeHandler('catalog:list');
+    ipcMain.handle('catalog:list', () => {
+      if (!fail) return response;
+      fail = false;
+      return {
+        ok: false,
+        error: { code: 'TIMEOUT', message: 'El catálogo no respondió a tiempo.' },
+      };
+    });
+  }, catalog);
+  await window.getByRole('button', { name: 'Editar TEST-E2E', exact: true }).click();
+  await window.getByLabel('Nombre de entidad').fill('Cambio que se descarta');
+  await window.getByRole('button', { name: 'Recargar', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Descartar y recargar', exact: true }).click();
+  await expect(window.getByRole('alert')).toContainText('El catálogo no respondió a tiempo.');
+  await expect(window.getByLabel('Nombre de entidad')).not.toBeVisible();
+  await window.getByRole('button', { name: 'Recargar', exact: true }).click();
+  await expect(
+    window.getByRole('cell', { name: 'Entidad sintética E2E', exact: true }),
+  ).toBeVisible();
+  await expect(window.getByRole('alert')).toHaveCount(0);
+});
+
+test('pulido UI: las aplicaciones pertenecen al lector seleccionado y la carga tiene estados claros', async () => {
+  const window = await launch();
+  const otherReader = 'Synthetic second contact';
+  const applicationId = 'A0000000031010';
+  await app!.evaluate(
+    ({ ipcMain }, args) => {
+      let current: CardIdentityReading | null = null;
+      ipcMain.removeHandler('reader:inspect');
+      ipcMain.handle('reader:inspect', () => ({
+        ok: true,
+        value: {
+          checkedAt: args.identity.readAt,
+          identityStatus: current?.status === 'READ' ? 'READ' : 'NOT_READ',
+          readers: [
+            { name: args.identity.readerName, state: 'CARD_PRESENT', atr: '3B00' },
+            { name: args.otherReader, state: 'CARD_PRESENT', atr: '3B00' },
+          ],
+          identity: current,
+        },
+      }));
+      ipcMain.removeHandler('reader:identity:read');
+      ipcMain.handle('reader:identity:read', (_event, request) => {
+        if (request.readerName === args.otherReader && request.applicationId)
+          return {
+            ok: false,
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: 'La aplicación pertenece a otra interfaz.',
+            },
+          };
+        current =
+          request.readerName === args.identity.readerName && !request.applicationId
+            ? {
+                ...args.identity,
+                status: 'SELECT_APPLICATION',
+                applicationLabel: null,
+                panMasked: null,
+                cardholderName: null,
+                expiry: null,
+                applications: [{ id: args.applicationId, label: 'Aplicación sintética' }],
+              }
+            : { ...args.identity, readerName: request.readerName };
+        return { ok: true, value: current };
+      });
+    },
+    { identity: transactionIdentity, otherReader, applicationId },
+  );
+  await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
+  const picker = window.getByLabel('Elegir tarjeta', { exact: true });
+  await picker.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await expect(picker.locator('.transaction-card-status')).toContainText(
+    'Selecciona una aplicación',
+  );
+  const choice = picker.getByRole('button', {
+    name: 'Aplicación sintética · ' + applicationId,
+    exact: true,
+  });
+  await choice.click();
+  await expect(picker.getByRole('button', { name: 'Cambiar tarjeta', exact: true })).toBeEnabled();
+  await picker.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await expect(choice).toBeVisible();
+  await picker.getByLabel('Lector para la transacción').selectOption(otherReader);
+  await expect(choice).not.toBeVisible();
+  await expect(picker.getByRole('button', { name: 'Cambiar tarjeta', exact: true })).toHaveCount(0);
+  await picker.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await expect(picker.getByRole('button', { name: 'Cambiar tarjeta', exact: true })).toBeEnabled();
+  await expect(picker.getByRole('alert')).toHaveCount(0);
+  await app!.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('reader:inspect');
+    ipcMain.handle('reader:inspect', () => ({
+      ok: false,
+      error: { code: 'SERVICE_UNAVAILABLE', message: 'El lector no está disponible.' },
+    }));
+  });
+  await picker.getByRole('button', { name: 'Buscar lector', exact: true }).click();
+  await expect(picker.locator('.transaction-card-status')).toContainText('Lector no disponible');
+  await expect(picker.locator('.transaction-card-status')).not.toContainText('Inserta una tarjeta');
+  await expect(picker.getByRole('button', { name: 'Cambiar tarjeta', exact: true })).toHaveCount(0);
+});
+
+test('lector por eventos: inserción y retiro actualizan la UI sin búsquedas ni lecturas automáticas', async () => {
+  const window = await launch();
+  await window.getByRole('button', { name: 'Configuración', exact: true }).click();
+  await window.clock.install();
+  try {
+    await app!.evaluate(({ ipcMain }) => {
+      const state = globalThis as typeof globalThis & {
+        eventReaderChecks?: number;
+        eventCardReads?: number;
+      };
+      state.eventReaderChecks = 0;
+      state.eventCardReads = 0;
+      ipcMain.removeHandler('reader:inspect');
+      ipcMain.handle('reader:inspect', () => {
+        state.eventReaderChecks!++;
+        return {
+          ok: true,
+          value: { checkedAt: '2026-10-15T14:00:00Z', identityStatus: 'NOT_READ', readers: [] },
+        };
+      });
+      ipcMain.removeHandler('reader:identity:read');
+      ipcMain.handle('reader:identity:read', () => {
+        state.eventCardReads!++;
+        return { ok: false };
+      });
+    });
+    await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
+    const picker = window.getByLabel('Elegir tarjeta', { exact: true });
+    await expect(picker.locator('.transaction-card-status')).toContainText(
+      'Sin lectores conectados',
+    );
+    await window.clock.fastForward(60000);
+    for (const present of [true, false, true]) {
+      await app!.evaluate(({ BrowserWindow }, present) => {
+        BrowserWindow.getAllWindows()[0]!.webContents.send('reader:changed', {
+          ok: true,
+          value: {
+            checkedAt: '2026-10-15T14:01:00Z',
+            identityStatus: 'NOT_READ',
+            readers: [
+              {
+                name: 'CI Reader',
+                state: present ? 'CARD_PRESENT' : 'EMPTY',
+                atr: present ? '3B00' : null,
+              },
+            ],
+          },
+        });
+      }, present);
+      await expect(picker.locator('.transaction-card-status')).toContainText(
+        present ? 'Tarjeta detectada' : 'Inserta una tarjeta',
+      );
+    }
+    expect(
+      await app!.evaluate(() => {
+        const state = globalThis as typeof globalThis & {
+          eventReaderChecks?: number;
+          eventCardReads?: number;
+        };
+        return [state.eventReaderChecks, state.eventCardReads];
+      }),
+    ).toEqual([1, 0]);
+  } finally {
+    await window.clock.resume();
+  }
+});
+
+for (const pollingResult of ['present', 'removed', 'error', 'timeout'] as const) {
+  test(`lectura en cola: espera la búsqueda manual y valida ${pollingResult}`, async () => {
+    const window = await launch();
+    await window.getByRole('button', { name: 'Configuración', exact: true }).click();
+    await window.clock.install();
+    try {
+      await app!.evaluate(
+        ({ ipcMain }, args) => {
+          const state = globalThis as typeof globalThis & {
+            queuedReads?: number;
+            finishQueuedPolling?: () => void;
+          };
+          state.queuedReads = 0;
+          let checks = 0;
+          const snapshot = {
+            checkedAt: args.identity.readAt,
+            identityStatus: 'NOT_READ',
+            readers: [{ name: args.identity.readerName, state: 'CARD_PRESENT', atr: '3B00' }],
+          };
+          ipcMain.removeHandler('reader:inspect');
+          ipcMain.handle('reader:inspect', () => {
+            if (++checks === 1) return { ok: true, value: snapshot };
+            return new Promise((resolveResult) => {
+              state.finishQueuedPolling = () =>
+                resolveResult(
+                  args.outcome === 'error'
+                    ? {
+                        ok: false,
+                        error: {
+                          code: 'SERVICE_UNAVAILABLE',
+                          message: 'Dependencia de lector no disponible.',
+                        },
+                      }
+                    : {
+                        ok: true,
+                        value: {
+                          ...snapshot,
+                          readers: [
+                            {
+                              name: args.identity.readerName,
+                              state: args.outcome === 'removed' ? 'EMPTY' : 'CARD_PRESENT',
+                              atr: args.outcome === 'removed' ? null : '3B00',
+                            },
+                          ],
+                        },
+                      },
+                );
+            });
+          });
+          ipcMain.removeHandler('reader:identity:read');
+          ipcMain.handle('reader:identity:read', () => {
+            state.queuedReads = (state.queuedReads ?? 0) + 1;
+            return { ok: true, value: args.identity };
+          });
+        },
+        { identity: transactionIdentity, outcome: pollingResult },
+      );
+      await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
+      const picker = window.getByLabel('Elegir tarjeta', { exact: true });
+      await expect(picker.getByRole('button', { name: 'Leer tarjeta', exact: true })).toBeEnabled();
+      await picker.getByRole('button', { name: 'Buscar lector', exact: true }).click();
+      await expect(picker.locator('.transaction-card-status')).toContainText('Consultando estado');
+      await picker.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+      await expect(
+        picker.getByRole('button', { name: 'Leyendo tarjeta…', exact: true }),
+      ).toBeDisabled();
+      expect(
+        await app!.evaluate(
+          () => (globalThis as typeof globalThis & { queuedReads?: number }).queuedReads,
+        ),
+      ).toBe(0);
+      if (pollingResult === 'timeout') await window.clock.fastForward(11000);
+      else
+        await app!.evaluate(() => {
+          (
+            globalThis as typeof globalThis & { finishQueuedPolling?: () => void }
+          ).finishQueuedPolling?.();
+        });
+      if (pollingResult === 'present') {
+        await expect(
+          picker.getByRole('button', { name: 'Cambiar tarjeta', exact: true }),
+        ).toBeEnabled();
+        expect(
+          await app!.evaluate(
+            () => (globalThis as typeof globalThis & { queuedReads?: number }).queuedReads,
+          ),
+        ).toBe(1);
+      } else {
+        if (pollingResult === 'removed')
+          await expect(picker.locator('.transaction-card-status')).toContainText(
+            'Inserta una tarjeta',
+          );
+        else await expect(picker.getByRole('alert').first()).toBeVisible();
+        await expect(
+          picker.getByRole('button', { name: 'Cambiar tarjeta', exact: true }),
+        ).toHaveCount(0);
+        expect(
+          await app!.evaluate(
+            () => (globalThis as typeof globalThis & { queuedReads?: number }).queuedReads,
+          ),
+        ).toBe(0);
+      }
+      await expect(window.getByLabel('Ambiente', { exact: true })).toBeEnabled();
+    } finally {
+      await window.clock.resume();
+    }
+  });
+}
+
+test('lector por eventos: no consulta periódicamente durante ni después de leer', async () => {
+  const window = await launch();
+  await window.getByRole('button', { name: 'Configuración', exact: true }).click();
+  await window.clock.install();
+  try {
+    await app!.evaluate(({ ipcMain }, identity) => {
+      const state = globalThis as typeof globalThis & {
+        uiReaderChecks?: number;
+        finishUiCardRead?: () => void;
+      };
+      state.uiReaderChecks = 0;
+      let current: typeof identity | null = null;
+      ipcMain.removeHandler('reader:inspect');
+      ipcMain.handle('reader:inspect', () => {
+        state.uiReaderChecks = (state.uiReaderChecks ?? 0) + 1;
+        return {
+          ok: true,
+          value: {
+            checkedAt: identity.readAt,
+            identityStatus: current ? 'READ' : 'NOT_READ',
+            readers: [{ name: identity.readerName, state: 'CARD_PRESENT', atr: '3B00' }],
+            identity: current,
+          },
+        };
+      });
+      ipcMain.removeHandler('reader:identity:read');
+      ipcMain.handle(
+        'reader:identity:read',
+        () =>
+          new Promise((resolve) => {
+            state.finishUiCardRead = () => {
+              current = identity;
+              resolve({ ok: true, value: identity });
+            };
+          }),
+      );
+    }, transactionIdentity);
+    await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
+    const picker = window.getByLabel('Elegir tarjeta', { exact: true });
+    await picker.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+    await expect(
+      picker.getByRole('button', { name: 'Leyendo tarjeta…', exact: true }),
+    ).toBeDisabled();
+    await expect(picker.locator('.transaction-card-status')).toContainText('Leyendo tarjeta…');
+    await expect(window.getByLabel('Ambiente', { exact: true })).toBeDisabled();
+    const checks = await app!.evaluate(
+      () => (globalThis as typeof globalThis & { uiReaderChecks?: number }).uiReaderChecks,
+    );
+    await window.clock.fastForward(6000);
+    await window.clock.fastForward(6000);
+    expect(
+      await app!.evaluate(
+        () => (globalThis as typeof globalThis & { uiReaderChecks?: number }).uiReaderChecks,
+      ),
+    ).toBe(checks);
+    await app!.evaluate(() => {
+      const state = globalThis as typeof globalThis & { finishUiCardRead?: () => void };
+      state.finishUiCardRead?.();
+      delete state.finishUiCardRead;
+    });
+    await expect(
+      picker.getByRole('button', { name: 'Cambiar tarjeta', exact: true }),
+    ).toBeEnabled();
+    await window.clock.fastForward(6000);
+    expect(
+      await app!.evaluate(
+        () => (globalThis as typeof globalThis & { uiReaderChecks?: number }).uiReaderChecks,
+      ),
+    ).toBe(checks);
+    await expect(
+      picker.getByRole('button', { name: 'Cambiar tarjeta', exact: true }),
+    ).toBeEnabled();
+    await expect(window.getByLabel('Ambiente', { exact: true })).toBeEnabled();
+  } finally {
+    await window.clock.resume();
+  }
+});
+
+test('configuración de envío offline guarda ajustes y prepara sin tramas ni transmisión', async () => {
+  const evidence = networkEvidence();
+  await writeFile(join(directory, 'network-evidence.json'), JSON.stringify(evidence));
+  const window = await launch();
+  await window.getByRole('button', { name: 'Configuración', exact: true }).click();
+  const settings = window.getByRole('region', { name: 'Configuración de envío', exact: true });
+  await expect(
+    settings.getByText(evidence.ingress.host + ':' + evidence.ingress.port, { exact: true }),
+  ).toBeVisible();
+  await expect(settings.getByLabel('Modo previsto')).toHaveValue('ON_CLICK');
+  await expect(settings.getByLabel('Espera de conexión (ms)')).toHaveValue('');
+  await settings.getByLabel('Espera de conexión (ms)').fill('0');
+  await settings
+    .getByRole('button', { name: 'Guardar configuración de envío', exact: true })
+    .click();
+  await expect(settings.getByRole('alert')).toContainText('entre 1 y 30000');
+  await expect(window.getByLabel('Ambiente', { exact: true })).toBeDisabled();
+  await settings.getByLabel('Espera de conexión (ms)').fill('1000');
+  await settings.getByLabel('Ventana de respuesta (ms)').fill('2000');
+  await settings.getByLabel('Modo previsto').selectOption('AFTER_REVIEW');
+  await settings
+    .getByRole('button', { name: 'Guardar configuración de envío', exact: true })
+    .click();
+  await expect(settings.getByRole('status')).toContainText('No se ha abierto ninguna conexión.');
+  await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
+  await reviewDraft(window);
+  await expect(
+    window.getByRole('region', { name: 'Contexto revisado', exact: true }),
+  ).toBeVisible();
+  const plan = window.getByLabel('Plan de envío', { exact: true });
+  await expect(plan).toContainText('Configuración de envío');
+  await expect(plan).toContainText('Después de revisar');
+  await expect(plan).toContainText('Plan documental · sin transmisión.');
+  await expect(
+    window.getByRole('button', { name: 'Enviar transacción', exact: true }),
+  ).toBeDisabled();
+  const api = await window.evaluate(() => ({
+    senderExposed: 'sendTransaction' in globalThis.window.desktop!,
+    nodeExposed: 'require' in globalThis.window,
+  }));
+  expect(api).toEqual({ senderExposed: false, nodeExposed: false });
+  const configuration = JSON.parse(
+    await readFile(join(directory, 'send-configuration.json'), 'utf8'),
+  ) as { configurations: { revision: number }[]; audit: unknown[] };
+  expect(configuration.configurations[0]?.revision).toBe(2);
+  expect(configuration.audit).toHaveLength(2);
+});
+
+test('bugs tarjeta: errores por interfaz y selección estable tras desconexión', async () => {
+  const window = await launch();
+  const devices: CardReaderSnapshot['readers'] = [
+    { name: 'Synthetic Preferred', state: 'CARD_PRESENT', atr: '3B00' },
+    { name: 'Synthetic Backup', state: 'CARD_PRESENT', atr: '3B00' },
+  ];
+  const setDevices = async (readers: CardReaderSnapshot['readers']) => {
+    await app!.evaluate(({ ipcMain }, list) => {
+      ipcMain.removeHandler('reader:inspect');
+      ipcMain.handle('reader:inspect', () => ({
+        ok: true,
+        value: {
+          checkedAt: '2026-10-11T23:00:00.000Z',
+          readers: list,
+          identityStatus: 'NOT_READ',
+          identity: null,
+        },
+      }));
+    }, readers);
+  };
+  await setDevices(devices);
+  await app!.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('reader:identity:read');
+    ipcMain.handle('reader:identity:read', () => ({
+      ok: false,
+      error: { code: 'TIMEOUT', message: 'La lectura sintética no respondió.' },
+    }));
+  });
+  await window.getByRole('button', { name: 'Tarjetas', exact: true }).click();
+  const panel = window.getByRole('region', { name: 'Estado del lector' });
+  const preferred = panel.getByRole('button', {
+    name: 'Synthetic Preferred Tarjeta presente',
+    exact: true,
+  });
+  const backup = panel.getByRole('button', {
+    name: 'Synthetic Backup Tarjeta presente',
+    exact: true,
+  });
+  await preferred.click();
+  await panel.getByRole('button', { name: 'Leer datos del chip', exact: true }).click();
+  await expect(panel.getByRole('alert')).toContainText('La lectura sintética no respondió.');
+  await expect(panel.getByRole('button', { name: 'Actualizar', exact: true })).toBeEnabled();
+  await backup.click();
+  await expect(panel.getByRole('alert')).toHaveCount(0);
+  await preferred.click();
+  await setDevices([devices[1]!]);
+  await panel.getByRole('button', { name: 'Actualizar', exact: true }).click();
+  await expect(backup).toHaveAttribute('aria-pressed', 'true');
+  await setDevices(devices);
+  await panel.getByRole('button', { name: 'Actualizar', exact: true }).click();
+  await expect(backup).toHaveAttribute('aria-pressed', 'true');
+  await expect(preferred).toHaveAttribute('aria-pressed', 'false');
+  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
+  await expect(panel.locator('.detected-card-top')).toContainText('LECTURA DE TARJETA');
+  await expect(panel.locator('.detected-card-top')).not.toContainText('QA · TARJETAS');
+});
+
+test('bugs tarjeta: rechaza una identidad de otro lector y actualiza el retiro después del fallo', async () => {
+  const window = await launch();
+  await app!.evaluate(({ ipcMain }, identity) => {
+    let present = true;
+    const current: typeof identity | null = null;
+    let reads = 0;
+    ipcMain.removeHandler('reader:inspect');
+    ipcMain.handle('reader:inspect', () => ({
+      ok: true,
+      value: {
+        checkedAt: identity.readAt,
+        readers: [
+          {
+            name: identity.readerName,
+            state: present ? 'CARD_PRESENT' : 'EMPTY',
+            atr: present ? '3B00' : null,
+          },
+        ],
+        identityStatus: current ? 'READ' : 'NOT_READ',
+        identity: current,
+      },
+    }));
+    ipcMain.removeHandler('reader:identity:read');
+    ipcMain.handle('reader:identity:read', () => {
+      reads++;
+      if (reads === 1)
+        return { ok: true, value: { ...identity, readerName: 'Other synthetic reader' } };
+      present = false;
+      return { ok: false, error: { code: 'NOT_FOUND', message: 'La tarjeta se retiró.' } };
+    });
+  }, transactionIdentity);
+  await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
+  const picker = window.getByLabel('Elegir tarjeta', { exact: true });
+  await picker.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await expect(picker.getByRole('alert')).toContainText(
+    'La lectura no corresponde al lector seleccionado.',
+  );
+  await expect(picker.getByRole('button', { name: 'Cambiar tarjeta', exact: true })).toHaveCount(0);
+  await expect(picker).not.toContainText(transactionIdentity.panMasked!);
+  await picker.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await expect(picker.locator('.transaction-card-status')).toContainText(
+    'Inserta una tarjeta por contacto',
+  );
+  await expect(picker.getByRole('button', { name: 'Leer tarjeta', exact: true })).toBeDisabled();
+  await expect(picker.getByRole('button', { name: 'Cambiar tarjeta', exact: true })).toHaveCount(0);
+  await installTransactionReader();
+  await picker.getByRole('button', { name: 'Buscar lector', exact: true }).click();
+  await picker.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await expect(picker.getByRole('alert')).toHaveCount(0);
+  await expect(picker.getByRole('button', { name: 'Cambiar tarjeta', exact: true })).toBeVisible();
+  await expect(window.getByLabel('Resumen de la transacción')).toContainText(
+    transactionIdentity.panMasked!,
+  );
+});
+
+test('selección directa: cambiar tarjeta no la vuelve a seleccionar al actualizar', async () => {
+  const window = await prepareBalanceSubmission();
+  const picker = window.getByLabel('Elegir tarjeta', { exact: true });
+  const send = window.getByRole('button', { name: 'Enviar transacción', exact: true });
+  await picker.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await expect(send).toBeEnabled();
+  await picker.getByRole('button', { name: 'Cambiar tarjeta', exact: true }).click();
+  await expect(send).toBeDisabled();
+  await picker.getByRole('button', { name: 'Buscar lector', exact: true }).click();
+  await expect(picker.getByRole('button', { name: 'Buscar lector', exact: true })).toBeEnabled();
+  await expect(picker.getByRole('button', { name: 'Cambiar tarjeta', exact: true })).toHaveCount(0);
+  await expect(send).toBeDisabled();
+  await picker.getByRole('button', { name: 'Seleccionar tarjeta leída', exact: true }).click();
+  await expect(send).toBeEnabled();
+  await window.getByRole('radio', { name: 'Ahorros', exact: true }).focus();
+  await window.keyboard.press('ArrowRight');
+  await expect(window.getByRole('radio', { name: 'Corriente', exact: true })).toBeChecked();
+  await expect(send).toBeDisabled();
+  await window.keyboard.press('ArrowLeft');
+  await expect(window.getByRole('radio', { name: 'Ahorros', exact: true })).toBeChecked();
+  await expect(send).toBeEnabled();
+  await expect(window.getByRole('heading', { name: 'Aún no hay resultado' })).toBeVisible();
 });

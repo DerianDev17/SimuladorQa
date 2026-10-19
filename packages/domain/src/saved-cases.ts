@@ -1,4 +1,4 @@
-import { catalogText, isRevision, isUuid } from './catalogs';
+import { catalogText, isRestrictedCatalogText, isRevision, isUuid } from './catalogs';
 import type { CatalogRecord, CatalogSnapshot } from './catalogs';
 import { isEnvironment, isRecord, transactions } from './index';
 import type { Environment } from './index';
@@ -20,6 +20,13 @@ export interface SavedCase extends CatalogRecord, CaseValues {
   evidenceDocuments: readonly string[];
 }
 
+export function isRestrictedCaseText(value: string): boolean {
+  return (
+    isRestrictedCatalogText(value) ||
+    /\b(?:PIN|CVV|CVC|ZPK|PASSWORD|TOKEN|SECRET|TRACK\s*2)\s*[:=\d]/i.test(value)
+  );
+}
+
 export function parseCaseValues(value: unknown): CaseValues | undefined {
   if (
     !isRecord(value) ||
@@ -29,8 +36,7 @@ export function parseCaseValues(value: unknown): CaseValues | undefined {
   )
     return undefined;
   const name = catalogText(value.name, 80);
-  if (name && /\b(?:PIN|CVV|CVC|ZPK|PASSWORD|TOKEN|SECRET|TRACK\s*2)\s*[:=\d]/i.test(name))
-    return undefined;
+  if (name && isRestrictedCaseText(name)) return undefined;
   const draft = parseDraftRequest(value.draft);
   return name && draft ? { name, draft } : undefined;
 }
