@@ -1,6 +1,567 @@
 # Checklist de informacion por subir
 
+TODO-DATA WITHDRAWAL-DEBIT-AND-REMAINING (2026-10-19): confirmar la semantica
+F54 01/02 por perfil, si el disponible corresponde al saldo posterior al retiro
+y la fuente del debito total efectivo con comisiones. El comprobante local
+Con/Sin impresion fue confirmado por el usuario y no depende de esos datos.
+Se conservan saldos neutrales del host; no se infieren importes restantes.
+
 ## TODO-DATA activos de la primera entrega
+
+TODO-DATA QA-WITHDRAWAL-900114-WIRE: obtener NWINT/PROXY205 del19/10/2026,
+11:59:16-11:59:38. Comparacion offline y SQL ya completada: builder reproduce
+el cuerpo aprobado del frame248; CMS recibe011000/USD20/ahorros y cuenta correcta.
+F48 difiere del retiro aprobado solo por `*S2C00000036`, opcion de impresion
+de saldo confirmada en la fuente del proveedor (ImprimeSaldo/CostoImpSaldo).
+No agregar comision ni cambiar EMV por suposicion. Falta el ISO original900114
+para comprobar sus bytes dinamicos/EMV; los logs recibidos son del16/10.
+Ver transactions/WITHDRAWAL.md, comparacion del19/10. La causa del91 no se
+considera reparada por validar el builder ni por cambiar su etiqueta visual.
+
+TODO-DATA QA-WITHDRAWAL-900114-CORE: F39=91 y respuesta CMS original
+RetCode/CodigoProceso/MappedRespCode=0, registrada con fin posterior al 91.
+La base define 91 como Issuer or switch inoperative; los dos registros MsgType2
+tienen RetCode76 (NO EXISTE TRANSACCION ORIGINAL), mapeado a21, no a91.
+SmartVista QA confirma para el original STAN900114, 2026-10-19 11:59:16,
+PID80131, tipo700, USD20, mensaje1035: codigo interno801 (Timeout - authorizing
+institution did not respond) y respuesta de red91. Mediator termina el original
+19.973 segundos despues de iniciarlo, con APROBADO / TRANSACCION OK. Falta
+localizar la demora y comprobar los timers vigentes de Switch/PROXY205/AUTHTD/Core
+con logs del intervalo 11:59:16-11:59:38. El acceso a la ruta vigente de Mediator
+no esta disponible en esta sesion; las copias archivadas no justifican cambios
+de parametros. No afirmar ausencia de debito ni convertir 91 en aprobacion.
+Por correccion del usuario, 91 termina el envio como no aprobado por el host
+y libera la siguiente solicitud QA. Conciliacion y reversos son otros procesos;
+se retira Nueva prueba QA. Ver transactions/WITHDRAWAL.md y ADR-016.
+
+Actualizacion posterior: el usuario indica permitir el retiro usando la
+preparacion "tal cual la consulta". Se implementa y configura la prueba
+QA ATM20521/ahorros/USD20 con BOUND_PROFILE/ZERO, PIN/AC nuevos y F3/F4 de
+retiro. Fuente USER_QA_INSTRUCTION; no se atribuye validacion al proveedor.
+La alternativa CASH/01 y las reglas generales del proveedor conservan sus
+pendientes documentales. Ver ADR-016 y transactions/WITHDRAWAL.md.
+
+Consulta aprobada confirmada en el diario, 2026-10-16T21:07:27.983Z:
+ATM20521/STAN 900110/RRN 628900900110, 0210/00, APPROVED, 451 bytes y
+1271 ms de transporte. Se cierra la validacion financiera posterior a F35 y
+5F34 (QA-F35-FIX-HOST-VALIDATION y seguimiento QA-ARQC-900108); no implica
+que exista envio de retiro. El rechazo historico 57 / `5 ` sigue pendiente.
+
+Solicitud de retiro: flujo de ejecucion ahorros/LOCAL/QA implementado;
+proveedor PIN/EMV de retiro implementado y vinculado en Main, con contrato
+independiente en qa-withdrawal-policies.json. Incluye monto exacto, IPC, ISO/TCP,
+diario separado, correlacion e idempotencia, probados con dependencias sinteticas.
+La alternativa CASH/01 genera 9F02 desde el monto y lo vincula a CDOL1/F55;
+su implementacion no acredita la regla del enlace. No se activa envio real
+sin contrato validado. Borrador concreto ATM20521/USD20 en
+artifacts/qa-withdrawal-contract.pending.json, sin referencia de aprobacion.
+La captura ya recibida confirma 011000/USD 20/00, frames 248/254. No pedirla
+de nuevo. TODO-DATA QA-WITHDRAWAL-EMV-GENERATION: F4 contiene USD 20 pero
+F55 tiene 9F02=0 y 9C=80; confirmar la regla aprobada de generacion antes
+de construir una nueva AC de retiro. El formatter consume EMV, no resuelve
+ese contrato. AMOUNT-RULES y reglas de resultado parcial/reverso siguen
+separadas. Ver [estado y fuentes](transactions/WITHDRAWAL.md).
+
+Respuesta del usuario, 2026-10-16: confirma que la discrepancia requiere
+consulta al proveedor. Los valores propuestos 9F02=000000002000 / 9C=01
+para USD 20 no constituyen una regla aprobada para este enlace.
+QA-WITHDRAWAL-EMV-GENERATION permanece abierto. La consulta preparada en
+WITHDRAWAL.md pide la regla para CDOL1/F55, la explicacion de la diferencia
+y un caso validado con correlacion; no se ha enviado al proveedor.
+QA-WITHDRAWAL-RESULT-RULES conserva como pendientes el tratamiento de
+rechazos/parciales y el cierre de conciliacion. Mientras tanto, el motor
+conserva esas respuestas como REQUIRES_REVIEW e impide duplicar retiros.
+
+PROXY/SRVPIN recibidos 2026-10-16: el adjunto identifica 900108, pasa
+PIN/tarjeta, falla ARQC y registra 57; PROXY transmite `5 `. F55 omite 5F34
+y el validador completa 00 porque no recibe F23. Corregido el proveedor local
+para incluir la secuencia vigente del chip en F55; captura aprobada incluye
+5F34=01 y NWINT 900107 confirma F23=001. TODO-DATA QA-ARQC-900108: comprobar
+con una nueva consulta que llega la secuencia correcta y ARQC pasa. TODO-DATA
+QA-RESPONSE57-PACKING-900108: localizar el cambio 57 -> `5 ` entre SRVPIN y
+PROXY. No normalizar ni remapear por suposicion. El diario 900108 registra
+NOT_APPROVED/96, confirmando el arreglo F44 previo. Ver
+[correlacion y limites](protocols/QA_SWITCH_LOGS_20261016.md).
+
+Logs recibidos 2026-10-16: ATM20521/STAN 900107, UTRNNO 262891821077305370.
+NWINT completo confirma F39 literal `5 ` de PID 82052 y ausencia de mapeo
+para nwind 28; SmartVista devuelve 939/96. Resuelto TODO-DATA
+QA-INVALID-RESPONSE-900107: el parser omitio F44, definido en ISOBASEI y
+presente en la respuesta real. Corregido y comprobado offline con el cuerpo
+original; RRN final 628900900107 coincide. PROXY recibido despues confirma
+`5 ` para esa consulta; QA-RC939-900107 queda limitado a su detalle SRVPIN,
+que no se deduce del adjunto de 900108. No pedir NWINT/PROXY otra vez.
+El tar esta truncado antes de tcpcomms, pero eso no impide este diagnostico.
+La aprobacion financiera sigue pendiente; no se envia otra TRX. Ver
+[evidencia y alcance](protocols/QA_SWITCH_LOGS_20261016.md).
+
+Diagnostico resuelto para ATM20521/STAN 900105 y 900106, revision 2026-10-16:
+SmartVista QA registra 880/19; el detalle de UTRNNO 262882258532152760
+identifica BAD_TRK2. Se corrige el relleno BCD de F35 conforme a la captura
+aprobada: 0 inicial para longitud impar, sin copiar el F final de tag 57.
+TODO-DATA QA-F35-FIX-HOST-VALIDATION: comprobar una nueva consulta con PIN/EMV
+nuevos despues del arreglo y correlacionar su respuesta. Las pruebas locales
+no demuestran aprobacion financiera. No se consume reserva real; al inspeccionar
+quedan 998. Los pendientes QA-RC19-900102/900103/900104 siguen abiertos porque
+no se consultaron sus motivos internos en esta revision. Ver
+[correlacion y correccion](implementation/BALANCE_EXECUTION.md).
+
+Resuelto TODO-DATA QA-SEQUENCE-POOL-REPLENISHMENT, 2026-10-15T22:41:47Z:
+tras el intento bloqueado aa348124-ebe0-45e3-a086-f7089b300e46, el usuario
+autoriza verificar y asignar 900105-901104 exclusivamente a esta estacion.
+Tres SELECT confirman lote/fecha compatibles y cero registros del rango.
+Main carga y reconoce las 1000 reservas con respaldo y reemplazo atomico.
+No se envia una transaccion; el diario conserva cinco entradas. La excepcion
+SQL puntual queda consumida y SQL-TLS-SERVER-CERTIFICATE sigue pendiente.
+Ver [ADR-015](adr/ADR-015-QA-SEQUENCE-POOL-REPLENISHMENT.md).
+
+Consulta nueva 2026-10-15T21:23:31.115Z: la instancia Electron envia saldo
+ATM20521/STAN 900104/RRN 628800900104 y recibe 0210/19, NOT_APPROVED.
+La consulta SQL puntual autorizada (ADR-014) confirma lote 31/2026-08-17
+y candidato sin uso. Se provisiona una reserva local desde Main con respaldo,
+tras detectar que escribir desde Codex recreaba la copia virtual de AppData.
+La reserva se consume; diario con cinco entradas, sin reintento ni hook de
+envio al arrancar. TODO-DATA QA-RC19-900104: motivo interno correlacionado de
+SmartVista. SQL-TLS-SERVER-CERTIFICATE permanece pendiente y la excepcion
+queda consumida. ATM20524 sigue sin perfil ISO validado. Ver
+[ejecucion](implementation/BALANCE_EXECUTION.md) y
+[autorizacion puntual](adr/ADR-014-ONE-TIME-BALANCE-RESERVATION-INSPECTION.md).
+
+Conexion de la app recuperada, 2026-10-15T21:06:39Z: el usuario confirma
+"conectado" y Windows verifica el socket Established de Electron Main
+58860, 10.10.10.21:59471 -> 10.60.0.11:16100. El mensaje previo de la ventana
+era una validacion local de configuracion, no evidencia de rechazo TCP.
+La virtualizacion de AppData de Windows hacia visibles los archivos a las
+herramientas pero no a Electron fuera del paquete. Se recuperaron 16 archivos
+con verificacion SHA-256 y respaldo, incluyendo historial y marcadores de
+ejecucion unica; no se descifraron secretos ni se sobrescribio SQLite.
+QA-16100-REFUSED-20261015 ya no bloquea la conexion actual; la causa del
+rechazo historico de las 20:11:26Z sigue sin determinar. ATM20521 conserva
+cero secuencias y ATM20524 carece de perfil ISO directo validado; no se
+envia una nueva TRX. Ver [recuperacion](implementation/SWITCH_CONNECTION.md).
+
+Inspeccion de certificados 2026-10-15T20:33:18Z: SQL 172.60.60.172:55893
+presenta CN=SSL_Self_Signed_Fallback, autofirmado, con errores de confianza
+y nombre. La huella/cadena no corresponden a ninguno de los dos CER aportados.
+La inspeccion de metadatos de 15 bases, bajo la excepcion PREPROD ya autorizada
+en ADR-006, no encuentra esos certificados; no consulta registros de negocio.
+TODO-DATA SQL-TLS-SERVER-CERTIFICATE: configurar certificado/cadena y nombre
+aprobados para SQL. Se conserva la validacion TLS de la app. La conexion
+al Switch se recupera posteriormente como se indica arriba; no resuelve
+el certificado de SQL ni la falta de secuencias. Ver
+[evidencia de certificado y conexion](implementation/SWITCH_CONNECTION.md).
+
+Diagnostico de conexion 2026-10-15T20:11:26Z: QA 10.60.0.11:16100 rechaza
+el establecimiento TCP (REFUSED), cero bytes enviados/recibidos. Es distinto
+del problema TLS SQL en 55893. El nuevo ATMPublicKeyProd.cer esta vigente
+hasta 2027-07-18, pero su confianza/correspondencia con SQL no esta acreditada;
+16100 usa TCP sin TLS. El origen historico de QA-16100-REFUSED-20261015
+requeriria correlacionar listener y rechazos remotos con ese intento;
+no bloquea la conexion recuperada. Las capturas muestran
+10.10.10.21 configurada y cierres de 172.60.60.171; no demuestran NAT ni
+sesion establecida de la PC. Ver [conexion](implementation/SWITCH_CONNECTION.md).
+
+Reintento solicitado con root.cer, 2026-10-15: el certificado aportado vence
+el 2026-04-17 y su validacion devuelve UntrustedRoot/NotTimeValid. SQL sigue
+sin una cadena confiable; no se instala el certificado vencido. Dos intentos
+reales a traves del motor, con lectura correcta de tarjeta, terminan BLOCKED:
+ATM20521 por QA-SEQUENCE-POOL; ATM20524 por vinculacion PIN/perfil ISO directa.
+Ambos generan cero tramas y cero bytes transmitidos; no hay respuesta host.
+QA-TWO-PROFILE-EXECUTION continua pendiente. Evidencia y detalle en
+[contexto de varios ATM](implementation/MULTI_ATM_CONTEXT.md).
+
+Comparacion solicitada de los dos perfiles QA, 2026-10-15: ATM20521 tiene
+perfil ejecutable y pool agotado; ATM20524 conserva evidencia CMS pero no
+perfil ISO directo ejecutable. Sus adquirentes de catalogo difieren y las
+ultimas fechas contables observadas son distintas. TODO-DATA
+QA-TWO-PROFILE-EXECUTION: reserva nueva, vinculacion validada de los campos
+ISO/calendario de ATM20524 y acceso a metadata actual. La consulta SQL de
+contraste falla por validacion TLS; no hay nuevos envios ni reservas.
+Ver [comparacion](implementation/MULTI_ATM_CONTEXT.md).
+
+Consulta posterior solicitada, 2026-10-15T18:52:05.807Z: 0210/19 para
+ATM20521/STAN 900103/RRN 628800900103. El pool ahora conserva cero secuencias;
+no reutilizar ninguna de las consumidas. TODO-DATA QA-RC19-900103: motivo
+interno del host correlacionado con esta nueva consulta. Los diagnosticos
+reales registran version terminal 008C, chip 00A0, TVR 8080800000 y CVM 3F0001;
+no demuestran por si solos el motivo de F39=19. QA-EMV-VERSION-CVM-BINDING
+continua pendiente. Las capturas del nodo 80131 aportadas en esta solicitud
+confirman metadata del enlace; el bloque de llave protegido no se interpreta
+como clave clara ni se incorpora al repositorio. Se conserva la vinculacion
+TEST local previamente comprobada. No hay reintento automatico.
+
+Actualizacion 2026-10-15: el envio de consulta nueva ya tiene evidencia local
+de respuesta correlacionada 0210/19, ATM20521/STAN 900102/RRN 628800900102.
+No es aprobacion financiera. TODO-DATA QA-RC19-900102: motivo interno y mapeo
+del host para esa consulta. TODO-DATA QA-EMV-VERSION-CVM-BINDING: validar la
+correspondencia de version terminal 008C/chip 00A0 y seleccion CVM contra
+el perfil aprobado; no forzar resultados satisfactorios. El pool privado
+conserva una secuencia: su reposicion necesita una reserva aprobada, sin
+reciclar las consumidas. Estos pendientes no bloquean el monitor de presencia,
+la UI ni los diagnosticos. No se ejecutan pruebas ni nuevas consultas.
+
+Actualizacion posterior 2026-10-14: la nueva llave de enlace del usuario ya
+se verifica por KCV/XOR y por coincidencia del cifrado PIN con la consulta
+aprobada. Se protege con DPAPI y activa ATM20521 en qa-execution-profiles.json,
+con lote abierto 31 consultado y seriales propios reservados. Se resuelve
+QA-LOCAL-TEST-BINDING para este perfil y se corrige la envolvente EMV F55.
+Los bloqueos de llave descritos abajo son historicos para este perfil; no se
+vuelven a pedir componentes/HSM/SafeNet. La aprobacion depende del intento
+financiero y su respuesta. Detalle: QA_PIN_EXECUTION.md.
+
+Correccion de conexion 2026-10-14: no falta IP ni autorizacion TCP para la PC
+en la prueba actual. La app no mantenia un socket y su indicador era fijo;
+el CLI cerraba al primer 0800. Implementados control de conexion QA en Inicio
+y estado real. Prueba de 45 segundos a 10.60.0.11:16100 recibe 0800/071 y
+0800/072 manteniendo TCP abierto, sin bytes de aplicacion transmitidos.
+VISA-NETWORK-RESPONSE-POLICY sigue limitado a la respuesta ISO automatica y
+el veredicto de sesion financiera, no impide conectar/observar TCP. Ver
+docs/implementation/SWITCH_CONNECTION.md.
+
+Correccion de alcance 2026-10-14: el usuario confirma que el emisor financiero
+sigue conectado a 10.60.0.11:16100. TCS, su IP y su intercambio de llaves dejan
+de ser requisitos de esta ruta; QA-TCS-WIRE-KEY-EXCHANGE solo corresponde a una
+futura emulacion TCS. Los componentes 2134/2135 ya estan importados como maestra
+de ATM20524, protegida por DPAPI fuera del repositorio. Su KCV coincide con CMS
+y difiere del enlace 80131, revisado nuevamente en SmartVista. No falta recibir
+esos componentes. QA-LOCAL-TEST-BINDING/QA-PIN-HSM-BINDING mantienen la
+vinculacion efectiva de cifrado PIN con la llave del enlace, no generar otra
+maestra CMS. La prueba directa vuelve a recibir 0800/071. Los servicios
+documentados 10.10.30.6:4001 y 172.60.60.152:50200/51200 agotan el plazo TCP;
+PC/SC no detecta lectores en esta revision. No se envia consulta financiera.
+Detalle y evidencia en QA_PIN_EXECUTION.md. Los apartados siguientes conservan
+la cronologia anterior, incluida la interpretacion TCS ya corregida.
+
+Actualizacion posterior 2026-10-14: el usuario cambia CMS a 10.10.10.21;
+lectura SQL confirmada y snapshot local sincronizado. TCP con origen fijo
+10.10.10.21:30964 conecta al host 172.60.60.152:6100 en 39 ms, sin recepcion
+durante 8 segundos ni payload enviado. La IP deja de ser un pendiente.
+Continuan el contrato/adaptador TCS y su intercambio de llaves. Ver
+QA_PIN_EXECUTION.md y artifacts/cms-atm20524-origin-sync.json.
+
+Actualizacion 2026-10-14: componentes CMS 2134/2135 comprobados en memoria;
+su combinacion coincide con el KCV de la llave maestra de ATM20524 en SQL.
+Perfil local e imagen 1054 vinculados como evidencia TCS; no son una llave
+PIN del enlace ISO directo. TODO-DATA QA-TCS-WIRE-KEY-EXCHANGE: falta el
+contrato/captura validada de arranque e intercambio TCS. Usuario no dispone
+de Bin32 ni manual. CMS registra origen 10.10.10.244:30964 y cambio de llave
+pendiente; PC actual 10.10.10.21. TCP al host ATM 6100 conecta sin payload.
+Ver QA_PIN_EXECUTION.md para evidencia, diferencias de calendario y limites.
+
+Decision posterior 2026-10-13: el usuario exige ingreso y cifrado de PIN nuevo
+y descarta usar el PIN cifrado de una captura, incluso con EMV nuevo.
+Revision de SmartVista en la sesion disponible confirma enlace 80131/16100
+habilitado, pero no identifica una operacion de cifrado accesible al simulador.
+La funcion de calendario original si esta localizada en
+AccesoBase.ConsultoFechaContable; falta vincular su lote/estado efectivo,
+no solicitar de nuevo una especificacion completa. Detalle de lo revisado
+y limites en docs/implementation/QA_PIN_EXECUTION.md. No hubo envio financiero.
+
+Actualizacion posterior Device keys 2026-10-13: se recibe evidencia SmartVista
+de los dos enlaces PID 80131 y 82052, Key Length 32, formato PIN 01, PPK Index 1
+y KCV conservado en configuracion privada; el usuario reporta igual bloque protegido en ambos. Se vincula
+metadata a ATM20521 mediante qa-atm-evidence-bindings.json privado, sin claves
+ni PIN, y Main muestra pendientes concretos de HSM/formato/secuencia-calendario.
+No volver a afirmar que el usuario no configuro llaves en SmartVista ni pedir
+esas capturas otra vez. El valor recibido no es una clave clara para el
+cifrador local: falta integrar su uso mediante HSM/servicio QA y validar el
+codigo 01. Vinculacion documental no habilita envio. Detalle y limites en
+docs/implementation/QA_PIN_EXECUTION.md.
+
+Revision posterior: el KCV se retira de IPC/pantalla. Se recupera de la
+documentacion previa el endpoint HSM del .reg recibido; desde esta PC su
+conexion agota el plazo. El original UNC falla por autenticacion (1326), sin
+otra copia local .reg hallada. No pedir otro export como si nunca se hubiera
+recibido; lo pendiente actual es acceso al origen y al runtime criptografico.
+
+Avance posterior 2026-10-13: implementado proveedor concreto de consulta
+con PIN nativo, cifrado TEST Windows protegido por DPAPI y primera AC desde
+la sesion PC/SC vigente. Las fuentes ISO/EMV recibidas no se vuelven a pedir.
+Se sustituyen los pendientes generales de implementacion por activacion
+del primer perfil y vinculacion criptografica TEST local aprobada:
+QA-LOCAL-TEST-BINDING, QA-EXECUTION-ACTIVATION. La PC no tiene actualmente
+qa-execution-profiles.json ni qa-test-keys en userData. No se deduce una
+clave usable de los exportes cifrados del host. La seguridad de tarjeta virtual
+sin chip mantiene QA-VIRTUAL-CARD-SECURITY. Detalle, pruebas y limites en
+docs/implementation/QA_PIN_EXECUTION.md. Los registros siguientes son
+cronologicos; sus frases de "integracion pendiente" describen etapas previas.
+
+Objetivo aclarado por el usuario: varios cajeros virtuales operables sin ATM
+fisico; el real disponible sirve para validar inicialmente. Main ya inyecta
+Router de contexto por perfil, sin dependencia de lector. Dos consultas
+sinteticas de ATM independientes recorren builder/servicio/TCP local y reciben
+0210/00. No son consultas financieras QA. Backend real PIN/EMV y perfiles
+de tarjeta virtual siguen pendientes de integracion; no pedir otro cajero
+fisico como solucion. Ver docs/implementation/MULTI_ATM_CONTEXT.md.
+
+Aclaracion 2026-10-13: usuario no puede instalar SafeNet en la PC. No proponer
+importar llaves/Registro del host. Opcion recomendada: puente autenticado QA
+en el host que ya cifra, usando mecanismo recibido. El contrato WCF inspeccionado
+no expone EncrytPinToZone y no se sustituye por ImportClearPIN/cambio de PIN.
+Alternativa para validar recorrido real: consulta nueva desde ATM QA existente,
+con observacion/correlacion. Detalle: docs/implementation/QA_REMOTE_PIN_OPTIONS.md.
+
+Revision integral tras correccion del usuario, 2026-10-13: configuraciones
+ISO, enlace, Registro HSM, parametros EMV, CDOL/IAC y fuentes DLL ya recibidos.
+MsgFormatDotNet.Des.EncrytPinToZone llama a CCrypto2.EncryptPinToZone; hay un
+mecanismo originador de cifrado en las fuentes aportadas. No pedir un generador
+completo como si no se hubiese recibido. Electron no inyecta proveedor de
+contexto, el lector no ejecuta GENERATE AC y QaPinCipher no tiene adaptador real:
+son pendientes de implementacion/integracion, no ausencia general de configuracion.
+ready=false del diagnostico local no consulta HSM ni prueba su desconfiguracion.
+Se corrigen mensajes de disponibilidad, sin habilitar transporte. Revision y
+pendientes concretos: docs/implementation/PROVIDED_CONFIGURATION_AUDIT.md.
+
+Comprobacion posterior 2026-10-13 12:38 Ecuador, pedido de envio real:
+la PC ya recibe 0800/071 del Switch en 16100, runId
+49e9a06b-09e8-4ab6-a61b-fb3fa594141c; cero writes. La denegacion de 12:05/12:11
+no describe esta conexion. Readiness sigue false por proveedor PIN/EMV,
+secuencia/calendario y perfil; no se genera ni envia consulta financiera nueva.
+Gestion recibida no certifica admision financiera o coexistencia persistente.
+Detalle: docs/protocols/QA_SWITCH_LOGS_20261013.md.
+
+Logs tcpcomms01.out y nwint00_24571.out del 2026-10-13 ya recibidos.
+TCP confirma direccion PC 10.10.10.21 invalida en admision, puertos origen
+54364/51944 a 12:05:17/12:11:27; cierre antes de la trama financiera.
+El primer puerto coincide con intento local 49c58b04, cero bytes financieros.
+SWITCH-ATM-ACCESS-CURRENT mantiene solo configuracion activa IP/device y
+coexistencia con sesion ATM; no volver a pedir estos logs. NWINT muestra
+retiro ATM20530/000133 por 82032 con 0210/00 y posterior reverso 0420/0430/00;
+no corresponde a consulta ATM20521 ni acredita ruta CB 82052.
+Lectura fisica 12:33 Ecuador confirma tarjeta 2267, CDOL/IAC; proveedor real
+PIN/EMV/contexto sigue pendiente. Borrador nuevo preparado sin wire/envio.
+Detalle, hashes y lineas: docs/protocols/QA_SWITCH_LOGS_20261013.md.
+
+Prueba fisica 2026-10-13 11:55 Ecuador: tarjeta 2267 presente y leida con
+CDOL1/CDOL2 e IAC, runId 50147b00-f616-4cc3-8bd5-ba7113643876. Ya no esta
+bloqueada por presencia/parametros publicos del terminal. Inspeccion Main
+ready=false porque sigue sin proveedor PIN/EMV/contexto; no se ejecuta
+consulta financiera ni se repite captura. Diagnostico
+55691c9e-4479-4f13-97c6-a4f15a3737fe. Detalle en EMV_TERMINAL_PARAMETERS.md.
+
+Parametros solicitados ya recibidos, 2026-10-13: Registro 9F33=604020,
+9F35=14, 9F40=EF80B05010; TAC_DENIAL no encontrado. No volver a pedir esos
+valores ni exigir crear TAC_DENIAL. Regla de TAC ausente de EMV Book 3 10.7
+implementada, con analisis online-only que respeta IAC-Denial del chip.
+READ RECORD obtiene ahora IAC 9F0E/9F0F/9F0D. Perfil privado actualizado,
+sin habilitar proveedor financiero. Prueba fisica 11:17 Ecuador: tarjeta
+no presente, cero APDU/envios. Detalle y limites en EMV_TERMINAL_PARAMETERS.md.
+
+Busqueda de Registro recibida el 2026-10-13: adjunto /reg:32 con 142 claves,
+141 bajo DATADICT y una raiz del componente en
+HKLM/SOFTWARE/Wincor Nixdorf/ProTopas/CurrentVersion/EmvDebitCreditFW.
+Texto pegado /reg:64 confirma la vista fisica WOW6432Node de esa misma rama.
+Ubicacion resuelta: no volver a solicitar busqueda global ni ruta del componente.
+La salida no contiene lineas REG_SZ/REG_BINARY/REG_DWORD ni parametros del
+terminal; no acredita sus valores efectivos. Consulta siguiente acotada a
+TERMINAL_PROPERTIES/TAGS, valores 9F33, 9F35 y 9F40, y TAC_DENIAL en
+TERMINAL_PROPERTIES, si existen. Son nombres derivados del INA y del perfil;
+existencia de esas subclaves/valores sigue pendiente de comprobacion. No
+consultar/exportar DATADICT completo, tags PAN/Track/PIN ni todas las ramas.
+
+Precision de alcance del 2026-10-13: emular la consulta ATM no requiere copiar
+todo el software/perifericos Diebold. El simulador debe implementar lectura y
+procesamiento EMV, seguridad PIN y mensajes del perfil QA. emvdecre.ina/BAT,
+seleccion Diebold 91x y CDOL de tarjeta 2267 ya estan recibidos; no solicitar
+otra vez "EMV de la terminal" como entregable completo. GENERATE AC, TVR/CVM
+y proveedor de contexto siguen siendo implementacion pendiente. Para adoptar
+exactamente el perfil del terminal, confirmar solo parametros no presentes
+en el fragmento (por ejemplo 9F33, 9F35 y, si aplica al perfil, 9F40/TAC_DENIAL)
+en configuracion efectiva de EMVDEBITCREDITFW. TVR no es una constante a pedir
+del cajero: se calcula en cada operacion. No inventar valores ni convertir la
+ausencia de estos parametros en una solicitud de reinstalacion/imagenes.
+
+Seleccion de tarjeta resuelta: el usuario elige reinsertar 2267. Lectura
+fisica posterior 2026-10-12 18:24:41-48 Ecuador confirma PAN enmascarado
+terminado en 2267, AID A0000000031010 y CDOL1/CDOL2 obtenidos del chip.
+Reporte c85c288e-feb7-4dbd-a8ab-f4c425d29946. Ya no se solicita seleccionar
+tarjeta ni aportar esas listas. Se mantienen solo los pendientes reales de
+procesamiento/generacion EMV, cifrador PIN TEST y contexto ATM. Esta lectura
+no ejecuta GENERATE AC ni verifica PIN y no envia una consulta financiera.
+
+Implementacion adicional 2026-10-12 18:14 Ecuador: el lector obtiene CDOL1 y
+CDOL2 directamente del chip y devuelve solo tags/longitudes, sin valores
+transaccionales. No se solicitan como archivos del cajero. Prueba fisica READ
+exitosa, runId d00384a2-3db3-4cc5-b821-50159c313374: tarjeta conectada termina
+en 0663, diferente de 2267 usada en replay anterior. Esa seleccion se resuelve
+con relectura posterior de 2267; no reutilizar PIN/perfil de otra tarjeta.
+Se conservan los pendientes concretos de TVR/CVM del terminal, generacion AC,
+proveedor PIN TEST y contexto ATM. Adaptador actualizado y pruebas unitarias/
+integracion cubren requisitos, ausencias y datos invalidos. No se envia un
+replay financiero para sustituir esta prueba. Ver EMV_IDENTITY_READING.md.
+
+Nueva evidencia posterior del usuario: monitor 18:00:45.130 muestra Ret=5,
+motivo 1136: Error No definido para consulta/card 2267. Catalogo SQL recibido
+y SELECT propio confirman RetCode 11136 = ATC Duplicado, TAGs Counters,
+Visa/Banred/MasterCard/ATM=5; 1136 no existe en ese catalogo. La diferencia de
+codigo y F39=96 recibido por TCP no se normaliza ni corrige por inferencia.
+Hora/operacion/tarjeta compatibles con el replay de 18:00, sin STAN/UTRNNO
+en captura para correlacion completa. Evitar repetir esa seguridad capturada
+como solucion de trx nueva: corresponde implementar seguridad fresca del chip.
+No ejecutar UPDATE de RetCode 51 mostrado en imagen; no se cambian contadores
+ni se deshabilita unicidad. TODO-DATA CB-96-TRANSLATION: log/identificadores
+que unan validacion ATC, codigo interno y respuesta de red. Detalle SQL y
+alcance de evidencias en BALANCE_EXECUTION.md.
+
+Prueba tras recibir INA/BAT Diebold: perfil parcial privado guardado sin
+activar operaciones nuevas. C:/ProTopas no disponible en esta estacion;
+parametros efectivos del Registro del cajero siguen pendientes. Una sola
+reproduccion autorizada, 2026-10-12 18:00:44.720 Ecuador, runId
+6ab37704-6c24-4e38-b3e2-eab06b59b46e, recibe 0210/F39=96 sin F54.
+PROXY205 registra request/response actuales; SQL no registra nuevo 301000
+para ATM20521. En la ventana CMS 310030 registra 31580494/31580495, 8908,
+sin correlacion demostrada con esta consulta. Se comprueba cfg W vigente;
+no se aplica el BAT ni se cambia BD/Registro. 47 pruebas locales pasan.
+Detalle y limitaciones en BALANCE_EXECUTION.md.
+
+Correccion EMV del 2026-10-12: el usuario confirma cajero Diebold y aporta
+captura de Application Configuration Utility, Home > EMV, con Vendor Protocol
+Diebold 91x y boton Export. Esto reemplaza la suposicion de runtime NCR: no
+buscar NCR/APTRA/EMV EXITS ni aplicar sus tablas al Diebold sin validar mapeo.
+El TXT recibido 205_NCR6848_Multi_Dip.txt contiene EMV1/EMV4/EMV5 y coincide
+con Y:/ExtremePCI/Imagenes/2020/CB CALIDAD/205_NCR6848_Multi_Dip.txt, pero sigue
+siendo fuente NCR de referencia, sin vinculo probado con este terminal 91x.
+No se pide reenviar ese TXT. TODO-DATA DIEBOLD-91X-EMV-PROFILE: export de la
+configuracion mostrada en ACU, producto/version y parametros EMV efectivos
+del terminal QA (descarga del host si no estan incluidos en el export).
+La captura confirma seleccion de protocolo, no AID/TAC/capacidades/CDOL ni
+perfil completo. CARD-TRANSACTION-SECURITY conserva implementacion del dialogo
+transaccional del chip y proveedor PIN TEST. Ver BALANCE_EXECUTION.md.
+
+Nueva evidencia Diebold del 2026-10-12: recibido texto y captura de
+emvdecre.ina con marcador de archivo 4.1.0-210326-10-1a948234-68adbf54.
+TAC_ONLINE/TAC_DEFAULT son cinco bytes FF; DEFAULT_TDOL contiene seis entradas;
+tags locales 9F1D=00, 9F53=5A, 9F39=05. NUMBER_OF_SUPPORTED_AID=0 y ausencia
+de secciones AID describen este fragmento, no demuestran que el terminal
+activo carezca de aplicaciones ni la causa del F39=96. No cambiar ese contador
+por inferencia ni usar TDOL como CDOL. Se conserva fuente privada y revision
+offline; configuracion efectiva pendiente. BAT ya recibido y ubicado por la
+captura en C:/ProTopas/Conf/EMV/emvdecre.bat: kconv emvdecre.ina seguido de
+ccrcconv emvdecre.rck -t EMVDEBITCREDITFW -U. El usuario indica que no hay mas
+archivos; RCK se genera en ese recorrido, no volver a solicitarlo ni ejecutarlo
+para obtener evidencia. Destino logico EMVDEBITCREDITFW confirmado por argumento;
+ruta fisica de Registro no probada. Siguiente comprobacion acotada: buscar
+solo nombres de claves EMVDEBITCREDITFW en HKLM/SOFTWARE, vistas 32/64, en el
+cajero fisico QA. No ejecutar BAT ni importar Registro. Marcadores de archivo
+no identifican version del kernel ni demuestran aplicacion en runtime.
+
+Revision runtime de Mediator confirmada por el usuario: W apunta a
+172.60.60.156/e$, Y a host ATM 172.60.60.152/e$. El cfg de W usa
+CAuth.SendMediator (existente); la incompatibilidad hallada entre cfg de
+Y y DLL Mediator no describe el cfg de W. Esa propuesta no se despliega.
+Se aplica correccion autorizada del unico destino OnError inexistente:
+paso 008, 0121 -> 012 (NotificarSMS), conservando validaciones y respaldo
+fechado. XML, metodos y referencias verificados. La prueba de 16:48:18
+Ecuador, runId e0e41301-165b-4a34-aca7-e504cb4384e1, sigue recibiendo
+F39=96. Llegada a PROXY205 comprobada; no hay nueva consulta de saldo
+301000 en SQL. Dos consultas CMS 310030 en esa ventana devuelven 8908;
+su correlacion con el replay sigue pendiente. La correccion no demuestra
+resolver el 96 ni habilita generacion EMV. Detalle en BALANCE_EXECUTION.md.
+
+Revision de Mediator y llaves recibidas el 2026-10-12: .reg inspeccionado
+sin importar Registro ni mostrar/usar valores de llaves. Seccion 428150205
+presente; referencias HSM y configuracion recibidas, contrato/formato TEST y
+perfil EMV siguen pendientes. DotNet.rar contiene ahora las cuatro DLL
+del flujo DebitoConecta, ExtremeICryptoSwitchPCI e IProcesaClaves.
+Incompatibilidad encontrada: paso 010 pide CSendCore.SendMediator, ausente
+en la DLL canonica; existe SendTransaccion. Se entrega candidato local que
+cambia solo ese metodo, con XML y disponibilidad de metodos verificados,
+sin desplegarlo. TODO-DATA MEDIATOR-FLOW-VERSION: validar versiones/cfg
+cargados y comportamiento del metodo antes de cambiar servidor. PROXY205
+llama AUTHTD y el mapa canonico de BIN usa fallback 999999 al cfg recibido.
+No se prueba que este conflicto causara el 96 sin log correlacionado.
+Detalle y candidato en docs/implementation/BALANCE_EXECUTION.md.
+
+Actualizacion del 2026-10-12 15:57 Ecuador: DebitoConecta_999999.cfg recibido
+y decodificado como XML Base64; identifica ValidarCryptoGrafia (paso 004) y
+SendMediator (010), pero no origina PIN/EMV. Vinculo runtime del cfg y modulos
+pendiente (DEBITO-CONFIG-RUNTIME), sin modificarlo ni ejecutar sus pasos.
+Nueva reproduccion real QA autorizada, runId d0a39870-baea-44dc-9cd5-4fb3b2530eef,
+recibe 0210/F39=96 sin F54. SQL no muestra una nueva consulta 301000 de
+ATM20521; en esa ventana registra CMS 310030/canal 21, TraceId 31580490/31580491,
+con otros identificadores. Falta correlacion para atribuirlos al replay y
+determinar el origen del 96 (CB-96-CURRENT-SWITCH-LOG). La prueba de 15:31
+recibio 00 y TraceId 31580488 aprobado; no se generaliza el fallo de 13:19 a
+las ventanas posteriores. Detalle en CB_205_BALANCE_SAMPLE.md e ISOBASEI_REVIEW.md.
+
+Diagnostico de llegada al Core, 2026-10-12: los nuevos logs correlacionan
+las dos consultas de 13:19 con UTRNNO 262851819241039480 y
+262851819568813530. TXROUT devuelve destino 999 / SVT_FRAUD_PID=999;
+NWINT registra NETWORK LINE DOWN, denial code 802 y RESP=802/RESPCODE=91.
+El rechazo actual se produce en esa etapa del Switch; no corresponde al
+8908 historico de Mediator. PID 999 (10.60.0.20:2223) y enlace CB 82052
+(172.60.60.156:49212) tienen conexiones abortadas. TODO-DATA
+CB-CURRENT-SWITCH-LINKS: conectividad desde Switch, listeners y logs de
+ambos servicios, mas txrout para validar politica/seleccion de fraude.
+No sustituir 999 por 82052 ni deshabilitar fraude por inferencia. Detalle,
+hashes y lineas en docs/protocols/CB_205_BALANCE_SAMPLE.md. Estas fuentes
+resuelven la localizacion del rechazo actual, no los STAN 008101-008103
+del 8 de octubre ni el proveedor PIN/EMV de una consulta nueva.
+
+Actualizacion de implementacion del 2026-10-12: builder mecanico CB/QA/ahorros,
+parser F54, orquestador, IPC, transporte y diario entregados. No hay proveedor
+real de contexto/seguridad inyectado en Electron; la tarjeta presente y un PIN
+facilitado no desbloquean ese contrato. Ver `docs/implementation/BALANCE_EXECUTION.md`.
+
+- **TODO-DATA CB-SEQUENCE-CONTRACT**: implementar un adaptador QA autorizado
+  para reserva/unicidad/reinicio de STAN y calendarios/zona del host.
+  Correccion tras revisar GenerarTransaccion y el archivo activo: la secuencia
+  empieza en Param.Serial; GrabaAutoTran=N conserva ese serial y no requiere
+  sp_DebGetNextSeq. La decision esta implementada en selectCoonectaSequence.
+  La conexion SQL existente, confirmada por el usuario como compartida QA/PREPROD,
+  permite inspeccion de las 14 bases de aplicacion visibles; el SP no se encontro
+  alli. No se sustituye por otro procedimiento de secuencias. Falta la reserva
+  del serial ATM para esta instancia y calendarios; el SP solo bloquea su rama.
+  Bloquea solo adquisicion del contexto financiero real, no builder ni pruebas.
+- **TODO-DATA HSM-QA-PROVIDER**: falta contrato del generador/cifrado PIN de TEST,
+  perfil EMV transaccional y asociacion a la tarjeta/cuenta. La inspeccion adicional
+  de Extreme.ISeguridad/Seguridad/CBusSeguridad confirma interfaces de usuarios y
+  permisos; SeguridadWcf no queda identificado como proveedor de PIN financiero.
+  ATMIso8583 consume PinTrasladado; ValidacionPinLocal2018 valida PIN/ARQC recibidos.
+  Estos consumidores no completan el origen de seguridad de una consulta nueva.
+  ExtremeTools.CryptoTool.AnsiPinEncrypt aporta ahora preparacion mecanica PAN/PIN,
+  implementada offline por LegacyQaPinEncryption con puerto QaPinCipher; no hay
+  cifrador TEST configurado. ExtremeICryptoCMS.dll, referenciada por ATMIso8583,
+  no esta en los tres RAR ni en Y:/ExtremePCI (busqueda sin errores de lectura).
+  Revision directa de SRVPIN.XML/EXTBASE.config aportados el 2026-10-12 confirma
+  ValidacionPinLocal2018.CIEMVAll_PADSS. CCryptoService.ValidaPinCard aparece
+  en ValidaPinConCedula; no es un generador F52. No solicitar la DLL como
+  requisito general ni pedir nuevamente esas configuraciones. Falta el contrato
+  del mecanismo TEST que origina PIN cifrado y perfil kernel EMV.
+  Lista exacta de entregables en docs/implementation/BALANCE_EXECUTION.md.
+  El usuario indica que no conoce ese componente. No inferir un algoritmo, usar
+  certificados privados de la imagen o reemplazar seguridad por la de un PCAP.
+  SRVPIN.XML recibido ademas tiene atributo Debug sin signo igual; validar la
+  configuracion activa sin atribuirle el 91/96. Bloquea solo su adaptador.
+
+- **TODO-DATA BALANCE-RESPONSE-CONTRACT** (2026-10-12): el codec acotado
+  inspecciona 0210/F39 y ahora decodifica/proyecta F54 con etiquetas neutrales.
+  ATMIso8583.GetSaldos aporta layout de registros de 20 caracteres, signo y
+  escala /100, contrastados offline con F54 del frame 224 CB. Ya no falta
+  una fuente del layout; faltan aprobacion de perfil, semantica y variantes.
+  Aprobar estructura, tipos/unidades, cuenta/moneda y significado de saldo
+  total/disponible en la respuesta ATM, con correspondencia a CMS cuando aplique.
+  No inferir el layout por un estandar generico ni igualar F39 con RetCode o
+  MappedRespCode. Bloquea solo interpretacion/validacion del saldo y resultado,
+  sin impedir configuracion, revision ni reconstruccion offline. Ver
+  `docs/transactions/BALANCE_INQUIRY.md` para el diagnostico actualizado del envio.
+
+- **TODO-DATA ATM-IMAGE-ACTIVE-PROFILE** (2026-10-12): recibidos guion NCR,
+  configuraciones, diccionarios y modulos del host ATM en imagen cajero.
+  Usuario confirma copias sin fecha activas y fechadas backup: seleccion y
+  hashes implementados/verificados; no se vuelve a pedir identificar backups.
+  EXTBASE/EXTBASEATM tienen roles/configuraciones diferentes y se conservan
+  separados; faltan perfil de la instancia y entradas TRAN de BD. La leyenda de buffers no coincide
+  literalmente con todas las tablas de cuenta. Bloquea solo adoptar ese perfil
+  para ejecucion. Builder aporta reglas F3/F7/F11/F12/F13/F15/F37; secuencia y
+  seguridad nueva siguen pendientes. Ver `docs/protocols/ISOBASEI_REVIEW.md`.
+
+- **TODO-DATA AUTOMATIC-FRAME-GENERATOR** (2026-10-11): configuracion QA y preparacion
+  de planes desde la UI implementadas sin envios. Falta aprobar el mapeo de entradas
+  y reglas dinamicas de una transaccion nueva, vinculacion cuenta/tarjeta y seguridad
+  PIN/EMV. ISOBASEI y la consulta capturada ya estan recibidos; no se solicitan de nuevo.
+  Bloquea solo generacion/transmision, no configuracion ni revision offline. Ver
+  `docs/implementation/SEND_CONFIGURATION.md`.
 
 Correccion CMS (2026-10-08): campos completos y variantes de nombre reconocidos
 en el observador; revision de presencia/tipos para saldo y retiro, con 26
@@ -152,9 +713,9 @@ Detalle y pruebas: `docs/implementation/TRANSACTION_PREPARATION.md`.
 - [x] `ISOBASEI.bin` de SWATM01 Coonecta recibido y sus secciones/parametros inspeccionados offline; validacion wire/casos pendiente.
 - [ ] Especificacion ISO ATM Coonecta.
 - [ ] Trama consulta saldo request/response aprobada.
-- [ ] PCAP consulta saldo.
-- [ ] Trama retiro aprobado request/response.
-- [ ] PCAP retiro aprobado.
+- [x] PCAP consulta saldo CB 205 recibido y contrastado con ISOBASEI; consulta nueva/perfil aprobado pendientes.
+- [ ] Trama retiro aprobado request/response validada como fixture ejecutable; muestra CB 205 recibida.
+- [x] PCAP retiro aprobado CB 205 recibido; no se envio retiro desde el simulador.
 - [ ] Trama retiro rechazado request/response.
 - [ ] Trama reverso request/response + original.
 - [ ] PCAP reverso.
@@ -206,11 +767,11 @@ Estos items no modifican el estado de las tramas ATM/PCAP pendientes del P0.
 
 ## P1 - Hardware
 
-- [ ] OMNIKEY 5422 conectado.
-- [ ] Nombre PC/SC del reader.
+- [x] OMNIKEY 5422 conectado y detectado en la prueba fisica del 2026-10-08.
+- [x] Nombre PC/SC del reader identificado por el adaptador Windows.
 - [ ] Driver/version.
-- [ ] ATR/ATS de tarjeta de prueba.
-- [ ] Evidencia de lectura disponible.
+- [x] ATR de tarjeta de prueba disponible; ATS/contactless y otros perfiles pendientes.
+- [x] Evidencia de lectura manual EMV de contacto; no valida seguridad transaccional.
 
 ## P2 - Carga/estres
 

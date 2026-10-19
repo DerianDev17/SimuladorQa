@@ -2,6 +2,74 @@
 
 ## Objetivo y alcance
 
+Logs del 13 de octubre recibidos posteriormente: tcpcomms01.out confirma
+el rechazo por direccion invalida de 10.10.10.21 en find_device_using_address,
+puertos 54364 y 51944 a 12:05:17 y 12:11:27. El primero correlaciona con el
+intento local por endpoint completo. Se resuelve la falta de log actual;
+queda validar configuracion activa de admision y coexistencia de sesiones.
+NWINT muestra otro retiro ATM20530 con 00 y reverso, sin consulta ATM20521.
+Ver ../protocols/QA_SWITCH_LOGS_20261013.md. No se transmite otro replay
+para sustituir una consulta nueva; proveedor PIN/EMV/contexto sigue pendiente.
+
+Revision 2026-10-13: intento autorizado runId
+49c58b04-903e-483d-820b-c76120000aca conecta a 12:05:18 Ecuador pero termina
+ADMISSION_DENIED antes del write: cero bytes financieros. Probe posterior
+4b8afd61-c700-4725-9f5e-da801e82c453 a 12:11:27, sin enviar datos, confirma
+texto exacto NO AUTHORIZATION y cierre del peer. Endpoint, origen local y
+hash del payload preparado coinciden con el replay aprobado del 12 de octubre;
+no se atribuye este rechazo a PIN/EMV, ATC ni al Core.
+
+SELECT de Mediator, diagnostico b08ffba4-5b7f-4bf0-9653-ec8706bc6a88,
+confirma consulta 301000/ATM20521/secuencia 7939 a 2026-10-13 11:53:18.383
+(reloj del Journal), TraceId 31580499, RetCode 0 y respuesta APROBADO.
+Compatible con la transaccion del cajero indicada por el usuario; no prueba
+por si sola su aplicacion contable. Habilitacion, ruta y flags SQL consultados
+coinciden con el diagnostico previo del 12 de octubre. No hubo DML/DDL.
+
+Unico cambio remoto propio registrado: cfg de Mediator, Step 008 OnError
+0121 -> 012, aplicado 2026-10-12 16:48:07 Ecuador; no modifica admision TCP.
+No se pudo comprobar su hash vigente por falta de acceso a W/Y y UNC.
+TODO-DATA SWITCH-ATM-ACCESS-CURRENT: configuracion activa de admision del
+listener/PID 80131 y tcpcomms01.out del 13 de octubre, ventana 12:05-12:12
+Ecuador, para identificar el dispositivo y motivo concreto del rechazo.
+Los logs locales disponibles son del 12; no usarlos como estado actual ni
+sustituir la IP/configuracion del cajero activo por la del simulador.
+
+Diagnostico de la prueba 2026-10-12 18:00:44 Ecuador: el usuario aporta monitor
+18:00:45.130 con Ret=5/motivo 1136, y catalogo OCTOCLI_PCI RetCode 11136 =
+ATC Duplicado, TAGs Counters, mapeo 5. SELECT propio confirma 11136 y ausencia
+de 1136 en ese catalogo. El socket recibio F39=96; la traduccion entre esos
+codigos y correlacion por STAN/UTRNNO siguen pendientes. La seguridad F55
+preservada por replay aporta un origen concreto de duplicacion; no seguir
+repitiendola como solucion para consulta nueva. Estos casos sirven como
+comunicacion/prueba negativa identificada. Para una nueva consulta se necesita
+seguridad EMV originada por el chip para esa operacion. No cambiar solo ATC,
+STAN o fecha ni borrar contadores del host. Ver BALANCE_EXECUTION.md.
+
+Reejecucion solicitada por el usuario el 2026-10-12: ahora conecta a
+10.60.0.11:16100, recibe 0800/071, transmite una vez los 536 bytes originales
+STAN 007923 y recibe 0210/F39 91 correlacionado por STAN/RRN/terminal.
+runId 9a6606b3-6829-4f2e-abed-99f27e97d274; write UTC 18:16:03.939
+(13:16:03.939 Ecuador), respuesta antes de 18:16:04.502 UTC.
+No hay F54 en la respuesta ni una consulta aprobada. No se confirma llegada
+actual a Mediator/Core ni se atribuye la causa de 91 al error historico.
+Reporte privado qa-cb-balance-attempt-9a6606b3-6829-4f2e-abed-99f27e97d274.json.
+El rechazo TCP descrito a continuacion pertenece al intento anterior.
+
+Actualizacion 2026-10-12: el usuario solicita enviar al Switch como en la prueba
+anterior. Se ejecuta el emisor de la consulta original CB, sin cambios de campos,
+con hashes y destino QA comprobados. La conexion a 10.60.0.11:16100 resulta en
+ECONNREFUSED antes de transmitir: writeAttempted=false, writeCompleted=false,
+bytesWritten=0, bytesReceived=0; no existe respuesta ISO financiera de este intento.
+Un probe independiente sin writes confirma REFUSED en el mismo destino.
+La ruta local elegida usa 10.10.10.21 por Wi-Fi y gateway 10.10.10.1; no acredita
+la direccion observada por el Switch ni identifica quien origina el rechazo TCP.
+Revisar listener/ruta/reglas del puerto con el administrador del Switch antes
+de otro envio. No se atribuye este fallo a PIN/EMV, STAN ni al Core.
+Reportes privados: qa-cb-balance-attempt-b550c403-42ae-4ae3-8152-2a8b31208152.json
+y qa-switch-connectivity-20261012.json en artifacts. No se enviaron 0810, retiro
+o reverso; no se declaro una consulta nueva generada desde el chip.
+
 Revision PCAP/nwint del 2026-10-08: cuatro envios reales y tres preparaciones
 sin transmision. El replay identico STAN 007923 recibio 91; variantes que
 cambian solo F11 a 008101/008102/008103 recibieron 96. El nwint adjunto no

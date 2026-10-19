@@ -8,7 +8,7 @@
 - [x] seleccion de ambiente persistida y auditoria local
 - [ ] configuracion completa de endpoints y limites (TODO-DATA ENVIRONMENT)
 - [x] SQLite/Worker para catalogos de entidades y ATM, con auditoria atomica
-- [ ] SQLite para historial transaccional
+- [ ] SQLite para historial transaccional; diario de saldo en archivo implementado, ver BALANCE_EXECUTION
 - [ ] logging transaccional sanitizado y rotacion
 
 La primera entrega tiene pruebas unitarias, integracion y E2E Electron. Ver `docs/implementation/BOOTSTRAP.md`.
@@ -18,9 +18,10 @@ fuentes/ambientes autorizados se siguen en `docs/INPUT_CHECKLIST.md`; configurar
 un borrador no completa esos requisitos.
 
 ## Epic 2 - Hardware
-- [ ] listar readers PC/SC
-- [ ] detectar OMNIKEY 5422
-- [ ] detectar tarjeta
+- [x] listar readers PC/SC mediante adaptador Windows fuera del Renderer
+- [x] detectar OMNIKEY 5422, verificado fisicamente el 2026-10-08
+- [x] detectar presencia/retirada de tarjeta e invalidar identidad de sesion
+- [x] leer identidad EMV de contacto y mostrar PAN enmascarado; otros perfiles pendientes
 - [ ] resolver perfil
 
 ## Epic 3 - Profiles
@@ -60,7 +61,19 @@ un borrador no completa esos requisitos.
 - [x] resumen del contexto revisado por Main con UUID y timestamp UTC
 - [x] borrador conservado al navegar durante la sesion y accion Limpiar borrador
 - [x] guardar/cargar/eliminar casos DRAFT persistentes por ambiente con referencias documentales sanitizadas y revalidacion de ATM
+- [x] recorrido UI de datos, lectura/seleccion manual de tarjeta y resumen sin envio
+- [x] configuracion rapida entidad/ATM con retorno al borrador y seleccion del perfil activo creado
+- [x] busqueda local y filtros de operacion/vigencia en casos con recuperacion de errores
+- [x] confirmacion de limpieza que conserva casos y bloqueo de ambiente durante operaciones
+- [x] configuracion de envio por ambiente y plan automatico offline desde el formulario, sin RAW/HEX ni sockets
+- [ ] generador de requests nuevos aprobado (AUTOMATIC-FRAME-GENERATOR / CB-DYNAMIC-REQUEST / CARD-TRANSACTION-SECURITY)
+- [x] builder acotado CB/QA/ahorros con reglas de la imagen ATM y campos privados por proveedor, verificado con fixtures sinteticos
+- [x] parser F54 exacto y etiquetas neutrales 01/02/91, sin mapeo supuesto total/disponible
 - [ ] balance real (ISO-SPEC / GOLDEN-SAMPLES / ENVIRONMENT / PROFILES)
+- [ ] contexto financiero de tarjeta/cuenta en Main mediante referencia opaca y sesion vigente
+- [x] orquestador de saldo e IPC con revalidacion, referencia de tarjeta y proteccion de doble envio; proveedor real pendiente
+- [x] recepcion ISO correlacionada y proyeccion F54; semantica/variantes BALANCE-RESPONSE-CONTRACT pendientes
+- [x] diario de saldo persistente, idempotencia tras reinicio, recuperacion e historial QA; sin datos de seguridad
 - [ ] withdrawal approved real
 - [ ] withdrawal declined real
 - [ ] reversal real
@@ -70,6 +83,9 @@ Ver `docs/implementation/TRANSACTION_PREPARATION.md`. Revisar el borrador no
 genera una transaccion ni se cuenta como un flujo MVP aprobado.
 La biblioteca local se documenta en `docs/implementation/SAVED_CASES.md`; sus
 referencias no son evidencia de una ejecucion ni habilitan envio.
+La revision del 2026-10-12 separa el bloqueo de envio en codigo del 91/96
+historico y prioriza el primer saldo nuevo CB 205/QA/ahorros. Ver
+`docs/transactions/BALANCE_INQUIRY.md`; ISOBASEI y PCAP CB ya estan recibidos.
 
 ## Epic 6 - Observability
 - [x] evidencia de las diez capturas visible en transacciones, con conteos MTI y limites del analisis
