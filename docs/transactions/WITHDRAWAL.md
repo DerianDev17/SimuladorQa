@@ -3,6 +3,60 @@
 ## Objetivo
 Simular retiro ATM exitoso.
 
+## Comprobante local e importes — 2026-10-19
+
+El usuario confirma que Con impresion/Sin impresion corresponde a un comprobante
+del simulador con vista previa. Es una preferencia de sesion: no modifica F48,
+Impreso, montos, PIN/EMV ni comisiones del host. Sin impresion es el valor inicial;
+Con impresion abre la vista previa una vez que el retiro se confirma aprobado.
+El operador pulsa Imprimir comprobante para abrir el dialogo del sistema. Cancelar,
+fallar, agotar el plazo o reimprimir nunca invoca una transaccion financiera.
+Los retiros aprobados guardados tambien ofrecen Ver comprobante en el historial.
+Los casos guardados no persisten esta preferencia; cargarlos vuelve a Sin impresion.
+
+La respuesta F54 de retiro estaba descartada en codec, transporte y diario. Ahora
+se conserva su lectura mecanica documentada (GetSaldos y frame 254), con tipos
+01/02/91 neutrales, signo, moneda y cuenta. Solo se proyectan saldos en una
+aprobacion completa 00 con F4 exacto. La ausencia de F54 permite aprobar retiro
+con saldos vacios; F54 mal formado se trata como respuesta invalida. El parser de
+saldo mantiene su exigencia de F54. Los registros anteriores se leen sin migracion;
+sus saldos descartados no se reconstruyen ni se calculan con consultas anteriores.
+
+La UI destaca Monto autorizado y muestra los saldos recibidos del mismo resultado.
+Debito total permanece No confirmado: F4 autoriza el retiro, no es un asiento Core
+ni incluye por si solo comisiones. Saldo restante muestra Sin identificar cuando
+hay F54 y No informado si falta. No se resta el retiro a un saldo ni se confunde
+un limite de credito con fondos disponibles.
+
+TODO-DATA WITHDRAWAL-DEBIT-AND-REMAINING: confirmar por perfil la correspondencia
+de F54 01/02 con total/disponible, que el disponible sea posterior al retiro y la
+fuente del debito total efectivo con comisiones. Requiere especificacion aprobada
+o evidencia correlacionada de host/Core. Se bloquean solo estas etiquetas e
+importes derivados; retiro, saldos neutrales y comprobante local funcionan.
+
+Impresion: IPC acepta solo environment QA y requestId UUID. Main recupera el
+registro del diario y proyecta exclusivamente importes/referencias publicas, sin
+tarjeta, PIN, RAW ni diagnosticos privados. Una interfaz ReceiptPrinter aisla
+Electron; la ventana de impresion tiene sandbox, sin Node, preload, JavaScript
+ni navegacion. El HTML escapa valores y bloquea recursos de red. El servicio limita
+concurrencia y espera a 120 s, cancela recursos tardios y sanitiza fallos. SUBMITTED
+significa envio a la cola del sistema, no confirma salida fisica del papel.
+
+Pruebas: unidad de contratos/HTML/estados y F54; integracion TCP loopback -> diario
+-> recuperacion -> impresion con puerto sintetico, sin bytes financieros nuevos;
+E2E Electron con ambas preferencias, vista previa, cancelacion, fallo, reimpresion,
+aislamiento de la ventana y ajuste a 1040 px. No se ejecuta un retiro real ni se
+usa una impresora fisica durante esta verificacion.
+
+Validacion local completada: lint, typecheck, build, formato de archivos afectados
+y check:security correctos. Pasan 824 pruebas unitarias, 72 pruebas seleccionadas
+de retiro/comprobante (incluidas en las suites), y cinco E2E de retiro/saldo; las
+dos E2E de comprobante se repiten correctamente tras ajustar el modal a 1040x768.
+En integracion pasan 163 de 164 en lote: la prueba existente de importacion PIN
+Windows excede 20 s bajo carga y pasa al repetirla aislada, sin cambiar su timeout
+ni codigo. Evidencia visual sintetica en artifacts/withdrawal-result-print.png,
+withdrawal-receipt-preview.png y withdrawal-receipt-compact.png.
+
 ## Comparacion de trama solicitada, 2026-10-19
 
 Se contrasta el builder actual, el perfil ATM20521, los frames 218/248/250 de

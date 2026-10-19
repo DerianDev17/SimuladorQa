@@ -1,4 +1,6 @@
 const paths = {
+  printer: 'M7 8V3h10v5 M7 17H4V9h16v8h-3 M7 14h10v7H7z M17 11h.01',
+  trash: 'M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15 M10 10v7 M14 10v7',
   dashboard: 'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',
   transaction: 'M4 7h16m-4-4 4 4-4 4 M20 17H4m4-4-4 4 4 4',
   atm: 'M5 3h14v18H5z M8 6h8v6H8z M8 16h8 M8 19h3',

@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import {
   isWithdrawalAmount,
   parseWithdrawalContextRequest,
@@ -18,6 +20,7 @@ import { NewVisaWithdrawal } from '../../apps/desktop/src/main/adapters/new-visa
 import { NewVisaBalance } from '../../apps/desktop/src/main/adapters/new-visa-balance';
 import { CapturedVisaBalance } from '../../apps/desktop/src/main/adapters/captured-visa-balance';
 import { WithdrawalService } from '../../apps/desktop/src/main/withdrawal-service';
+import { BalanceExecutionView } from '../../apps/desktop/src/renderer/BalanceExecutionView';
 import type {
   BalanceContextProvider,
   BalanceExchangeResult,
@@ -86,6 +89,13 @@ describe('resultado de retiro separado de conciliacion', () => {
       expect(balanceResponseConfirmed(record)).toBe(true);
       expect(withdrawalBlocksNewExecution(record)).toBe(false);
       expect(parseBalanceJournal({ version: 1, executions: [record] })).toEqual([record]);
+      const markup = renderToStaticMarkup(
+        createElement(BalanceExecutionView, { execution: record }),
+      );
+      expect(markup).toContain('Retiro no aprobado');
+      expect(markup).toContain('El emisor o el switch no está operativo (91)');
+      expect(markup).toContain('Respuesta del host recibida');
+      expect(markup).not.toMatch(/conciliación|No repitas|Nueva prueba QA/);
       expect(
         await f.service.execute(f.request, f.target, deadlines, async () => true),
       ).toMatchObject({ ok: true, value: f.previous });
@@ -377,6 +387,12 @@ describe('motor de retiro y proteccion de duplicados', () => {
       balanceDeliveryUncertain({ ...result.value, transmissionAttempted: false, bytesQueued: 0 }),
     ).toBe(true);
     expect(balanceResponseConfirmed(result.value)).toBe(false);
+    const markup = renderToStaticMarkup(
+      createElement(BalanceExecutionView, { execution: result.value }),
+    );
+    expect(markup).toContain('Monto solicitado: USD 20.00');
+    expect(markup).toContain('No repitas el envío');
+    expect(markup).not.toContain('Consulta aprobada');
     expect(
       await f.service.execute(
         { ...request, requestId: randomUUID() },

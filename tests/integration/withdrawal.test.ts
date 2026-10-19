@@ -9,6 +9,8 @@ import { CapturedVisaBalance } from '../../apps/desktop/src/main/adapters/captur
 import { CapturedVisaFraming } from '../../apps/desktop/src/main/infrastructure/captured-visa-framing';
 import { FileBalanceJournal } from '../../apps/desktop/src/main/infrastructure/balance-journal';
 import { WithdrawalService } from '../../apps/desktop/src/main/withdrawal-service';
+import { WithdrawalReceiptService } from '../../apps/desktop/src/main/withdrawal-receipt-service';
+import { withdrawalReceiptHtml } from '../../apps/desktop/src/main/adapters/withdrawal-receipt-html';
 import { NewVisaWithdrawal } from '../../apps/desktop/src/main/adapters/new-visa-withdrawal';
 import { withdrawalFixture, withdrawalResponse } from '../helpers/withdrawal';
 import { removeTestDirectory } from '../helpers/temporary-directory';
@@ -196,6 +198,30 @@ describe('retiro sintetico por TCP local y diario persistente', () => {
       ),
     ).toEqual(result);
     expect(acquire).toHaveBeenCalledTimes(1);
+    const restarted = new WithdrawalService(
+      new FileBalanceJournal(path, 'WITHDRAWAL'),
+      transport,
+      runtime,
+    );
+    const print = vi.fn(async (receipt) => {
+      expect(withdrawalReceiptHtml(receipt)).toContain('USD 123.45');
+      return 'SUBMITTED' as const;
+    });
+    const receipts = new WithdrawalReceiptService((request) => restarted.find(request.requestId), {
+      print,
+    });
+    const bytesBeforePrinting = received;
+    expect(await receipts.print({ environment: 'QA', requestId: f.request.requestId })).toEqual({
+      ok: true,
+      value: 'SUBMITTED',
+    });
+    expect(await receipts.print({ environment: 'QA', requestId: f.request.requestId })).toEqual({
+      ok: true,
+      value: 'SUBMITTED',
+    });
+    expect(print).toHaveBeenCalledTimes(2);
+    expect(received).toBe(bytesBeforePrinting);
+    expect(await journal.read()).toEqual([result.value]);
     await expect(new FileBalanceJournal(path).read()).rejects.toThrow('BALANCE_JOURNAL_INVALID');
     // A crash after write retains PENDING and blocks another request, including a new UUID.
     await journal.write([
