@@ -6,6 +6,16 @@ artifacts/
 **/mediator-observer.json
 **/network-evidence.json
 **/*.credential.xml
+**/qa-test-keys/
+**/qa-atm-master-keys/
+**/qa-cms-atm-evidence.json
+**/qa-cms-atm-evidence.*.backup.json
+**/qa-execution-profiles.json
+**/qa-execution-profiles.json.*
+**/qa-withdrawal-policies.json
+**/qa-withdrawal-policies.json.*
+**/qa-atm-evidence-bindings.json
+**/qa-atm-evidence-bindings.json.*
 .env
 .env.*
 **/[Pp][Aa][Ss][Ss].txt
@@ -20,5 +30,11 @@ artifacts/
 .DS_Store
 # Manual de proveedor restringido: conservar la fuente local fuera de Git.
 /Docs tecnicos/Extreme MediatorII Message Interface CMS v3.6 (1).pdf
+# Imagen/configuracion privada del ATM: originales y certificados fuera de Git.
+/Docs tecnicos/imagen cajero/
+/Docs tecnicos/Mediator/
+# Export de Registro recibido con material criptografico privado.
+*.reg
+/Docs tecnicos/Pass oracle.txt
 # Capturas originales privadas; versionar solo evidencia sanitizada y metadatos.
 /Tramas transacciones/
