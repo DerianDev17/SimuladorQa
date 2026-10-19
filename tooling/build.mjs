@@ -24,7 +24,10 @@ export async function buildMain() {
     'mediator-command.ps1',
     'cms-financial-fields.json',
     'pcsc-status.ps1',
+    'pcsc-monitor.ps1',
     'pcsc-card.ps1',
+    'qa-pin-entry.ps1',
+    'qa-pin-cipher.ps1',
   ]) {
     await copyFile(`apps/desktop/src/main/adapters/${name}`, `dist/${name}`);
   }

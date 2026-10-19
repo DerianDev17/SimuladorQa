@@ -9,7 +9,26 @@ npm ci
 npm run dev
 ```
 
-`dev` inicia Vite en http://127.0.0.1:5173 y abre Electron. React tiene HMR; cambios en Main/preload requieren reiniciar el comando. Cerrar Electron detiene Vite.
+`dev` inicia Vite en http://127.0.0.1:5173 y abre Electron. React tiene HMR.
+Desde 2026-10-16, Main desactiva la cache HTTP en disco solo en modo `--dev`
+mediante `disable-http-cache`, antes de `ready`, para evitar reutilizar entradas
+danadas de Chromium al cargar Vite. El aviso reportado `Critical error found -8`
+y `No file for a1010052` corresponde a esa cache. No se eliminan archivos de
+AppData. La compilacion normal conserva la politica de cache predeterminada.
+Fuente: [opcion oficial de Electron](https://www.electronjs.org/docs/latest/api/command-line-switches#--disable-http-cache).
+
+Los cambios en Main/preload, helpers, dominio y contratos compartidos recompilan
+Main y solicitan reiniciar Electron por IPC privado del lanzador. El reinicio
+espera a que termine una lectura o consulta en curso; durante esa espera Main
+rechaza nuevos inicios. No reenvia operaciones. Un fallo de compilacion conserva
+la instancia actual y se informa en consola. Cerrar Electron normalmente detiene
+Vite. Cambios en el propio lanzador requieren reiniciar el comando.
+
+Actualizacion 2026-10-15: typecheck y build correctos; no se ejecutan suites
+automatizadas por instruccion del usuario. La recuperacion posterior de
+configuracion utilizo la recarga del lanzador de desarrollo. Tras retirar
+los hooks temporales, el usuario conecta la app y Windows confirma su socket
+Established a las 21:06:39Z. Se conserva esa conexion abierta.
 
 El comando permanece activo mientras la app esta abierta. La ventana deberia
 aparecer en pocos segundos. El lanzador inicia Electron con windowsHide=false:
@@ -40,6 +59,22 @@ Es una compilación ejecutable con las dependencias instaladas; aún no es un in
 La segunda entrega añade CRUD de entidades y perfiles ATM en borrador mediante SQLite/Worker; ver `LOCAL_CATALOGS.md`. Las páginas de tarjetas, carga e historial mantienen los requisitos pendientes; aún no tienen cifrado ni ejecución. La pantalla de monitor describe solamente la estación actual; no inventa agentes ni heartbeats.
 
 Las preferencias viven en `preferences.json` dentro de `app.getPath('userData')` de Electron, fuera del repo. Si el archivo es inválido, corregirlo o respaldarlo fuera de la app y restablecerlo manualmente; la app no lo sobrescribe silenciosamente.
+
+En Windows, una herramienta empaquetada puede ver archivos de AppData
+redirigidos a su LocalCache mientras Electron iniciado fuera del paquete
+lee el directorio real, aunque ambas rutas logicas sean iguales. Para
+diagnosticar configuracion ausente, comprobar la lectura desde el proceso
+Main afectado. El 2026-10-15 se recuperaron 16 archivos mediante una
+migracion puntual verificada y con respaldo; no es una funcion automatica
+del arranque. Ver [conexion al Switch](SWITCH_CONNECTION.md).
+
+La provision de 900104 a las 21:21Z confirma que una escritura posterior
+desde la herramienta empaquetada puede volver a crear la copia virtual.
+La reserva se provisiona y verifica desde Main a las 21:23Z; la copia virtual
+queda respaldada y sin uso activo. Para datos de la instancia abierta,
+efectuar escrituras desde sus servicios y comprobar el resultado desde el
+mismo contexto; no basta con que las rutas logicas o hashes vistos desde
+la herramienta coincidan. No se cambian preferencias de virtualizacion de Windows.
 
 ## Verificar
 

@@ -1,5 +1,6 @@
 import {
   dataBlockers,
+  isRecord,
   parseEnvironmentRequest,
   parsePreparationRequest,
   prepareTransaction,
@@ -29,10 +30,37 @@ import type { CardReaderAdapter } from '../../../../packages/domain/src/card-rea
 
 // Las operaciones locales comparten cola. El observador verifica el ambiente antes
 // y después de consultar, sin retener esa cola durante la espera de red.
+import { isRevision, isUuid, selectableAtms } from '../../../../packages/domain/src/catalogs';
+import { parseSaveSendConfiguration } from '../../../../packages/domain/src/send-configuration';
+import type { SendConfigurationSnapshot } from '../../../../packages/domain/src/send-configuration';
+import type { PreparedSendPlan } from '../../../../packages/shared/src/contracts';
+import type { SendConfigurationService } from './send-configuration-service';
+import {
+  parseBalanceContextRequest,
+  parseBalanceExecutionRequest,
+} from '../../../../packages/domain/src/balance-inquiry';
+import type {
+  BalanceContextRequest,
+  BalanceReadiness,
+  BalanceExecution,
+} from '../../../../packages/domain/src/balance-inquiry';
+import type { BalanceTarget } from './balance-ports';
+import { missingBalanceContext } from './balance-inquiry-service';
+import type { BalanceInquiryService } from './balance-inquiry-service';
+import type { SwitchConnectionPort } from './switch-connection-port';
+import type { SwitchConnectionSnapshot } from '../../../../packages/domain/src/switch-connection';
+import {
+  parseWithdrawalContextRequest,
+  parseWithdrawalExecutionRequest,
+  missingWithdrawalContext,
+} from '../../../../packages/domain/src/withdrawal';
+import type { WithdrawalService } from './withdrawal-service';
+
 export class DesktopApplication {
   private queue: Promise<unknown> = Promise.resolve();
   private environmentRevision = 0;
   private observationBusy = false;
+  private balanceBusy: string | undefined;
   constructor(
     private readonly store: PreferencesStore,
     private readonly identity: RuntimeIdentity,
@@ -43,6 +71,10 @@ export class DesktopApplication {
     private readonly observer?: TransactionObserver,
     private readonly networkEvidence?: NetworkEvidenceCatalog,
     private readonly readerAdapter?: CardReaderAdapter,
+    private readonly sendConfiguration?: SendConfigurationService,
+    private readonly balanceInquiry?: BalanceInquiryService,
+    private readonly switchConnection?: SwitchConnectionPort,
+    private readonly withdrawalService?: WithdrawalService,
   ) {}
 
   private serialize<T>(operation: () => Promise<T>): Promise<T> {
@@ -59,7 +91,10 @@ export class DesktopApplication {
       environment: preferences.environment,
       storage: 'AVAILABLE',
       reader: this.readerAdapter ? 'CONFIGURED' : 'NOT_CONFIGURED',
-      connection: 'NOT_CONFIGURED',
+      connection:
+        preferences.environment === 'QA' && this.switchConnection
+          ? this.switchConnection.snapshot().state
+          : 'NOT_CONFIGURED',
       controlPlane: 'NOT_CONFIGURED',
       blockers: dataBlockers,
       audit: [...preferences.audit].reverse(),
@@ -86,6 +121,11 @@ export class DesktopApplication {
 
   setEnvironment(payload: unknown): Promise<Result<AppSnapshot>> {
     return this.serialize(async () => {
+      if (this.balanceBusy)
+        return failure(
+          'CONFLICT',
+          'Espera el resultado de la transacción antes de cambiar el ambiente.',
+        );
       const environment = parseEnvironmentRequest(payload);
       if (!environment)
         return failure('VALIDATION_ERROR', 'Selecciona QA o PREPROD. Producción está bloqueada.');
@@ -108,6 +148,7 @@ export class DesktopApplication {
           ].slice(-100),
         };
         await this.store.write(next);
+        this.switchConnection?.disconnect('ENVIRONMENT_CHANGED');
         this.environmentRevision++;
         return { ok: true, value: this.snapshot(next) };
       } catch {
@@ -231,8 +272,386 @@ export class DesktopApplication {
     });
   }
 
+  getSendConfiguration(payload: unknown): Promise<Result<SendConfigurationSnapshot>> {
+    return this.serialize(async () => {
+      const environment = parseEnvironmentRequest(payload);
+      if (!environment) return failure('VALIDATION_ERROR', 'Selecciona QA o PREPROD.');
+      try {
+        const preferences = await this.store.read();
+        if (preferences.environment !== environment)
+          return failure('CONFLICT', 'El ambiente cambió. Recarga la configuración.');
+        return this.sendConfiguration
+          ? await this.sendConfiguration.read(environment)
+          : failure('SERVICE_UNAVAILABLE', 'La configuración de envío no está disponible.');
+      } catch {
+        return failure('STORAGE_UNAVAILABLE', 'No se pudo verificar el ambiente.');
+      }
+    });
+  }
+  switchConnectionAction(
+    action: 'status' | 'connect' | 'disconnect',
+    payload: unknown,
+  ): Promise<Result<SwitchConnectionSnapshot>> {
+    return this.serialize(async () => {
+      if (parseEnvironmentRequest(payload) !== 'QA')
+        return failure('FORBIDDEN', 'La conexión al Switch está disponible en QA.');
+      if (action !== 'status' && this.balanceBusy)
+        return failure(
+          'CONFLICT',
+          'Espera el resultado de la transacción antes de cambiar la conexión.',
+        );
+      try {
+        if ((await this.store.read()).environment !== 'QA')
+          return failure('CONFLICT', 'El ambiente cambió. Abre la conexión desde QA.');
+        if (!this.switchConnection)
+          return failure('SERVICE_UNAVAILABLE', 'El servicio de conexión no está disponible.');
+        if (action === 'connect') {
+          const setup = await this.sendConfiguration?.read('QA');
+          if (!setup)
+            return failure('SERVICE_UNAVAILABLE', 'La configuración de envío no está disponible.');
+          if (!setup.ok) return setup;
+          const configuration = setup.value.configuration;
+          if (!configuration)
+            return failure(
+              'CONFLICT',
+              'No hay una configuración de conexión guardada. Abre Configuración para definirla.',
+            );
+          if (!setup.value.documentedEndpoint)
+            return failure(
+              'CONFLICT',
+              'El destino QA documentado no está disponible. Revisa Configuración.',
+            );
+          if (setup.value.status !== 'CONFIGURED_BLOCKED')
+            return failure(
+              'CONFLICT',
+              'El destino guardado no coincide con el documentado. Actualízalo en Configuración.',
+            );
+          if (configuration.connectDeadlineMs === null)
+            return failure('CONFLICT', 'Define el plazo de conexión en Configuración.');
+          this.switchConnection.connect({
+            environment: 'QA',
+            endpoint: configuration.endpoint,
+            connectDeadlineMs: configuration.connectDeadlineMs,
+          });
+        } else if (action === 'disconnect') this.switchConnection.disconnect('USER_DISCONNECTED');
+        return { ok: true, value: this.switchConnection.snapshot() };
+      } catch {
+        return failure(
+          'SERVICE_UNAVAILABLE',
+          'No se pudo comprobar o cambiar la conexión al Switch.',
+        );
+      }
+    });
+  }
+  saveSendConfiguration(payload: unknown): Promise<Result<SendConfigurationSnapshot>> {
+    return this.serialize(async () => {
+      if (this.balanceBusy)
+        return failure(
+          'CONFLICT',
+          'Espera el resultado de la transacción antes de cambiar el destino o los plazos.',
+        );
+      const request = parseSaveSendConfiguration(payload);
+      if (!request) return failure('VALIDATION_ERROR', 'Revisa el modo y los plazos de envío.');
+      try {
+        const preferences = await this.store.read();
+        if (preferences.environment !== request.environment)
+          return failure('CONFLICT', 'El ambiente cambió. Recarga antes de guardar.');
+        return this.sendConfiguration
+          ? await this.sendConfiguration.save(request)
+          : failure('SERVICE_UNAVAILABLE', 'La configuración de envío no está disponible.');
+      } catch {
+        return failure('STORAGE_UNAVAILABLE', 'No se pudo verificar el ambiente.');
+      }
+    });
+  }
+  async prepareSendPlan(payload: unknown): Promise<Result<PreparedSendPlan>> {
+    if (
+      !isRecord(payload) ||
+      Object.keys(payload).length !== 2 ||
+      !Object.hasOwn(payload, 'draft') ||
+      !Object.hasOwn(payload, 'configurationRevision') ||
+      !isRevision(payload.configurationRevision)
+    )
+      return failure(
+        'VALIDATION_ERROR',
+        'Revisa el borrador y la configuración. No envíes tramas por este canal.',
+      );
+    const review = await this.reviewDraft(payload.draft);
+    if (!review.ok) return review;
+    return this.serialize(async () => {
+      try {
+        const preferences = await this.store.read();
+        if (preferences.environment !== review.value.environment)
+          return failure('CONFLICT', 'El ambiente cambió durante la preparación.');
+        if (!this.sendConfiguration)
+          return failure('SERVICE_UNAVAILABLE', 'La configuración de envío no está disponible.');
+        const setup = await this.sendConfiguration.read(preferences.environment);
+        if (!setup.ok) return setup;
+        const configuration = setup.value.configuration;
+        if (
+          !configuration ||
+          configuration.revision !== payload.configurationRevision ||
+          setup.value.status === 'SOURCE_CHANGED'
+        )
+          return failure(
+            'CONFLICT',
+            'La configuración o el destino cambió. Recarga antes de preparar.',
+          );
+        return {
+          ok: true,
+          value: {
+            planId: this.identity.uuid(),
+            plannedAt: this.identity.now(),
+            review: review.value,
+            configurationRevision: configuration.revision,
+            trigger: configuration.trigger,
+            endpoint: { ...configuration.endpoint },
+            status: 'BLOCKED',
+            blockers: [
+              ...setup.value.pending,
+              ...review.value.blockers.map((item) => ({ id: item.id, label: item.label })),
+            ].filter(
+              (item, index, all) => all.findIndex((other) => other.id === item.id) === index,
+            ),
+            frameGenerated: false,
+            transmissionAttempted: false,
+          },
+        };
+      } catch {
+        return failure(
+          'STORAGE_UNAVAILABLE',
+          'No se pudo preparar el envío desde la configuración local.',
+        );
+      }
+    });
+  }
+
+  private balanceTarget(
+    request: BalanceContextRequest,
+  ): Promise<Result<{ target: BalanceTarget; connect: number | null; response: number | null }>> {
+    return this.serialize(async () => {
+      try {
+        if ((await this.store.read()).environment !== 'QA')
+          return failure('CONFLICT', 'La ejecución requiere el ambiente QA activo.');
+        if (!this.catalogs || !this.sendConfiguration || !this.networkEvidence)
+          return failure('SERVICE_UNAVAILABLE', 'Faltan catálogo o configuración de envío QA.');
+        const catalog = await this.catalogs.execute(
+          { kind: 'list', environment: 'QA' },
+          {
+            user: this.identity.user,
+            machine: this.identity.hostname,
+            timestamp: this.identity.now(),
+          },
+        );
+        if (!catalog.ok) return catalog;
+        const atm = selectableAtms(catalog.value).find((item) => item.id === request.draft.atmId);
+        if (
+          !atm ||
+          atm.revision !== request.draft.atmRevision ||
+          !/^[A-Z0-9]{8}$/.test(atm.terminalId)
+        )
+          return failure(
+            'CONFLICT',
+            'Recarga el ATM y verifica su Terminal ID de ocho caracteres.',
+          );
+        const network = this.networkEvidence.forEnvironment('QA');
+        if (network.status !== 'DOCUMENTED' || network.evidence.entityId !== 205)
+          return failure(
+            'FORBIDDEN',
+            'Este perfil ejecutable corresponde únicamente a CB 205 en QA.',
+          );
+        const setup = await this.sendConfiguration.read('QA');
+        if (!setup.ok) return setup;
+        const configuration = setup.value.configuration;
+        if (
+          !configuration ||
+          configuration.revision !== request.configurationRevision ||
+          setup.value.status !== 'CONFIGURED_BLOCKED'
+        )
+          return failure(
+            'CONFLICT',
+            'La configuración o el destino cambió. Recarga y revisa de nuevo.',
+          );
+        return {
+          ok: true,
+          value: {
+            target: {
+              ...request,
+              terminalId: atm.terminalId,
+              endpoint: { ...configuration.endpoint },
+            },
+            connect: configuration.connectDeadlineMs,
+            response: configuration.observationWindowMs,
+          },
+        };
+      } catch {
+        return failure('STORAGE_UNAVAILABLE', 'No se pudo verificar el contexto de ejecución.');
+      }
+    });
+  }
+  getWithdrawalReadiness(payload: unknown): Promise<Result<BalanceReadiness>> {
+    return this.getBalanceReadiness(payload, 'WITHDRAWAL');
+  }
+  executeWithdrawal(payload: unknown): Promise<Result<BalanceExecution>> {
+    return this.executeBalance(payload, 'WITHDRAWAL');
+  }
+  getWithdrawalExecution(payload: unknown): Promise<Result<BalanceExecution | null>> {
+    return this.getBalanceExecution(payload, 'WITHDRAWAL');
+  }
+  getWithdrawalHistory(payload: unknown): Promise<Result<readonly BalanceExecution[]>> {
+    return this.getBalanceHistory(payload, 'WITHDRAWAL');
+  }
+  async getBalanceReadiness(
+    payload: unknown,
+    operation: 'BALANCE' | 'WITHDRAWAL' = 'BALANCE',
+  ): Promise<Result<BalanceReadiness>> {
+    const request =
+      operation === 'WITHDRAWAL'
+        ? parseWithdrawalContextRequest(payload)
+        : parseBalanceContextRequest(payload);
+    if (!request)
+      return failure(
+        'VALIDATION_ERROR',
+        operation === 'WITHDRAWAL'
+          ? 'Selecciona ATM, tarjeta y monto positivo para retiro de ahorros local en QA.'
+          : 'Selecciona una tarjeta y un ATM para consulta de ahorros en QA.',
+      );
+    const context = await this.balanceTarget(request);
+    if (!context.ok) return context;
+    const service = operation === 'WITHDRAWAL' ? this.withdrawalService : this.balanceInquiry;
+    const readiness = service
+      ? await service.inspect(context.value.target)
+      : structuredClone(
+          operation === 'WITHDRAWAL' ? missingWithdrawalContext : missingBalanceContext,
+        );
+    const blockers = [...readiness.blockers];
+    if (context.value.connect === null || context.value.response === null)
+      blockers.push({
+        id: 'SEND-DEADLINES',
+        label: 'Define los plazos de conexión y respuesta en Configuración',
+      });
+    return {
+      ok: true,
+      value: {
+        ready: readiness.ready && !blockers.length,
+        blockers,
+        ...(readiness.sequencesRemaining !== undefined
+          ? { sequencesRemaining: readiness.sequencesRemaining }
+          : {}),
+      },
+    };
+  }
+  async executeBalance(
+    payload: unknown,
+    operation: 'BALANCE' | 'WITHDRAWAL' = 'BALANCE',
+  ): Promise<Result<BalanceExecution>> {
+    const request =
+      operation === 'WITHDRAWAL'
+        ? parseWithdrawalExecutionRequest(payload)
+        : parseBalanceExecutionRequest(payload);
+    if (!request)
+      return failure(
+        'VALIDATION_ERROR',
+        'Revisa el contexto de ejecución; este canal no acepta tramas ni secretos.',
+      );
+    if (this.balanceBusy)
+      return failure(
+        'CONFLICT',
+        'Ya hay una transacción en curso. Consulta su referencia sin repetir el envío.',
+      );
+    this.balanceBusy = request.requestId;
+    try {
+      const context = await this.balanceTarget({
+        draft: request.draft,
+        cardReadId: request.cardReadId,
+        configurationRevision: request.configurationRevision,
+      });
+      if (!context.ok) return context;
+      const service = operation === 'WITHDRAWAL' ? this.withdrawalService : this.balanceInquiry;
+      if (!service)
+        return failure('SERVICE_UNAVAILABLE', 'El servicio de ejecución no está configurado.');
+      if (context.value.connect === null || context.value.response === null)
+        return failure(
+          'VALIDATION_ERROR',
+          'Define los plazos de conexión y respuesta antes de enviar.',
+        );
+      return await service.execute(
+        request,
+        context.value.target,
+        { connect: context.value.connect, response: context.value.response },
+        async () => {
+          const current = await this.balanceTarget({
+            draft: request.draft,
+            cardReadId: request.cardReadId,
+            configurationRevision: request.configurationRevision,
+          });
+          return (
+            current.ok &&
+            current.value.target.terminalId === context.value.target.terminalId &&
+            current.value.target.endpoint.host === context.value.target.endpoint.host &&
+            current.value.target.endpoint.port === context.value.target.endpoint.port
+          );
+        },
+      );
+    } finally {
+      this.balanceBusy = undefined;
+    }
+  }
+  getBalanceExecution(
+    payload: unknown,
+    operation: 'BALANCE' | 'WITHDRAWAL' = 'BALANCE',
+  ): Promise<Result<BalanceExecution | null>> {
+    return this.serialize(async () => {
+      if (
+        !isRecord(payload) ||
+        Object.keys(payload).length !== 2 ||
+        payload.environment !== 'QA' ||
+        !isUuid(payload.requestId)
+      )
+        return failure('VALIDATION_ERROR', 'Revisa el ambiente y la referencia de ejecución.');
+      try {
+        if ((await this.store.read()).environment !== 'QA')
+          return failure('CONFLICT', 'Consulta el resultado desde QA.');
+        const service = operation === 'WITHDRAWAL' ? this.withdrawalService : this.balanceInquiry;
+        return service
+          ? await service.find(payload.requestId)
+          : failure('SERVICE_UNAVAILABLE', 'El servicio de ejecución no está disponible.');
+      } catch {
+        return failure('STORAGE_UNAVAILABLE', 'No se pudo recuperar el resultado.');
+      }
+    });
+  }
+
+  getBalanceHistory(
+    payload: unknown,
+    operation: 'BALANCE' | 'WITHDRAWAL' = 'BALANCE',
+  ): Promise<Result<readonly BalanceExecution[]>> {
+    return this.serialize(async () => {
+      if (parseEnvironmentRequest(payload) !== 'QA')
+        return failure('VALIDATION_ERROR', 'El historial de este perfil corresponde a QA.');
+      try {
+        if ((await this.store.read()).environment !== 'QA')
+          return failure('CONFLICT', 'Abre el historial desde QA.');
+        const service = operation === 'WITHDRAWAL' ? this.withdrawalService : this.balanceInquiry;
+        return service
+          ? await service.history()
+          : failure('SERVICE_UNAVAILABLE', 'El historial de transacciones no está disponible.');
+      } catch {
+        return failure(
+          'STORAGE_UNAVAILABLE',
+          'No se pudo recuperar el historial de transacciones.',
+        );
+      }
+    });
+  }
+
   catalog(kind: CatalogCommand['kind'], payload: unknown): Promise<Result<CatalogSnapshot>> {
     return this.serialize(async () => {
+      if (this.balanceBusy && kind !== 'list')
+        return failure(
+          'CONFLICT',
+          'Espera el resultado de la transacción antes de modificar perfiles o casos.',
+        );
       let command: CatalogCommand | undefined;
       switch (kind) {
         case 'list': {
