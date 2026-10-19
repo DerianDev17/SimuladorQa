@@ -12,6 +12,8 @@ import {
   withdrawalFinancialNotes,
 } from '../../../../packages/domain/src/withdrawal-receipt';
 import { Icon } from './Icon';
+import { useEffect, useState } from 'react';
+import { reversalOutcomeLabels } from '../../../../packages/domain/src/withdrawal-reversal';
 
 export const balanceOutcomeLabels: Record<BalanceExecution['outcome'], string> = {
   PENDING: 'Resultado pendiente',
@@ -28,6 +30,8 @@ export const balanceOutcomeLabels: Record<BalanceExecution['outcome'], string> =
   STORAGE_ERROR: 'Resultado sin guardar',
 };
 export function executionOutcomeLabel(execution: BalanceExecution): string {
+  if (execution.reversal && execution.outcome === 'APPROVED')
+    return reversalOutcomeLabels[execution.reversal.outcome];
   if (withdrawalHostNotApproved(execution)) return 'Retiro no aprobado';
   if (execution.withdrawal) {
     if (execution.outcome === 'APPROVED') return 'Retiro autorizado por el host';
@@ -44,15 +48,23 @@ export function BalanceExecutionView({
   onReceipt?: (execution: BalanceExecution) => void;
 }) {
   const approved = execution.outcome === 'APPROVED';
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    if (execution.reversal?.outcome !== 'WAITING') return;
+    const timer = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(timer);
+  }, [execution.reversal?.outcome]);
+  const fullyApproved =
+    approved && (!execution.reversal || execution.reversal.outcome === 'APPROVED');
   return (
     <div
-      className={`preparation balance-execution ${execution.outcome === 'APPROVED' ? 'balance-approved' : ''}`}
+      className={`preparation balance-execution ${fullyApproved ? 'balance-approved' : ''}`}
       role="status"
       aria-label={execution.withdrawal ? 'Resultado de retiro' : 'Resultado de consulta de saldo'}
     >
-      <div className={`execution-status ${approved ? 'is-approved' : ''}`}>
+      <div className={`execution-status ${fullyApproved ? 'is-approved' : ''}`}>
         <span className="execution-status-icon">
-          <Icon name={approved ? 'check' : 'file'} size={23} />
+          <Icon name={fullyApproved ? 'check' : 'clock'} size={23} />
         </span>
         <div>
           <strong>{executionOutcomeLabel(execution)}</strong>
@@ -62,6 +74,44 @@ export function BalanceExecutionView({
           <span className="execution-response-code">RC {execution.responseCode}</span>
         )}
       </div>
+      {execution.reversal && (
+        <section className="reversal-progress" aria-label="Flujo de retiro y reverso">
+          <ol>
+            <li>
+              <strong>1. Retiro</strong>
+              <span>{approved ? 'Aprobado · 00' : balanceOutcomeLabels[execution.outcome]}</span>
+            </li>
+            <li>
+              <strong>2. Espera</strong>
+              <span>
+                {execution.reversal.outcome === 'WAITING' && execution.reversal.dueAt
+                  ? `${Math.max(0, Math.ceil((Date.parse(execution.reversal.dueAt) - now) / 1000))} s para enviar el reverso`
+                  : `${execution.reversal.delaySeconds} s después de la aprobación`}
+              </span>
+            </li>
+            <li>
+              <strong>3. Reverso</strong>
+              <span>
+                {reversalOutcomeLabels[execution.reversal.outcome]}
+                {execution.reversal.responseCode ? ` · ${execution.reversal.responseCode}` : ''}
+              </span>
+            </li>
+          </ol>
+          {execution.reversal.outcome === 'APPROVED' && (
+            <p>
+              El host aceptó el reverso. El saldo final debe verificarse con una nueva consulta.
+            </p>
+          )}
+          {['NOT_SENT', 'NOT_APPROVED', 'UNCONFIRMED'].includes(execution.reversal.outcome) &&
+            approved && (
+              <p>
+                El retiro fue aprobado y el reverso no está confirmado. Conserva ambas referencias
+                para revisar en el host.
+              </p>
+            )}
+          <small>Referencia del reverso: {execution.reversal.transactionId}</small>
+        </section>
+      )}
       {execution.withdrawal && (
         <>
           <p className="execution-requested">
@@ -117,7 +167,11 @@ export function BalanceExecutionView({
       )}
       {approved && (
         <section className="host-balances" aria-label="Saldos recibidos">
-          <h3>Saldos devueltos por el host</h3>
+          <h3>
+            {execution.reversal
+              ? 'Saldos del retiro, anteriores al reverso'
+              : 'Saldos devueltos por el host'}
+          </h3>
           {execution.balances.length ? (
             <dl>
               {execution.balances.map((balance) => (

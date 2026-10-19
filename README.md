@@ -20,6 +20,14 @@ No inventar reglas transaccionales. Toda regla ISO8583, framing TCP, timeout, PI
 
 ## Desarrollo local
 
+Retiro + reverso temporizado (2026-10-19): dentro de **Retiro aprobado**, elegir
+**Retiro + reverso** y la espera (5 s inicialmente, configurable entre 1 y 30 s).
+Tras 0210/00, Main espera y envia un 0420 vinculado al original; registra 0430
+por separado y muestra la cuenta regresiva. El comprobante incluye el resultado
+del reverso. Sin reintentos automaticos; QA/LOCAL/ahorros y reverso total sin
+efectivo ni surcharge. Validado offline y con TCP local; pendiente prueba del
+flujo nuevo en host/Core. Ver [alcance](docs/transactions/REVERSAL.md).
+
 Retiro con comprobante local (2026-10-19): opciones Con/Sin impresion, vista previa
 y dialogo de impresion sin otro envio financiero. El resultado destaca el monto
 autorizado y conserva los saldos F54 recibidos tambien en retiros. Debito total y

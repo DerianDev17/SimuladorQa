@@ -298,3 +298,44 @@
     flex-wrap: wrap;
   }
 }
+.reversal-progress {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: var(--surface, #fff);
+  border: 1px solid #cddbf0;
+  border-radius: 12px;
+}
+.reversal-progress ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 1rem;
+}
+.reversal-progress li {
+  display: grid;
+  gap: 0.25rem;
+  border-left: 3px solid #2878e3;
+  padding-left: 0.75rem;
+}
+.reversal-progress small {
+  overflow-wrap: anywhere;
+}
+.withdrawal-amount-input {
+  align-self: start;
+}
+.withdrawal-flow-options {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+  align-items: start;
+}
+.withdrawal-flow-options > p {
+  grid-column: 1 / -1;
+}
+@media (max-width: 760px) {
+  .withdrawal-flow-options {
+    grid-template-columns: 1fr;
+  }
+}

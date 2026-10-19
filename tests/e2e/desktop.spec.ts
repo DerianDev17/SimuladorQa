@@ -47,6 +47,74 @@ test.beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'coonecta-e2e-'));
 });
 
+test('retiro con reverso: cuenta regresiva, resultado separado y comprobante', async () => {
+  test.setTimeout(60000);
+  const window = await prepareBalanceSubmission();
+  await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
+  await window.getByLabel('Monto de prueba').fill('20.00');
+  await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await window.getByRole('radio', { name: 'Retiro + reverso', exact: true }).check();
+  await expect(window.getByLabel('Espera para el reverso')).toHaveValue('5');
+  await window.getByLabel('Espera para el reverso').selectOption('3');
+  await app!.evaluate(({ ipcMain }, seed) => {
+    let saved: typeof seed | null = null;
+    ipcMain.removeHandler('transaction:withdrawal:execute');
+    ipcMain.removeHandler('transaction:withdrawal:result');
+    ipcMain.handle('transaction:withdrawal:result', () => ({ ok: true, value: saved }));
+    ipcMain.handle('transaction:withdrawal:execute', async (_event, request) => {
+      if (request.reversalDelaySeconds !== 3) throw Error('TEST_PLAN_MISSING');
+      saved = {
+        ...seed,
+        requestId: request.requestId,
+        cardReadId: request.cardReadId,
+        atmId: request.draft.atmId,
+        finishedAt: null,
+        reversal: {
+          transactionId: seed.cardReadId,
+          delaySeconds: 3,
+          outcome: 'WAITING',
+          dueAt: new Date(Date.now() + 3000).toISOString(),
+          finishedAt: null,
+          responseCode: null,
+          transmissionAttempted: false,
+          bytesQueued: 0,
+        },
+      };
+      await new Promise((done) => setTimeout(done, 3000));
+      saved = {
+        ...saved,
+        finishedAt: new Date().toISOString(),
+        reversal: {
+          ...saved.reversal!,
+          outcome: 'APPROVED',
+          finishedAt: new Date().toISOString(),
+          responseCode: '00',
+          transmissionAttempted: true,
+          bytesQueued: 400,
+        },
+      };
+      return { ok: true, value: saved };
+    });
+  }, approvedWithdrawalExecution());
+  const send = window.getByRole('button', { name: 'Enviar transacción', exact: true });
+  await send.click();
+  const flow = window.getByRole('region', { name: 'Flujo de retiro y reverso' });
+  await expect(flow).toContainText('s para enviar el reverso');
+  await expect(send).toBeDisabled();
+  await expect(flow).toContainText('Reverso aceptado por el host');
+  await expect(window.getByRole('region', { name: 'Resultado', exact: true })).toContainText(
+    'Flujo completo',
+  );
+  await expect(send).toBeDisabled(); // new card required, no repeat
+  await mkdir('artifacts', { recursive: true });
+  await window.evaluate(() => globalThis.window.scrollTo(0, 0));
+  await window.screenshot({ path: 'artifacts/withdrawal-reversal-flow.png' });
+  await window.getByRole('button', { name: 'Ver comprobante', exact: true }).first().click();
+  const dialog = window.getByRole('dialog', { name: 'Vista previa del comprobante' });
+  await expect(dialog).toContainText('Reverso aceptado por el host');
+  await expect(dialog).toContainText('Recibidos antes del reverso');
+});
+
 test('lector PC/SC usa IPC protegido y mantiene separada la identidad', async () => {
   const window = await launch();
   await window.getByRole('button', { name: 'Tarjetas', exact: true }).click();

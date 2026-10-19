@@ -90,6 +90,8 @@ export function TransactionWorkspace({
   const [scenario, setScenario] = useState<Scenario>('LOCAL');
   const [account, setAccount] = useState<AccountType>('SAVINGS');
   const [amount, setAmount] = useState('');
+  const [withReversal, setWithReversal] = useState(false);
+  const [reversalDelay, setReversalDelay] = useState(5);
   const [receiptPreference, setReceiptPreference] = useState<ReceiptPreference>('WITHOUT_PRINT');
   const [receipt, setReceipt] = useState<WithdrawalReceipt>();
   const receiptRequest = useRef<string | undefined>(undefined);
@@ -106,6 +108,34 @@ export function TransactionWorkspace({
   const [balanceHistory, setBalanceHistory] = useState<readonly BalanceExecution[]>();
   const executionLock = useRef(false);
   useEffect(() => {
+    if (!executingBalance || !balanceRequestId || requestOperation !== 'WITHDRAWAL') return;
+    let cancelled = false;
+    let polling = false;
+    const timer = setInterval(() => {
+      if (polling) return;
+      polling = true;
+      void client
+        .call((api) =>
+          api.getWithdrawalExecution({ environment: 'QA', requestId: balanceRequestId }),
+        )
+        .then((result) => {
+          if (!cancelled && executionLock.current && result.ok && result.value)
+            setBalanceExecution((previous) =>
+              previous?.requestId === result.value!.requestId && previous.finishedAt
+                ? previous
+                : result.value!,
+            );
+        })
+        .finally(() => {
+          polling = false;
+        });
+    }, 500);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [executingBalance, balanceRequestId, requestOperation, client]);
+  useEffect(() => {
     if (!balanceExecution || receiptRequest.current !== balanceExecution.requestId) return;
     const preview = createWithdrawalReceipt(balanceExecution);
     if (preview) {
@@ -120,6 +150,8 @@ export function TransactionWorkspace({
       setBalanceHistory(undefined);
       setSessionExecutions([]);
       setReceiptPreference('WITHOUT_PRINT');
+      setWithReversal(false);
+      setReversalDelay(5);
       setReceipt(undefined);
       receiptRequest.current = undefined;
     }
@@ -417,6 +449,8 @@ export function TransactionWorkspace({
     setAccount('SAVINGS');
     setAmount('');
     setReceiptPreference('WITHOUT_PRINT');
+    setWithReversal(false);
+    setReversalDelay(5);
     setAtmId('');
   }
 
@@ -445,6 +479,8 @@ export function TransactionWorkspace({
     setAccount(saved.account ?? 'SAVINGS');
     setAmount(saved.amount ?? '');
     setReceiptPreference('WITHOUT_PRINT');
+    setWithReversal(false);
+    setReversalDelay(5);
     setAtmId(saved.atmId ?? '');
     setCaseWarning(warning);
   }
@@ -515,6 +551,9 @@ export function TransactionWorkspace({
           const request = {
             ...balanceContext,
             requestId,
+            ...(monetary && transaction === 'WITHDRAWAL_APPROVED' && withReversal
+              ? { reversalDelaySeconds: reversalDelay }
+              : {}),
           };
           backendResult = await (monetary
             ? api.executeWithdrawal(request)
@@ -797,6 +836,7 @@ export function TransactionWorkspace({
                   if (selected) {
                     invalidate();
                     setTransaction(selected.id);
+                    setWithReversal(false);
                     setAmount('');
                   }
                 }}
@@ -898,6 +938,66 @@ export function TransactionWorkspace({
                 <p id="receipt-choice-help">Impresión local, sin comisión adicional al host.</p>
               </fieldset>
             )}
+            {transaction === 'WITHDRAWAL_APPROVED' && (
+              <fieldset
+                className="receipt-options withdrawal-flow-options"
+                disabled={fieldsDisabled}
+              >
+                <legend>Flujo de la prueba</legend>
+                <div className="receipt-choices">
+                  <label>
+                    <input
+                      type="radio"
+                      name="withdrawal-flow"
+                      checked={!withReversal}
+                      onChange={() => {
+                        invalidate();
+                        setWithReversal(false);
+                      }}
+                    />
+                    <span>
+                      <strong>Solo retiro</strong>
+                    </span>
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="withdrawal-flow"
+                      checked={withReversal}
+                      onChange={() => {
+                        invalidate();
+                        setWithReversal(true);
+                      }}
+                    />
+                    <span>
+                      <strong>Retiro + reverso</strong>
+                    </span>
+                  </label>
+                </div>
+                {withReversal && (
+                  <>
+                    <label>
+                      Espera después de la aprobación
+                      <select
+                        aria-label="Espera para el reverso"
+                        value={reversalDelay}
+                        onChange={(event) => setReversalDelay(Number(event.target.value))}
+                      >
+                        {[1, 3, 5, 10, 20, 30].map((seconds) => (
+                          <option key={seconds} value={seconds}>
+                            {seconds} segundos
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <p>
+                      Tras aprobarse el retiro, el simulador enviará su reverso total. Prueba sin
+                      entrega de efectivo.
+                    </p>
+                  </>
+                )}
+              </fieldset>
+            )}
           </div>
 
           {error?.target !== 'review' && errorFeedback}
@@ -947,6 +1047,7 @@ export function TransactionWorkspace({
                     if (!selected) return;
                     invalidate();
                     setTransaction(selected.transaction);
+                    setWithReversal(false);
                     setAccount(selected.account);
                     setAmount('');
                   }}
@@ -1151,13 +1252,16 @@ export function TransactionWorkspace({
               Resultado
             </h2>
             <span
-              className={`pill ${balanceExecution?.outcome === 'APPROVED' ? 'result-success-pill' : 'neutral'}`}
+              className={`pill ${balanceExecution?.outcome === 'APPROVED' && !balanceDeliveryUncertain(balanceExecution) ? 'result-success-pill' : 'neutral'}`}
             >
               {executingBalance
                 ? 'En curso'
                 : balanceExecution
-                  ? balanceExecution.outcome === 'APPROVED'
-                    ? 'Aprobado'
+                  ? balanceExecution.outcome === 'APPROVED' &&
+                    !balanceDeliveryUncertain(balanceExecution)
+                    ? balanceExecution.reversal
+                      ? 'Flujo completo'
+                      : 'Aprobado'
                     : 'Intento registrado'
                   : balanceRequestId
                     ? 'Por confirmar'
