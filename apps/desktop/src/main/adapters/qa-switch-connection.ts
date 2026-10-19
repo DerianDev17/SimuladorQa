@@ -5,6 +5,7 @@ import type {
   SwitchDisconnectReason,
 } from '../../../../../packages/domain/src/switch-connection';
 import type { SwitchConnectionPort } from '../switch-connection-port';
+import type { BalanceTransport } from '../balance-ports';
 import { CapturedVisaFraming } from '../infrastructure/captured-visa-framing';
 import { VisaNetworkManagement } from './visa-network-management';
 
@@ -172,6 +173,15 @@ export class QaSwitchConnection implements SwitchConnectionPort {
     this.revision++;
     if (this.finish) this.finish(reason);
     else if (this.current.state === 'DISCONNECTED') this.current.reason = reason;
+  }
+
+  manageTransport(transport: BalanceTransport): BalanceTransport {
+    return {
+      // Preserve capabilities when coordinating observation and financial sockets.
+      ...(transport.supportsReversal ? { supportsReversal: true as const } : {}),
+      exchange: (request) =>
+        this.withTransaction(request.endpoint, () => transport.exchange(request)),
+    };
   }
 
   async withTransaction<T>(

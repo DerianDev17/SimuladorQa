@@ -3,8 +3,10 @@ import { randomUUID } from 'node:crypto';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WithdrawalReversalTransport } from '../../apps/desktop/src/main/adapters/withdrawal-reversal-transport';
+import { BalanceTcpTransport } from '../../apps/desktop/src/main/adapters/balance-tcp-transport';
+import { QaSwitchConnection } from '../../apps/desktop/src/main/adapters/qa-switch-connection';
 import { NewVisaWithdrawal } from '../../apps/desktop/src/main/adapters/new-visa-withdrawal';
 import { CapturedVisaBalance } from '../../apps/desktop/src/main/adapters/captured-visa-balance';
 import { CapturedVisaFraming } from '../../apps/desktop/src/main/infrastructure/captured-visa-framing';
@@ -20,6 +22,18 @@ import { networkManagementRequest } from '../helpers/visa-network-management';
 const framing = new CapturedVisaFraming();
 let server: Server | undefined, directory: string | undefined;
 const peers = new Set<Socket>();
+const observations = new Set<QaSwitchConnection>();
+async function observe(port: number) {
+  const connection = new QaSwitchConnection();
+  observations.add(connection);
+  connection.connect({
+    environment: 'QA',
+    endpoint: { host: '127.0.0.1', port },
+    connectDeadlineMs: 1000,
+  });
+  await expect.poll(() => connection.snapshot().state).toBe('CONNECTED');
+  return connection;
+}
 async function listen(handler: (peer: Socket, body: Buffer) => void) {
   server = createServer((peer) => {
     peers.add(peer);
@@ -58,6 +72,8 @@ function request(port: number) {
   };
 }
 afterEach(async () => {
+  for (const connection of observations) connection.disconnect('APP_CLOSED');
+  observations.clear();
   for (const peer of peers) peer.destroy();
   peers.clear();
   if (server?.listening) await new Promise<void>((resolve) => server!.close(() => resolve()));
@@ -130,7 +146,20 @@ describe('retiro, espera y reverso en TCP loopback', () => {
         } else if (mode === 'reversal-decline')
           peer.end(framing.encode(reversalResponse(body, '91'), Buffer.alloc(2)));
       });
-      const result = await new WithdrawalReversalTransport().exchange(request(port));
+      const connection = await observe(port);
+      const r = request(port);
+      const persist = r.reversal.persist;
+      r.reversal.persist = async (progress) => {
+        expect(connection.snapshot()).toMatchObject({
+          state: 'DISCONNECTED',
+          reason: 'TRANSACTION_STARTED',
+        });
+        await persist(progress);
+      };
+      const result = await connection
+        .manageTransport(new WithdrawalReversalTransport())
+        .exchange(r);
+      await expect.poll(() => connection.snapshot().state).toBe('CONNECTED');
       const sent = mode.startsWith('reversal-');
       expect(received).toEqual(sent ? [0x0200, 0x0420] : [0x0200]);
       expect(result.reversal?.outcome).toBe(
@@ -175,10 +204,12 @@ describe('retiro, espera y reverso en TCP loopback', () => {
     expect(result.transmissionAttempted).toBe(false);
     expect(result.reversal?.outcome).toBe('NOT_SENT');
   });
-  it('persiste progreso y dos IDs sin datos privados; reiniciar no repite ningún mensaje', async () => {
-    let messages = 0;
+  it('Main coordina observación, retiro y reverso; persiste ambos sin repetir al reiniciar', async () => {
+    const messages: number[] = [];
+    const financialPeers = new Set<Socket>();
     const port = await listen((peer, body) => {
-      messages++;
+      messages.push(body.readUInt16BE(22));
+      financialPeers.add(peer);
       const reply =
         body.readUInt16BE(22) === 0x0200
           ? withdrawalResponse(new CapturedVisaBalance('WITHDRAWAL').inspect(body))
@@ -201,11 +232,29 @@ describe('retiro, espera y reverso en TCP loopback', () => {
     };
     const provider = {
       inspect: async () => ({ ready: true, blockers: [] }),
-      acquire: async () => f.lease,
+      acquire: vi.fn(async () => f.lease),
     };
+    const connection = await observe(port);
+    const unsupported = new WithdrawalService(
+      journal,
+      connection.manageTransport(new BalanceTcpTransport('WITHDRAWAL')),
+      identity,
+      provider,
+    );
+    expect(
+      await unsupported.execute(
+        f.request,
+        f.target,
+        { connect: 1000, response: 1000 },
+        async () => true,
+      ),
+    ).toMatchObject({ ok: false, error: { code: 'SERVICE_UNAVAILABLE' } });
+    expect(provider.acquire).not.toHaveBeenCalled();
+    expect(messages).toEqual([]);
+    expect(connection.snapshot().state).toBe('CONNECTED');
     const service = new WithdrawalService(
       journal,
-      new WithdrawalReversalTransport(),
+      connection.manageTransport(new WithdrawalReversalTransport()),
       identity,
       provider,
     );
@@ -221,7 +270,12 @@ describe('retiro, espera y reverso en TCP loopback', () => {
       if (pending.ok && pending.value?.reversal?.outcome === 'WAITING') break;
       await new Promise((done) => setTimeout(done, 10));
     }
+    expect(connection.snapshot()).toMatchObject({
+      state: 'DISCONNECTED',
+      reason: 'TRANSACTION_STARTED',
+    });
     const result = await execution;
+    await expect.poll(() => connection.snapshot().state).toBe('CONNECTED');
     expect(result).toMatchObject({
       ok: true,
       value: { outcome: 'APPROVED', reversal: { outcome: 'APPROVED' } },
@@ -235,7 +289,7 @@ describe('retiro, espera y reverso en TCP loopback', () => {
     expect(withdrawalBlocksNewExecution(result.value)).toBe(false);
     const restarted = new WithdrawalService(
       journal,
-      new WithdrawalReversalTransport(),
+      connection.manageTransport(new WithdrawalReversalTransport()),
       identity,
       provider,
     );
@@ -247,7 +301,8 @@ describe('retiro, espera y reverso en TCP loopback', () => {
         async () => true,
       ),
     ).toEqual(result);
-    expect(messages).toBe(2);
+    expect(messages).toEqual([0x0200, 0x0420]);
+    expect(financialPeers.size).toBe(1);
     const saved = await readFile(path, 'utf8');
     expect(saved).not.toMatch(/privateFields|opaqueBody|9F10|pinBlock|411111/);
     const conflict = await restarted.execute(
@@ -285,6 +340,7 @@ describe('retiro, espera y reverso en TCP loopback', () => {
         async () => true,
       ),
     ).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
-    expect(messages).toBe(2);
+    expect(messages).toEqual([0x0200, 0x0420]);
+    expect(provider.acquire).toHaveBeenCalledOnce();
   });
 });

@@ -197,10 +197,7 @@ describe('proveedor PIN/EMV conectado a lectura, ISO y TCP', () => {
             records = structuredClone([...value]);
           },
         },
-        {
-          exchange: (request) =>
-            connection.withTransaction(request.endpoint, () => transport.exchange(request)),
-        },
+        connection.manageTransport(transport),
         {
           agentId: randomUUID(),
           hostname: 'synthetic',

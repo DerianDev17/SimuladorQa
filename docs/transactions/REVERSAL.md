@@ -12,6 +12,12 @@ envia un unico 0420 y espera 0430 en la misma conexion. No se espera que Core
 genere el mensaje: el disparador es esta prueba elegida por el usuario. La
 espera no es un timeout del host ni una deteccion de tarjeta retenida.
 
+La conexion TCP de observacion se pausa durante todo el flujo y se restaura
+al finalizar si el operador la mantenia abierta. Main usa `manageTransport`
+para conservar la capacidad de reverso del adaptador al coordinar los sockets.
+Un transporte que no admite reversos sigue rechazando esta prueba antes del
+retiro; no se degrada a enviar solo el 0200.
+
 El retiro y el reverso tienen UUID distintos, un mismo runId, y comparten
 STAN/RRN/terminal del original. Se conservan como padre/hijo en el diario de
 retiros. No se reservan otra secuencia ni otra tarjeta para el reverso. F90

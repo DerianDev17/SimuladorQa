@@ -291,10 +291,7 @@ void app
     const balanceTransport = new BalanceTcpTransport();
     balanceService = new BalanceInquiryService(
       new FileBalanceJournal(join(app.getPath('userData'), 'balance-executions.json')),
-      {
-        exchange: (request) =>
-          connection.withTransaction(request.endpoint, () => balanceTransport.exchange(request)),
-      },
+      connection.manageTransport(balanceTransport),
       runtime,
       balanceContexts,
       90000,
@@ -305,10 +302,7 @@ void app
         join(app.getPath('userData'), 'withdrawal-executions.json'),
         'WITHDRAWAL',
       ),
-      {
-        exchange: (request) =>
-          connection.withTransaction(request.endpoint, () => withdrawalTransport.exchange(request)),
-      },
+      connection.manageTransport(withdrawalTransport),
       runtime,
       withdrawalContexts,
     );
