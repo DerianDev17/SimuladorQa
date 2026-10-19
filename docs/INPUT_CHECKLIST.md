@@ -6,6 +6,15 @@ y la fuente del debito total efectivo con comisiones. El comprobante local
 Con/Sin impresion fue confirmado por el usuario y no depende de esos datos.
 Se conservan saldos neutrales del host; no se infieren importes restantes.
 
+TODO-DATA REVERSAL-CARD-RETAINED: el usuario confirma como disparador funcional
+que el ATM retenga la tarjeta despues del retiro. Falta una fuente de evento del
+ATM destino y la condicion temporal de retencion; la presencia PC/SC en el
+lector local no la demuestra. Faltan vinculo con el retiro aprobado, familia
+MTI por canal, F90/campos originales, correlacion, idempotencia y tratamiento
+de respuestas tardias. Las capturas 0420/0430 disponibles no identifican este
+motivo. Mantener bloqueado el envio hasta validar esos datos; ver
+[reverso](transactions/REVERSAL.md).
+
 ## TODO-DATA activos de la primera entrega
 
 TODO-DATA QA-WITHDRAWAL-900114-WIRE: obtener NWINT/PROXY205 del19/10/2026,
