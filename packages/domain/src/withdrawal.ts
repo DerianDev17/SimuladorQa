@@ -1,6 +1,7 @@
 import { isRecord } from './index';
 import { isRevision, isUuid } from './catalogs';
 import { parseDraftRequest } from './transaction-draft';
+import { isReversalDelay } from './withdrawal-reversal';
 import type {
   BalanceContextRequest,
   BalanceExecutionRequest,
@@ -67,14 +68,31 @@ export function parseWithdrawalContextRequest(value: unknown): BalanceContextReq
 export function parseWithdrawalExecutionRequest(
   value: unknown,
 ): BalanceExecutionRequest | undefined {
-  if (!isRecord(value) || Object.keys(value).length !== 4 || !isUuid(value.requestId))
+  if (
+    !isRecord(value) ||
+    Object.keys(value).length !== (Object.hasOwn(value, 'reversalDelaySeconds') ? 5 : 4) ||
+    !isUuid(value.requestId) ||
+    (Object.hasOwn(value, 'reversalDelaySeconds') && !isReversalDelay(value.reversalDelaySeconds))
+  )
     return undefined;
   const context = parseWithdrawalContextRequest({
     draft: value.draft,
     configurationRevision: value.configurationRevision,
     cardReadId: value.cardReadId,
   });
-  return context ? { ...context, requestId: value.requestId } : undefined;
+  if (
+    !context ||
+    (value.reversalDelaySeconds !== undefined &&
+      context.draft.transaction !== 'WITHDRAWAL_APPROVED')
+  )
+    return undefined;
+  return {
+    ...context,
+    requestId: value.requestId,
+    ...(value.reversalDelaySeconds !== undefined
+      ? { reversalDelaySeconds: value.reversalDelaySeconds as number }
+      : {}),
+  };
 }
 
 // This information is public. Only Main can bind the approved security provider.

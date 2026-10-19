@@ -4,7 +4,7 @@ import type { BalanceValue } from '../../../../../packages/domain/src/balance-in
 
 // ISOBASEI + QA frames 218/224 (balance), 248/254 (withdrawal).
 // Operation selection is explicit; this is not a general ISO codec.
-const profile: Record<
+export const capturedVisaFieldProfile: Record<
   number,
   { encoding: 'BCD' | 'EBCDIC' | 'BINARY'; length: number; variable?: true }
 > = {
@@ -88,6 +88,17 @@ export class CapturedVisaBalance {
     return this.parse(source).metadata;
   }
 
+  // Main-only views. The caller owns and wipes source; never persist these bytes.
+  encodedFields(source: Buffer): Map<number, Buffer> {
+    const parsed = this.parse(source);
+    return new Map(
+      parsed.metadata.fields.map((field, i) => {
+        const [start, end] = parsed.spans[i]!;
+        return [field, source.subarray(start, end)];
+      }),
+    );
+  }
+
   response(source: Uint8Array): {
     metadata: CapturedBalanceMetadata;
     balances: readonly BalanceValue[];
@@ -164,7 +175,7 @@ export class CapturedVisaBalance {
     const values = new Map<number, Buffer>(),
       spans: [number, number][] = [];
     for (const field of fields) {
-      const item = profile[field]!;
+      const item = capturedVisaFieldProfile[field]!;
       const start = cursor,
         length = item.variable ? body[cursor++] : item.length;
       if (length === undefined || length > item.length || (item.variable && length === 0))

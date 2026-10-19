@@ -10,6 +10,7 @@ import {
 } from '../../../../../packages/domain/src/balance-inquiry';
 import type { BalanceJournal } from '../balance-ports';
 import { parseWithdrawalDetails } from '../../../../../packages/domain/src/withdrawal';
+import { parseWithdrawalReversal } from '../../../../../packages/domain/src/withdrawal-reversal';
 
 const outcomes = [
   'PENDING',
@@ -69,10 +70,13 @@ export function parseBalanceJournal(value: unknown): BalanceExecution[] | undefi
         ...keys,
         ...(isRecord(item) && Object.hasOwn(item, 'diagnostics') ? ['diagnostics'] : []),
         ...(isRecord(item) && Object.hasOwn(item, 'withdrawal') ? ['withdrawal'] : []),
+        ...(isRecord(item) && Object.hasOwn(item, 'reversal') ? ['reversal'] : []),
         ...(isRecord(item) && Object.hasOwn(item, 'qaContinuation') ? ['qaContinuation'] : []),
       ]) ||
       (item.diagnostics !== undefined && !parseBalanceDiagnostics(item.diagnostics)) ||
       (Object.hasOwn(item, 'withdrawal') && !parseWithdrawalDetails(item.withdrawal)) ||
+      (Object.hasOwn(item, 'reversal') &&
+        (!item.withdrawal || !parseWithdrawalReversal(item.reversal))) ||
       !['requestId', 'runId', 'transactionId', 'atmId', 'cardReadId'].every((key) =>
         isUuid(item[key]),
       ) ||
@@ -97,6 +101,17 @@ export function parseBalanceJournal(value: unknown): BalanceExecution[] | undefi
       !Array.isArray(item.blockers) ||
       item.blockers.length > 20 ||
       requests.has(String(item.requestId))
+    )
+      return undefined;
+    if (
+      item.reversal !== undefined &&
+      (!isRecord(item.withdrawal) ||
+        item.withdrawal.transaction !== 'WITHDRAWAL_APPROVED' ||
+        !isRecord(item.reversal) ||
+        (['WAITING', 'SENDING', 'APPROVED', 'NOT_APPROVED', 'UNCONFIRMED'].includes(
+          String(item.reversal.outcome),
+        ) &&
+          item.outcome !== 'APPROVED'))
     )
       return undefined;
     if (
@@ -156,6 +171,16 @@ export function parseBalanceJournal(value: unknown): BalanceExecution[] | undefi
 }
 // No card payloads, PIN/EMV or RAW. No automatic eviction of idempotency records.
 export class FileBalanceJournal implements BalanceJournal {
+  private pending: Promise<void> = Promise.resolve();
+  // Progress polling must not hold a Windows read handle across atomic rename.
+  private serialize<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.pending.then(operation);
+    this.pending = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
   constructor(
     private readonly path: string,
     private readonly operation: 'BALANCE' | 'WITHDRAWAL' = 'BALANCE',
@@ -166,6 +191,9 @@ export class FileBalanceJournal implements BalanceJournal {
     );
   }
   async read(): Promise<BalanceExecution[]> {
+    return this.serialize(() => this.readFile());
+  }
+  private async readFile(): Promise<BalanceExecution[]> {
     let handle;
     try {
       handle = await open(this.path, 'r');
@@ -196,6 +224,10 @@ export class FileBalanceJournal implements BalanceJournal {
     }
   }
   async write(executions: readonly BalanceExecution[]): Promise<void> {
+    const snapshot = structuredClone(executions);
+    return this.serialize(() => this.writeFile(snapshot));
+  }
+  private async writeFile(executions: readonly BalanceExecution[]): Promise<void> {
     const document = { version: 1, executions };
     if (!parseBalanceJournal(document) || !this.accepts(executions))
       throw new Error('BALANCE_JOURNAL_INVALID');

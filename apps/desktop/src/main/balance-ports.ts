@@ -7,6 +7,7 @@ import type {
 } from '../../../../packages/domain/src/balance-inquiry';
 import type { NewBalanceInput } from './adapters/new-visa-balance';
 import type { CapturedBalanceMetadata } from './adapters/captured-visa-balance';
+import type { ReversalProgress } from '../../../../packages/domain/src/withdrawal-reversal';
 
 export interface BalanceTarget extends BalanceContextRequest {
   terminalId: string;
@@ -36,6 +37,10 @@ export interface BalanceExchangeRequest {
   expected: CapturedBalanceMetadata;
   connectDeadlineMs: number;
   responseDeadlineMs: number;
+  reversal?: {
+    delaySeconds: number;
+    persist: (progress: ReversalProgress, original: BalanceExchangeResult) => Promise<void>;
+  };
 }
 export interface BalanceExchangeResult {
   outcome:
@@ -52,8 +57,10 @@ export interface BalanceExchangeResult {
   elapsedMs: number;
   responseCode: string | null;
   balances: readonly BalanceValue[];
+  reversal?: ReversalProgress;
 }
 export interface BalanceTransport {
+  readonly supportsReversal?: true;
   exchange(request: BalanceExchangeRequest): Promise<BalanceExchangeResult>;
 }
 export interface BalanceJournal {

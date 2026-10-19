@@ -4,6 +4,7 @@ import { isRevision, isUuid, isUtcTimestamp } from './catalogs';
 import { parseDraftRequest } from './transaction-draft';
 import type { DraftRequest } from './transaction-draft';
 import type { WithdrawalDetails } from './withdrawal';
+import type { WithdrawalReversal } from './withdrawal-reversal';
 
 export interface BalanceContextRequest {
   draft: DraftRequest;
@@ -12,6 +13,7 @@ export interface BalanceContextRequest {
 }
 export interface BalanceExecutionRequest extends BalanceContextRequest {
   requestId: string;
+  reversalDelaySeconds?: number;
 }
 export interface BalanceReadiness {
   ready: boolean;
@@ -98,6 +100,7 @@ export interface BalanceExecution {
   diagnostics?: BalanceDiagnostics;
   // Absent in historical balance records. Never infer this from the selected UI operation.
   withdrawal?: WithdrawalDetails;
+  reversal?: WithdrawalReversal;
   // Legacy manual QA decision, retained only to read existing audit records.
   qaContinuation?: { id: string; createdAt: string; agentId: string };
 }
@@ -151,6 +154,12 @@ export function withdrawalHostNotApproved(execution: BalanceExecution): boolean 
 }
 
 export function balanceDeliveryUncertain(execution: BalanceExecution): boolean {
+  if (
+    execution.reversal &&
+    execution.outcome === 'APPROVED' &&
+    execution.reversal.outcome !== 'APPROVED'
+  )
+    return true;
   if (withdrawalHostNotApproved(execution)) return false;
   return (
     execution.outcome === 'PENDING' ||
@@ -174,6 +183,7 @@ export function balanceNotTransmitted(execution: BalanceExecution): boolean {
 }
 
 export function balanceResponseConfirmed(execution: BalanceExecution): boolean {
+  if (execution.reversal && balanceDeliveryUncertain(execution)) return false;
   if (withdrawalHostNotApproved(execution)) return true;
   return (
     execution.finishedAt !== null &&

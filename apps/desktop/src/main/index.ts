@@ -40,6 +40,7 @@ import { WindowsQaPinEntry } from './adapters/qa-pin-entry';
 import { WindowsQaPinCipher } from './adapters/qa-pin-cipher';
 import { FileBalanceJournal } from './infrastructure/balance-journal';
 import { BalanceTcpTransport } from './adapters/balance-tcp-transport';
+import { WithdrawalReversalTransport } from './adapters/withdrawal-reversal-transport';
 import { FileNetworkEvidence } from './adapters/file-network-evidence';
 import { inspectReader } from './adapters/windows-pcsc-reader';
 import { WindowsPcscMonitor } from './adapters/windows-pcsc-monitor';
@@ -298,7 +299,7 @@ void app
       balanceContexts,
       90000,
     );
-    const withdrawalTransport = new BalanceTcpTransport('WITHDRAWAL');
+    const withdrawalTransport = new WithdrawalReversalTransport();
     withdrawalService = new WithdrawalService(
       new FileBalanceJournal(
         join(app.getPath('userData'), 'withdrawal-executions.json'),

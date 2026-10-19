@@ -6,14 +6,13 @@ y la fuente del debito total efectivo con comisiones. El comprobante local
 Con/Sin impresion fue confirmado por el usuario y no depende de esos datos.
 Se conservan saldos neutrales del host; no se infieren importes restantes.
 
-TODO-DATA REVERSAL-CARD-RETAINED: el usuario confirma como disparador funcional
-que el ATM retenga la tarjeta despues del retiro. PCAP y DLL ATM corroboran la
-ruta 0420/0430 para las muestras, pero ninguna fuente entrega al simulador el
-evento remoto de retencion ni su condicion temporal. La DLL tiene builders
-separados para reverso general y timeout; no generalizar el copiado de campos
-del timeout. Faltan vinculo con el retiro aprobado, snapshot original seguro,
-validacion de campos variables/privados, correlacion, idempotencia y tratamiento
-de respuestas tardias. Mantener bloqueado el envio hasta validar esos datos; ver
+TODO-DATA REVERSAL-CARD-RETAINED: sigue pendiente el evento remoto de retencion
+y su condicion temporal. La nueva prueba explicita Retiro + reverso utiliza un
+temporizador local solicitado por el usuario; no depende de inferir ese evento.
+Implementados snapshot efimero, campos del builder general, correlacion y diario
+idempotente. REVERSAL-EMV-COMPLETION mantiene pendiente la finalizacion EMV del
+ATM; REVERSAL-QA-ACCEPTANCE mantiene la validacion del flujo nuevo en host/Core.
+No generalizar la rutina de timeout, que usa otro MTI original en F90. Ver
 [revision estatica de DLL](protocols/QA_REVERSAL_DLL_REVIEW_20261019.md) y
 [reverso](transactions/REVERSAL.md).
 

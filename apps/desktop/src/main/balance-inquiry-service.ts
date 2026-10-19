@@ -27,6 +27,7 @@ import {
   missingWithdrawalContext,
 } from '../../../../packages/domain/src/withdrawal';
 import { balanceContextErrorLabels } from './balance-context-errors';
+import { parseWithdrawalReversal } from '../../../../packages/domain/src/withdrawal-reversal';
 
 export const missingBalanceContext: BalanceReadiness = {
   ready: false,
@@ -149,6 +150,13 @@ export class BalanceInquiryService {
     )
       return Promise.resolve(failure('VALIDATION_ERROR', 'El contexto de ejecución no es válido.'));
     const fingerprint = JSON.stringify(request);
+    if (request.reversalDelaySeconds !== undefined && !this.transport.supportsReversal)
+      return Promise.resolve(
+        failure(
+          'SERVICE_UNAVAILABLE',
+          'El transporte no admite retiro con reverso. No se envió el retiro.',
+        ),
+      );
     if (this.running) {
       if (this.running.id !== request.requestId || this.running.fingerprint !== fingerprint)
         return Promise.resolve(failure('CONFLICT', 'Ya hay una transacción en curso.'));
@@ -210,6 +218,7 @@ export class BalanceInquiryService {
         previous.configurationRevision !== request.configurationRevision ||
         previous.cardReadId !== request.cardReadId ||
         previous.scenario !== request.draft.scenario ||
+        previous.reversal?.delaySeconds !== request.reversalDelaySeconds ||
         (this.operation === 'WITHDRAWAL'
           ? previous.withdrawal?.amount !== request.draft.amount ||
             previous.withdrawal?.transaction !== request.draft.transaction
@@ -244,6 +253,20 @@ export class BalanceInquiryService {
       responseCode: null,
       balances: [],
       blockers: [],
+      ...(request.reversalDelaySeconds !== undefined
+        ? {
+            reversal: {
+              transactionId: this.identity.uuid(),
+              delaySeconds: request.reversalDelaySeconds,
+              outcome: 'WAITING_WITHDRAWAL' as const,
+              dueAt: null,
+              finishedAt: null,
+              responseCode: null,
+              transmissionAttempted: false,
+              bytesQueued: 0,
+            },
+          }
+        : {}),
       ...(this.operation === 'WITHDRAWAL'
         ? {
             withdrawal: parseWithdrawalDetails({
@@ -264,6 +287,15 @@ export class BalanceInquiryService {
           outcome: 'BLOCKED',
           finishedAt: this.identity.now(),
           blockers: readiness.blockers,
+          ...(record.reversal
+            ? {
+                reversal: {
+                  ...record.reversal,
+                  outcome: 'NOT_SENT' as const,
+                  finishedAt: this.identity.now(),
+                },
+              }
+            : {}),
         },
       };
     }
@@ -370,6 +402,33 @@ export class BalanceInquiryService {
         expected: built.metadata,
         connectDeadlineMs: deadlines.connect,
         responseDeadlineMs: deadlines.response,
+        ...(record.reversal
+          ? {
+              reversal: {
+                delaySeconds: record.reversal.delaySeconds,
+                persist: async (progress, original) => {
+                  const reversal = parseWithdrawalReversal({ ...record.reversal, ...progress });
+                  if (
+                    !reversal ||
+                    original.outcome !== 'APPROVED' ||
+                    original.responseCode !== '00'
+                  )
+                    throw Error('REVERSAL_PROGRESS_INVALID');
+                  record.outcome = original.outcome;
+                  record.responseCode = original.responseCode;
+                  record.transmissionAttempted = original.transmissionAttempted;
+                  record.bytesQueued = original.bytesQueued;
+                  record.elapsedMs = original.elapsedMs;
+                  record.balances = structuredClone(original.balances);
+                  record.reversal = reversal;
+                  await this.journal.write([
+                    ...records.filter((item) => item.requestId !== record.requestId),
+                    structuredClone(record),
+                  ]);
+                },
+              },
+            }
+          : {}),
       });
       if (
         ![
@@ -423,9 +482,16 @@ export class BalanceInquiryService {
         currency,
         amount,
       }));
+      if (record.reversal) {
+        const reversal =
+          result.reversal && parseWithdrawalReversal({ ...record.reversal, ...result.reversal });
+        if (!reversal) throw Error('REVERSAL_RESULT_INVALID');
+        record.reversal = reversal;
+      }
     } catch (error) {
       const code = error instanceof Error ? error.message : '';
-      record.outcome = transportStarted ? 'TRANSPORT_ERROR' : 'CONTEXT_ERROR';
+      if (!(record.reversal && record.outcome === 'APPROVED'))
+        record.outcome = transportStarted ? 'TRANSPORT_ERROR' : 'CONTEXT_ERROR';
       record.transmissionAttempted = transportStarted;
       record.blockers = transportStarted
         ? [
@@ -452,6 +518,13 @@ export class BalanceInquiryService {
       if (lease) release(lease);
     }
     record.finishedAt = this.identity.now();
+    if (record.reversal && record.reversal.finishedAt === null) {
+      record.reversal = {
+        ...record.reversal,
+        outcome: record.reversal.transmissionAttempted ? 'UNCONFIRMED' : 'NOT_SENT',
+        finishedAt: record.finishedAt,
+      };
+    }
     try {
       await this.journal.write([
         ...records.filter((item) => item.requestId !== record.requestId),

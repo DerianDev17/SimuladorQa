@@ -1,4 +1,5 @@
 import type { BalanceExecution, BalanceValue } from './balance-inquiry';
+import { reversalOutcomeLabels } from './withdrawal-reversal';
 
 export type ReceiptPreference = 'WITHOUT_PRINT' | 'WITH_PRINT';
 export type ReceiptPrintStatus = 'SUBMITTED' | 'CANCELLED';
@@ -16,6 +17,7 @@ export interface WithdrawalReceipt {
   rrn: string;
   amount: string;
   balances: readonly BalanceValue[];
+  reversal?: { status: string; transactionId: string };
 }
 
 export function hostMoney(currency: string, amount: string): string {
@@ -51,6 +53,14 @@ export function createWithdrawalReceipt(execution: BalanceExecution): Withdrawal
     stan: execution.correlation.stan,
     rrn: execution.correlation.rrn,
     amount: hostMoney(execution.withdrawal.currency, execution.withdrawal.amount),
+    ...(execution.reversal
+      ? {
+          reversal: {
+            status: reversalOutcomeLabels[execution.reversal.outcome],
+            transactionId: execution.reversal.transactionId,
+          },
+        }
+      : {}),
     balances: execution.balances.map(({ accountCode, type, currency, amount }) => ({
       accountCode,
       type,
@@ -63,6 +73,13 @@ export function createWithdrawalReceipt(execution: BalanceExecution): Withdrawal
 export function withdrawalReceiptRows(receipt: WithdrawalReceipt): readonly [string, string][] {
   return [
     ['Estado', 'Retiro autorizado por el host · 00'],
+    ...(receipt.reversal
+      ? ([
+          ['Reverso', receipt.reversal.status],
+          ['Referencia de reverso', receipt.reversal.transactionId],
+          ['Saldos', 'Recibidos antes del reverso'],
+        ] as [string, string][])
+      : []),
     ['Cuenta', 'Ahorros'],
     ['Monto autorizado', receipt.amount],
     ['Débito total', 'No confirmado'],

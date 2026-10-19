@@ -25,7 +25,8 @@ huella indicada aqui.
   retencion de tarjeta.
 - Ambos builders crean una solicitud con MTI `0420`. El builder de timeout
   copia explicitamente de la solicitud anterior F2, F3, F4, F11-F15, F18-F19,
-  F22, F25, F28, F32, F35, F37-F39, F41-F43, F48-F49, F55, F60 y F95. Es una
+  F22, F25, F28, F32, F35, F37-F39, F41-F43, F48-F49, F55 y F60. F95 se
+  construye con Dispensed/Surcharge, no se copia. Es una
   regla de esa ruta y no se aplica al flujo de retencion sin compararla con la
   muestra real.
 - El builder general toma valores de `Param`, la solicitud/respuesta ISO y
@@ -48,16 +49,50 @@ reverso ni un manejador identificable de tarjeta retenida. No aporta el origen
 del evento ATM ni completa el contrato de correlacion/idempotencia del
 simulador.
 
-## Efecto en el alcance del simulador
+## Ampliacion del analisis: prueba temporizada solicitada
 
-La evidencia ya disponible establece `0420/0430` para los dos ejemplos del
-enlace ATM y esta DLL respalda que la aplicacion ATM prepara `0420`. Aun falta
-un snapshot transaccional original seguro y correlacionado para reconstruir el
-reverso en el simulador; tambien falta la fuente del evento remoto de tarjeta
-retenida. La DLL confirma rutas y dependencias, pero no sustituye golden
-samples de campos privados ni contrato aprobado para producirlas.
+El usuario identifica al Core como autorizador, estima 35–50 segundos sin
+confirmar el valor y solicita que el simulador envie el reverso despues del
+retiro. Esto define un disparador explicito de prueba; no acredita un evento
+de retencion ni el timeout configurado en Core.
 
-Mantener deshabilitado el envio de reversos hasta que exista la correlacion
-original, la fuente del evento de retencion y validacion de la solicitud
-generada contra muestras QA sanitizadas. No reutilizar la rutina de timeout
-como reverso por retencion.
+La inspeccion adicional de IL de `GenerarReversoIso8583` identifica:
+
+- F28: signo C y surcharge en centavos. Se implementa solo surcharge cero.
+- F38: NroAutoriza del retiro; F39: 00. Solo aplica tras aprobacion completa.
+- F48: EO, A, BR, CO, F90, R, X, D opcional, TC, S2 opcional, DD, en ese
+  orden. F90 privado contiene longitud 42 y los datos del original.
+- F90: 0200 + STAN original + F7 original + adquirente a 11 digitos +
+  forwarding a cero (11 digitos). ISOBASEI lo codifica en 21 bytes binarios.
+- F60: un byte 22 hexadecimal. F95: Dispensed a 12 digitos, 12 ceros,
+  surcharge a 9 digitos, 9 ceros; la prueba sin efectivo/comision produce 42 ceros.
+- `GetDataEMVMastercardR` llama `CEmvTags.GetTagsByList` (MsgFormatDotNet) con
+  la lista 9F10/95. El metodo selecciona estos tags del TLV recibido, sin
+  generar una AC ni alterar su valor. `GetDataEMV` agrega envolvente 01/00/longitud.
+
+El constructor de timeout usa **0100** en F90; el general y las dos capturas
+usan **0200**. Se registra esta diferencia y no se aplica la ruta timeout al
+nuevo flujo aprobado. Su validacion permanece pendiente para TIMEOUT_REVERSAL.
+
+## Contraste offline con las dos capturas
+
+El constructor del simulador se ejecuto offline sobre cada 0200/0210 recibido.
+El conjunto de campos y todos los bytes de campos del 0420 coinciden salvo
+F12 (hora de generacion) y F55 (IAD 9F10 del estado EMV original frente al
+estado posterior del ATM). F28/F48/F60/F90/F95 coinciden en ambas muestras.
+El filtro preserva los valores actuales de 9F10/95: no fabrica el cambio IAD
+observado ni lo toma de otra tarjeta. La prueba temporizada no completa el
+segundo GENERATE AC ni reproduce la retencion fisica del ATM.
+
+Ambos 0430 tienen F90 con la hora desplazada +5 respecto al 0420. No son ecos
+binarios exactos de F90. El codec valida original MTI/STAN e instituciones,
+ademas de PAN/F3/STAN/RRN/terminal del mensaje; la hora de F90 no decide la
+correlacion. Ambas respuestas reales se reconocen offline como 00. No se
+generaliza una regla de zona horaria a partir de estos dos casos.
+
+Los keepalives TCP de un byte con secuencia anterior se excluyeron del
+reensamblado; los mensajes financieros se reconstruyeron completos, sin
+solapamientos contradictorios. No se versionan PCAP, DLL, scripts de inspeccion
+con datos privados ni payloads originales. Las pruebas automatizadas usan
+fixtures sinteticos. Falta validar la nueva prueba temporizada contra el host
+QA; la verificacion local no acredita restitucion de saldo en Core.
