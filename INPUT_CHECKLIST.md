@@ -9,8 +9,10 @@
 - [ ] Trama retiro aprobado request/response.
 - [ ] PCAP retiro aprobado.
 - [ ] Trama retiro rechazado request/response.
-- [ ] Trama reverso request/response + original.
-- [ ] PCAP reverso.
+- [x] Trama reverso request/response + original (2 pares ATM QA recibidos;
+      reglas de construccion y evento de retencion siguen pendientes).
+- [x] PCAP reverso (2 pares ATM QA recibidos; construccion de nuevos reversos
+      aun requiere el contrato de campos).
 - [ ] Evidencia timeout + reverso.
 - [ ] Host/puerto QA por escenario.
 - [ ] Host/puerto PREPROD por escenario.

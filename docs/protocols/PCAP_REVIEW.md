@@ -8,6 +8,13 @@ corresponde a USD 20; los mensajes financieros del PID 82032 no aparecen en
 el enlace 49212 del nuevo PCAP. No se modifica el reporte historico BANRED ni
 se habilita una nueva trama o se declara llegada al Core.
 
+Actualizacion 2026-10-19: la nueva captura aporta dos pares correlacionados
+`0200/0210` y `0420/0430` de retiro QA en el enlace ATM 16100. Ambos reversos
+conservan importe, STAN y terminal; la comparacion de campos y sus limites estan
+en [evidencia de reversos QA](QA_REVERSAL_EVIDENCE_20261019.md). Se valida el
+flujo observado, pero no el generador: F48/F55 y otros campos varian y no tienen
+reglas aprobadas para construir nuevas solicitudes.
+
 Inspeccion local del 2026-10-06, completada a `2026-10-07T03:00:02.875Z` (UTC).
 Reporte UUID `b8be8605-9ba2-497a-aa05-70bd476764ec`.
 Se recibieron los diez archivos de `Tramas transacciones/`. Los originales son
@@ -104,16 +111,19 @@ solapamientos y perfiles incompletos, queda registrada en
   diccionario para los enlaces binarios/otros formatos (entre ellos puertos 16100,
   49212, 10200, 16214 y 49206/49208). El nombre Visa/Externa de un archivo no
   identifica su contrato. Falta explicacion de los solapamientos distintos.
-- **PCAP-CASE-MAPPING**: identificar por captura los casos de saldo/retiro,
-  originales/reversos, resultado esperado y STAN/RRN/UTRNNO aprobados. No se
+- **PCAP-CASE-MAPPING**: los dos pares de reverso QA del 2026-10-19 quedan
+  correlacionados por UTRNNO, reloj, terminal y STAN; para otras capturas no se
   presume rechazo por el nombre FondoInsuficientes ni se empareja por posicion.
 - **ISO-SPEC**: ContextoISO.xml/diccionario ATM con longitudes, variantes LLVAR,
-  encoding, campos obligatorios y reglas dinamicas. Bloquea construir/modificar
-  campos, leer F3/F39/F90/PAN/PIN/Track2 y sanitizar RAW/HEX para mostrarlo.
+  encoding, campos obligatorios y reglas dinamicas. La muestra nueva permite la
+  proyeccion local de campos de correlacion/resultado y presencia/diferencia de
+  campos; faltan reglas generales para construir/modificar y procesar reversos.
+  PAN/PIN/Track2 y RAW/HEX no se proyectan a UI ni a reportes.
 - **ENVIRONMENT**: autorizacion y TLS/timeout por endpoint. Una direccion
   observada en PCAP no autoriza envio ni hereda el ambiente PREPROD de la BD.
-- **GOLDEN-SAMPLES / CMS-ATM-MAPPING / CMS-REVERSAL**: fixtures por flujo,
-  mapeo a CMS, eco/cambio de identificadores, duplicados, timeout y late response.
+- **GOLDEN-SAMPLES / CMS-ATM-MAPPING / CMS-REVERSAL**: la captura nueva aporta
+  muestras ATM de `0420/0430`; faltan contrato de campos para generar reverso,
+  mapeo a CMS, idempotencia, duplicados, timeout y late response.
 
 El encapsulado offline queda implementado. Los cinco flujos MVP y el envio real
 permanecen BLOCKED; no se cambia el catalogo CMS 301000/302000 por deducciones

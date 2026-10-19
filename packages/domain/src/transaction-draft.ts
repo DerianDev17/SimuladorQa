@@ -141,11 +141,20 @@ export function draftBlockers(
   operationAvailable: boolean,
 ): readonly DataBlocker[] {
   const blockers: DataBlocker[] = [...dataBlockers];
-  if (needsOriginal(transaction))
+  if (transaction === 'REVERSAL')
     blockers.push({
       id: 'ORIGINAL_TRANSACTION',
-      label: 'Transacción original y reglas de reverso',
-      description: 'Faltan original validado, MTI, campos de correlación y política de timeout.',
+      label: 'Retiro original y evento de tarjeta retenida',
+      description:
+        'La captura QA confirma 0420/0430, pero faltan el evento confirmado del ATM y las reglas para F28, F48, F55, F60, F90 y F95.',
+      document: 'docs/transactions/REVERSAL.md',
+    });
+  else if (transaction === 'TIMEOUT_REVERSAL')
+    blockers.push({
+      id: 'ORIGINAL_TRANSACTION',
+      label: 'Retiro original y política de timeout',
+      description:
+        'Faltan timeout aprobado, manejo de respuestas tardías y reglas de duplicados para el reverso.',
       document: 'docs/transactions/REVERSAL.md',
     });
   else if (!operationAvailable)

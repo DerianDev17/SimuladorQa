@@ -1754,7 +1754,7 @@ test('pantalla del mockup: contexto ATM, catálogo CMS, monto y cambio de ambien
   await reviewDraft(window);
   await openPreparationDetails(window);
   await expect(
-    window.getByText('Transacción original y reglas de reverso', { exact: true }),
+    window.getByText('Retiro original y política de timeout', { exact: true }),
   ).toBeVisible();
   await expect(window.locator('.transaction-steps')).toHaveCount(0);
 });
@@ -1853,7 +1853,7 @@ test('plantillas documentales, resumen revisado y borrador conservado al navegar
   await window.getByLabel('Transacción', { exact: true }).selectOption('REVERSAL');
   await openPreparationDetails(window);
   await expect(
-    window.getByText('Transacción original y reglas de reverso', { exact: true }),
+    window.getByText('Retiro original y evento de tarjeta retenida', { exact: true }),
   ).toBeVisible();
 });
 

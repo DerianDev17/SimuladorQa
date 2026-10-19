@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { CmsV36Catalog } from '../../apps/desktop/src/main/adapters/cms-v36-catalog';
 import {
+  draftBlockers,
   isDraftAmount,
   parseDraftRequest,
   reviewDraft,
@@ -27,6 +28,23 @@ const emptyCatalog: CatalogSnapshot = {
   audit: [],
   cases: [],
 };
+
+describe('bloqueos de reverso', () => {
+  it('separa el bloqueo del reverso por retención del bloqueo por timeout', () => {
+    const retainedCard = draftBlockers('REVERSAL', false).find(
+      (item) => item.id === 'ORIGINAL_TRANSACTION',
+    );
+    const timeout = draftBlockers('TIMEOUT_REVERSAL', false).find(
+      (item) => item.id === 'ORIGINAL_TRANSACTION',
+    );
+
+    expect(retainedCard?.label).toBe('Retiro original y evento de tarjeta retenida');
+    expect(retainedCard?.description).toContain('F48, F55');
+    expect(retainedCard?.description).not.toContain('timeout');
+    expect(timeout?.label).toBe('Retiro original y política de timeout');
+    expect(timeout?.description).toContain('respuestas tardías');
+  });
+});
 
 describe('catálogo documental CMS v3.6', () => {
   it.each([
