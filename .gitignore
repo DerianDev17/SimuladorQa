@@ -30,6 +30,8 @@ artifacts/
 .DS_Store
 # Manual de proveedor restringido: conservar la fuente local fuera de Git.
 /Docs tecnicos/Extreme MediatorII Message Interface CMS v3.6 (1).pdf
+# La carpeta contiene configuracion tecnica y material sensible: no versionar.
+/Docs tecnicos/
 # Imagen/configuracion privada del ATM: originales y certificados fuera de Git.
 /Docs tecnicos/imagen cajero/
 /Docs tecnicos/Mediator/
