@@ -1,3 +1,4 @@
+import { redactCardDisplayText } from '../../../../../packages/domain/src/card-reader';
 import type {
   CardApplication,
   CardIdentityReading,
@@ -7,6 +8,7 @@ import type {
 // Supports the contact PSE and GPO with empty PDOL or explicit terminal country (9F1A).
 export interface CardApduSession {
   transmit(command: Uint8Array): Promise<Uint8Array>;
+  beginTransaction?(): Promise<void>;
   releaseTransaction(): Promise<void>;
   isValid(): Promise<boolean>;
   close(): void;
@@ -72,12 +74,7 @@ function text(bytes: Uint8Array | undefined, max: number): string | null {
   if (!bytes) return null;
   if (!bytes.length || bytes.length > max || bytes.some((byte) => byte < 32 || byte > 126))
     invalid();
-  return (
-    Buffer.from(bytes)
-      .toString('ascii')
-      .trim()
-      .replace(/\d{12,19}/g, '[PROTEGIDO]') || null
-  );
+  return redactCardDisplayText(Buffer.from(bytes).toString('ascii').trim()) || null;
 }
 function hex(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString('hex').toUpperCase();
@@ -189,6 +186,7 @@ export async function readEmvIdentity(
   base: Pick<CardIdentityReading, 'readId' | 'readAt' | 'readerName'>,
   applicationId?: string,
   terminalCountryCode?: string,
+  capturePrivate?: (fields: ReadonlyMap<string, Uint8Array>) => void,
 ): Promise<CardIdentityReading> {
   const result: CardIdentityReading = {
     ...base,
@@ -262,11 +260,13 @@ export async function readEmvIdentity(
   }
   const options = requireSuccess(await exchangeCard(session, gpo));
   let afl: Uint8Array | undefined;
+  let aip: Uint8Array | undefined;
   if (options.length === 1 && options[0]?.tag === '80') {
     if (options[0].value.length < 6) invalid();
     afl = options[0].value.subarray(2);
+    aip = options[0].value.subarray(0, 2);
   } else if (options.length === 1 && options[0]?.tag === '77') {
-    const aip = unique(options, '82');
+    aip = unique(options, '82');
     if (aip?.length !== 2) invalid();
     afl = unique(options, '94');
   } else invalid();
@@ -301,6 +301,48 @@ export async function readEmvIdentity(
     data.push(...nodes[0].children);
   }
   Object.assign(result, decodeCardFields(data));
+  const cdol1 = unique(data, '8C');
+  const cdol2 = unique(data, '8D');
+  result.transactionDataRequirements = {
+    cdol1: cdol1 ? parseCardDol(cdol1) : null,
+    cdol2: cdol2 ? parseCardDol(cdol2) : null,
+  };
+  const issuerCode = (tag: string): string | null => {
+    const value = unique(data, tag);
+    if (!value) return null;
+    if (value.length !== 5) invalid();
+    return hex(value);
+  };
+  result.issuerActionCodes = {
+    denial: issuerCode('9F0E'),
+    online: issuerCode('9F0F'),
+    default: issuerCode('9F0D'),
+  };
+  if (capturePrivate) {
+    const privateFields = new Map<string, Uint8Array>();
+    for (const tag of [
+      '5A',
+      '57',
+      '5F24',
+      '5F25',
+      '5F28',
+      '5F34',
+      '8C',
+      '8D',
+      '8E',
+      '9F07',
+      '9F08',
+      '9F42',
+      '9F0E',
+      '9F0F',
+      '9F0D',
+    ]) {
+      const value = unique(data, tag);
+      if (value) privateFields.set(tag, value);
+    }
+    if (aip) privateFields.set('82', aip);
+    capturePrivate(privateFields);
+  }
   result.status = 'READ';
   return result;
 }

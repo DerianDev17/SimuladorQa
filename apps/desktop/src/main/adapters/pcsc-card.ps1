@@ -25,6 +25,7 @@ public static class PcscCardNative {
     if (-not $cardLine -or $cardLine.Length -gt 1024) { throw 'CARD_INVALID' }
     $cardRequest = $cardLine | ConvertFrom-Json
     if ($cardRequest.op -ne 'open' -or $cardRequest.readerName -isnot [string] -or $cardRequest.readerName.Length -gt 160) { throw 'CARD_INVALID' }
+    $cardTransactional = $cardRequest.transactional -eq $true
     if ([PcscCardNative]::SCardEstablishContext(0, [IntPtr]::Zero, [IntPtr]::Zero, [ref]$cardContext) -ne 0) { throw 'CARD_UNAVAILABLE' }
     [uint32]$cardProtocol = 0
     $cardCode = [PcscCardNative]::SCardConnectW($cardContext, $cardRequest.readerName, 2, 3, [ref]$cardHandle, [ref]$cardProtocol)
@@ -36,6 +37,12 @@ public static class PcscCardNative {
         if ($cardLine.Length -gt 1024) { throw 'CARD_INVALID' }
         $cardRequest = $cardLine | ConvertFrom-Json
         if ($cardRequest.op -eq 'close') { break }
+        if ($cardRequest.op -eq 'begin') {
+            if (-not $cardLocked -and [PcscCardNative]::SCardBeginTransaction($cardHandle) -ne 0) { throw 'CARD_UNAVAILABLE' }
+            $cardLocked = $true
+            @{ ok=$true } | ConvertTo-Json -Compress
+            continue
+        }
         if ($cardRequest.op -eq 'release') {
             if ($cardLocked -and [PcscCardNative]::SCardEndTransaction($cardHandle, 0) -ne 0) { throw 'CARD_UNAVAILABLE' }
             $cardLocked = $false
@@ -54,14 +61,15 @@ public static class PcscCardNative {
             @{ ok=$true; valid=($cardCode -eq 0 -and $cardState -ge 4 -and $cardState -le 6) } | ConvertTo-Json -Compress
             continue
         }
-        if ($cardRequest.op -ne 'transmit' -or -not $cardLocked -or $cardRequest.command -isnot [string] -or $cardRequest.command -notmatch '^(?:[A-F0-9]{2}){5,22}$') { throw 'CARD_INVALID' }
+        if ($cardRequest.op -ne 'transmit' -or -not $cardLocked -or $cardRequest.command -isnot [string] -or $cardRequest.command -notmatch '^(?:[A-F0-9]{2}){5,261}$') { throw 'CARD_INVALID' }
         $cardSend = [byte[]]::new($cardRequest.command.Length / 2)
         for ($cardIndex=0; $cardIndex -lt $cardSend.Length; $cardIndex++) { $cardSend[$cardIndex] = [Convert]::ToByte($cardRequest.command.Substring($cardIndex*2, 2), 16) }
         # Only contact SELECT, READ RECORD, GET RESPONSE and GPO with empty PDOL or explicit 9F1A.
         $cardAllowed = ($cardSend[0] -eq 0 -and $cardSend[1] -eq 164 -and $cardSend[2] -eq 4 -and $cardSend[3] -eq 0 -and $cardSend[4] -ge 5 -and $cardSend[4] -le 16 -and $cardSend.Length -eq 6+$cardSend[4]) -or
             ($cardSend.Length -eq 5 -and $cardSend[0] -eq 0 -and $cardSend[1] -eq 178 -and $cardSend[2] -ge 1 -and ($cardSend[3] -band 7) -eq 4 -and ($cardSend[3] -shr 3) -ge 1 -and ($cardSend[3] -shr 3) -le 30) -or
             ($cardSend.Length -eq 5 -and $cardSend[0] -eq 0 -and $cardSend[1] -eq 192 -and $cardSend[2] -eq 0 -and $cardSend[3] -eq 0) -or
-            ($cardRequest.command -eq '80A8000002830000' -or $cardRequest.command -match '^80A800000483020[0-9]{3}00$')
+            ($cardRequest.command -eq '80A8000002830000' -or $cardRequest.command -match '^80A800000483020[0-9]{3}00$') -or
+            ($cardTransactional -and $cardSend.Length -ge 7 -and $cardSend[0] -eq 128 -and $cardSend[1] -eq 174 -and $cardSend[2] -eq 128 -and $cardSend[3] -eq 0 -and $cardSend[4] -ge 1 -and $cardSend.Length -eq 6+$cardSend[4] -and $cardSend[$cardSend.Length-1] -eq 0)
         if (-not $cardAllowed) { throw 'CARD_INVALID' }
         $cardPci = [PcscCardNative+IoRequest]::new()
         $cardPci.Protocol = $cardProtocol

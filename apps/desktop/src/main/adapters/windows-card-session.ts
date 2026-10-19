@@ -18,6 +18,7 @@ export class WindowsCardSession implements CardApduSession {
     script: string,
     private readonly timeoutMs = 8000,
     runtime = process.env.SystemRoot ?? 'C:\\Windows',
+    private readonly transactional = false,
   ) {
     this.child = spawn(
       join(runtime, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
@@ -82,7 +83,10 @@ export class WindowsCardSession implements CardApduSession {
     });
   }
   async open(readerName: string): Promise<void> {
-    await this.call({ op: 'open', readerName });
+    await this.call({ op: 'open', readerName, transactional: this.transactional });
+  }
+  async beginTransaction(): Promise<void> {
+    await this.call({ op: 'begin' });
   }
   async transmit(command: Uint8Array): Promise<Uint8Array> {
     const row = await this.call({

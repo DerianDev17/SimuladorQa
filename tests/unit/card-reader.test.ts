@@ -87,3 +87,13 @@ describe('estado PC/SC protegido', () => {
     },
   );
 });
+
+describe('privacidad de nombres de interfaces', () => {
+  it.each([' ', '-', '\u00a0'])('protege secuencias sensibles con separador %j', (separator) => {
+    const name = 'Reader ' + Array(4).fill('4'.repeat(4)).join(separator);
+    expect(
+      decodeReaderStatus(JSON.stringify({ ok: true, readers: [{ ...row, name }] }), timestamp)
+        .readers[0]?.name,
+    ).toBe('Reader [PROTEGIDO]');
+  });
+});

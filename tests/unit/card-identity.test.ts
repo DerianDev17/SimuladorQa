@@ -53,6 +53,89 @@ describe('identidad EMV de contacto', () => {
     });
     expect(commands).toHaveLength(4);
   });
+  it('obtiene CDOL1/CDOL2 del chip y expone solo tags/longitudes sin generar AC', async () => {
+    const rows = identityResponses();
+    rows[5] = success(
+      tlv(
+        '70',
+        tlv('5A', Buffer.from(syntheticPan, 'hex')),
+        tlv('8C', Buffer.from('9F020695059F3704', 'hex')),
+        tlv('8D', Buffer.from('8A029505', 'hex')),
+      ),
+    );
+    const fake = fakeCardSession(rows);
+    const result = await readEmvIdentity(fake.session, base);
+    expect(result.transactionDataRequirements).toEqual({
+      cdol1: [
+        { tag: '9F02', length: 6 },
+        { tag: '95', length: 5 },
+        { tag: '9F37', length: 4 },
+      ],
+      cdol2: [
+        { tag: '8A', length: 2 },
+        { tag: '95', length: 5 },
+      ],
+    });
+    expect(JSON.stringify(result)).not.toContain(syntheticPan);
+    expect(fake.commands.some((command) => command[1] === 0xae)).toBe(false);
+  });
+  it('conserva CDOL ausentes como null sin reemplazarlos por TDOL', async () => {
+    const result = await readEmvIdentity(fakeCardSession().session, base);
+    expect(result.transactionDataRequirements).toEqual({ cdol1: null, cdol2: null });
+  });
+  it('lee preferencias IAC del emisor desde los registros del chip', async () => {
+    const rows = identityResponses();
+    rows[5] = success(
+      tlv(
+        '70',
+        tlv('9F0E', Buffer.from('0000800000', 'hex')),
+        tlv('9F0F', Buffer.from('FFFFFFFFFF', 'hex')),
+        tlv('9F0D', Buffer.from('FFFF000000', 'hex')),
+      ),
+    );
+    expect((await readEmvIdentity(fakeCardSession(rows).session, base)).issuerActionCodes).toEqual({
+      denial: '0000800000',
+      online: 'FFFFFFFFFF',
+      default: 'FFFF000000',
+    });
+  });
+  it('distingue IAC ausentes de una tarjeta cuyos registros no fueron leidos', async () => {
+    expect((await readEmvIdentity(fakeCardSession().session, base)).issuerActionCodes).toEqual({
+      denial: null,
+      online: null,
+      default: null,
+    });
+    expect(
+      (await readEmvIdentity(fakeCardSession([Buffer.from([0x6a, 0x82])]).session, base))
+        .issuerActionCodes,
+    ).toBeUndefined();
+  });
+  it.each(['9F0E', '9F0F', '9F0D'])('rechaza longitud invalida para IAC %s', async (tag) => {
+    const rows = identityResponses();
+    rows[5] = success(tlv('70', tlv(tag, Buffer.from([0]))));
+    await expect(readEmvIdentity(fakeCardSession(rows).session, base)).rejects.toThrow(
+      'CARD_DATA_INVALID',
+    );
+  });
+  it.each(['9F02', '9F0200', '9F020695'])(
+    'rechaza CDOL truncado o longitud inválida: %s',
+    async (hex) => {
+      const rows = identityResponses();
+      rows[5] = success(tlv('70', tlv('8C', Buffer.from(hex, 'hex'))));
+      await expect(readEmvIdentity(fakeCardSession(rows).session, base)).rejects.toThrow(
+        'CARD_DATA_INVALID',
+      );
+    },
+  );
+  it('rechaza CDOL duplicado entre registros en vez de elegir uno silenciosamente', async () => {
+    const rows = identityResponses();
+    rows[5] = success(
+      tlv('70', tlv('8C', Buffer.from('9505', 'hex')), tlv('8C', Buffer.from('9F3704', 'hex'))),
+    );
+    await expect(readEmvIdentity(fakeCardSession(rows).session, base)).rejects.toThrow(
+      'CARD_DATA_INVALID',
+    );
+  });
   it('codifica país ISO n3 en BCD únicamente cuando lo solicita la tarjeta', async () => {
     const fake = fakeCardSession(identityResponses(true));
     expect((await readEmvIdentity(fake.session, base, undefined, '218')).status).toBe('READ');
@@ -246,5 +329,96 @@ describe('identidad EMV de contacto', () => {
     const failure = await failing.read({ readerName: base.readerName });
     expect(failure).toMatchObject({ ok: false, error: { code: 'SERVICE_UNAVAILABLE' } });
     expect(JSON.stringify(failure)).not.toContain('PRIVATE');
+  });
+});
+
+describe('vigencia y aislamiento de lecturas de tarjeta', () => {
+  afterEach(() => vi.useRealTimers());
+  it('no permite que una validación tardía tras timeout sobrescriba la lectura nueva', async () => {
+    vi.useFakeTimers();
+    const old = fakeCardSession();
+    let finishOld: ((value: boolean) => void) | undefined;
+    old.session.isValid = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finishOld = resolve;
+        }),
+    );
+    const fresh = fakeCardSession();
+    let calls = 0;
+    const service = new CardIdentityService(
+      reader,
+      async () => (++calls === 1 ? old.session : fresh.session),
+      100,
+    );
+    const pending = service.read({ readerName: base.readerName });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(old.session.isValid).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(await pending).toMatchObject({ ok: false, error: { code: 'TIMEOUT' } });
+    const latest = await service.read({ readerName: base.readerName });
+    expect(latest.ok).toBe(true);
+    finishOld?.(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await service.current()).toMatchObject(latest.ok ? { readId: latest.value.readId } : {});
+    expect(fresh.state.closed).toBe(false);
+    service.close();
+  });
+  it('no devuelve identidad si el servicio se cierra mientras valida la tarjeta', async () => {
+    vi.useFakeTimers();
+    const fake = fakeCardSession();
+    let finish: ((value: boolean) => void) | undefined;
+    fake.session.isValid = () =>
+      new Promise<boolean>((resolve) => {
+        finish = resolve;
+      });
+    const service = new CardIdentityService(reader, async () => fake.session);
+    const pending = service.read({ readerName: base.readerName });
+    await vi.advanceTimersByTimeAsync(0);
+    service.close();
+    finish?.(true);
+    expect(await pending).toMatchObject({ ok: false, error: { code: 'SERVICE_UNAVAILABLE' } });
+    expect(await service.current()).toBeNull();
+    expect(fake.state.closed).toBe(true);
+  });
+  it('un consumidor no puede modificar la identidad almacenada desde las respuestas', async () => {
+    const fake = fakeCardSession();
+    const service = new CardIdentityService(reader, async () => fake.session);
+    const result = await service.read({ readerName: base.readerName });
+    expect(result.ok).toBe(true);
+    if (result.ok) result.value.applicationLabel = 'MUTATED RESPONSE';
+    const current = await service.current();
+    expect(current?.applicationLabel).toBe('QA CARD');
+    if (current) current.readerName = 'Other Reader';
+    expect((await service.current())?.readerName).toBe(base.readerName);
+    service.close();
+  });
+});
+
+describe('privacidad en textos de identidad de tarjeta', () => {
+  it.each([' ', '-'])('protege números separados por %j en el titular', (separator) => {
+    const text = Array(4).fill('4'.repeat(4)).join(separator);
+    const fields = decodeCardFields(parseCardTlv(tlv('70', tlv('5F20', Buffer.from(text)))));
+    expect(fields.cardholderName).toBe('[PROTEGIDO]');
+    expect(JSON.stringify(fields)).not.toContain(text);
+  });
+  it('rechaza nombres sensibles con separadores antes de consultar hardware', async () => {
+    const inspect = vi.fn(reader.inspect);
+    const connect = vi.fn();
+    const service = new CardIdentityService({ inspect }, connect);
+    const result = await service.read({ readerName: Array(4).fill('4'.repeat(4)).join(' ') });
+    expect(result).toMatchObject({ ok: false, error: { code: 'VALIDATION_ERROR' } });
+    expect(inspect).not.toHaveBeenCalled();
+    expect(connect).not.toHaveBeenCalled();
+  });
+  it('protege números separados en etiquetas de aplicación del chip', async () => {
+    const rows = identityResponses();
+    const label = Array(3).fill('4'.repeat(4)).join(' ');
+    rows[1] = success(tlv('70', tlv('61', tlv('4F', syntheticAid), tlv('50', Buffer.from(label)))));
+    rows[3] = success(tlv('6F', tlv('84', syntheticAid), tlv('A5', tlv('50', Buffer.from(label)))));
+    const result = await readEmvIdentity(fakeCardSession(rows).session, base);
+    expect(result.applicationLabel).toBe('[PROTEGIDO]');
+    expect(result.applications[0]?.label).toBe('[PROTEGIDO]');
+    expect(JSON.stringify(result)).not.toContain(label);
   });
 });

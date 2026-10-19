@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { WindowsCardSession } from '../../apps/desktop/src/main/adapters/windows-card-session';
 import { CardIdentityService } from '../../apps/desktop/src/main/card-identity-service';
 import type { CardReaderAdapter } from '../../packages/domain/src/card-reader';
-import { identityResponses, syntheticPan } from '../helpers/card-identity';
+import { identityResponses, syntheticPan, success, tlv } from '../helpers/card-identity';
 import { removeTestDirectory } from '../helpers/temporary-directory';
 
 describe.skipIf(process.platform !== 'win32')('lectura EMV con proceso PC/SC sintético', () => {
@@ -37,9 +37,18 @@ describe.skipIf(process.platform !== 'win32')('lectura EMV con proceso PC/SC sin
   };
 
   it('pasa APDU por stdin y entrega solamente la proyección protegida al IPC', async () => {
-    const replies = identityResponses().map((row) =>
-      Buffer.from(row).toString('hex').toUpperCase(),
+    const responses = identityResponses();
+    responses[5] = success(
+      tlv(
+        '70',
+        tlv('5A', Buffer.from(syntheticPan, 'hex')),
+        tlv('5F20', Buffer.from('QA TESTER')),
+        tlv('5F24', Buffer.from('291231', 'hex')),
+        tlv('8C', Buffer.from('95059F3704', 'hex')),
+        tlv('8D', Buffer.from('8A02', 'hex')),
+      ),
     );
+    const replies = responses.map((row) => Buffer.from(row).toString('hex').toUpperCase());
     await writeFile(
       script,
       `
@@ -62,6 +71,18 @@ while ($null -ne ($line = [Console]::ReadLine())) {
       });
       expect(JSON.stringify(result).includes(syntheticPan)).toBe(false);
       expect(result).not.toHaveProperty('response');
+      expect(result).toMatchObject({
+        ok: true,
+        value: {
+          transactionDataRequirements: {
+            cdol1: [
+              { tag: '95', length: 5 },
+              { tag: '9F37', length: 4 },
+            ],
+            cdol2: [{ tag: '8A', length: 2 }],
+          },
+        },
+      });
       expect(await service.current()).toMatchObject({ cardholderName: 'QA TESTER' });
     } finally {
       service.close();

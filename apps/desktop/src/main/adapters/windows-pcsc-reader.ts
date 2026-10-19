@@ -1,3 +1,4 @@
+import { redactCardDisplayText } from '../../../../../packages/domain/src/card-reader';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import type {
@@ -38,7 +39,7 @@ function parseReaderStatus(text: string, checkedAt: string): CardReaderSnapshot 
     )
       throw Error('PCSC_RESPONSE_INVALID');
     return {
-      name: item.name.replace(/\d{12,19}/g, '[PROTEGIDO]'),
+      name: redactCardDisplayText(item.name),
       state: item.state as ReaderDevice['state'],
       atr: item.atr as string | null,
     };

@@ -2,6 +2,37 @@
 
 ## Comportamiento
 
+Actualizacion 2026-10-15: la app utiliza WindowsPcscMonitor y un unico helper
+pasivo pcsc-monitor.ps1. SCardGetStatusChangeW espera con INFINITE los cambios
+de tarjeta; el lector virtual PnP detecta conexion/desconexion de lectores.
+Solo se enumera al iniciar o cambiar la topologia. No abre una conexion con
+la tarjeta, no transmite APDU ni genera AC. Los cambios de uso compartido o
+exclusivo que no alteran la presencia no provocan parpadeos en la UI.
+
+Main publica reader:changed mediante un evento unidireccional de preload.
+La UI se suscribe antes de cargar su snapshot inicial y elimina la suscripcion
+al desmontarse. Se retira el polling cada cinco segundos. Buscar lector es
+una consulta manual del estado observado. La identidad se lee exclusivamente
+al pulsar Leer tarjeta; la insercion solo detecta presencia. Un retiro invalida
+la identidad, y una respuesta tardia no restaura una tarjeta retirada.
+
+El helper tiene plazo de arranque de ocho segundos, salida acotada y cierre
+al salir de la app. Solo se reinicia ante fallo de la dependencia, con espera
+creciente hasta treinta segundos; un lector estable no provoca reinicios.
+CI puede seleccionar explicitamente --simulate-reader junto con un userData
+aislado; no existe reemplazo automatico del hardware por datos sinteticos.
+
+Cambios revisados en codigo y compilacion TypeScript/C#; por solicitud del usuario no se ejecutan pruebas,
+la app, PC/SC ni transacciones en esta entrega. Se agregan casos de regresion
+de eventos, timeout, privacidad, desuscripcion y ausencia de polling, pendientes
+de ejecucion. Los apartados siguientes describen entregas anteriores.
+
+Correccion 2026-10-13: con una interfaz presente ya conocida, pulsar Leer
+durante la actualizacion automatica conserva la solicitud en cola. Espera
+el resultado pendiente y confirma la misma interfaz con tarjeta presente
+antes de pedir APDU. Retiro/error/timeout cancela la lectura; sin snapshot
+confirmado el boton permanece bloqueado. No se solapan estado y lectura.
+
 CardReaderAdapter separa el dominio del hardware. WindowsPcscReader invoca
 pcsc-status.ps1 en un proceso PowerShell externo y oculto. El Renderer usa
 reader:inspect mediante preload tipado; el IPC mantiene validacion de origen
@@ -53,6 +84,13 @@ SimulatedCardReader es explicito para CI y nunca reemplaza automaticamente al
 hardware cuando hay un fallo real.
 
 ## Verificacion local de 2026-10-08
+
+Verificacion posterior de 2026-10-12 18:14 Ecuador: la lectura real del chip
+obtiene CDOL1/CDOL2 junto a identidad, con salida publica limitada a tags y
+longitudes. La tarjeta actualmente leida termina en 0663; no se conserva la
+asociacion anterior a 2267 por suposicion. No se genera criptograma, valida
+PIN ni transmite ISO en esta comprobacion. Detalle y reporte en
+EMV_IDENTITY_READING.md. La presencia del lector no habilita contexto financiero.
 
 SCardSvr activo. Se enumeran HID Global OMNIKEY 5422 Smartcard Reader 0 y
 HID Global OMNIKEY 5422CL Smartcard Reader 0; ambas interfaces reportan tarjeta
@@ -116,3 +154,46 @@ La columna de autorizacion SmartVista no se rellena en el simulador: la consulta
 historica aprobada no incluia F38 en su request y el campo tampoco aparece en
 la respuesta ATM capturada. Generacion/semantica de la columna interna requiere
 validacion del proveedor; su ausencia con F39 96 no prueba falta de F38 enviado.
+
+## Selector de tarjeta en Transacciones (2026-10-11)
+
+Transacciones reutiliza los IPC de inspeccion/lectura manual existentes. El
+operador elige la interfaz, lee por contacto y confirma Usar esta tarjeta.
+Solo se usa en la UI una referencia de identidad protegida; no se crea ni
+persiste un perfil financiero. La lectura no decide cuenta, entidad o producto.
+Continuar sin tarjeta conserva un borrador parcial, con tarjeta pendiente.
+El selector consulta solo mientras Transacciones esta visible y elimina su
+seleccion/revision ante retirada, cambio de interfaz/lectura o error de consulta.
+Ver `docs/implementation/TRANSACTION_PREPARATION.md`.
+
+Las consultas automaticas de la vista esperan mientras hay una lectura manual
+pendiente y reanudan el siguiente ciclo disponible al terminar. Actualizar y
+elegir aplicacion se bloquean durante consulta/lectura; el guard interno impide
+iniciar una lectura si hay una consulta en curso. Esto evita que un snapshot
+anterior sobrescriba el resultado del chip. No cambia plazos ni reglas de Main.
+
+Las aplicaciones y avisos del chip se muestran solo para la interfaz seleccionada
+con tarjeta presente. Cambiar interfaz no ofrece AID de la lectura anterior. El
+selector distingue busqueda, lectura, ausencia y servicio no disponible; un fallo
+no invita a insertar una tarjeta como si la conexion estuviera verificada. La
+regresion Electron usa dos lectores sinteticos y reloj controlado para comprobar
+seleccion de aplicacion, aislamiento y pausa/reanudacion del polling.
+
+## Correcciones de tarjeta (2026-10-11)
+
+Las vistas comparten la resolucion de lector e identidad. Solo muestran una
+identidad del lector seleccionado con presencia confirmada; una lectura READ
+requiere tambien identityStatus=READ. Un error de consulta oculta identidad y
+ATR anteriores. Consulta pendiente, lector ausente/no disponible y tarjeta
+ausente se muestran como estados distintos. La ilustracion no fija el ambiente QA.
+
+Si desaparece la interfaz elegida, la vista conserva la interfaz de reemplazo
+al reaparecer la anterior. Cambiar interfaz o estado elimina el error de lectura
+anterior. Una respuesta de lectura de otra interfaz se rechaza. Tras NOT_FOUND,
+SERVICE_UNAVAILABLE o TIMEOUT se consulta estado inmediatamente, sin repetir
+APDU. Las etiquetas del chip y nombres de lector protegen secuencias numericas
+de 12 o mas digitos, incluso separadas por espacios o guiones.
+
+La regresion usa sesiones, datos de chip y respuestas IPC sinteticas para
+comprobar timeout, cierre, aislamiento de identidad, retiro, recuperacion y
+seleccion estable. No se ejecutaron envios de tramas ni una lectura fisica nueva.
