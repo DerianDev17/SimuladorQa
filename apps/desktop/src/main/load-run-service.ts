@@ -46,11 +46,13 @@ export class LoadRunService {
   private finishReason: 'COMPLETED' | 'STOPPED' | 'FAILED' | undefined;
   private writes: Promise<void> = Promise.resolve();
   private finishing = false;
+  private durationDrainTimer: ReturnType<typeof setTimeout> | undefined;
   constructor(
     private readonly identity: RuntimeIdentity,
     private readonly driver: LoadRunDriver,
     private readonly store: LoadRunStore,
     private readonly schedule: LoadScheduler,
+    private readonly durationDrainMs = 35_000,
   ) {}
 
   private releaseSource(): void {
@@ -156,9 +158,22 @@ export class LoadRunService {
             reason === 'ERROR' ? 'FAILED' : reason === 'STOP' ? 'STOPPED' : 'COMPLETED';
           if (reason === 'ERROR')
             this.run!.message = 'El worker de carga dejó de estar disponible.';
-          if (reason === 'DURATION' || reason === 'ERROR') {
+          if (reason === 'ERROR') {
             this.abort?.abort();
             this.releaseSource();
+          }
+          if (reason === 'DURATION' && this.run!.active) {
+            // Stop scheduling new operations, but let a financial request that
+            // already began receive its response before closing the source.
+            this.run!.message = 'Tiempo alcanzado. Esperando la operación en curso.';
+            this.durationDrainTimer = setTimeout(() => {
+              if (!this.busy || !this.run?.active || this.finishReason !== 'COMPLETED') return;
+              this.finishReason = 'FAILED';
+              this.run.message =
+                'La operación en curso no terminó durante el cierre. Revisa su correlación.';
+              this.abort?.abort();
+              this.releaseSource();
+            }, this.durationDrainMs);
           }
           if (!this.run!.active) void this.finish();
         },
@@ -193,6 +208,8 @@ export class LoadRunService {
     )
       return failure('VALIDATION_ERROR', 'Selecciona la corrida activa.');
     if (this.busy) {
+      clearTimeout(this.durationDrainTimer);
+      this.durationDrainTimer = undefined;
       this.finishReason = 'STOPPED';
       this.run.state = 'STOPPING';
       this.run.message = 'Deteniendo envíos y cerrando la operación en curso.';
@@ -227,8 +244,7 @@ export class LoadRunService {
           this.finishReason = 'FAILED';
           this.run.message =
             'Hay un envío sin resultado confirmado. Revisa su correlación en el historial; no se reintentará.';
-        }
-        if (value.outcome !== 'APPROVED' && !this.finishReason) {
+        } else if (value.outcome !== 'APPROVED' && this.run.state !== 'STOPPING') {
           this.finishReason = 'FAILED';
           this.run.message =
             value.blockers[0]?.label ??
@@ -245,7 +261,7 @@ export class LoadRunService {
           responseCode: null,
           correlation: null,
         };
-        if (!this.finishReason) {
+        if (this.run.state !== 'STOPPING') {
           this.finishReason = 'FAILED';
           this.run.message = result.error.message;
         }
@@ -267,6 +283,8 @@ export class LoadRunService {
   private async finish(): Promise<void> {
     if (!this.run || !this.busy || this.run.active || this.finishing) return;
     this.finishing = true;
+    clearTimeout(this.durationDrainTimer);
+    this.durationDrainTimer = undefined;
     this.run.state = this.finishReason ?? 'COMPLETED';
     this.run.finishedAt = this.identity.now();
     this.run.elapsedMs = Math.round(performance.now() - this.started);

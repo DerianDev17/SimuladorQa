@@ -28,11 +28,17 @@ Los máximos locales son 5 TPS, una operación simultánea, 100 consultas y
 300 segundos. El lector, las operaciones EMV, el cifrado y la respuesta del host
 pueden impedir alcanzar 5 TPS. El tiempo incluye la entrada inicial del PIN.
 Esta prueba no certifica la capacidad máxima del switch.
+La pantalla explica cuando la cantidad ingresada supera las 100 consultas y
+mantiene deshabilitado el inicio hasta corregirla.
 
 ## Motor, seguridad y métricas
 
 Un worker agenda cada operación sin ráfagas de recuperación; espera la respuesta
 antes de agendar la siguiente. Main coordina hardware y transporte existentes.
+Al alcanzar el límite de duración, no inicia otra consulta y espera hasta 35
+segundos para cerrar la operación que ya estaba en curso y registrar su
+respuesta. Si sigue sin terminar, cancela la dependencia, marca la corrida como
+fallida y deja la correlación disponible para revisión; no reintenta el envío.
 Cada consulta vuelve a leer el chip, genera seguridad y reserva una secuencia
 nueva. La misma tarjeta debe permanecer insertada. El PIN de sesión permanece
 solo en memoria y se borra al terminar o detenerse, sin pasar por Renderer.

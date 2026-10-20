@@ -65,7 +65,10 @@ async function finished(service: LoadRunService): Promise<LoadRunSnapshot> {
   if (!snapshot.ok || !snapshot.value) throw Error('NO_RESULT');
   return snapshot.value;
 }
-function setup(execute: (signal: AbortSignal, runId: string) => Promise<Result<BalanceExecution>>) {
+function setup(
+  execute: (signal: AbortSignal, runId: string) => Promise<Result<BalanceExecution>>,
+  durationDrainMs?: number,
+) {
   const close = vi.fn();
   const store = new FileLoadRunStore(join(directory, 'runs.json'));
   const driver = {
@@ -80,6 +83,7 @@ function setup(execute: (signal: AbortSignal, runId: string) => Promise<Result<B
       driver,
       store,
       workerLoadScheduler(resolve('artifacts/load-test-worker.cjs')),
+      durationDrainMs,
     ),
     store,
     close,
@@ -151,7 +155,23 @@ describe('worker de carga con persistencia real', () => {
     expect((await finished(service)).state).toBe('FAILED');
     expect(close).toHaveBeenCalled();
   });
-  it('el límite de duración cancela una dependencia que espera y limpia la sesión', async () => {
+  it('el límite de duración espera la respuesta de la operación ya iniciada', async () => {
+    const execute = vi.fn(async (signal: AbortSignal) => {
+      await new Promise((done) => setTimeout(done, 1200));
+      expect(signal.aborted).toBe(false);
+      return { ok: true as const, value: result() };
+    });
+    const { service, close } = setup(execute);
+    const input = request();
+    input.draft.durationSeconds = 1;
+    await service.start(input);
+    const run = await finished(service);
+    expect(run.state).toBe('COMPLETED');
+    expect(run.items).toMatchObject([{ outcome: 'APPROVED', sent: true }]);
+    expect(execute).toHaveBeenCalledOnce();
+    expect(close).toHaveBeenCalledOnce();
+  });
+  it('el cierre acotado cancela una dependencia que no responde y registra fallo', async () => {
     const { service, close } = setup(
       (signal) =>
         new Promise((done) =>
@@ -161,12 +181,13 @@ describe('worker de carga con persistencia real', () => {
             { once: true },
           ),
         ),
+      100,
     );
     const input = request();
     input.draft.durationSeconds = 1;
     await service.start(input);
     const run = await finished(service);
-    expect(run.state).toBe('COMPLETED');
+    expect(run.state).toBe('FAILED');
     expect(run.items).toHaveLength(1);
     expect(close).toHaveBeenCalledOnce();
   });

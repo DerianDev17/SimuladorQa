@@ -55,7 +55,11 @@ test('carga de saldo: iniciar, medir, recuperar y detener con motor real y fuent
   await window.getByRole('button', { name: 'Carga y estrés', exact: true }).click();
   await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
   const start = window.getByRole('button', { name: 'Iniciar prueba de saldo', exact: true });
+  await window.getByLabel('Máximo de operaciones').fill('150');
+  await expect(start).toBeDisabled();
+  await expect(window.getByRole('alert')).toContainText('entre 1 y 100');
   await window.getByLabel('Máximo de operaciones').fill('3');
+  await expect(window.getByRole('alert')).toHaveCount(0);
   await window.getByLabel('TPS objetivo').fill('6');
   await expect(start).toBeDisabled();
   await window.getByLabel('TPS objetivo').fill('5');

@@ -2,7 +2,12 @@ import { useEffect, useState } from 'react';
 import type { AtmProfile } from '../../../../packages/domain/src/catalogs';
 import type { Environment } from '../../../../packages/domain/src/index';
 import type { LoadTestDraft, LoadTestMode } from '../../../../packages/domain/src/load-test';
-import { loadRunMetrics, parseLoadRunRequest } from '../../../../packages/domain/src/load-run';
+import {
+  LOAD_RUN_MAX_OPERATIONS,
+  LOAD_RUN_MAX_SECONDS,
+  loadRunMetrics,
+  parseLoadRunRequest,
+} from '../../../../packages/domain/src/load-run';
 import type { LoadRunSnapshot } from '../../../../packages/domain/src/load-run';
 import { DesktopClient } from './desktop-client';
 import { CardReaderView } from './CardReaderView';
@@ -162,7 +167,7 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Load
               <input
                 type="number"
                 min="1"
-                max="100"
+                max={LOAD_RUN_MAX_OPERATIONS}
                 value={count}
                 disabled={locked || disabled}
                 onChange={(event) => setCount(event.target.value)}
@@ -185,7 +190,7 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Load
               <input
                 type="number"
                 min="1"
-                max="300"
+                max={LOAD_RUN_MAX_SECONDS}
                 value={duration}
                 disabled={locked || disabled}
                 onChange={(event) => setDuration(event.target.value)}
@@ -209,6 +214,14 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Load
               </label>
             )}
           </div>
+          {(!Number.isSafeInteger(Number(count)) ||
+            Number(count) < 1 ||
+            Number(count) > LOAD_RUN_MAX_OPERATIONS) && (
+            <p className="saved-card-error" role="alert">
+              El máximo de operaciones debe estar entre 1 y {LOAD_RUN_MAX_OPERATIONS}. Reduce el
+              valor para iniciar la prueba.
+            </p>
+          )}
           <div className="load-card-source">
             <h3>Tarjeta de la prueba</h3>
             {!active && !starting ? (
