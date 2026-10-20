@@ -199,6 +199,25 @@ describe('Main, proveedor y diario de saldo real en archivo', () => {
       error: { code: 'CONFLICT' },
     });
   });
+  it('mide las etapas de carga sin añadir datos de tarjeta al diario financiero', async () => {
+    const f = await fixture();
+    const phases: { name: string; elapsedMs: number }[] = [];
+    const result = await f.app.executeBalance(f.request, 'BALANCE', {
+      runId: randomUUID(),
+      signal: new AbortController().signal,
+      onPhase: (name, elapsedMs) => phases.push({ name, elapsedMs }),
+    });
+    expect(result).toMatchObject({ ok: true, value: { outcome: 'APPROVED' } });
+    expect(phases.map((phase) => phase.name)).toEqual(
+      expect.arrayContaining(['journal', 'inspect', 'context', 'validation', 'transport']),
+    );
+    expect(
+      phases.every((phase) => Number.isSafeInteger(phase.elapsedMs) && phase.elapsedMs >= 0),
+    ).toBe(true);
+    expect(await readFile(path, 'utf8')).not.toMatch(
+      /onPhase|elapsedMs.*context|privateFields|pinBlock/i,
+    );
+  });
   it('rechaza PROD, bytes, revisión obsoleta y ambiente cambiado antes del envío', async () => {
     const f = await fixture();
     for (const payload of [

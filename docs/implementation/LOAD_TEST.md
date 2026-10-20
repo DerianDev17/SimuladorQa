@@ -3,13 +3,16 @@
 ## Ejecutar el piloto con tarjeta física
 
 1. Abrir **Carga y estrés** en QA y seleccionar el ATM configurado para saldo.
-2. Mantener la tarjeta en el lector. Se puede elegir una referencia guardada,
-   pero hay que leer el chip antes de iniciar.
-3. Usar inicialmente 10 consultas, objetivo 5 TPS, 60 segundos y concurrencia 1.
-4. Pulsar **Iniciar prueba de saldo** e ingresar el PIN en el diálogo nativo.
+2. Elegir **Prueba rápida**, **1 TPS**, **3 TPS** o **5 TPS**. Los presets
+   completan cantidad y duración dentro de los límites locales; son objetivos,
+   no tasas garantizadas. **Modo avanzado** permite ajustar esos valores.
+3. Seleccionar la tarjeta QA en el lector. Un perfil guardado puede preseleccionar
+   el AID, pero hay que leer el chip físico antes de iniciar.
+4. Pulsar **Iniciar prueba** e ingresar el PIN en el diálogo nativo.
    El PIN se pide una vez por corrida, según autorización del usuario.
-5. Observar enviados, respuestas, aprobaciones, rechazos, errores, TPS reales
-   y percentiles. **Detener prueba** cancela el trabajo y cierra el socket.
+
+El panel muestra enviados, respuestas, aprobaciones, rechazos, errores, TPS
+reales y percentiles. **Detener prueba** cancela el trabajo y cierra el socket.
 
 La interfaz reemplaza el planificador bloqueado por un ejecutor físico
 secuencial. El límite es lo primero que ocurra: cantidad o tiempo. Se detiene
@@ -30,6 +33,10 @@ pueden impedir alcanzar 5 TPS. El tiempo incluye la entrada inicial del PIN.
 Esta prueba no certifica la capacidad máxima del switch.
 La pantalla explica cuando la cantidad ingresada supera las 100 consultas y
 mantiene deshabilitado el inicio hasta corregirla.
+El selector permite ver varios ATM, pero Main ejecuta solo uno por corrida;
+seleccionar varios muestra la dependencia pendiente y deshabilita el inicio.
+Los perfiles QA guardados son referencias de lectura y no credenciales virtuales.
+Las comprobaciones de perfil financiero y secuencias ocurren al iniciar en Main.
 
 ## Motor, seguridad y métricas
 

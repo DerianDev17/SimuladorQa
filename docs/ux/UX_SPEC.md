@@ -46,15 +46,17 @@ Fuente, limites financieros y pendientes: docs/transactions/WITHDRAWAL.md.
 - En escritorio, formulario y resultado se alinean en dos columnas; en ventanas pequeñas se apilan sin desbordamiento horizontal.
 
 ## Pantalla Load Test
-- transaccion o mix
-- total/duracion
-- TPS
-- numero ATM
-- estrategia ATM
-- pool tarjetas
-- conexiones
-- ramp-up
-- iniciar/detener
+
+- El modo básico presenta ATM, escenarios rápida/1/3/5 TPS, tarjeta física o
+  perfil QA asociado a esa lectura e **Iniciar prueba**. Main valida perfil,
+  seguridad, secuencias y diario al iniciar; los límites locales se explican
+  junto a los controles.
+- El modo avanzado muestra cantidad, objetivo TPS, duración y rampa. La
+  concurrencia física queda en uno. Seleccionar varios ATM muestra el bloqueo
+  correspondiente hasta disponer del proveedor financiero independiente.
+- El panel derecho distingue objetivo de TPS real, muestra latencias de host,
+  desglose numérico por etapa cuando existe y las últimas 20 transacciones.
+  Las corridas históricas sin tiempos por etapa no presentan cifras inventadas.
 
 ## Realtime
 El dashboard debe permanecer util incluso con miles de transacciones; mostrar agregados y solo una ventana de eventos recientes.

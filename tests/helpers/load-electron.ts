@@ -38,7 +38,22 @@ export function install(ipc: IpcMain, file: string, worker: string, sample: Bala
               ? { ok: false, error: { code: 'CONFLICT', message: 'Detenida por el operador.' } }
               : {
                   ok: true,
-                  value: { ...sample, requestId: randomUUID(), transactionId: randomUUID(), runId },
+                  value: {
+                    ...sample,
+                    requestId: randomUUID(),
+                    transactionId: randomUUID(),
+                    runId,
+                    loadTimings: {
+                      cardReadMs: 10,
+                      inspectMs: 5,
+                      contextMs: 10,
+                      validationMs: 5,
+                      journalMs: 5,
+                      transportMs: 250,
+                      otherMs: 15,
+                      totalMs: 300,
+                    },
+                  },
                 };
           },
         },
