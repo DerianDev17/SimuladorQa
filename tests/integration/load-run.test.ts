@@ -110,7 +110,8 @@ describe('worker de carga con persistencia real', () => {
     expect(run.state).toBe('COMPLETED');
     expect(run.items).toHaveLength(3);
     for (let i = 1; i < starts.length; i++)
-      expect(starts[i]! - ends[i - 1]!).toBeGreaterThanOrEqual(190);
+      expect(starts[i]! - starts[i - 1]!).toBeGreaterThanOrEqual(190);
+    expect(starts[1]! - ends[0]!).toBeLessThan(240);
     expect(close).toHaveBeenCalledOnce();
     expect((await store.read())?.runId).toBe(run.runId);
     expect(await service.start(input)).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
@@ -131,6 +132,19 @@ describe('worker de carga con persistencia real', () => {
     });
     expect((await finished(service)).state).toBe('FAILED');
     expect(execute).toHaveBeenCalledOnce();
+  });
+  it('no agrega otra pausa cuando la operación tarda más que el intervalo objetivo', async () => {
+    const starts: number[] = [];
+    const { service } = setup(async () => {
+      starts.push(performance.now());
+      await new Promise((done) => setTimeout(done, 350));
+      return { ok: true, value: result() };
+    });
+    const input = request();
+    input.draft.maxTransactions = 2;
+    await service.start(input);
+    expect((await finished(service)).state).toBe('COMPLETED');
+    expect(starts[1]! - starts[0]!).toBeLessThan(520);
   });
   it('cancelar aborta la consulta activa y marca incierto un envío sin respuesta', async () => {
     const execute = vi.fn(

@@ -23,6 +23,18 @@ export interface LoadRunItem {
   elapsedMs: number;
   responseCode: string | null;
   correlation: BalanceExecution['correlation'];
+  finishedAt?: string;
+  timings?: LoadRunTimings;
+}
+export interface LoadRunTimings {
+  cardReadMs: number;
+  inspectMs: number;
+  contextMs: number;
+  validationMs: number;
+  journalMs: number;
+  transportMs: number;
+  otherMs: number;
+  totalMs: number;
 }
 export interface LoadRunSnapshot {
   runId: string;

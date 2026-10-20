@@ -6,6 +6,7 @@ import type {
   LoadRunRequest,
   LoadRunSnapshot,
   LoadRunItem,
+  LoadRunTimings,
 } from '../../../../packages/domain/src/load-run';
 import type { BalanceExecution } from '../../../../packages/domain/src/balance-inquiry';
 import { balanceDeliveryUncertain } from '../../../../packages/domain/src/balance-inquiry';
@@ -15,7 +16,10 @@ import type { RuntimeIdentity } from './ports';
 
 export interface LoadRunSource {
   readerName: string;
-  execute(signal: AbortSignal, runId: string): Promise<Result<BalanceExecution>>;
+  execute(
+    signal: AbortSignal,
+    runId: string,
+  ): Promise<Result<BalanceExecution & { loadTimings?: LoadRunTimings }>>;
   close(): void;
 }
 export interface LoadRunDriver {
@@ -239,6 +243,8 @@ export class LoadRunService {
           elapsedMs: value.elapsedMs,
           responseCode: value.responseCode,
           correlation: value.correlation,
+          finishedAt: this.identity.now(),
+          ...(value.loadTimings ? { timings: value.loadTimings } : {}),
         };
         if (balanceDeliveryUncertain(value)) {
           this.finishReason = 'FAILED';
@@ -260,6 +266,7 @@ export class LoadRunService {
           elapsedMs: 0,
           responseCode: null,
           correlation: null,
+          finishedAt: this.identity.now(),
         };
         if (this.run.state !== 'STOPPING') {
           this.finishReason = 'FAILED';

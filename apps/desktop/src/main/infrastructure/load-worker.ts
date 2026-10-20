@@ -40,9 +40,8 @@ function schedule() {
 }
 port.on('message', (message: unknown) => {
   if (message === 'next') {
-    // Pace after completion: variable PIN/EMV preparation cannot bunch writes
-    // at the boundary between two operations.
-    last = performance.now();
+    // Pace from the previous start. A slow card/host operation already used
+    // its interval; adding another interval would reduce throughput further.
     schedule();
   } else if (message === 'stop') finish('STOP');
 });

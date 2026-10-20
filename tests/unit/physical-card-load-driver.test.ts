@@ -72,6 +72,8 @@ function fixture() {
       value: { ready: true, blockers: [], sequencesRemaining: 10 },
     })),
     executeBalance: vi.fn(async (_payload, _operation, execution) => {
+      execution?.onPhase?.('context', 12);
+      execution?.onPhase?.('transport', 8);
       const pin = await pins.request(execution!.signal);
       pin!.fill(0);
       const value = approvedWithdrawalExecution();
@@ -104,8 +106,12 @@ describe('adaptador de carga con tarjeta física', () => {
     if (!source.ok) throw Error('READY');
     const runId = randomUUID();
     const signal = new AbortController().signal;
+    const first = await source.value.execute(signal, runId);
     await source.value.execute(signal, runId);
-    await source.value.execute(signal, runId);
+    expect(first).toMatchObject({
+      ok: true,
+      value: { loadTimings: { contextMs: 12, transportMs: 8 } },
+    });
     expect(f.cards.read).toHaveBeenCalledTimes(1);
     expect(f.ask).toHaveBeenCalledTimes(1);
     const calls = vi.mocked(f.application.executeBalance).mock.calls;

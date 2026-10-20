@@ -547,7 +547,7 @@ export class DesktopApplication {
   async executeBalance(
     payload: unknown,
     operation: 'BALANCE' | 'WITHDRAWAL' = 'BALANCE',
-    execution?: { runId: string; signal: AbortSignal },
+    execution?: import('./balance-inquiry-service').BalanceExecutionContext,
   ): Promise<Result<BalanceExecution>> {
     const request =
       operation === 'WITHDRAWAL'

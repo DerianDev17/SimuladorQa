@@ -35,6 +35,10 @@ mantiene deshabilitado el inicio hasta corregirla.
 
 Un worker agenda cada operación sin ráfagas de recuperación; espera la respuesta
 antes de agendar la siguiente. Main coordina hardware y transporte existentes.
+El intervalo objetivo se mide desde el inicio de la consulta anterior: cuando
+la lectura del chip, la preparación y el host ya consumieron ese intervalo,
+la siguiente consulta empieza sin una espera adicional. La concurrencia física
+sigue siendo uno y el objetivo de TPS no garantiza que se alcance.
 Al alcanzar el límite de duración, no inicia otra consulta y espera hasta 35
 segundos para cerrar la operación que ya estaba en curso y registrar su
 respuesta. Si sigue sin terminar, cancela la dependencia, marca la corrida como
@@ -50,6 +54,13 @@ y STAN/RRN propios. Se persisten parámetros inmutables y resultados públicos e
 TPS = envíos con bytes encolados / tiempo total. Los percentiles usan únicamente
 respuestas recibidas y su tiempo de transporte, sin contar como respuesta una
 lectura o preparación local. La UI distingue operaciones en curso de envíos.
+Cada resultado nuevo registra únicamente duraciones numéricas de lectura,
+revisión, preparación de contexto, validación, diario, transporte y resto.
+No se guardan PIN, PAN, tramas ni campos EMV en estas mediciones. Los resultados
+anteriores carecen de desglose: por ejemplo, la corrida local de 5 respuestas
+completadas en 68,2 s consumió 6,2 s en transporte; los ~62 s restantes no
+pueden asignarse retrospectivamente a una etapa concreta. La próxima corrida
+permitirá medirlos sin inferir que el host causó toda la demora.
 
 Un envío cancelado después de transmitir conserva estado incierto y bloquea
 continuaciones automáticas. Al reiniciar, una corrida activa se marca

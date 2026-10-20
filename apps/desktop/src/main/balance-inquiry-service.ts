@@ -1,4 +1,5 @@
 import { isUuid, isUtcTimestamp } from '../../../../packages/domain/src/catalogs';
+import { performance } from 'node:perf_hooks';
 import {
   parseBalanceExecutionRequest,
   parseBalanceDiagnostics,
@@ -48,6 +49,12 @@ export const missingBalanceContext: BalanceReadiness = {
     },
   ],
 };
+export type BalanceLoadPhase = 'inspect' | 'context' | 'validation' | 'journal' | 'transport';
+export interface BalanceExecutionContext {
+  runId: string;
+  signal: AbortSignal;
+  onPhase?: (phase: BalanceLoadPhase, elapsedMs: number) => void;
+}
 function release(lease: BalanceContextLease): void {
   lease.header.fill(0);
   lease.extension.fill(0);
@@ -136,7 +143,7 @@ export class BalanceInquiryService {
     target: BalanceTarget,
     deadlines: { connect: number; response: number },
     revalidate: () => Promise<boolean>,
-    execution?: { runId: string; signal: AbortSignal },
+    execution?: BalanceExecutionContext,
   ): Promise<Result<BalanceExecution>> {
     if (
       !(this.operation === 'WITHDRAWAL'
@@ -202,11 +209,23 @@ export class BalanceInquiryService {
     target: BalanceTarget,
     deadlines: { connect: number; response: number },
     revalidate: () => Promise<boolean>,
-    execution?: { runId: string; signal: AbortSignal },
+    execution?: BalanceExecutionContext,
   ): Promise<Result<BalanceExecution>> {
+    const measure = async <T>(phase: BalanceLoadPhase, action: () => Promise<T>): Promise<T> => {
+      const started = performance.now();
+      try {
+        return await action();
+      } finally {
+        try {
+          execution?.onPhase?.(phase, Math.max(0, Math.round(performance.now() - started)));
+        } catch {
+          // Telemetry must never affect a financial operation.
+        }
+      }
+    };
     let records: BalanceExecution[];
     try {
-      records = await this.journal.read();
+      records = await measure('journal', () => this.journal.read());
     } catch {
       return failure(
         'STORAGE_UNAVAILABLE',
@@ -281,7 +300,7 @@ export class BalanceInquiryService {
           }
         : {}),
     };
-    const readiness = await this.inspect(target);
+    const readiness = await measure('inspect', () => this.inspect(target));
     if (!readiness.ready) {
       return {
         ok: true,
@@ -316,17 +335,20 @@ export class BalanceInquiryService {
     if (execution?.signal.aborted) abort.abort();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const validateLease = async (): Promise<void> => {
-      if (!lease?.validate) return;
+      const validate = lease?.validate;
+      if (!validate) return;
       try {
-        await Promise.race([
-          lease.validate(),
-          new Promise<never>((_, reject) => {
-            timer = setTimeout(() => {
-              abort.abort();
-              reject(Error('CONTEXT_TIMEOUT'));
-            }, this.contextDeadlineMs);
-          }),
-        ]);
+        await measure('validation', () =>
+          Promise.race([
+            validate(),
+            new Promise<never>((_, reject) => {
+              timer = setTimeout(() => {
+                abort.abort();
+                reject(Error('CONTEXT_TIMEOUT'));
+              }, this.contextDeadlineMs);
+            }),
+          ]),
+        );
       } finally {
         clearTimeout(timer);
       }
@@ -339,15 +361,17 @@ export class BalanceInquiryService {
         }
         return value;
       });
-      lease = await Promise.race([
-        acquire,
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(() => {
-            abort.abort();
-            reject(Error('CONTEXT_TIMEOUT'));
-          }, this.contextDeadlineMs);
-        }),
-      ]);
+      lease = await measure('context', () =>
+        Promise.race([
+          acquire,
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => {
+              abort.abort();
+              reject(Error('CONTEXT_TIMEOUT'));
+            }, this.contextDeadlineMs);
+          }),
+        ]),
+      );
       clearTimeout(timer);
       if (
         lease.environment !== 'QA' ||
@@ -382,62 +406,70 @@ export class BalanceInquiryService {
         terminalId: built.metadata.terminalId,
       };
       await validateLease();
-      if (!(await revalidate()) || Date.parse(lease.validUntil) <= Date.parse(this.identity.now()))
+      if (
+        !(await measure('validation', revalidate)) ||
+        Date.parse(lease.validUntil) <= Date.parse(this.identity.now())
+      )
         throw Error('CONTEXT_CHANGED');
       records = [...records, structuredClone(record)];
       // Persist before the financial side effect. A PENDING record after restart
       // remains unresolved and is returned, never replayed automatically.
       try {
-        await this.journal.write(records);
+        await measure('journal', () => this.journal.write(records));
       } catch {
         return failure(
           'STORAGE_UNAVAILABLE',
           'No se pudo registrar la ejecución. No se ha enviado la transacción.',
         );
       }
-      if (!(await revalidate()) || Date.parse(lease.validUntil) <= Date.parse(this.identity.now()))
+      if (
+        !(await measure('validation', revalidate)) ||
+        Date.parse(lease.validUntil) <= Date.parse(this.identity.now())
+      )
         throw Error('CONTEXT_CHANGED');
       await validateLease();
       if (Date.parse(lease.validUntil) <= Date.parse(this.identity.now()))
         throw Error('CONTEXT_CHANGED');
       if (abort.signal.aborted) throw Error('CONTEXT_CHANGED');
       transportStarted = true;
-      const result = await this.transport.exchange({
-        environment: 'QA',
-        endpoint: { ...target.endpoint },
-        wire,
-        expected: built.metadata,
-        connectDeadlineMs: deadlines.connect,
-        responseDeadlineMs: deadlines.response,
-        signal: abort.signal,
-        ...(record.reversal
-          ? {
-              reversal: {
-                delaySeconds: record.reversal.delaySeconds,
-                persist: async (progress, original) => {
-                  const reversal = parseWithdrawalReversal({ ...record.reversal, ...progress });
-                  if (
-                    !reversal ||
-                    original.outcome !== 'APPROVED' ||
-                    original.responseCode !== '00'
-                  )
-                    throw Error('REVERSAL_PROGRESS_INVALID');
-                  record.outcome = original.outcome;
-                  record.responseCode = original.responseCode;
-                  record.transmissionAttempted = original.transmissionAttempted;
-                  record.bytesQueued = original.bytesQueued;
-                  record.elapsedMs = original.elapsedMs;
-                  record.balances = structuredClone(original.balances);
-                  record.reversal = reversal;
-                  await this.journal.write([
-                    ...records.filter((item) => item.requestId !== record.requestId),
-                    structuredClone(record),
-                  ]);
+      const result = await measure('transport', () =>
+        this.transport.exchange({
+          environment: 'QA',
+          endpoint: { ...target.endpoint },
+          wire: wire!,
+          expected: built.metadata,
+          connectDeadlineMs: deadlines.connect,
+          responseDeadlineMs: deadlines.response,
+          signal: abort.signal,
+          ...(record.reversal
+            ? {
+                reversal: {
+                  delaySeconds: record.reversal.delaySeconds,
+                  persist: async (progress, original) => {
+                    const reversal = parseWithdrawalReversal({ ...record.reversal, ...progress });
+                    if (
+                      !reversal ||
+                      original.outcome !== 'APPROVED' ||
+                      original.responseCode !== '00'
+                    )
+                      throw Error('REVERSAL_PROGRESS_INVALID');
+                    record.outcome = original.outcome;
+                    record.responseCode = original.responseCode;
+                    record.transmissionAttempted = original.transmissionAttempted;
+                    record.bytesQueued = original.bytesQueued;
+                    record.elapsedMs = original.elapsedMs;
+                    record.balances = structuredClone(original.balances);
+                    record.reversal = reversal;
+                    await this.journal.write([
+                      ...records.filter((item) => item.requestId !== record.requestId),
+                      structuredClone(record),
+                    ]);
+                  },
                 },
-              },
-            }
-          : {}),
-      });
+              }
+            : {}),
+        }),
+      );
       if (
         ![
           'APPROVED',
@@ -535,10 +567,12 @@ export class BalanceInquiryService {
       };
     }
     try {
-      await this.journal.write([
-        ...records.filter((item) => item.requestId !== record.requestId),
-        record,
-      ]);
+      await measure('journal', () =>
+        this.journal.write([
+          ...records.filter((item) => item.requestId !== record.requestId),
+          record,
+        ]),
+      );
     } catch {
       // Do not discard a received response or suggest repeating a financial write.
       return {

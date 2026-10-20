@@ -34,7 +34,23 @@ function valid(value: unknown): value is LoadRunSnapshot {
   return value.items.every((item: unknown) => {
     if (
       !isRecord(item) ||
-      Object.keys(item).length !== 8 ||
+      Object.keys(item).length < 8 ||
+      Object.keys(item).length > 10 ||
+      Object.keys(item).some(
+        (key) =>
+          ![
+            'requestId',
+            'transactionId',
+            'outcome',
+            'sent',
+            'received',
+            'elapsedMs',
+            'responseCode',
+            'correlation',
+            'finishedAt',
+            'timings',
+          ].includes(key),
+      ) ||
       !isUuid(item.requestId) ||
       !(item.transactionId === null || isUuid(item.transactionId)) ||
       ![
@@ -62,6 +78,31 @@ function valid(value: unknown): value is LoadRunSnapshot {
       )
     )
       return false;
+    const phases = [
+      'cardReadMs',
+      'inspectMs',
+      'contextMs',
+      'validationMs',
+      'journalMs',
+      'transportMs',
+      'otherMs',
+      'totalMs',
+    ];
+    if (item.finishedAt !== undefined && !isUtcTimestamp(item.finishedAt)) return false;
+    if (item.timings !== undefined) {
+      if (!isRecord(item.timings) || Object.keys(item.timings).length !== phases.length)
+        return false;
+      const timings = item.timings;
+      if (
+        !phases.every(
+          (phase) =>
+            Number.isSafeInteger(timings[phase]) &&
+            (timings[phase] as number) >= 0 &&
+            (timings[phase] as number) <= 300000,
+        )
+      )
+        return false;
+    }
     return (
       item.correlation === null ||
       (isRecord(item.correlation) &&

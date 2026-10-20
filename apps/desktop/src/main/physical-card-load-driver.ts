@@ -1,5 +1,7 @@
 import type { LoadRunDriver, LoadRunSource } from './load-run-service';
 import type { LoadRunRequest } from '../../../../packages/domain/src/load-run';
+import type { LoadRunTimings } from '../../../../packages/domain/src/load-run';
+import { performance } from 'node:perf_hooks';
 import type { BalanceContextRequest } from '../../../../packages/domain/src/balance-inquiry';
 import type { CardIdentityService } from './card-identity-service';
 import type { DesktopApplication } from './application';
@@ -89,6 +91,15 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
         },
         execute: async (signal, runId) => {
           if (closed || signal.aborted) return failure('CONFLICT', 'La corrida fue detenida.');
+          const started = performance.now();
+          const phases: Omit<LoadRunTimings, 'cardReadMs' | 'otherMs' | 'totalMs'> = {
+            inspectMs: 0,
+            contextMs: 0,
+            validationMs: 0,
+            journalMs: 0,
+            transportMs: 0,
+          };
+          const readStarted = performance.now();
           const reading = first
             ? { ok: true as const, value: original }
             : await this.cards.read({
@@ -96,6 +107,7 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
                 applicationId: original.applicationId,
                 terminalCountryCode: '218',
               });
+          const cardReadMs = Math.round(performance.now() - readStarted);
           first = false;
           this.publish();
           if (!reading.ok) return reading;
@@ -107,15 +119,38 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
           )
             return failure('CONFLICT', 'La tarjeta cambió. Se detuvo la corrida.');
           try {
-            return await this.application.executeBalance(
+            const result = await this.application.executeBalance(
               {
                 ...context,
                 cardReadId: reading.value.readId,
                 requestId: this.identity.uuid(),
               },
               'BALANCE',
-              { runId, signal },
+              {
+                runId,
+                signal,
+                onPhase: (phase, elapsedMs) => {
+                  const key = `${phase}Ms` as keyof typeof phases;
+                  phases[key] += elapsedMs;
+                },
+              },
             );
+            if (!result.ok) return result;
+            const totalMs = Math.round(performance.now() - started);
+            const measuredMs =
+              cardReadMs + Object.values(phases).reduce((sum, value) => sum + value, 0);
+            return {
+              ok: true,
+              value: {
+                ...result.value,
+                loadTimings: {
+                  cardReadMs,
+                  ...phases,
+                  otherMs: Math.max(0, totalMs - measuredMs),
+                  totalMs,
+                },
+              },
+            };
           } finally {
             this.publish();
           }
