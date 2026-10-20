@@ -9,6 +9,23 @@ const labelPattern = /^[\p{L}\p{N} _./-]{1,32}$/u;
 const accountTypes = new Set<AccountType>(['SAVINGS', 'CURRENT']);
 const maximumProfiles = 100;
 
+export function isValidCardProfileAlias(value: string): boolean {
+  return aliasPattern.test(value.trim()) && !/(?:\d[\s-]*){12,}/.test(value);
+}
+
+export function suggestCardProfileAlias(identity: CardIdentityReading | undefined): string {
+  if (identity?.status !== 'READ') return '';
+  const lastFour = identity.panMasked?.match(/\d{4}$/)?.[0];
+  const label = (identity.applicationLabel ?? 'Tarjeta QA')
+    .replace(/[^\p{L}\p{N} _.-]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const candidate = `${label.slice(0, lastFour ? 33 : 40)}${lastFour ? ` - ${lastFour}` : ''}`;
+  return isValidCardProfileAlias(candidate)
+    ? candidate
+    : `Tarjeta QA${lastFour ? ` - ${lastFour}` : ''}`;
+}
+
 export interface CardDataRequirements {
   cdol1: readonly { tag: string; length: number }[] | null;
   cdol2: readonly { tag: string; length: number }[] | null;
@@ -92,8 +109,7 @@ export function parseSaveCardProfileRequest(value: unknown): SaveCardProfileRequ
     typeof value.readId !== 'string' ||
     !uuidPattern.test(value.readId) ||
     typeof value.alias !== 'string' ||
-    !aliasPattern.test(value.alias.trim()) ||
-    /(?:\d[\s-]*){12,}/.test(value.alias) ||
+    !isValidCardProfileAlias(value.alias) ||
     (Object.hasOwn(value, 'defaultAccount') && !isOptionalAccountType(value.defaultAccount))
   )
     return undefined;
@@ -115,8 +131,7 @@ export function parseUpdateCardProfileRequest(
     typeof value.id !== 'string' ||
     !uuidPattern.test(value.id) ||
     typeof value.alias !== 'string' ||
-    !aliasPattern.test(value.alias.trim()) ||
-    /(?:\d[\s-]*){12,}/.test(value.alias) ||
+    !isValidCardProfileAlias(value.alias) ||
     !Object.hasOwn(value, 'defaultAccount') ||
     !isOptionalAccountType(value.defaultAccount)
   )

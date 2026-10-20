@@ -7,6 +7,8 @@ import {
   parseSavedCardProfileFile,
   parseUpdateCardProfileRequest,
   updateSavedCardProfile,
+  suggestCardProfileAlias,
+  isValidCardProfileAlias,
 } from '../../packages/domain/src/saved-card-profiles';
 
 const reading: CardIdentityReading = {
@@ -30,6 +32,16 @@ const reading: CardIdentityReading = {
 };
 
 describe('perfiles locales de referencia de tarjetas', () => {
+  it('el alias sugerido se puede guardar sin editar y limpia etiquetas del chip', () => {
+    expect(suggestCardProfileAlias(reading)).toBe('VISA DEBIT - 2267');
+    for (const applicationLabel of ['VISA/DEBIT', '•', 'A'.repeat(40), '1'.repeat(16)]) {
+      const alias = suggestCardProfileAlias({ ...reading, applicationLabel });
+      expect(parseSaveCardProfileRequest({ readId: reading.readId, alias })).toBeDefined();
+    }
+    expect(suggestCardProfileAlias(undefined)).toBe('');
+    expect(isValidCardProfileAlias('VISA · •••• 2267')).toBe(false);
+    expect(isValidCardProfileAlias('1234 '.repeat(4).trim())).toBe(false);
+  });
   it('acepta solo alias y readId; rechaza credenciales adicionales y nombres con números largos', () => {
     expect(parseSaveCardProfileRequest({ readId: reading.readId, alias: 'Visa QA azul' })).toEqual({
       readId: reading.readId,

@@ -8,6 +8,7 @@ import { FileSavedCardProfileStore } from '../../apps/desktop/src/main/infrastru
 import { SavedCardProfileService } from '../../apps/desktop/src/main/saved-card-profile-service';
 import type { RuntimeIdentity } from '../../apps/desktop/src/main/ports';
 import { removeTestDirectory } from '../helpers/temporary-directory';
+import { suggestCardProfileAlias } from '../../packages/domain/src/saved-card-profiles';
 
 const runtime: RuntimeIdentity = {
   agentId: randomUUID(),
@@ -54,14 +55,14 @@ describe('inventario QA persistente desde una lectura vigente', () => {
       expect(await service.list(undefined)).toEqual({ ok: true, value: [] });
       const saved = await service.save({
         readId: reading.readId,
-        alias: 'Visa QA azul',
+        alias: suggestCardProfileAlias(reading),
         defaultAccount: 'SAVINGS',
       });
       expect(saved).toMatchObject({
         ok: true,
         value: [
           {
-            alias: 'Visa QA azul',
+            alias: 'VISA DEBIT - 2267',
             lastFour: '2267',
             applicationId: 'A1B2C3D4E5F6',
             applicationLabel: 'VISA DEBIT',
