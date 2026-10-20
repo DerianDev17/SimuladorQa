@@ -2,11 +2,11 @@
 
 ## Uso
 
-El operador inserta la tarjeta por contacto, elige el lector y pulsa **Leer
-tarjeta**. El simulador obtiene de la tarjeta la identidad disponible y la lista
-CDOL1/CDOL2 que indica qué datos solicitará el chip durante una operación.
-Después puede guardar un perfil QA con alias y una cuenta predeterminada
-opcional.
+El operador deja la tarjeta insertada, elige el lector y pulsa **Leer datos del
+chip** cuando el simulador la detecta. La lectura es manual. Al completarse, la
+pantalla habilita **Guardar tarjeta QA** y propone un alias editable con la
+aplicación y, si está disponible, los últimos cuatro. El operador puede guardar
+el perfil con una cuenta predeterminada opcional sin retirar la tarjeta.
 
 En Transacciones, un perfil guardado preselecciona el AID y, si se configuró,
 la cuenta. Antes de usarlo el simulador vuelve a leer la tarjeta presente y
