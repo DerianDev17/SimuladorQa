@@ -21,10 +21,10 @@ export class FileSavedCardProfileStore implements SavedCardProfileStore {
       contents = await readFile(this.file, 'utf8');
     } catch (error) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')
-        return { version: 1, profiles: [] };
+        return { version: 2, profiles: [] };
       throw new Error('STORAGE_UNAVAILABLE', { cause: error });
     }
-    if (Buffer.byteLength(contents, 'utf8') > savedCardProfileLimits.count * 1024)
+    if (Buffer.byteLength(contents, 'utf8') > savedCardProfileLimits.count * 2048)
       throw new Error('STORAGE_UNAVAILABLE');
     const value = parseSavedCardProfileFile(JSON.parse(contents) as unknown);
     if (!value) throw new Error('STORAGE_UNAVAILABLE');

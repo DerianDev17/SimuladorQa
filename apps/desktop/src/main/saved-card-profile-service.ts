@@ -2,7 +2,9 @@ import {
   createSavedCardProfile,
   parseDeleteCardProfileRequest,
   parseSaveCardProfileRequest,
+  parseUpdateCardProfileRequest,
   savedCardProfileLimits,
+  updateSavedCardProfile,
 } from '../../../../packages/domain/src/saved-card-profiles';
 import type { SavedCardProfile } from '../../../../packages/domain/src/saved-card-profiles';
 import type { Result } from '../../../../packages/shared/src/contracts';
@@ -78,7 +80,7 @@ export class SavedCardProfileService {
             'El inventario local alcanzó el máximo de 100 perfiles.',
           );
         const profiles = [profile, ...current.profiles];
-        await this.store.write({ version: 1, profiles });
+        await this.store.write({ version: 2, profiles });
         return { ok: true, value: profiles };
       } catch {
         return failure('STORAGE_UNAVAILABLE', 'No se pudo guardar el perfil local de QA.');
@@ -97,10 +99,38 @@ export class SavedCardProfileService {
         if (!current.profiles.some((profile) => profile.id === request.id))
           return failure('NOT_FOUND', 'El perfil local ya no existe.');
         const profiles = current.profiles.filter((profile) => profile.id !== request.id);
-        await this.store.write({ version: 1, profiles });
+        await this.store.write({ version: 2, profiles });
         return { ok: true, value: profiles };
       } catch {
         return failure('STORAGE_UNAVAILABLE', 'No se pudo actualizar el inventario local de QA.');
+      }
+    });
+  }
+
+  async update(payload: unknown): Promise<Result<readonly SavedCardProfile[]>> {
+    const request = parseUpdateCardProfileRequest(payload);
+    if (!request)
+      return failure(
+        'VALIDATION_ERROR',
+        'Ingresa un alias de 2 a 40 caracteres y una cuenta QA válida.',
+      );
+    return this.serializeMutation(async () => {
+      const qa = await this.requireQa();
+      if (qa !== true) return qa;
+      try {
+        const current = await this.store.read();
+        const existing = current.profiles.find((profile) => profile.id === request.id);
+        if (!existing) return failure('NOT_FOUND', 'El perfil local ya no existe.');
+        const updated = updateSavedCardProfile(existing, request);
+        if (!updated)
+          return failure('VALIDATION_ERROR', 'No se pudo validar la configuración del perfil.');
+        const profiles = current.profiles.map((profile) =>
+          profile.id === updated.id ? updated : profile,
+        );
+        await this.store.write({ version: 2, profiles });
+        return { ok: true, value: profiles };
+      } catch {
+        return failure('STORAGE_UNAVAILABLE', 'No se pudo actualizar el perfil local de QA.');
       }
     });
   }

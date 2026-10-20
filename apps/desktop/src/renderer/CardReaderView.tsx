@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CardReaderSnapshot, ReaderDevice } from '../../../../packages/domain/src/card-reader';
 import type { Environment } from '../../../../packages/domain/src/index';
+import type { AccountType } from '../../../../packages/domain/src/transaction-draft';
+import type { SavedCardProfile } from '../../../../packages/domain/src/saved-card-profiles';
 import type { Result } from '../../../../packages/shared/src/contracts';
 import { DesktopClient } from './desktop-client';
 import { Icon } from './Icon';
 import { selectedReader, matchingCardIdentity } from './card-reader-state';
-import { availableTransactionCard } from './transaction-card';
+import { availableTransactionCard, matchesSavedCardProfile } from './transaction-card';
 import type { TransactionCard } from './transaction-card';
 import { SavedCardProfilesView } from './SavedCardProfilesView';
 
@@ -348,6 +350,7 @@ interface CardReaderViewProps {
   selectedReadId?: string | undefined;
   onUseCard?: (card: TransactionCard) => void;
   onClearCard?: () => void;
+  onSavedProfileAccount?: (account: AccountType | null) => void;
   onAvailableCardChange?: (card: TransactionCard | undefined) => void;
   onReadingChange?: (reading: boolean) => void;
 }
@@ -360,6 +363,7 @@ export function CardReaderView({
   selectedReadId,
   onUseCard,
   onClearCard,
+  onSavedProfileAccount,
   onAvailableCardChange,
   onReadingChange,
 }: CardReaderViewProps) {
@@ -370,6 +374,10 @@ export function CardReaderView({
   const [reading, setReading] = useState(false);
   const [readError, setReadError] = useState<string>();
   const [manualSelection, setManualSelection] = useState<string>();
+  const [savedProfiles, setSavedProfiles] = useState<readonly SavedCardProfile[]>([]);
+  const [savedProfilesLoading, setSavedProfilesLoading] = useState(false);
+  const [selectedSavedProfileId, setSelectedSavedProfileId] = useState('');
+  const [profileMismatch, setProfileMismatch] = useState(false);
   // Ecuador was explicitly selected by the user for this QA station.
   const [countryCode, setCountryCode] = useState('218');
   const mounted = useRef(false);
@@ -424,6 +432,32 @@ export function CardReaderView({
       unsubscribe?.();
     };
   }, []);
+  useEffect(() => {
+    if (!transaction || environment !== 'QA') {
+      setSavedProfiles([]);
+      setSelectedSavedProfileId('');
+      setSavedProfilesLoading(false);
+      return;
+    }
+    let active = true;
+    setSavedProfilesLoading(true);
+    void new DesktopClient(window.desktop)
+      .call((api) => api.listSavedCardProfiles())
+      .then((result) => {
+        if (!active) return;
+        setSavedProfilesLoading(false);
+        if (!result.ok) return;
+        setSavedProfiles(result.value);
+        setSelectedSavedProfileId((selected) =>
+          result.value.some((profile) => profile.id === selected && profile.applicationId)
+            ? selected
+            : '',
+        );
+      });
+    return () => {
+      active = false;
+    };
+  }, [environment, transaction]);
   const reader = selectedReader(snapshot, selectedName);
   const identity = error ? undefined : matchingCardIdentity(snapshot, reader?.name);
   useEffect(() => {
@@ -444,6 +478,10 @@ export function CardReaderView({
     () => availableTransactionCard(error ? undefined : snapshot, reader?.name),
     [snapshot, reader?.name, error],
   );
+  const usableProfiles = savedProfiles.filter((profile) => profile.applicationId);
+  const selectedSavedProfile = usableProfiles.find(
+    (profile) => profile.id === selectedSavedProfileId,
+  );
   useEffect(() => {
     if (refreshing || reading) return;
     onAvailableCardChange?.(availableCard);
@@ -451,9 +489,26 @@ export function CardReaderView({
     // A previous status effect must not invalidate a newly selected identity.
     if (manualSelection) {
       setManualSelection(undefined);
-      if (availableCard?.readId === manualSelection) onUseCard?.(availableCard);
+      if (availableCard?.readId === manualSelection) {
+        const profile = selectedSavedProfile;
+        if (profile && !matchesSavedCardProfile(profile, availableCard)) setProfileMismatch(true);
+        else {
+          setProfileMismatch(false);
+          onUseCard?.(availableCard);
+          if (profile) onSavedProfileAccount?.(profile.defaultAccount);
+        }
+      }
     }
-  }, [availableCard, refreshing, reading, manualSelection, onAvailableCardChange, onUseCard]);
+  }, [
+    availableCard,
+    refreshing,
+    reading,
+    manualSelection,
+    selectedSavedProfile,
+    onAvailableCardChange,
+    onUseCard,
+    onSavedProfileAccount,
+  ]);
   useEffect(() => {
     onReadingChange?.(reading);
   }, [reading, onReadingChange]);
@@ -473,6 +528,7 @@ export function CardReaderView({
     }
     readPending.current = true;
     setManualSelection(undefined);
+    setProfileMismatch(false);
     setReading(true);
     setReadError(undefined);
     setSnapshot((current) => current && { ...current, identity: null, identityStatus: 'NOT_READ' });
@@ -519,6 +575,23 @@ export function CardReaderView({
     if (result.ok && result.value.readerName !== readerName) {
       setReadError('La lectura no corresponde al lector seleccionado. Vuelve a leer la tarjeta.');
     } else if (result.ok) {
+      const card =
+        result.value.status === 'READ'
+          ? {
+              readId: result.value.readId,
+              readerName: result.value.readerName,
+              panMasked: result.value.panMasked,
+              applicationLabel: result.value.applicationLabel,
+              applicationId: result.value.applicationId,
+            }
+          : undefined;
+      const mismatch = !!(
+        transaction &&
+        selectedSavedProfile &&
+        card &&
+        !matchesSavedCardProfile(selectedSavedProfile, card)
+      );
+      setProfileMismatch(mismatch);
       setSnapshot((current) =>
         current &&
         current.readers.some(
@@ -531,8 +604,16 @@ export function CardReaderView({
             }
           : current,
       );
-      if (transaction && result.value.status === 'READ') setManualSelection(result.value.readId);
+      if (mismatch) {
+        setReadError(
+          'La tarjeta leída no coincide con el perfil QA elegido. Confirma el AID y los últimos cuatro dígitos.',
+        );
+      } else if (transaction && result.value.status === 'READ') {
+        setManualSelection(result.value.readId);
+      }
     } else {
+      if (transaction && selectedSavedProfile && result.error.code === 'CONFLICT')
+        setProfileMismatch(true);
       setReadError(result.error.message);
       if (['NOT_FOUND', 'SERVICE_UNAVAILABLE', 'TIMEOUT'].includes(result.error.code))
         refreshRef.current?.();
@@ -562,12 +643,60 @@ export function CardReaderView({
           </label>
           <button
             disabled={disabled || reading || !!error || reader?.state !== 'CARD_PRESENT'}
-            onClick={() => reader && void readChip(reader.name)}
+            onClick={() =>
+              reader && void readChip(reader.name, selectedSavedProfile?.applicationId ?? undefined)
+            }
           >
             <Icon name="reader" size={16} />
             {reading ? 'Leyendo tarjeta…' : 'Leer tarjeta'}
           </button>
         </div>
+        {environment === 'QA' && (
+          <label className="saved-profile-picker">
+            Perfil QA guardado
+            <select
+              aria-label="Perfil QA guardado para la transacción"
+              value={selectedSavedProfileId}
+              disabled={disabled || reading || refreshing || savedProfilesLoading}
+              onChange={(event) => {
+                setSelectedSavedProfileId(event.target.value);
+                setProfileMismatch(false);
+                setManualSelection(undefined);
+                onClearCard?.();
+              }}
+            >
+              <option value="">
+                {savedProfilesLoading
+                  ? 'Cargando perfiles…'
+                  : 'Sin perfil · elegir aplicación al leer'}
+              </option>
+              {usableProfiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.alias} · {profile.lastFour ? `•••• ${profile.lastFour}` : 'AID'}
+                </option>
+              ))}
+            </select>
+            {selectedSavedProfile && (
+              <small>
+                Leerá el AID {selectedSavedProfile.applicationId}. Requiere la tarjeta física y
+                genera seguridad nueva desde el chip.
+                {selectedSavedProfile.defaultAccount
+                  ? ` Cuenta al usarla: ${selectedSavedProfile.defaultAccount === 'SAVINGS' ? 'Ahorros' : 'Corriente'}.`
+                  : ''}
+              </small>
+            )}
+            {!savedProfilesLoading && usableProfiles.length === 0 && (
+              <small>Guarda primero una lectura en Tarjetas para preseleccionar el AID.</small>
+            )}
+            {selectedSavedProfile &&
+              availableCard &&
+              !matchesSavedCardProfile(selectedSavedProfile, availableCard) && (
+                <small className="saved-profile-mismatch">
+                  La lectura actual no coincide con este perfil. Elige otro perfil o vuelve a leer.
+                </small>
+              )}
+          </label>
+        )}
         <div className="transaction-card-status" role="status">
           <Icon name="card" size={24} />
           <div>
@@ -619,6 +748,11 @@ export function CardReaderView({
             {readError}
           </p>
         )}
+        {profileMismatch && (
+          <p className="inline-error" role="alert">
+            No se seleccionó esta tarjeta para la transacción porque no coincide con el perfil QA.
+          </p>
+        )}
         {identity?.status === 'SELECT_APPLICATION' && (
           <div className="card-application-choice">
             <p>Elige la aplicación de la tarjeta:</p>
@@ -644,8 +778,19 @@ export function CardReaderView({
         {availableCard && selectedReadId !== availableCard.readId && (
           <button
             className="text-button"
-            disabled={disabled || reading || refreshing}
-            onClick={() => onUseCard?.(availableCard)}
+            disabled={
+              disabled ||
+              reading ||
+              refreshing ||
+              profileMismatch ||
+              (!!selectedSavedProfile &&
+                !matchesSavedCardProfile(selectedSavedProfile, availableCard))
+            }
+            onClick={() => {
+              onUseCard?.(availableCard);
+              if (selectedSavedProfile)
+                onSavedProfileAccount?.(selectedSavedProfile.defaultAccount);
+            }}
           >
             Seleccionar tarjeta leída
           </button>

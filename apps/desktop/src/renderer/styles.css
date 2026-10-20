@@ -2402,6 +2402,43 @@ td {
 .saved-card-form input {
   width: 100%;
 }
+.saved-card-form select,
+.saved-card-edit select {
+  min-width: 220px;
+}
+.saved-card-capture {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+.saved-card-capture > div {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fbfcff;
+}
+.saved-card-capture span,
+.saved-card-capture strong,
+.saved-card-capture small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.saved-card-capture span {
+  color: var(--muted);
+  font-size: 10px;
+}
+.saved-card-capture strong {
+  margin-top: 5px;
+  font-size: 11px;
+}
+.saved-card-capture small {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
 .saved-card-hint,
 .saved-card-error,
 .saved-card-empty {
@@ -2432,6 +2469,28 @@ td {
 }
 .saved-card-privacy p {
   margin: 0;
+}
+.saved-card-field-guide {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(185px, 1fr));
+  gap: 9px;
+  margin-top: 12px;
+}
+.saved-card-field-guide article {
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+.saved-card-field-guide strong {
+  display: block;
+  font-size: 11px;
+}
+.saved-card-field-guide p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
 }
 .saved-card-list {
   margin-top: 18px;
@@ -2487,6 +2546,25 @@ td {
   margin-top: 4px;
   color: var(--muted);
   font-size: 10px;
+}
+.saved-card-edit {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f8faff;
+}
+.saved-card-edit label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.saved-card-edit input {
+  min-width: min(260px, 75vw);
 }
 .card-reader-heading,
 .card-reader-refresh,
@@ -3124,6 +3202,23 @@ td {
   display: grid;
   gap: 14px;
   min-width: 0;
+}
+.saved-profile-picker {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.saved-profile-picker select {
+  width: min(100%, 460px);
+}
+.saved-profile-picker small {
+  max-width: 620px;
+  line-height: 1.5;
+}
+.saved-profile-picker .saved-profile-mismatch {
+  color: #8b2920;
 }
 .transaction-card-picker label {
   display: grid;

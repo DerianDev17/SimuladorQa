@@ -34,6 +34,7 @@ import type {
   DeleteCardProfileRequest,
   SaveCardProfileRequest,
   SavedCardProfile,
+  UpdateCardProfileRequest,
 } from '../../domain/src/saved-card-profiles';
 
 import type {
@@ -62,6 +63,7 @@ export const channels = {
   generateVirtualCardFixtures: 'reader:virtual-fixtures:generate',
   listSavedCardProfiles: 'reader:profiles:list',
   saveCardProfile: 'reader:profiles:save',
+  updateCardProfile: 'reader:profiles:update',
   deleteCardProfile: 'reader:profiles:delete',
   environment: 'app:environment',
   prepare: 'app:prepare',
@@ -185,6 +187,9 @@ export interface DesktopApi {
   ): Promise<Result<VirtualCardFixture[]>>;
   listSavedCardProfiles(): Promise<Result<readonly SavedCardProfile[]>>;
   saveCardProfile(request: SaveCardProfileRequest): Promise<Result<readonly SavedCardProfile[]>>;
+  updateCardProfile(
+    request: UpdateCardProfileRequest,
+  ): Promise<Result<readonly SavedCardProfile[]>>;
   deleteCardProfile(
     request: DeleteCardProfileRequest,
   ): Promise<Result<readonly SavedCardProfile[]>>;

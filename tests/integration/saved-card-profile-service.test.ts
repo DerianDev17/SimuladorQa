@@ -29,6 +29,13 @@ const reading: CardIdentityReading = {
   panMasked: '412345**2267',
   cardholderName: 'Example User',
   expiry: '10/27',
+  transactionDataRequirements: {
+    cdol1: [
+      { tag: '9F02', length: 6 },
+      { tag: '9F37', length: 4 },
+    ],
+    cdol2: null,
+  },
 };
 
 describe('inventario QA persistente desde una lectura vigente', () => {
@@ -45,7 +52,11 @@ describe('inventario QA persistente desde una lectura vigente', () => {
       );
 
       expect(await service.list(undefined)).toEqual({ ok: true, value: [] });
-      const saved = await service.save({ readId: reading.readId, alias: 'Visa QA azul' });
+      const saved = await service.save({
+        readId: reading.readId,
+        alias: 'Visa QA azul',
+        defaultAccount: 'SAVINGS',
+      });
       expect(saved).toMatchObject({
         ok: true,
         value: [
@@ -53,6 +64,15 @@ describe('inventario QA persistente desde una lectura vigente', () => {
             alias: 'Visa QA azul',
             lastFour: '2267',
             applicationId: 'A1B2C3D4E5F6',
+            applicationLabel: 'VISA DEBIT',
+            transactionDataRequirements: {
+              cdol1: [
+                { tag: '9F02', length: 6 },
+                { tag: '9F37', length: 4 },
+              ],
+              cdol2: null,
+            },
+            defaultAccount: 'SAVINGS',
             scope: 'QA_REFERENCE_ONLY',
           },
         ],
@@ -62,6 +82,29 @@ describe('inventario QA persistente desde una lectura vigente', () => {
       const serialized = JSON.stringify(reloaded);
       expect(serialized).not.toMatch(/Example User|10\/27|412345|panMasked|track|pin|cvv/i);
       if (!saved.ok) throw new Error('Expected saved profile');
+      const updated = await service.update({
+        id: saved.value[0]!.id,
+        alias: 'Visa QA débito',
+        defaultAccount: 'CURRENT',
+      });
+      expect(updated).toMatchObject({
+        ok: true,
+        value: [{ alias: 'Visa QA débito', defaultAccount: 'CURRENT' }],
+      });
+      expect(
+        await service.update({
+          id: randomUUID(),
+          alias: 'Perfil ausente',
+          defaultAccount: null,
+        }),
+      ).toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } });
+      expect(
+        await service.update({
+          id: saved.value[0]!.id,
+          alias: 'Perfil inválido',
+          defaultAccount: 'UNSUPPORTED',
+        }),
+      ).toMatchObject({ ok: false, error: { code: 'VALIDATION_ERROR' } });
       expect(await service.delete({ id: saved.value[0]!.id })).toEqual({ ok: true, value: [] });
     } finally {
       await removeTestDirectory(directory, 'coonecta-card-profiles-');

@@ -391,6 +391,11 @@ void app
               savedCardProfiles?.save(payload) ??
               failure('SERVICE_UNAVAILABLE', 'El inventario local no está disponible.')
             );
+          case channels.updateCardProfile:
+            return (
+              savedCardProfiles?.update(payload) ??
+              failure('SERVICE_UNAVAILABLE', 'El inventario local no está disponible.')
+            );
           case channels.deleteCardProfile:
             return (
               savedCardProfiles?.delete(payload) ??

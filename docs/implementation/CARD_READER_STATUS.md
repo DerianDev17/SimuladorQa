@@ -143,9 +143,11 @@ log correlacionado de PROXY205 y datos del proveedor; no se normaliza a 05.
   La asociacion al perfil de cuenta/entidad permanece pendiente.
 - CARD-TRANSACTION-SECURITY: PIN/HSM, datos EMV nuevos y campos dinamicos;
   no se inventan desde un ATR ni se atribuyen a una captura historica.
-- CARD-PROFILE-STORAGE: inventario de referencia implementado con alias,
-  ultimos cuatro, AID y fecha. Sigue pendiente cualquier perfil financiero o
-  asociacion cuenta/entidad; no se almacena PAN completo ni seguridad de pago.
+- CARD-PROFILE-STORAGE: inventario QA implementado con alias, ultimos cuatro,
+  AID/etiqueta, requisitos CDOL (solo tags/longitudes), cuenta opcional y fecha.
+  Sigue pendiente asociacion cuenta/entidad; no se almacena PAN completo ni
+  seguridad de pago. Variables propietarias requieren TODO-DATA
+  CARD-GROUP-VARIABLE-MAP.
 - CB205-PROXY-RETURN-5: falta respuesta original y log correlacionado de
   PROXY205 para UTRNNO 262812046562412550 / STAN 008103, y mapeo aprobado de
   codigo 5 en PID 82052. Bloquea corregir ese retorno; la comunicacion ATM con
@@ -173,6 +175,15 @@ desde una lectura vigente. Se persisten alias, ultimos cuatro, AID y fecha en
 PAN completo, Track 2, PIN ni valores/criptogramas EMV; Main confirma que la
 misma lectura aun este activa al guardar. Los perfiles solo identifican tarjetas
 fisicas y no sustituyen el chip para una operacion nueva. Ver ADR-018.
+
+Ampliacion 2026-10-20: los perfiles guardados conservan tambien la etiqueta de
+aplicacion y los tags/longitudes CDOL1/CDOL2. Alias y cuenta predeterminada
+pueden editarse; en Transacciones el perfil preselecciona AID/cuenta y compara
+la lectura actual por AID y ultimos cuatro. El chip debe seguir presente y el
+proveedor produce datos nuevos para cada operacion. La version 2 migra de forma
+normalizada el inventario version 1. Valores propietarios del libro Card Groups
+siguen bloqueados hasta completar TODO-DATA CARD-GROUP-VARIABLE-MAP; ver
+ADR-019.
 
 Las consultas automaticas de la vista esperan mientras hay una lectura manual
 pendiente y reanudan el siguiente ciclo disponible al terminar. Actualizar y

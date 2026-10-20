@@ -399,7 +399,8 @@ export function TransactionWorkspace({
       (selected.readId === card?.readId &&
         selected.readerName === card.readerName &&
         selected.panMasked === card.panMasked &&
-        selected.applicationLabel === card.applicationLabel)
+        selected.applicationLabel === card.applicationLabel &&
+        selected.applicationId === card.applicationId)
     )
       return;
     selectedCardRef.current = undefined;
@@ -422,6 +423,14 @@ export function TransactionWorkspace({
     selectedCardRef.current = card;
     setSelectedCard(card);
   }
+  const applySavedCardAccount = useCallback(
+    (preferred: AccountType | null) => {
+      if (!preferred || preferred === account) return;
+      invalidate();
+      setAccount(preferred);
+    },
+    [account],
+  );
   const hasDraftData =
     transaction !== 'BALANCE' ||
     scenario !== 'LOCAL' ||
@@ -1011,9 +1020,11 @@ export function TransactionWorkspace({
             {visible && (
               <CardReaderView
                 transaction
+                {...(snapshot ? { environment: snapshot.environment } : {})}
                 disabled={fieldsDisabled}
                 selectedReadId={selectedCard?.readId}
                 onUseCard={chooseCard}
+                onSavedProfileAccount={applySavedCardAccount}
                 onClearCard={clearCard}
                 onAvailableCardChange={onCardAvailable}
                 onReadingChange={onCardReading}

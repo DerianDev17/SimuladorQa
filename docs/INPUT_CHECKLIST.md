@@ -16,6 +16,19 @@ No generalizar la rutina de timeout, que usa otro MTI original en F90. Ver
 [revision estatica de DLL](protocols/QA_REVERSAL_DLL_REVIEW_20261019.md) y
 [reverso](transactions/REVERSAL.md).
 
+TODO-DATA CARD-GROUP-VARIABLE-MAP (2026-10-20): el libro Card Groups incluye
+variables de F023/F045/F052/F053/F055, entre ellas PAN, titular, Track 1,
+verificacion PIN, CVV, PIN/PIN Block y datos EMV. La captura de Variables
+Manager tampoco acredita un mapeo aprobado entre esos nombres y el mensaje ISO
+de este simulador. Para habilitar captura, edicion o envio se requiere, por
+campo: identificador exacto, origen (chip/banda/terminal/host), formato y
+longitud, clasificacion de seguridad, vigencia, destino ISO y regla de
+override. Debe definirse en particular F55/9F10, 9F26, 9F36, tag C0, F123 y
+F125. No importar valores del libro al inventario QA. Mientras no exista ese
+contrato, el perfil solo guarda AID/etiqueta, CDOL tags/longitudes, ultimos
+cuatro, alias y cuenta predeterminada; la operacion vuelve a leer el chip y
+obtiene seguridad nueva.
+
 ## TODO-DATA activos de la primera entrega
 
 TODO-DATA QA-WITHDRAWAL-900114-WIRE: obtener NWINT/PROXY205 del19/10/2026,

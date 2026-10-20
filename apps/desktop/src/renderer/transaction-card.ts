@@ -1,4 +1,5 @@
 import type { CardReaderSnapshot } from '../../../../packages/domain/src/card-reader';
+import type { SavedCardProfile } from '../../../../packages/domain/src/saved-card-profiles';
 
 import { matchingCardIdentity } from './card-reader-state';
 
@@ -8,6 +9,15 @@ export interface TransactionCard {
   readerName: string;
   panMasked: string | null;
   applicationLabel: string | null;
+  applicationId: string | null;
+}
+
+export function matchesSavedCardProfile(profile: SavedCardProfile, card: TransactionCard): boolean {
+  return (
+    profile.applicationId !== null &&
+    profile.applicationId === card.applicationId &&
+    (!profile.lastFour || card.panMasked?.endsWith(profile.lastFour) === true)
+  );
 }
 
 export function availableTransactionCard(
@@ -21,5 +31,6 @@ export function availableTransactionCard(
     readerName: identity.readerName,
     panMasked: identity.panMasked,
     applicationLabel: identity.applicationLabel,
+    applicationId: identity.applicationId,
   };
 }

@@ -37,6 +37,7 @@ const api: DesktopApi = Object.freeze<DesktopApi>({
     ipcRenderer.invoke(channels.generateVirtualCardFixtures, request),
   listSavedCardProfiles: () => ipcRenderer.invoke(channels.listSavedCardProfiles),
   saveCardProfile: (request) => ipcRenderer.invoke(channels.saveCardProfile, request),
+  updateCardProfile: (request) => ipcRenderer.invoke(channels.updateCardProfile, request),
   deleteCardProfile: (request) => ipcRenderer.invoke(channels.deleteCardProfile, request),
   setEnvironment: (environment) => ipcRenderer.invoke(channels.environment, { environment }),
   prepareTransaction: (request) => ipcRenderer.invoke(channels.prepare, request),
