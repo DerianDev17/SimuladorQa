@@ -163,7 +163,10 @@ prueba fisica verifica lectura de requisitos; no se declara una trx enviada.
 - CARD-IDENTITY-OTHER-PDOL: valores y evidencia aprobados para otras entradas.
 - CARD-IDENTITY-NO-PSE: AID/documentacion de tarjetas sin directorio de contacto.
 - CARD-IDENTITY-CONTACTLESS: secuencia/perfil especifico antes de extender lectura.
-- CARD-PROFILE-STORAGE: catalogo validado, proteccion y asociacion cuenta/entidad.
+- CARD-PROFILE-STORAGE: implementado inventario QA solo referencia: alias,
+  ultimos cuatro, AID y fecha. No almacena PAN completo, titular, vencimiento,
+  Track 2 ni datos de autenticacion. Falta asociacion aprobada cuenta/entidad;
+  el perfil guardado no habilita envio financiero.
 - CARD-TRANSACTION-SECURITY: generacion nueva PIN/HSM/EMV y reglas ATM; identidad
   leida no desbloquea envio financiero ni produccion. El generador VISA local
   crea referencias opacas de interfaz y no implementa credenciales de tarjeta,

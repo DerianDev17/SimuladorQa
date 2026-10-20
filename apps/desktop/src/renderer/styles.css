@@ -2377,6 +2377,117 @@ td {
   flex: 0 0 auto;
   font-size: 10px;
 }
+.saved-card-profiles {
+  padding: 24px;
+}
+.saved-card-profiles .panel-heading > div > p {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.saved-card-form {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 18px;
+}
+.saved-card-form label {
+  display: grid;
+  gap: 6px;
+  min-width: min(320px, 100%);
+  color: var(--muted);
+  font-size: 11px;
+}
+.saved-card-form input {
+  width: 100%;
+}
+.saved-card-hint,
+.saved-card-error,
+.saved-card-empty {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.saved-card-error {
+  color: #8b2920;
+}
+.saved-card-privacy {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 16px;
+  padding: 11px 13px;
+  border: 1px solid #cfe0f7;
+  border-radius: 9px;
+  background: #f5f8fe;
+  color: #456488;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.saved-card-privacy svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+.saved-card-privacy p {
+  margin: 0;
+}
+.saved-card-list {
+  margin-top: 18px;
+}
+.saved-card-list-heading,
+.saved-card-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.saved-card-list-heading {
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.saved-card-list-heading h3 {
+  font-size: 12px;
+}
+.saved-card-list-heading > span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.saved-card-row {
+  min-width: 0;
+  padding: 11px 4px;
+  border-top: 1px solid var(--border);
+}
+.saved-card-mark {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 32px;
+  flex: 0 0 auto;
+  border-radius: 6px;
+  background: #edf4ff;
+  color: #245eae;
+  font-size: 10px;
+  font-weight: 800;
+  font-style: italic;
+}
+.saved-card-row > div {
+  flex: 1;
+  min-width: 0;
+}
+.saved-card-row strong,
+.saved-card-row small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.saved-card-row strong {
+  font-size: 12px;
+}
+.saved-card-row small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 10px;
+}
 .card-reader-heading,
 .card-reader-refresh,
 .card-reader-status,

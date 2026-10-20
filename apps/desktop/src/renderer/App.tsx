@@ -648,7 +648,7 @@ export function App() {
           {page === 'cards' && snapshot?.environment && (
             <>
               <VirtualCardGeneratorView environment={snapshot.environment} />
-              <CardReaderView />
+              <CardReaderView environment={snapshot.environment} />
             </>
           )}
           {page === 'load' && (

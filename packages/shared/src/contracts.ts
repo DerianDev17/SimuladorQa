@@ -30,6 +30,11 @@ import type {
   VirtualCardFixture,
   VirtualCardGenerationRequest,
 } from '../../domain/src/virtual-card-fixtures';
+import type {
+  DeleteCardProfileRequest,
+  SaveCardProfileRequest,
+  SavedCardProfile,
+} from '../../domain/src/saved-card-profiles';
 
 import type {
   SaveSendConfigurationRequest,
@@ -55,6 +60,9 @@ export const channels = {
   reader: 'reader:inspect',
   readCardIdentity: 'reader:identity:read',
   generateVirtualCardFixtures: 'reader:virtual-fixtures:generate',
+  listSavedCardProfiles: 'reader:profiles:list',
+  saveCardProfile: 'reader:profiles:save',
+  deleteCardProfile: 'reader:profiles:delete',
   environment: 'app:environment',
   prepare: 'app:prepare',
   reviewDraft: 'transaction:draft:review',
@@ -175,6 +183,11 @@ export interface DesktopApi {
   generateVirtualCardFixtures(
     request: VirtualCardGenerationRequest,
   ): Promise<Result<VirtualCardFixture[]>>;
+  listSavedCardProfiles(): Promise<Result<readonly SavedCardProfile[]>>;
+  saveCardProfile(request: SaveCardProfileRequest): Promise<Result<readonly SavedCardProfile[]>>;
+  deleteCardProfile(
+    request: DeleteCardProfileRequest,
+  ): Promise<Result<readonly SavedCardProfile[]>>;
   setEnvironment(environment: Environment): Promise<Result<AppSnapshot>>;
   prepareTransaction(request: PreparationRequest): Promise<Result<Preparation>>;
   reviewDraft(request: DraftRequest): Promise<Result<ReviewedDraft>>;

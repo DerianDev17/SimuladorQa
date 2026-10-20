@@ -222,9 +222,11 @@ y ATR. El OMNIKEY 5422 conectado reporta tarjeta presente en ambas interfaces.
 Tarjetas permite leer manualmente la identidad EMV por contacto: PAN enmascarado,
 titular, vencimiento y aplicacion cuando el chip los expone. La tarjeta QA
 terminada en 2267 fue leida fisicamente con pais de terminal Ecuador (218)
-seleccionado por el usuario. Otros perfiles/PDOL, lectura contactless y generacion
-PIN/EMV transaccional siguen pendientes. Ver `docs/hardware/EMV_IDENTITY_READING.md`
-y `docs/implementation/CARD_READER_STATUS.md`.
+seleccionado por el usuario. En QA se puede guardar una referencia local con
+alias, ultimos cuatro, AID y fecha; no es un perfil financiero ni permite
+reutilizar el chip fuera del lector. Otros perfiles/PDOL, lectura contactless y
+generacion PIN/EMV transaccional siguen pendientes. Ver
+`docs/hardware/EMV_IDENTITY_READING.md` y `docs/implementation/CARD_READER_STATUS.md`.
 
 Requiere Windows y Node.js 22.20 o una LTS posterior compatible.
 

@@ -143,8 +143,9 @@ log correlacionado de PROXY205 y datos del proveedor; no se normaliza a 05.
   La asociacion al perfil de cuenta/entidad permanece pendiente.
 - CARD-TRANSACTION-SECURITY: PIN/HSM, datos EMV nuevos y campos dinamicos;
   no se inventan desde un ATR ni se atribuyen a una captura historica.
-- CARD-PROFILE-STORAGE: catalogo validado y cifrado antes de guardar datos
-  sensibles. Se conserva solo evidencia de presencia con metadatos tecnicos.
+- CARD-PROFILE-STORAGE: inventario de referencia implementado con alias,
+  ultimos cuatro, AID y fecha. Sigue pendiente cualquier perfil financiero o
+  asociacion cuenta/entidad; no se almacena PAN completo ni seguridad de pago.
 - CB205-PROXY-RETURN-5: falta respuesta original y log correlacionado de
   PROXY205 para UTRNNO 262812046562412550 / STAN 008103, y mapeo aprobado de
   codigo 5 en PID 82052. Bloquea corregir ese retorno; la comunicacion ATM con
@@ -165,6 +166,13 @@ Continuar sin tarjeta conserva un borrador parcial, con tarjeta pendiente.
 El selector consulta solo mientras Transacciones esta visible y elimina su
 seleccion/revision ante retirada, cambio de interfaz/lectura o error de consulta.
 Ver `docs/implementation/TRANSACTION_PREPARATION.md`.
+
+Actualizacion 2026-10-20: Tarjetas permite guardar un perfil QA de referencia
+desde una lectura vigente. Se persisten alias, ultimos cuatro, AID y fecha en
+`qa-card-profiles.json` dentro de userData. No se persisten titular, vencimiento,
+PAN completo, Track 2, PIN ni valores/criptogramas EMV; Main confirma que la
+misma lectura aun este activa al guardar. Los perfiles solo identifican tarjetas
+fisicas y no sustituyen el chip para una operacion nueva. Ver ADR-018.
 
 Las consultas automaticas de la vista esperan mientras hay una lectura manual
 pendiente y reanudan el siguiente ciclo disponible al terminar. Actualizar y

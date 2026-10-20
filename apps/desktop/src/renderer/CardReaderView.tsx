@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CardReaderSnapshot, ReaderDevice } from '../../../../packages/domain/src/card-reader';
+import type { Environment } from '../../../../packages/domain/src/index';
 import type { Result } from '../../../../packages/shared/src/contracts';
 import { DesktopClient } from './desktop-client';
 import { Icon } from './Icon';
 import { selectedReader, matchingCardIdentity } from './card-reader-state';
 import { availableTransactionCard } from './transaction-card';
 import type { TransactionCard } from './transaction-card';
+import { SavedCardProfilesView } from './SavedCardProfilesView';
 
 const stateLabels = {
   CARD_PRESENT: 'Tarjeta presente',
@@ -339,6 +341,7 @@ export function CardReaderPanel({
 }
 
 interface CardReaderViewProps {
+  environment?: Environment;
   compact?: boolean;
   transaction?: boolean;
   disabled?: boolean;
@@ -350,6 +353,7 @@ interface CardReaderViewProps {
 }
 
 export function CardReaderView({
+  environment,
   compact = false,
   transaction = false,
   disabled = false,
@@ -672,19 +676,24 @@ export function CardReaderView({
       </div>
     );
   return (
-    <CardReaderPanel
-      snapshot={snapshot}
-      error={error}
-      refreshing={refreshing}
-      selectedName={selectedName}
-      onSelect={setSelectedName}
-      onRefresh={() => refreshRef.current?.()}
-      compact={compact}
-      reading={reading}
-      readError={readError}
-      onRead={(name, applicationId) => void readChip(name, applicationId)}
-      countryCode={countryCode}
-      onCountryChange={setCountryCode}
-    />
+    <>
+      <CardReaderPanel
+        snapshot={snapshot}
+        error={error}
+        refreshing={refreshing}
+        selectedName={selectedName}
+        onSelect={setSelectedName}
+        onRefresh={() => refreshRef.current?.()}
+        compact={compact}
+        reading={reading}
+        readError={readError}
+        onRead={(name, applicationId) => void readChip(name, applicationId)}
+        countryCode={countryCode}
+        onCountryChange={setCountryCode}
+      />
+      {!compact && !transaction && environment && (
+        <SavedCardProfilesView environment={environment} identity={identity} />
+      )}
+    </>
   );
 }

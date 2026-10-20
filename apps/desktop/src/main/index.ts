@@ -50,6 +50,8 @@ import { WindowsCardSession } from './adapters/windows-card-session';
 import { CardIdentityService } from './card-identity-service';
 import { LoadTestService } from './load-test-service';
 import { VirtualCardGeneratorService } from './virtual-card-generator-service';
+import { SavedCardProfileService } from './saved-card-profile-service';
+import { FileSavedCardProfileStore } from './infrastructure/saved-card-profile-store';
 
 const development = process.argv.includes('--dev');
 // Vite serves development assets directly; avoid reusing a corrupt HTTP disk cache.
@@ -67,6 +69,7 @@ let withdrawalService: WithdrawalService | undefined;
 let withdrawalReceipts: WithdrawalReceiptService | undefined;
 let loadTestService: LoadTestService | undefined;
 let virtualCardGenerator: VirtualCardGeneratorService | undefined;
+let savedCardProfiles: SavedCardProfileService | undefined;
 let quitting = false;
 let developmentReload = false;
 let developmentReloadTimer: ReturnType<typeof setTimeout> | undefined;
@@ -213,6 +216,12 @@ void app
     const preferences = new FilePreferencesStore(join(app.getPath('userData'), 'preferences.json'));
     loadTestService = new LoadTestService(runtime, preferences);
     virtualCardGenerator = new VirtualCardGeneratorService(runtime, preferences);
+    savedCardProfiles = new SavedCardProfileService(
+      cardIdentity,
+      preferences,
+      new FileSavedCardProfileStore(join(app.getPath('userData'), 'qa-card-profiles.json')),
+      runtime,
+    );
     const sendConfiguration = new SendConfigurationService(
       new FileSendConfigurationStore(join(app.getPath('userData'), 'send-configuration.json')),
       networkEvidence,
@@ -371,6 +380,21 @@ void app
             return (
               virtualCardGenerator?.generate(payload) ??
               failure('SERVICE_UNAVAILABLE', 'El generador local no está disponible.')
+            );
+          case channels.listSavedCardProfiles:
+            return (
+              savedCardProfiles?.list(payload) ??
+              failure('SERVICE_UNAVAILABLE', 'El inventario local no está disponible.')
+            );
+          case channels.saveCardProfile:
+            return (
+              savedCardProfiles?.save(payload) ??
+              failure('SERVICE_UNAVAILABLE', 'El inventario local no está disponible.')
+            );
+          case channels.deleteCardProfile:
+            return (
+              savedCardProfiles?.delete(payload) ??
+              failure('SERVICE_UNAVAILABLE', 'El inventario local no está disponible.')
             );
           case channels.snapshot:
             return payload === undefined
