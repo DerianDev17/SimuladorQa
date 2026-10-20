@@ -650,7 +650,7 @@ antes de ejecutar desde ADQCLONE. Ver `docs/protocols/ISOBASEI_REVIEW.md` y
 - **TODO-DATA OBSERVERS**: faltan SQL/API y reglas de correlacion aprobadas de SmartVista/Core. Consulta Journal/Message aportada por el usuario e implementada para Mediator; no completa validacion de resultados ni SmartVista.
 - **TODO-DATA MEDIATOR-OBSERVER-ACCESS / MEDIATOR-JOURNAL-CORRELATION**: implementada consulta acotada PREPROD por TraceId a partir del SQL del usuario (2026-10-07). Falta cuenta de lectura, TLS con CA/nombre aprobado, mapeo entidad/canal y correlacion con ISO/runId/transactionId. La prueba segura actual devuelve TLS_ERROR, sin autenticar ni leer registros. Ver `docs/implementation/MEDIATOR_OBSERVER.md` y ADR-009; ADR-006 sigue limitado a metadatos.
 - **TODO-DATA MEDIATOR-SQL-TIMEZONE / MEDIATOR-MESSAGE-PROJECTION**: confirmar zona de fechas SQL y aprobar allowlist de valores XML visibles. La consulta conserva hora SQL sin inferir UTC y protege todos los valores XML.
-- **TODO-DATA LOAD-LIMITS**: faltan limites/ventanas autorizadas y gate funcional de los cinco flujos. Bloquea carga y estres.
+- **TODO-DATA LOAD-LIMITS / QA-CARD-SOURCE**: el usuario reporta un techo actual de 5 TPS para el Switch y solicita iniciar solo con consultas de saldo. La UI y Main rechazan propuestas superiores a 5 TPS, pero el dato es provisional y no valida capacidad ni aprobacion formal. La ejecucion sigue bloqueada: faltan ventana, concurrencia, maximo de operaciones/duracion, politica de parada, un pool o generador QA autorizado para PIN/EMV nuevos y el motor de carga. Ver [carga y estres](implementation/LOAD_TEST.md).
 
 La documentacion describe los flujos, pero no aporta evidencia suficiente para ejecutarlos.
 
@@ -785,7 +785,7 @@ Estos items no modifican el estado de las tramas ATM/PCAP pendientes del P0.
 
 ## P2 - Carga/estres
 
-- [ ] TPS permitido QA.
+- [ ] TPS permitido QA (usuario reporta 5 TPS; falta aprobacion/evidencia formal).
 - [ ] TPS permitido PREPROD.
 - [ ] Max conexiones.
 - [ ] Ventanas autorizadas.

@@ -18,6 +18,7 @@ import type {
 import type { CaptureEvidence } from '../../domain/src/capture-evidence';
 import type { SaveCaseRequest } from '../../domain/src/saved-cases';
 import type { ObservationRequest, ObservationSearch } from '../../domain/src/observations';
+import type { LoadTestDraft, LoadTestPlan } from '../../domain/src/load-test';
 import type { NetworkEvidenceSnapshot } from '../../domain/src/network-evidence';
 import type { SwitchConnectionSnapshot } from '../../domain/src/switch-connection';
 import type {
@@ -72,6 +73,7 @@ export const channels = {
   saveCase: 'catalog:case:save',
   deleteCase: 'catalog:case:delete',
   observations: 'observations:search',
+  prepareLoadTest: 'load:plan:prepare',
 } as const;
 
 // Main -> Renderer only. These are not callable command channels.
@@ -176,6 +178,7 @@ export interface DesktopApi {
   saveCase(request: SaveCaseRequest): Promise<Result<CatalogSnapshot>>;
   deleteCase(request: DeleteRequest): Promise<Result<CatalogSnapshot>>;
   searchObservations(request: ObservationRequest): Promise<Result<ObservationSearch>>;
+  prepareLoadTest(request: LoadTestDraft): Promise<Result<LoadTestPlan>>;
 }
 
 export function failure(code: ErrorCode, message: string): Result<never> {

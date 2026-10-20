@@ -1038,6 +1038,116 @@ main {
   align-items: center;
   gap: 5px;
 }
+.load-test-view {
+  display: grid;
+  gap: 18px;
+}
+.load-test-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+.load-test-heading h1 {
+  font-size: 28px;
+  letter-spacing: -0.6px;
+}
+.load-test-heading p {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.load-test-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+  align-items: start;
+  gap: 18px;
+}
+.load-test-side {
+  display: grid;
+  gap: 18px;
+}
+.load-test-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.load-test-form label {
+  color: #607088;
+  font-size: 12px;
+  font-weight: 500;
+}
+.load-test-form input,
+.load-test-form select {
+  margin-top: 7px;
+  font-size: 12px;
+}
+.load-test-actions,
+.load-test-error {
+  grid-column: 1 / -1;
+}
+.load-test-actions {
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid #edf1f7;
+  padding-top: 16px;
+}
+.load-test-actions .primary {
+  min-width: 180px;
+}
+.load-test-hint {
+  display: block;
+  margin-top: 6px;
+  color: #607088;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.load-test-blocker {
+  margin-top: 0;
+}
+.load-test-no-send {
+  margin-top: 15px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.load-test-error {
+  color: #a64954;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.load-test-summary {
+  display: grid;
+  gap: 14px;
+}
+.load-test-summary dt {
+  margin-bottom: 5px;
+  color: #8796a9;
+  font-size: 11px;
+}
+.load-test-summary dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 1050px) {
+  .load-test-columns {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 650px) {
+  .load-test-form {
+    grid-template-columns: 1fr;
+  }
+  .load-test-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .load-test-actions .primary {
+    width: 100%;
+  }
+}
 .transaction-layout {
   display: grid;
   grid-template-columns: 1fr 1fr;

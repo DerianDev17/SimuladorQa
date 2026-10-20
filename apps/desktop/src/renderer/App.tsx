@@ -15,6 +15,9 @@ import { CardReaderView } from './CardReaderView';
 import { SwitchConnectionView, connectionTitle, useSwitchConnection } from './SwitchConnectionView';
 import type { IconName } from './Icon';
 import type { AtmSelection } from './transaction-setup';
+import { LoadTestView } from './LoadTestView';
+import type { LoadTestDraft } from '../../../../packages/domain/src/load-test';
+import type { LoadTestPlan } from '../../../../packages/domain/src/load-test';
 
 const navigation: { id: string; label: string; icon: IconName; group: string }[] = [
   { id: 'dashboard', label: 'Inicio', icon: 'dashboard', group: 'ESTACIÓN DE PRUEBAS' },
@@ -355,7 +358,7 @@ export function App() {
               </button>
             </div>
           )}
-          {page !== 'transactions' && (
+          {page !== 'transactions' && page !== 'load' && (
             <div className="page-heading">
               <div>
                 <h1>{page === 'dashboard' ? 'Inicio' : current?.label}</h1>
@@ -643,23 +646,15 @@ export function App() {
 
           {page === 'cards' && <CardReaderView />}
           {page === 'load' && (
-            <section className="panel">
-              <div className="empty-state">
-                <span className="empty-icon">
-                  <Icon name={current?.icon ?? 'dashboard'} size={36} />
-                </span>
-                <span className="eyebrow">GATE FUNCIONAL</span>
-                <h2>Primero, valida los flujos funcionales</h2>
-                <p>
-                  La carga requiere que los cinco flujos MVP pasen pruebas deterministas y que
-                  existan límites autorizados por ambiente.
-                </p>
-                <button className="primary" onClick={() => setPage('settings')}>
-                  Ver requisitos pendientes
-                  <Icon name="arrow" size={16} />
-                </button>
-              </div>
-            </section>
+            <LoadTestView
+              key={environment ?? 'unavailable'}
+              environment={environment}
+              atms={catalog?.atms ?? []}
+              disabled={busy || catalogBusy || transactionBusy || !snapshot}
+              onPrepare={(request: LoadTestDraft) =>
+                client.call<LoadTestPlan>((api) => api.prepareLoadTest(request))
+              }
+            />
           )}
 
           <footer className="main-footer">

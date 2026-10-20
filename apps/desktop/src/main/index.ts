@@ -48,6 +48,7 @@ import { SimulatedCardReader } from './adapters/simulated-card-reader';
 import { QaSwitchConnection } from './adapters/qa-switch-connection';
 import { WindowsCardSession } from './adapters/windows-card-session';
 import { CardIdentityService } from './card-identity-service';
+import { LoadTestService } from './load-test-service';
 
 const development = process.argv.includes('--dev');
 // Vite serves development assets directly; avoid reusing a corrupt HTTP disk cache.
@@ -63,6 +64,7 @@ let cardIdentity: CardIdentityService | undefined;
 let balanceService: BalanceInquiryService | undefined;
 let withdrawalService: WithdrawalService | undefined;
 let withdrawalReceipts: WithdrawalReceiptService | undefined;
+let loadTestService: LoadTestService | undefined;
 let quitting = false;
 let developmentReload = false;
 let developmentReloadTimer: ReturnType<typeof setTimeout> | undefined;
@@ -206,6 +208,8 @@ void app
       uuid: randomUUID,
       now: () => new Date().toISOString(),
     };
+    const preferences = new FilePreferencesStore(join(app.getPath('userData'), 'preferences.json'));
+    loadTestService = new LoadTestService(runtime, preferences);
     const sendConfiguration = new SendConfigurationService(
       new FileSendConfigurationStore(join(app.getPath('userData'), 'send-configuration.json')),
       networkEvidence,
@@ -307,7 +311,7 @@ void app
       withdrawalContexts,
     );
     const application = new DesktopApplication(
-      new FilePreferencesStore(join(app.getPath('userData'), 'preferences.json')),
+      preferences,
       runtime,
       catalogs,
       new CmsV36Catalog(),
@@ -410,6 +414,11 @@ void app
             return application.getBalanceHistory(payload);
           case channels.observations:
             return application.searchObservations(payload);
+          case channels.prepareLoadTest:
+            return (
+              loadTestService?.prepare(payload) ??
+              failure('SERVICE_UNAVAILABLE', 'El preparador de carga no está disponible.')
+            );
           case channels.catalog:
             return application.catalog('list', payload);
           case channels.saveEntity:
