@@ -19,6 +19,17 @@ export interface AtmValues {
   acquirerId: string;
   active: boolean;
 }
+// Cloning is administrative only. Terminal identity and acquiring data require
+// evidence for the new ATM; executable ISO, keys and STAN pools live in Main.
+export function cloneAtmDraft(source: AtmProfile): AtmValues {
+  return {
+    alias: '',
+    entityId: source.entityId,
+    terminalId: '',
+    acquirerId: '',
+    active: source.active,
+  };
+}
 export interface CatalogRecord {
   id: string;
   revision: number;

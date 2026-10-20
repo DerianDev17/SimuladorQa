@@ -45,6 +45,11 @@ disponible cuando llega su respuesta, incluso si termina en timeout.
 
 ## Alcance pendiente
 
+Ahora se puede **Clonar** un ATM del catálogo. Se copia únicamente su entidad
+administrativa; alias, Terminal ID y Acquirer ID quedan vacíos para completarlos
+con evidencia del nuevo cajero. El UUID y la revisión se crean al guardar. La
+clonación no copia clave, campos ISO ni reservas STAN y no habilita el envío.
+
 Guardar un perfil **DRAFT** no valida los campos ISO ni habilita envío. Transacciones
 permite seleccionar ATM y entidad activos del ambiente y revalida su revisión desde Main.
 Si no hay perfiles, **Crear entidad/Crear ATM** abre directamente el formulario. Guardar

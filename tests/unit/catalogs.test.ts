@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   catalogLimits,
+  cloneAtmDraft,
   parseAtmValues,
   parseDeleteRequest,
   parseEntityValues,
@@ -21,6 +22,26 @@ const atm = {
 };
 
 describe('validación de catálogos', () => {
+  it('clona solo la entidad administrativa y exige identidad nueva', () => {
+    const source = {
+      ...atm,
+      id,
+      revision: 1,
+      status: 'DRAFT' as const,
+      environment: 'QA' as const,
+      createdAt: '2026-10-06T12:00:00.000Z',
+      updatedAt: '2026-10-06T12:00:00.000Z',
+    };
+    const draft = cloneAtmDraft(source);
+    expect(draft).toEqual({
+      alias: '',
+      entityId: id,
+      terminalId: '',
+      acquirerId: '',
+      active: true,
+    });
+    expect(parseAtmValues(draft)).toBeUndefined();
+  });
   it('admite campos documentados y solo elimina espacios de los extremos', () => {
     expect(parseEntityValues(entity)).toEqual({ ...entity, code: 'TEST', name: 'Test Entity' });
     expect(parseAtmValues(atm)).toEqual({

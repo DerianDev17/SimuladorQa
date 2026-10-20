@@ -1558,6 +1558,26 @@ async function createTestAtm(window: Page, alias: string) {
   await expect(window.getByRole('button', { name: `Editar ${alias}`, exact: true })).toBeVisible();
 }
 
+test('clonación ATM exige nueva identidad y conserva el origen', async () => {
+  const window = await launch();
+  await createTestEntity(window);
+  await createTestAtm(window, 'ATM de origen');
+  await window.getByRole('button', { name: 'Clonar ATM de origen' }).click();
+  await expect(window.getByLabel('Alias ATM')).toHaveValue('');
+  await expect(window.getByLabel('Terminal ID', { exact: true })).toHaveValue('');
+  await expect(window.getByLabel('Acquirer ID', { exact: true })).toHaveValue('');
+  await expect(window.getByLabel('Entidad del ATM')).not.toHaveValue('');
+  await window.getByLabel('Alias ATM').fill('ATM clonado');
+  await window.getByLabel('Terminal ID', { exact: true }).fill('Test-Terminal');
+  await window.getByLabel('Acquirer ID', { exact: true }).fill('Test-Acquirer-2');
+  await window.getByRole('button', { name: 'Guardar borrador' }).click();
+  await expect(window.getByRole('alert')).toContainText('Terminal ID');
+  await window.getByLabel('Terminal ID', { exact: true }).fill('Test-Terminal-2');
+  await window.getByRole('button', { name: 'Guardar borrador' }).click();
+  await expect(window.getByRole('button', { name: 'Editar ATM de origen' })).toBeVisible();
+  await expect(window.getByRole('button', { name: 'Editar ATM clonado' })).toBeVisible();
+});
+
 test('casos locales: validación, reinicio, carga, separación de ambientes y eliminación', async () => {
   let window = await launch();
   await createTestEntity(window);

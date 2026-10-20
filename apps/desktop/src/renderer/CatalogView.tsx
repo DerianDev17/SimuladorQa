@@ -6,6 +6,7 @@ import {
   parseAtmValues,
   parseEntityValues,
   isRestrictedCatalogText,
+  cloneAtmDraft,
 } from '../../../../packages/domain/src/catalogs';
 import type {
   AtmProfile,
@@ -142,26 +143,28 @@ export function CatalogView({
   const totalPages = Math.max(1, Math.ceil(rows.length / 15));
   const currentPage = Math.min(page, totalPages - 1);
 
-  function edit(item?: Entity | AtmProfile) {
+  function edit(item?: Entity | AtmProfile, clone = false) {
     setNotice('');
     setFormError('');
     const next: Editor = {
-      id: item?.id ?? null,
-      revision: item?.revision ?? null,
+      id: clone ? null : (item?.id ?? null),
+      revision: clone ? null : (item?.revision ?? null),
       entity:
         item && 'name' in item
           ? { code: item.code, name: item.name, networkType: item.networkType, active: item.active }
           : { ...blankEntity },
       atm:
-        item && 'alias' in item
-          ? {
-              alias: item.alias,
-              entityId: item.entityId,
-              terminalId: item.terminalId,
-              acquirerId: item.acquirerId,
-              active: item.active,
-            }
-          : { ...blankAtm },
+        item && 'alias' in item && clone
+          ? cloneAtmDraft(item)
+          : item && 'alias' in item
+            ? {
+                alias: item.alias,
+                entityId: item.entityId,
+                terminalId: item.terminalId,
+                acquirerId: item.acquirerId,
+                active: item.active,
+              }
+            : { ...blankAtm },
     };
     baseline.current = next;
     setEditor(next);
@@ -445,7 +448,11 @@ export function CatalogView({
                 {formError}
               </p>
             )}
-            <p className="form-note">Guarda o cancela antes de salir.</p>
+            <p className="form-note">
+              {entitiesView
+                ? 'Guarda o cancela antes de salir.'
+                : 'Este registro es administrativo. La ejecución QA requiere una vinculación privada propia, secuencias exclusivas y validación de conectividad; guardar o clonar no habilita transacciones.'}
+            </p>
             <details className="inline-details">
               <summary>Detalles del perfil</summary>
               <p className="form-note">
@@ -586,6 +593,15 @@ export function CatalogView({
                           >
                             Editar
                           </button>
+                          {'alias' in item && (
+                            <button
+                              disabled={blocked || Boolean(editor)}
+                              onClick={() => edit(item, true)}
+                              aria-label={`Clonar ${item.alias}`}
+                            >
+                              Clonar
+                            </button>
+                          )}
                           <button
                             className="danger-text"
                             disabled={blocked || Boolean(editor)}
