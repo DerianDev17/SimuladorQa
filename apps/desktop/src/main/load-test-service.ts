@@ -41,7 +41,7 @@ export class LoadTestService {
           {
             id: 'QA_CARD_SOURCE_NOT_READY',
             label:
-              'No hay un pool o generador de tarjetas QA autorizado para producir PIN/EMV nuevos en cada consulta.',
+              'El pool virtual QA está autorizado, pero falta integrar el proveedor que genere PIN/EMV nuevos por consulta.',
           },
           {
             id: 'LOAD_EXECUTOR_NOT_IMPLEMENTED',

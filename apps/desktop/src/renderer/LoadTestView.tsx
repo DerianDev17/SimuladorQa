@@ -259,8 +259,8 @@ export function LoadTestView({ environment, atms, disabled, onPrepare }: LoadTes
               <strong>La ejecución real todavía está bloqueada</strong>
               <p>
                 El servicio financiero actual procesa una operación a la vez y exige PIN y EMV
-                nuevos por consulta. No hay un pool de tarjetas virtuales QA ni un motor que genere
-                esas operaciones de forma segura.
+                nuevos por consulta. El pool virtual QA está autorizado, pero todavía no está
+                integrado; tampoco hay un motor de carga conectado a ese proveedor.
               </p>
             </div>
             <p className="load-test-no-send">

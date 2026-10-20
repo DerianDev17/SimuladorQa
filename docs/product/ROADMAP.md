@@ -29,7 +29,7 @@
 - TPS configurable con tope local actual de 5 TPS para la primera campaña QA.
 - Single ATM / multi ATM.
 - Metricas p50/p90/p95/p99.
-- Preparador QA de consultas de saldo con techo local provisional de 5 TPS; envio bloqueado hasta contar con fuente de tarjetas/seguridad QA, limites de corrida y motor de carga. Ver `../implementation/LOAD_TEST.md`.
+- Preparador QA de consultas de saldo con techo local provisional de 5 TPS; envio bloqueado hasta integrar el pool virtual autorizado, definir limites de corrida y construir el motor de carga. Referencias VISA opacas generadas localmente solo cubren pruebas de interfaz. Ver `../implementation/LOAD_TEST.md`.
 
 ## Fase 4 - Operacion distribuida
 - Control Plane.

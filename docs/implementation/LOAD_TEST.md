@@ -22,18 +22,19 @@ un tope de 5 TPS, siguen pendientes una ventana autorizada, concurrencia,
 cantidad maxima y duracion maxima. La pantalla todavia no tiene endpoint de
 ejecucion de carga.
 
-El flujo transaccional existente admite una sola operacion activa y requiere
-tarjeta fisica leida, PIN y EMV nuevos por consulta. El catalogo no guarda
-perfiles de tarjeta virtual y no existe un generador de PIN/EMV QA para carga.
-Por eso no se puede producir 5 TPS con el lector actual, abrir varias consultas
-contra la misma sesion ni repetir tramas/capturas; el Switch puede rechazar los
-datos dinamicos repetidos o invalidos. No se reutilizan PAN, PIN Block, ARQC ni
-tramas capturadas como estrategia de carga.
+El usuario confirma que existe un pool virtual QA autorizado. La pantalla
+Tarjetas ahora genera referencias VISA ficticias para validaciones visuales
+locales; no contiene PAN, PIN ni EMV y no sirve como pool financiero. Aun falta
+la interfaz aprobada del pool real: el proveedor transaccional activo requiere
+una tarjeta con PIN y EMV nuevos por consulta, y el servicio admite una sola
+operacion activa. No se puede producir 5 TPS con el lector actual ni abrir
+varias consultas contra la misma sesion. No se reutilizan PAN, PIN Block, ARQC
+ni tramas capturadas como estrategia de carga.
 
-Antes de enviar debe existir una fuente de perfiles QA y un mecanismo aprobado
-por el equipo del Switch/Core para producir datos de tarjeta y seguridad validos
-para cada consulta. Tambien se deben confirmar concurrencia, cantidad/duracion,
-ventana, politica de parada y suficientes secuencias QA no recicladas.
+Antes de enviar debe conocerse la interfaz aprobada del pool y confirmar que
+puede suministrar datos de tarjeta de prueba y PIN/EMV dinamicos nuevos para cada
+consulta. Faltan tambien concurrencia, cantidad/duracion, ventana, politica de
+parada y suficientes secuencias QA no recicladas.
 
 El futuro ejecutor requiere coordinador en Main y workers fuera del Renderer,
 limitador de tasa que nunca exceda 5 TPS, rampa controlada, backpressure,
