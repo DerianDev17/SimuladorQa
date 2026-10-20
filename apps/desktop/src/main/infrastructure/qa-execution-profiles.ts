@@ -271,6 +271,12 @@ export function parseQaExecutionProfileFile(input: unknown): {
     new Set(profiles.map((row) => row.terminalId)).size !== profiles.length
   )
     throw Error('QA_PROFILE_INVALID');
+  // STAN and the derived RRN are shared by this QA origin. A sequence may
+  // belong to only one terminal's remaining reservation pool.
+  const reserved = (input.profiles as Record<string, unknown>[]).flatMap(
+    (row) => row.reservedSequences as number[],
+  );
+  if (new Set(reserved).size !== reserved.length) throw Error('QA_PROFILE_INVALID');
   return { file: { version: 1, profiles: input.profiles as Record<string, unknown>[] }, profiles };
 }
 

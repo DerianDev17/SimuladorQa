@@ -71,4 +71,15 @@ describe('perfiles aprobados de ejecucion QA', () => {
     input.profiles.push(structuredClone(row));
     expect(() => parseQaExecutionProfileFile(input)).toThrow('QA_PROFILE_INVALID');
   });
+  it('rechaza reservas STAN compartidas entre cajeros distintos', () => {
+    const { input, row } = qaExecutionFixture();
+    const other = structuredClone(row);
+    other.id = '9a0d41b3-9800-48af-8b3e-f76046cf345c';
+    other.atmId = '988b7f37-8ac7-4bb7-ac79-fdd09ce53fb5';
+    other.terminalId = 'ATM99999';
+    input.profiles.push(other);
+    expect(() => parseQaExecutionProfileFile(input)).toThrow('QA_PROFILE_INVALID');
+    other.reservedSequences = [654321];
+    expect(parseQaExecutionProfileFile(input).profiles).toHaveLength(2);
+  });
 });

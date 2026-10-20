@@ -1,5 +1,10 @@
 # Enviar una consulta nueva con PIN en QA
 
+Validación de perfiles múltiples (2026-10-20): el archivo privado rechaza
+reservas STAN solapadas entre ATM distintos. La asignación exclusiva histórica
+y entre estaciones sigue pendiente de contrato; esta comprobación cubre solo
+las reservas vigentes en el archivo local.
+
 Actualizacion ARQC 2026-10-16: SRVPIN 900108 confirma PIN/tarjeta OK y
 criptograma negado. QaEmvOperation ahora incluye 5F34 desde el chip en F55,
 incluso si el perfil guardado lo omite; el host no recibe F23 en ese recorrido
