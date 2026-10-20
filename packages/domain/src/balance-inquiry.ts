@@ -209,6 +209,17 @@ export function canStartAfterUnconfirmedBalance(execution: BalanceExecution): bo
   );
 }
 
+// A completed but unresolved withdrawal still blocks another withdrawal.
+// Its reference can leave the active form when the new operation is a balance
+// inquiry, which has an independent journal and no financial debit.
+export function canStartBalanceAfterUnconfirmedWithdrawal(execution: BalanceExecution): boolean {
+  return (
+    execution.environment === 'QA' &&
+    execution.finishedAt !== null &&
+    withdrawalBlocksNewExecution(execution)
+  );
+}
+
 export function parseBalanceContextRequest(value: unknown): BalanceContextRequest | undefined {
   if (
     !isRecord(value) ||

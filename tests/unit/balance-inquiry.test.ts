@@ -5,6 +5,8 @@ import {
   balanceDeliveryUncertain,
   balanceNotTransmitted,
   canStartAfterUnconfirmedBalance,
+  canStartBalanceAfterUnconfirmedWithdrawal,
+  withdrawalBlocksNewExecution,
 } from '../../packages/domain/src/balance-inquiry';
 import type { BalanceExecution, BalanceOutcome } from '../../packages/domain/src/balance-inquiry';
 import {
@@ -96,6 +98,25 @@ describe('reintento explícito según entrega financiera', () => {
     'no libera el formulario sin ejecución de saldo terminada y guardada: %s',
     (outcome) => expect(canStartAfterUnconfirmedBalance(result(outcome, true))).toBe(false),
   );
+  it('permite salir de un retiro terminado con RC 59 solo para iniciar saldo', () => {
+    const withdrawal: BalanceExecution = {
+      ...result('REQUIRES_REVIEW', true),
+      responseCode: '59',
+      correlation: { stan: '900125', rrn: '629200' + '900125', terminalId: 'ATM20521' },
+      withdrawal: {
+        transaction: 'WITHDRAWAL_APPROVED',
+        amount: '50.00',
+        account: 'SAVINGS',
+        currency: '840',
+      },
+    };
+    expect(withdrawalBlocksNewExecution(withdrawal)).toBe(true);
+    expect(canStartBalanceAfterUnconfirmedWithdrawal(withdrawal)).toBe(true);
+    expect(canStartBalanceAfterUnconfirmedWithdrawal({ ...withdrawal, finishedAt: null })).toBe(
+      false,
+    );
+    expect(canStartBalanceAfterUnconfirmedWithdrawal(result('REQUIRES_REVIEW', true))).toBe(false);
+  });
 });
 
 describe('reglas de consulta CB provenientes del módulo ATM', () => {

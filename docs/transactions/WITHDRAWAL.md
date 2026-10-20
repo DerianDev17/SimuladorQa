@@ -282,6 +282,12 @@ Evidencia local sanitizada: artifacts/qa-withdrawal-readiness-20261016.json.
   no activa ese bloqueo; el registro original se conserva sin retransmitirlo.
 - La UI recupera por el canal de la operacion original aunque se edite el
   formulario. Muestra monto, referencia, resultado e historial de ambos flujos.
+- Un retiro terminado con respuesta aun sin clasificar (por ejemplo, RC 59 del
+  intento ATM20521/STAN 900125) conserva su referencia y bloquea otros retiros.
+  Si el operador elige Consulta de saldo, puede iniciar una nueva consulta con
+  otra lectura de tarjeta y PIN; el retiro original permanece en el diario y
+  puede consultarse en el historial. Esto no clasifica RC 59 ni confirma el
+  resultado financiero del retiro.
 
 Pruebas sinteticas de unidad, TCP loopback, archivo e IPC cubren aprobacion,
 entrada invalida, proveedor ausente, timeout, respuesta no correlacionada,

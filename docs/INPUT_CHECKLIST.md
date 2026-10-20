@@ -101,6 +101,11 @@ y un caso validado con correlacion; no se ha enviado al proveedor.
 QA-WITHDRAWAL-RESULT-RULES conserva como pendientes el tratamiento de
 rechazos/parciales y el cierre de conciliacion. Mientras tanto, el motor
 conserva esas respuestas como REQUIRES_REVIEW e impide duplicar retiros.
+TODO-DATA QA-WITHDRAWAL-RC59-900125: ATM20521/STAN 900125 recibio RC 59 en
+una respuesta correlacionada de retiro por USD 50. Falta el contrato aprobado
+que determine si es rechazo definitivo y como conciliarlo con Core. Hasta
+entonces el retiro queda por revisar y bloquea otro retiro; una consulta de
+saldo nueva puede iniciarse con lectura y PIN nuevos sin alterar ese registro.
 
 PROXY/SRVPIN recibidos 2026-10-16: el adjunto identifica 900108, pasa
 PIN/tarjeta, falla ARQC y registra 57; PROXY transmite `5 `. F55 omite 5F34

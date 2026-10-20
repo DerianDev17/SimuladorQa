@@ -496,7 +496,7 @@ test('consulta terminada sin respuesta permite iniciar un retiro nuevo conservan
   await expect(send).toBeDisabled();
   await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
   await window.getByLabel('Monto de prueba').fill('50.00');
-  await expect(result).toContainText('Operación: Consulta de saldo');
+  await expect(result).toContainText('Consulta de saldo · QA');
   await expect(send).toBeDisabled();
   await result.getByRole('button', { name: 'Nueva transacción', exact: true }).click();
   await expect(result).toContainText('Aún no hay resultado');
@@ -654,6 +654,103 @@ test('retiro 91 historico y actual finalizan sin paso de conciliacion y permiten
   expect(requests[0]).not.toMatchObject({ requestId: previous.requestId });
   await expect(window.locator('.session-activity tbody tr')).toHaveCount(2);
   await expect(window.locator('.session-activity')).toContainText('Retiro no aprobado');
+});
+
+test('retiro RC 59 conserva su bloqueo financiero y permite una consulta de saldo nueva', async () => {
+  test.setTimeout(60000);
+  const window = await prepareBalanceSubmission();
+  const previous: BalanceExecution = {
+    requestId: randomUUID(),
+    runId: randomUUID(),
+    transactionId: randomUUID(),
+    environment: 'QA',
+    atmId: await window.getByLabel('Perfil ATM', { exact: true }).inputValue(),
+    atmRevision: 1,
+    configurationRevision: 1,
+    cardReadId: transactionIdentity.readId,
+    startedAt: '2026-10-19T22:40:27.321Z',
+    finishedAt: '2026-10-19T22:40:40.333Z',
+    scenario: 'LOCAL',
+    outcome: 'REQUIRES_REVIEW',
+    frameGenerated: true,
+    transmissionAttempted: true,
+    bytesQueued: 451,
+    elapsedMs: 449,
+    correlation: { stan: '900125', rrn: '629200' + '900125', terminalId: 'ATM20521' },
+    responseCode: '59',
+    balances: [],
+    blockers: [],
+    withdrawal: {
+      transaction: 'WITHDRAWAL_APPROVED',
+      amount: '50.00',
+      currency: '840',
+      account: 'SAVINGS',
+    },
+  };
+  const journal = join(directory, 'withdrawal-executions.json');
+  await writeFile(journal, JSON.stringify({ version: 1, executions: [previous] }));
+  await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
+  const result = window.getByRole('region', { name: 'Resultado', exact: true });
+  const send = window.getByRole('button', { name: 'Enviar transacción', exact: true });
+  await expect(result).toContainText('Código de respuesta: 59');
+  await expect(send).toBeDisabled();
+  await expect(result.getByRole('button', { name: 'Nueva consulta de saldo' })).toHaveCount(0);
+
+  await window.getByLabel('Transacción', { exact: true }).selectOption('BALANCE');
+  await expect(result.getByRole('button', { name: 'Nueva consulta de saldo' })).toBeVisible();
+  await expect(send).toBeDisabled();
+  await app!.evaluate(({ ipcMain }) => {
+    const state = globalThis as typeof globalThis & { balanceAfter59Calls?: number };
+    state.balanceAfter59Calls = 0;
+    ipcMain.removeHandler('transaction:balance:execute');
+    ipcMain.handle('transaction:balance:execute', (_event, request) => {
+      state.balanceAfter59Calls!++;
+      return {
+        ok: true,
+        value: {
+          requestId: request.requestId,
+          runId: request.requestId,
+          transactionId: request.requestId,
+          environment: 'QA',
+          atmId: request.draft.atmId,
+          atmRevision: request.draft.atmRevision,
+          configurationRevision: request.configurationRevision,
+          cardReadId: request.cardReadId,
+          startedAt: '2026-10-19T22:41:00.000Z',
+          finishedAt: '2026-10-19T22:41:01.000Z',
+          scenario: 'LOCAL',
+          outcome: 'APPROVED',
+          frameGenerated: true,
+          transmissionAttempted: true,
+          bytesQueued: 451,
+          elapsedMs: 1000,
+          correlation: { stan: '900126', rrn: '629200' + '900126', terminalId: 'ATM20521' },
+          responseCode: '00',
+          balances: [],
+          blockers: [],
+        },
+      };
+    });
+  });
+  await result.getByRole('button', { name: 'Nueva consulta de saldo' }).click();
+  await expect(result).toContainText('Aún no hay resultado');
+  await expect(send).toBeDisabled();
+  await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
+  await expect(result).toContainText('Código de respuesta: 59');
+  await expect(send).toBeDisabled();
+  await window.getByLabel('Transacción', { exact: true }).selectOption('BALANCE');
+  await result.getByRole('button', { name: 'Nueva consulta de saldo' }).click();
+  await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await expect(send).toBeEnabled();
+  await send.click();
+  await expect(result).toContainText('Consulta aprobada');
+  expect(
+    await app!.evaluate(
+      () =>
+        (globalThis as typeof globalThis & { balanceAfter59Calls?: number }).balanceAfter59Calls,
+    ),
+  ).toBe(1);
+  expect(JSON.parse(await readFile(journal, 'utf8')).executions).toEqual([previous]);
 });
 
 test('retiro QA: monto, bloqueo real y recuperación conservan la operación original', async () => {
