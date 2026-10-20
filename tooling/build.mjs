@@ -6,6 +6,7 @@ export async function buildMain() {
   await buildElectron({
     entryPoints: {
       main: 'apps/desktop/src/main/index.ts',
+      'load-worker': 'apps/desktop/src/main/infrastructure/load-worker.ts',
       preload: 'apps/desktop/src/preload.ts',
       'catalog-worker': 'apps/desktop/src/main/infrastructure/catalog-worker.ts',
     },
@@ -29,7 +30,17 @@ export async function buildMain() {
     'qa-pin-entry.ps1',
     'qa-pin-cipher.ps1',
   ]) {
-    await copyFile(`apps/desktop/src/main/adapters/${name}`, `dist/${name}`);
+    const source = `apps/desktop/src/main/adapters/${name}`;
+    const destination = `dist/${name}`;
+    // PowerShell can hold a running script open on Windows. Leave identical
+    // runtime assets in place; changed assets must still copy successfully.
+    const contents = await readFile(source);
+    try {
+      if (contents.equals(await readFile(destination))) continue;
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    await copyFile(source, destination);
   }
 }
 

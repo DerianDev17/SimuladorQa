@@ -61,6 +61,9 @@ export class DesktopApplication {
   private environmentRevision = 0;
   private observationBusy = false;
   private balanceBusy: string | undefined;
+  isFinancialBusy(): boolean {
+    return this.balanceBusy !== undefined;
+  }
   constructor(
     private readonly store: PreferencesStore,
     private readonly identity: RuntimeIdentity,
@@ -544,6 +547,7 @@ export class DesktopApplication {
   async executeBalance(
     payload: unknown,
     operation: 'BALANCE' | 'WITHDRAWAL' = 'BALANCE',
+    execution?: { runId: string; signal: AbortSignal },
   ): Promise<Result<BalanceExecution>> {
     const request =
       operation === 'WITHDRAWAL'
@@ -592,6 +596,7 @@ export class DesktopApplication {
             current.value.target.endpoint.port === context.value.target.endpoint.port
           );
         },
+        execution,
       );
     } finally {
       this.balanceBusy = undefined;

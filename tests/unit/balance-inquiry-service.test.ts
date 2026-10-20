@@ -46,6 +46,32 @@ const provider = (): BalanceContextProvider => ({
   acquire: async (target) => balanceLease(target),
 });
 describe('orquestación de saldo sin inferir seguridad ni resultados', () => {
+  it('conserva el runId de carga y propaga cancelación sin enviar una consulta nueva', async () => {
+    const f = fixture(provider());
+    const target = balanceTarget();
+    const runId = randomUUID();
+    const abort = new AbortController();
+    const result = await f.service.execute(
+      balanceRequest(target),
+      target,
+      { connect: 100, response: 100 },
+      async () => true,
+      { runId, signal: abort.signal },
+    );
+    expect(result).toMatchObject({ ok: true, value: { runId, outcome: 'APPROVED' } });
+    expect(f.records()[0]?.runId).toBe(runId);
+    const aborted = new AbortController();
+    aborted.abort();
+    const second = await f.service.execute(
+      balanceRequest(target),
+      target,
+      { connect: 100, response: 100 },
+      async () => true,
+      { runId, signal: aborted.signal },
+    );
+    expect(second).toMatchObject({ ok: true, value: { runId, transmissionAttempted: false } });
+    expect(f.transport.exchange).toHaveBeenCalledTimes(1);
+  });
   it.each(Object.entries(balanceContextErrorLabels))(
     'conserva el diagnóstico público %s sin transporte y permite otra solicitud explícita',
     async (code, label) => {

@@ -23,6 +23,7 @@ export class BalanceTcpTransport implements BalanceTransport {
       balances: [],
     });
     if (
+      request.signal?.aborted ||
       request.environment !== 'QA' ||
       !isIPv4(request.endpoint.host) ||
       !Number.isInteger(request.endpoint.port) ||
@@ -91,6 +92,7 @@ export class BalanceTcpTransport implements BalanceTransport {
           responseCode,
           balances: structuredClone(balances),
         };
+        request.signal?.removeEventListener('abort', cancel);
         socket.destroy();
         wire.fill(0);
         try {
@@ -100,7 +102,13 @@ export class BalanceTcpTransport implements BalanceTransport {
         }
         resolve(result);
       };
+      const cancel = () => finish('TRANSPORT_ERROR');
       const connectTimer = setTimeout(() => finish('CONNECT_TIMEOUT'), request.connectDeadlineMs);
+      request.signal?.addEventListener('abort', cancel, { once: true });
+      if (request.signal?.aborted) {
+        cancel();
+        return;
+      }
       socket.once('connect', () => {
         if (ended) return;
         clearTimeout(connectTimer);

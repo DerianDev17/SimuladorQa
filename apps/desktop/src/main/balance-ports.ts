@@ -31,6 +31,7 @@ export interface BalanceContextProvider {
   acquire(target: BalanceTarget, signal: AbortSignal): Promise<BalanceContextLease>;
 }
 export interface BalanceExchangeRequest {
+  signal?: AbortSignal;
   environment: 'QA';
   endpoint: { host: string; port: number };
   wire: Uint8Array;

@@ -47,6 +47,23 @@ function request(port: number): BalanceExchangeRequest {
 }
 const framing = new CapturedVisaFraming();
 describe('consulta financiera TCP en loopback con datos sinteticos', () => {
+  it('detener carga cierra el socket y conserva evidencia de un envío sin respuesta', async () => {
+    const abort = new AbortController();
+    const port = await listen((peer) => peer.once('data', () => abort.abort()));
+    const input = { ...request(port), signal: abort.signal, responseDeadlineMs: 30000 };
+    const result = await new BalanceTcpTransport().exchange(input);
+    expect(result).toMatchObject({
+      outcome: 'TRANSPORT_ERROR',
+      transmissionAttempted: true,
+      responseCode: null,
+    });
+    expect(result.bytesQueued).toBeGreaterThan(0);
+    await vi.waitFor(() => expect(peers.size).toBe(0));
+    expect(await new BalanceTcpTransport().exchange(input)).toMatchObject({
+      transmissionAttempted: false,
+      bytesQueued: 0,
+    });
+  });
   it('correlaciona respuesta fragmentada y separa gestión de red sin responder 0810', async () => {
     let received = 0,
       connections = 0;

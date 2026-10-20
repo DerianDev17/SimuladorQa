@@ -136,6 +136,7 @@ export class BalanceInquiryService {
     target: BalanceTarget,
     deadlines: { connect: number; response: number },
     revalidate: () => Promise<boolean>,
+    execution?: { runId: string; signal: AbortSignal },
   ): Promise<Result<BalanceExecution>> {
     if (
       !(this.operation === 'WITHDRAWAL'
@@ -167,6 +168,7 @@ export class BalanceInquiryService {
       structuredClone(target),
       { ...deadlines },
       revalidate,
+      execution,
     );
     this.running = { id: request.requestId, fingerprint, result };
     void result
@@ -200,6 +202,7 @@ export class BalanceInquiryService {
     target: BalanceTarget,
     deadlines: { connect: number; response: number },
     revalidate: () => Promise<boolean>,
+    execution?: { runId: string; signal: AbortSignal },
   ): Promise<Result<BalanceExecution>> {
     let records: BalanceExecution[];
     try {
@@ -234,7 +237,7 @@ export class BalanceInquiryService {
       );
     const record: BalanceExecution = {
       requestId: request.requestId,
-      runId: this.identity.uuid(),
+      runId: execution?.runId ?? this.identity.uuid(),
       transactionId: this.identity.uuid(),
       environment: 'QA',
       atmId: request.draft.atmId!,
@@ -308,6 +311,9 @@ export class BalanceInquiryService {
     let wire: Buffer | undefined;
     let transportStarted = false;
     const abort = new AbortController();
+    const cancel = () => abort.abort();
+    execution?.signal.addEventListener('abort', cancel, { once: true });
+    if (execution?.signal.aborted) abort.abort();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const validateLease = async (): Promise<void> => {
       if (!lease?.validate) return;
@@ -394,6 +400,7 @@ export class BalanceInquiryService {
       await validateLease();
       if (Date.parse(lease.validUntil) <= Date.parse(this.identity.now()))
         throw Error('CONTEXT_CHANGED');
+      if (abort.signal.aborted) throw Error('CONTEXT_CHANGED');
       transportStarted = true;
       const result = await this.transport.exchange({
         environment: 'QA',
@@ -402,6 +409,7 @@ export class BalanceInquiryService {
         expected: built.metadata,
         connectDeadlineMs: deadlines.connect,
         responseDeadlineMs: deadlines.response,
+        signal: abort.signal,
         ...(record.reversal
           ? {
               reversal: {
@@ -513,6 +521,7 @@ export class BalanceInquiryService {
           ];
     } finally {
       clearTimeout(timer);
+      execution?.signal.removeEventListener('abort', cancel);
       abort.abort();
       wire?.fill(0);
       if (lease) release(lease);
