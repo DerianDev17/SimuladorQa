@@ -33,6 +33,8 @@ const api: DesktopApi = Object.freeze<DesktopApi>({
     };
   },
   readCardIdentity: (request) => ipcRenderer.invoke(channels.readCardIdentity, request),
+  generateVirtualCardFixtures: (request) =>
+    ipcRenderer.invoke(channels.generateVirtualCardFixtures, request),
   setEnvironment: (environment) => ipcRenderer.invoke(channels.environment, { environment }),
   prepareTransaction: (request) => ipcRenderer.invoke(channels.prepare, request),
   reviewDraft: (request) => ipcRenderer.invoke(channels.reviewDraft, request),

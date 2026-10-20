@@ -16,6 +16,7 @@ import { SwitchConnectionView, connectionTitle, useSwitchConnection } from './Sw
 import type { IconName } from './Icon';
 import type { AtmSelection } from './transaction-setup';
 import { LoadTestView } from './LoadTestView';
+import { VirtualCardGeneratorView } from './VirtualCardGeneratorView';
 import type { LoadTestDraft } from '../../../../packages/domain/src/load-test';
 import type { LoadTestPlan } from '../../../../packages/domain/src/load-test';
 
@@ -644,7 +645,12 @@ export function App() {
             />
           )}
 
-          {page === 'cards' && <CardReaderView />}
+          {page === 'cards' && snapshot?.environment && (
+            <>
+              <VirtualCardGeneratorView environment={snapshot.environment} />
+              <CardReaderView />
+            </>
+          )}
           {page === 'load' && (
             <LoadTestView
               key={environment ?? 'unavailable'}

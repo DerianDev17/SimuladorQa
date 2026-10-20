@@ -2,7 +2,7 @@
 
 Aplicacion desktop para QA orientada a simular transacciones ATM de la Red Coonecta, ejecutar pruebas funcionales, carga y estres, y correlacionar cada transaccion con SmartVista/SVFE y el Core correspondiente.
 
-La pantalla **Carga y estres** prepara borradores QA solo para consulta de saldo y aplica un techo local provisional de 5 TPS reportado por el usuario. Los planes siguen bloqueados: falta una fuente QA de tarjeta y seguridad para carga, definir concurrencia/ventana/cantidad y construir el ejecutor. Ver [alcance de carga](docs/implementation/LOAD_TEST.md).
+La pantalla **Carga y estres** prepara borradores QA solo para consulta de saldo y aplica un techo local provisional de 5 TPS reportado por el usuario. **Tarjetas** genera referencias VISA ficticias para pruebas de interfaz; los planes de carga siguen bloqueados hasta integrar el pool virtual QA autorizado, definir limites de corrida y construir el ejecutor. Ver [alcance de carga](docs/implementation/LOAD_TEST.md).
 
 ## Alcance inicial
 

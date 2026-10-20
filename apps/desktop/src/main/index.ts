@@ -49,6 +49,7 @@ import { QaSwitchConnection } from './adapters/qa-switch-connection';
 import { WindowsCardSession } from './adapters/windows-card-session';
 import { CardIdentityService } from './card-identity-service';
 import { LoadTestService } from './load-test-service';
+import { VirtualCardGeneratorService } from './virtual-card-generator-service';
 
 const development = process.argv.includes('--dev');
 // Vite serves development assets directly; avoid reusing a corrupt HTTP disk cache.
@@ -65,6 +66,7 @@ let balanceService: BalanceInquiryService | undefined;
 let withdrawalService: WithdrawalService | undefined;
 let withdrawalReceipts: WithdrawalReceiptService | undefined;
 let loadTestService: LoadTestService | undefined;
+let virtualCardGenerator: VirtualCardGeneratorService | undefined;
 let quitting = false;
 let developmentReload = false;
 let developmentReloadTimer: ReturnType<typeof setTimeout> | undefined;
@@ -210,6 +212,7 @@ void app
     };
     const preferences = new FilePreferencesStore(join(app.getPath('userData'), 'preferences.json'));
     loadTestService = new LoadTestService(runtime, preferences);
+    virtualCardGenerator = new VirtualCardGeneratorService(runtime, preferences);
     const sendConfiguration = new SendConfigurationService(
       new FileSendConfigurationStore(join(app.getPath('userData'), 'send-configuration.json')),
       networkEvidence,
@@ -364,6 +367,11 @@ void app
                   void publishReaderSnapshot();
                 })
               : failure('SERVICE_UNAVAILABLE', 'El lector no está configurado.');
+          case channels.generateVirtualCardFixtures:
+            return (
+              virtualCardGenerator?.generate(payload) ??
+              failure('SERVICE_UNAVAILABLE', 'El generador local no está disponible.')
+            );
           case channels.snapshot:
             return payload === undefined
               ? application.getSnapshot()

@@ -266,6 +266,15 @@ PC/SC como fuente de la tarjeta; aun no entrega un generador criptografico de
 tarjetas virtuales sin chip. El Router admite otro proveedor sin acoplarlo
 al hardware, pero las claves EMV y reglas de un perfil virtual no se inventan.
 
+Actualizacion 2026-10-20: Tarjetas puede generar referencias `QA-VISA-*`
+opacas para probar la interfaz local. No contienen PAN, PIN, vencimiento, CVV,
+PIN Block, ARQC ni APDU; no se conectan al proveedor financiero ni habilitan
+la carga. La existencia del pool virtual QA autorizado fue confirmada por el
+usuario; falta integrar su API/SDK/servicio y validar que suministre seguridad
+dinamica aprobada para cada consulta. No se afirma que estas referencias sean
+tarjetas del sandbox de Visa ni credenciales aceptadas por el Core. Decision:
+[ADR-017](../adr/ADR-017-LOCAL-VIRTUAL-CARD-FIXTURES.md).
+
 ## Recorrido y limites
 
 1. Validar ATM/revision/destino, perfil, secuencia disponible, acceso DPAPI a

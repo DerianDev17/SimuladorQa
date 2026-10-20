@@ -26,6 +26,10 @@ import type {
   CardIdentityRequest,
   CardReaderSnapshot,
 } from '../../domain/src/card-reader';
+import type {
+  VirtualCardFixture,
+  VirtualCardGenerationRequest,
+} from '../../domain/src/virtual-card-fixtures';
 
 import type {
   SaveSendConfigurationRequest,
@@ -50,6 +54,7 @@ export const channels = {
   disconnectSwitch: 'switch:connection:disconnect',
   reader: 'reader:inspect',
   readCardIdentity: 'reader:identity:read',
+  generateVirtualCardFixtures: 'reader:virtual-fixtures:generate',
   environment: 'app:environment',
   prepare: 'app:prepare',
   reviewDraft: 'transaction:draft:review',
@@ -167,6 +172,9 @@ export interface DesktopApi {
   getReaderSnapshot(): Promise<Result<CardReaderSnapshot>>;
   onReaderSnapshot(listener: (result: Result<CardReaderSnapshot>) => void): () => void;
   readCardIdentity(request: CardIdentityRequest): Promise<Result<CardIdentityReading>>;
+  generateVirtualCardFixtures(
+    request: VirtualCardGenerationRequest,
+  ): Promise<Result<VirtualCardFixture[]>>;
   setEnvironment(environment: Environment): Promise<Result<AppSnapshot>>;
   prepareTransaction(request: PreparationRequest): Promise<Result<Preparation>>;
   reviewDraft(request: DraftRequest): Promise<Result<ReviewedDraft>>;

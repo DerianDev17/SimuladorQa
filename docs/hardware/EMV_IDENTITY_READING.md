@@ -165,4 +165,6 @@ prueba fisica verifica lectura de requisitos; no se declara una trx enviada.
 - CARD-IDENTITY-CONTACTLESS: secuencia/perfil especifico antes de extender lectura.
 - CARD-PROFILE-STORAGE: catalogo validado, proteccion y asociacion cuenta/entidad.
 - CARD-TRANSACTION-SECURITY: generacion nueva PIN/HSM/EMV y reglas ATM; identidad
-  leida no desbloquea envio financiero ni produccion.
+  leida no desbloquea envio financiero ni produccion. El generador VISA local
+  crea referencias opacas de interfaz y no implementa credenciales de tarjeta,
+  chip virtual ni seguridad dinamica.

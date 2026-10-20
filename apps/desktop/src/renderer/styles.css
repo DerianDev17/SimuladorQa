@@ -2264,6 +2264,119 @@ td {
   overflow-wrap: anywhere;
   min-width: 0;
 }
+.virtual-card-generator {
+  padding: 24px;
+}
+.virtual-card-generator .panel-heading > div > p {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.virtual-card-generator-controls {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 18px;
+}
+.virtual-card-generator-controls label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.virtual-card-generator-controls select {
+  min-width: 160px;
+}
+.virtual-card-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 12px 14px;
+  border: 1px solid #cfe0f7;
+  border-radius: 9px;
+  background: #f5f8fe;
+  color: #456488;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.virtual-card-notice svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+.virtual-card-notice p {
+  margin: 0;
+}
+.virtual-card-empty,
+.virtual-card-error {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.virtual-card-error {
+  color: #8b2920;
+}
+.virtual-card-list {
+  margin-top: 18px;
+}
+.virtual-card-list-heading,
+.virtual-card-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.virtual-card-list-heading {
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.virtual-card-list-heading h3 {
+  font-size: 12px;
+}
+.virtual-card-list-heading > span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.virtual-card-row {
+  min-width: 0;
+  padding: 11px 12px;
+  border-top: 1px solid var(--border);
+}
+.virtual-card-brand {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 32px;
+  flex: 0 0 auto;
+  border-radius: 6px;
+  background: #edf4ff;
+  color: #245eae;
+  font-size: 10px;
+  font-weight: 800;
+  font-style: italic;
+}
+.virtual-card-row > div {
+  flex: 1;
+  min-width: 0;
+}
+.virtual-card-row strong,
+.virtual-card-row small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.virtual-card-row strong {
+  font-size: 12px;
+  letter-spacing: 0.4px;
+}
+.virtual-card-row small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.virtual-card-row .pill {
+  flex: 0 0 auto;
+  font-size: 10px;
+}
 .card-reader-heading,
 .card-reader-refresh,
 .card-reader-status,
