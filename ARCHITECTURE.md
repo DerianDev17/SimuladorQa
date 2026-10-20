@@ -114,5 +114,16 @@ BalanceContextProvider, BalanceTransport y BalanceJournal. El dominio conserva
 contratos/resultados; reglas del proveedor y wire permanecen en adaptadores.
 Renderer envia una referencia de tarjeta y clave de idempotencia, sin secretos.
 Se registra PENDING antes del write y no se repite una referencia tras reinicio.
-El proveedor QA real sigue pendiente; su ausencia bloquea el transporte antes
-de conectar. Ver ADR-012 y `docs/implementation/BALANCE_EXECUTION.md`.
+La fuente física QA genera contexto por operación; si falta un perfil válido,
+se bloquea el transporte antes de conectar. Ver ADR-012 y
+`docs/implementation/BALANCE_EXECUTION.md`.
+
+Carga física QA (2026-10-20): LoadRunService coordina un worker de ritmo y un
+PhysicalCardLoadDriver que reutiliza DesktopApplication/BalanceInquiryService.
+Cada operación obtiene lectura nueva y conserva el runId común. IPC expone solo
+inicio, estado y parada con metadatos validados. LoadPinSession conserva una copia
+acotada del PIN exclusivamente en Main por autorización explícita del usuario;
+se borra al cerrar la corrida. No cambia el protocolo ISO. Cancelación propagada
+al proveedor y socket, con resultado incierto después de transmitir. El diario
+financiero y qa-load-runs.json impiden reintentos y reanudación silenciosa.
+Ver docs/adr/ADR-020-PHYSICAL-CARD-LOAD.md.

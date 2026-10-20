@@ -4,9 +4,8 @@ import type { Result } from '../../../../packages/shared/src/contracts';
 import { failure } from '../../../../packages/shared/src/contracts';
 import type { PreferencesStore, RuntimeIdentity } from './ports';
 
-// The only executable operation would be balance inquiry, but the approved QA
-// card source and a load runner are not available. This service only prepares
-// a sanitized plan and intentionally has no financial transport method.
+// Legacy virtual-pool planner. Physical-card execution uses LoadRunService
+// and requires a fresh card reference, which this draft does not contain.
 export class LoadTestService {
   constructor(
     private readonly identity: RuntimeIdentity,
@@ -46,7 +45,7 @@ export class LoadTestService {
           {
             id: 'LOAD_EXECUTOR_NOT_IMPLEMENTED',
             label:
-              'La aplicación prepara el plan, pero todavía no dispone de un ejecutor de carga.',
+              'Este borrador virtual no es ejecutable. Usa Carga y estrés con una tarjeta física leída.',
           },
         ],
         frameGenerated: false,

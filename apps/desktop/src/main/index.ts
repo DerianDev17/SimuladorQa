@@ -1,3 +1,8 @@
+import { LoadPinSession } from './adapters/load-pin-session';
+import { LoadRunService } from './load-run-service';
+import { PhysicalCardLoadDriver } from './physical-card-load-driver';
+import { FileLoadRunStore } from './infrastructure/load-run-store';
+import { workerLoadScheduler } from './infrastructure/load-scheduler';
 import { app, BrowserWindow, dialog, ipcMain, session } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { hostname, userInfo } from 'node:os';
@@ -67,6 +72,7 @@ let cardIdentity: CardIdentityService | undefined;
 let balanceService: BalanceInquiryService | undefined;
 let withdrawalService: WithdrawalService | undefined;
 let withdrawalReceipts: WithdrawalReceiptService | undefined;
+let loadRun: LoadRunService | undefined;
 let loadTestService: LoadTestService | undefined;
 let virtualCardGenerator: VirtualCardGeneratorService | undefined;
 let savedCardProfiles: SavedCardProfileService | undefined;
@@ -78,6 +84,7 @@ function reloadDevelopmentWhenIdle(): void {
   if (!developmentReload || quitting) return;
   clearTimeout(developmentReloadTimer);
   if (
+    loadRun?.isBusy() ||
     balanceService?.isBusy() ||
     withdrawalService?.isBusy() ||
     cardIdentity?.isBusy() ||
@@ -189,6 +196,7 @@ void app
     });
     cardReader.subscribe((snapshot) => {
       cardIdentity?.observePresence(snapshot);
+      loadRun?.observeReaders(snapshot?.readers ?? null);
       if (snapshot) void publishReaderSnapshot();
       else {
         readerRevision++;
@@ -237,7 +245,7 @@ void app
     const executionProfiles = new FileQaExecutionProfiles(
       join(app.getPath('userData'), 'qa-execution-profiles.json'),
     );
-    const pinEntry = new WindowsQaPinEntry(join(__dirname, 'qa-pin-entry.ps1'));
+    const pinEntry = new LoadPinSession(new WindowsQaPinEntry(join(__dirname, 'qa-pin-entry.ps1')));
     const pinCipher = new WindowsQaPinCipher(
       join(__dirname, 'qa-pin-cipher.ps1'),
       join(app.getPath('userData'), 'qa-test-keys'),
@@ -305,8 +313,11 @@ void app
     const connection = new QaSwitchConnection();
     switchConnection = connection;
     const balanceTransport = new BalanceTcpTransport();
+    const balanceJournal = new FileBalanceJournal(
+      join(app.getPath('userData'), 'balance-executions.json'),
+    );
     balanceService = new BalanceInquiryService(
-      new FileBalanceJournal(join(app.getPath('userData'), 'balance-executions.json')),
+      balanceJournal,
       connection.manageTransport(balanceTransport),
       runtime,
       balanceContexts,
@@ -337,6 +348,19 @@ void app
       switchConnection,
       withdrawalService,
     );
+    loadRun = new LoadRunService(
+      runtime,
+      new PhysicalCardLoadDriver(
+        cardIdentity,
+        application,
+        pinEntry,
+        balanceJournal,
+        runtime,
+        () => void publishReaderSnapshot(),
+      ),
+      new FileLoadRunStore(join(app.getPath('userData'), 'qa-load-runs.json')),
+      workerLoadScheduler(join(__dirname, 'load-worker.cjs')),
+    );
     withdrawalReceipts = new WithdrawalReceiptService(
       (request) => application.getWithdrawalExecution(request),
       new ElectronReceiptPrinter(() => window),
@@ -356,7 +380,41 @@ void app
           )
         )
           return failure('FORBIDDEN', 'Solicitud no autorizada.');
+        if (
+          loadRun?.isBusy() &&
+          new Set<string>([
+            channels.environment,
+            channels.readCardIdentity,
+            channels.executeBalance,
+            channels.executeWithdrawal,
+            channels.connectSwitch,
+            channels.disconnectSwitch,
+            channels.saveSendConfiguration,
+            channels.saveAtm,
+            channels.deleteAtm,
+            channels.saveEntity,
+            channels.deleteEntity,
+          ]).has(channel)
+        )
+          return failure(
+            'CONFLICT',
+            'Detén la corrida de carga antes de cambiar el contexto o enviar otra operación.',
+          );
         switch (channel) {
+          case channels.startLoadRun:
+            if (
+              developmentReload ||
+              application.isFinancialBusy() ||
+              balanceService?.isBusy() ||
+              withdrawalService?.isBusy() ||
+              cardIdentity?.isBusy()
+            )
+              return failure('CONFLICT', 'Espera a que termine la operación actual.');
+            return loadRun!.start(payload);
+          case channels.loadRun:
+            return loadRun!.current(payload);
+          case channels.stopLoadRun:
+            return loadRun!.stop(payload);
           case channels.switchConnection:
             return application.switchConnectionAction('status', payload);
           case channels.connectSwitch:
@@ -502,6 +560,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', (event) => {
   clearTimeout(developmentReloadTimer);
+  loadRun?.close();
   switchConnection?.disconnect('APP_CLOSED');
   observer?.close();
   cardReader?.close();

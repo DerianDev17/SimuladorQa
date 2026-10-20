@@ -50,6 +50,9 @@ const api: DesktopApi = Object.freeze<DesktopApi>({
   saveCase: (request) => ipcRenderer.invoke(channels.saveCase, request),
   deleteCase: (request) => ipcRenderer.invoke(channels.deleteCase, request),
   searchObservations: (request) => ipcRenderer.invoke(channels.observations, request),
+  startLoadRun: (request) => ipcRenderer.invoke(channels.startLoadRun, request),
+  getLoadRun: () => ipcRenderer.invoke(channels.loadRun),
+  stopLoadRun: (request) => ipcRenderer.invoke(channels.stopLoadRun, request),
   prepareLoadTest: (request) => ipcRenderer.invoke(channels.prepareLoadTest, request),
 });
 contextBridge.exposeInMainWorld('desktop', api);

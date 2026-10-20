@@ -1,3 +1,4 @@
+import type { LoadRunRequest, LoadRunSnapshot } from '../../domain/src/load-run';
 import type {
   DataBlocker,
   Environment,
@@ -89,6 +90,9 @@ export const channels = {
   deleteCase: 'catalog:case:delete',
   observations: 'observations:search',
   prepareLoadTest: 'load:plan:prepare',
+  startLoadRun: 'load:run:start',
+  loadRun: 'load:run:status',
+  stopLoadRun: 'load:run:stop',
 } as const;
 
 // Main -> Renderer only. These are not callable command channels.
@@ -205,6 +209,9 @@ export interface DesktopApi {
   deleteCase(request: DeleteRequest): Promise<Result<CatalogSnapshot>>;
   searchObservations(request: ObservationRequest): Promise<Result<ObservationSearch>>;
   prepareLoadTest(request: LoadTestDraft): Promise<Result<LoadTestPlan>>;
+  startLoadRun(request: LoadRunRequest): Promise<Result<LoadRunSnapshot>>;
+  getLoadRun(): Promise<Result<LoadRunSnapshot | null>>;
+  stopLoadRun(request: { runId: string }): Promise<Result<LoadRunSnapshot | null>>;
 }
 
 export function failure(code: ErrorCode, message: string): Result<never> {

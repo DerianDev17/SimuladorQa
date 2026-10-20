@@ -17,8 +17,6 @@ import type { IconName } from './Icon';
 import type { AtmSelection } from './transaction-setup';
 import { LoadTestView } from './LoadTestView';
 import { VirtualCardGeneratorView } from './VirtualCardGeneratorView';
-import type { LoadTestDraft } from '../../../../packages/domain/src/load-test';
-import type { LoadTestPlan } from '../../../../packages/domain/src/load-test';
 
 const navigation: { id: string; label: string; icon: IconName; group: string }[] = [
   { id: 'dashboard', label: 'Inicio', icon: 'dashboard', group: 'ESTACIÓN DE PRUEBAS' },
@@ -660,9 +658,7 @@ export function App() {
               environment={environment}
               atms={catalog?.atms ?? []}
               disabled={busy || catalogBusy || transactionBusy || !snapshot}
-              onPrepare={(request: LoadTestDraft) =>
-                client.call<LoadTestPlan>((api) => api.prepareLoadTest(request))
-              }
+              onBusyChange={setTransactionBusy}
             />
           )}
 

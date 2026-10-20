@@ -29,6 +29,13 @@ contrato, el perfil solo guarda AID/etiqueta, CDOL tags/longitudes, ultimos
 cuatro, alias y cuenta predeterminada; la operacion vuelve a leer el chip y
 obtiene seguridad nueva.
 
+TODO-DATA LOAD-VIRTUAL-PROVIDER (2026-10-20): falta contrato del pool financiero
+virtual para concurrencia mayor a uno. El usuario autorizó PIN una vez por corrida
+para el piloto con tarjeta física. Ese piloto queda ejecutable en QA/LOCAL/saldo,
+con límites locales 5 TPS, 100 operaciones, 300 segundos y concurrencia 1;
+no requiere inventar el proveedor virtual. La capacidad real del switch sigue
+pendiente de medición; el desarrollo no inicia una corrida contra QA.
+
 ## TODO-DATA activos de la primera entrega
 
 TODO-DATA QA-WITHDRAWAL-900114-WIRE: obtener NWINT/PROXY205 del19/10/2026,

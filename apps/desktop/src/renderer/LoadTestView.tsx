@@ -1,216 +1,183 @@
-import { useState } from 'react';
-import type { FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import type { AtmProfile } from '../../../../packages/domain/src/catalogs';
 import type { Environment } from '../../../../packages/domain/src/index';
-import type {
-  LoadTestDraft,
-  LoadTestMode,
-  LoadTestPlan,
-} from '../../../../packages/domain/src/load-test';
-import { LOAD_TEST_LOCAL_MAX_TPS } from '../../../../packages/domain/src/load-test';
-import type { Result } from '../../../../packages/shared/src/contracts';
+import type { LoadTestDraft, LoadTestMode } from '../../../../packages/domain/src/load-test';
+import { loadRunMetrics, parseLoadRunRequest } from '../../../../packages/domain/src/load-run';
+import type { LoadRunSnapshot } from '../../../../packages/domain/src/load-run';
+import { DesktopClient } from './desktop-client';
+import { CardReaderView } from './CardReaderView';
+import type { TransactionCard } from './transaction-card';
+import { Icon } from './Icon';
 
 interface LoadTestViewProps {
   environment: Environment | undefined;
   atms: readonly AtmProfile[];
   disabled: boolean;
-  onPrepare(request: LoadTestDraft): Promise<Result<LoadTestPlan>>;
+  onBusyChange(busy: boolean): void;
 }
-
-interface DraftFields {
-  mode: LoadTestMode;
-  atmId: string;
-  maxTransactions: string;
-  targetTps: string;
-  concurrency: string;
-  rampUpSeconds: string;
-  durationSeconds: string;
-}
-
-const initialFields: DraftFields = {
-  mode: 'LOAD',
-  atmId: '',
-  maxTransactions: '',
-  targetTps: '',
-  concurrency: '',
-  rampUpSeconds: '0',
-  durationSeconds: '',
+const labels = {
+  RUNNING: 'En ejecución',
+  STOPPING: 'Deteniendo',
+  COMPLETED: 'Completada',
+  STOPPED: 'Detenida',
+  FAILED: 'Detenida por error',
+  INTERRUPTED: 'Interrumpida',
 };
-
-function positiveValue(value: string): number | undefined {
-  if (!value.trim()) return;
-  const number = Number(value);
-  return Number.isFinite(number) && number > 0 ? number : undefined;
-}
-
-function positiveInteger(value: string): number | undefined {
-  const number = positiveValue(value);
-  return number !== undefined && Number.isSafeInteger(number) ? number : undefined;
-}
-
-function nonNegativeInteger(value: string): number | undefined {
-  if (!value.trim()) return;
-  const number = Number(value);
-  return Number.isSafeInteger(number) && number >= 0 ? number : undefined;
-}
-
-export function LoadTestView({ environment, atms, disabled, onPrepare }: LoadTestViewProps) {
-  const availableAtms = atms.filter((atm) => atm.active && atm.environment === 'QA');
-  const [fields, setFields] = useState(initialFields);
-  const [plan, setPlan] = useState<LoadTestPlan>();
+export function LoadTestView({ environment, atms, disabled, onBusyChange }: LoadTestViewProps) {
+  const available = atms.filter((atm) => atm.active && atm.environment === 'QA');
+  const [atmId, setAtmId] = useState('');
+  const [mode, setMode] = useState<LoadTestMode>('LOAD');
+  const [count, setCount] = useState('10');
+  const [tps, setTps] = useState('5');
+  const [duration, setDuration] = useState('60');
+  const [ramp, setRamp] = useState('10');
+  const [card, setCard] = useState<TransactionCard>();
+  const [run, setRun] = useState<LoadRunSnapshot | null>(null);
   const [error, setError] = useState<string>();
-  const [preparing, setPreparing] = useState(false);
-  const selectedAtm = availableAtms.find((atm) => atm.id === fields.atmId);
-  const count = positiveInteger(fields.maxTransactions);
-  const targetTps = positiveValue(fields.targetTps);
-  const concurrency = positiveInteger(fields.concurrency);
-  const rampUpSeconds = nonNegativeInteger(fields.rampUpSeconds);
-  const durationSeconds = positiveInteger(fields.durationSeconds);
-  const isQa = environment === 'QA';
+  const [starting, setStarting] = useState(false);
+  const [statusReady, setStatusReady] = useState(false);
+  const [uncertain, setUncertain] = useState(false);
+  const active = !!run && ['RUNNING', 'STOPPING'].includes(run.state);
+  const locked = active || starting || uncertain;
+  const client = new DesktopClient(window.desktop);
+  const selected = available.find((atm) => atm.id === atmId);
+  const draft: LoadTestDraft = {
+    environment: 'QA',
+    operation: 'BALANCE',
+    mode,
+    atmId,
+    atmRevision: selected?.revision ?? 0,
+    maxTransactions: Number(count),
+    targetTps: Number(tps),
+    concurrency: 1,
+    rampUpSeconds: mode === 'STRESS' ? Number(ramp) : 0,
+    durationSeconds: Number(duration),
+  };
+  useEffect(() => {
+    if (!atmId && available.length === 1) setAtmId(available[0]!.id);
+  }, [atms, atmId]);
+  useEffect(() => {
+    onBusyChange(locked);
+    return () => onBusyChange(false);
+  }, [locked, onBusyChange]);
+  useEffect(() => {
+    let live = true;
+    let pending = false;
+    const refresh = async () => {
+      if (pending) return;
+      pending = true;
+      const result = await client.call((api) => api.getLoadRun());
+      pending = false;
+      if (!live) return;
+      setStatusReady(result.ok);
+      if (result.ok) setRun(result.value);
+      else setError(result.error.message);
+    };
+    void refresh();
+    const timer = setInterval(() => void refresh(), 1000);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, []);
   const valid =
-    isQa &&
-    !!selectedAtm &&
-    count !== undefined &&
-    targetTps !== undefined &&
-    targetTps <= LOAD_TEST_LOCAL_MAX_TPS &&
-    concurrency !== undefined &&
-    rampUpSeconds !== undefined &&
-    (fields.mode === 'LOAD' || rampUpSeconds > 0) &&
-    durationSeconds !== undefined;
-
-  function update<K extends keyof DraftFields>(key: K, value: DraftFields[K]) {
-    setFields((current) => ({ ...current, [key]: value }));
-    setPlan(undefined);
-    setError(undefined);
-  }
-
-  async function prepare(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (
-      !valid ||
-      !selectedAtm ||
-      count === undefined ||
-      targetTps === undefined ||
-      concurrency === undefined ||
-      rampUpSeconds === undefined ||
-      durationSeconds === undefined
-    )
-      return;
-    setPreparing(true);
-    setPlan(undefined);
-    setError(undefined);
-    const result = await onPrepare({
-      environment: 'QA',
-      operation: 'BALANCE',
-      atmId: selectedAtm.id,
-      atmRevision: selectedAtm.revision,
-      maxTransactions: count,
-      targetTps,
-      concurrency,
-      mode: fields.mode,
-      rampUpSeconds,
-      durationSeconds,
+    !!card &&
+    !!selected &&
+    !!parseLoadRunRequest({
+      requestId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+      cardReadId: card.readId,
+      draft,
     });
-    if (result.ok) setPlan(result.value);
-    else setError(result.error.message);
-    setPreparing(false);
+  async function start() {
+    if (!valid || !card || locked) return;
+    setStarting(true);
+    setError(undefined);
+    const result = await client.call(
+      (api) => api.startLoadRun({ requestId: crypto.randomUUID(), cardReadId: card.readId, draft }),
+      20000,
+    );
+    if (result.ok) {
+      setRun(result.value);
+      setCard(undefined);
+    } else {
+      setError(result.error.message);
+      if (result.error.code === 'TIMEOUT') setUncertain(true);
+    }
+    setStarting(false);
   }
-
+  async function stop() {
+    if (!run) return;
+    const result = await client.call((api) => api.stopLoadRun({ runId: run.runId }));
+    if (result.ok) {
+      setRun(result.value);
+      setUncertain(false);
+    } else setError(result.error.message);
+  }
+  const metrics = run ? loadRunMetrics(run) : null;
+  const latency = (value: number | null | undefined) =>
+    value == null ? '—' : `${Math.round(value)} ms`;
   return (
     <div className="load-test-view">
       <header className="load-test-heading">
-        <div>
-          <h1>Carga y estrés</h1>
-          <p>Prepara una corrida QA exclusivamente de consultas de saldo.</p>
-        </div>
-        <span className="pill amber">Solo planificación</span>
+        <h1>Carga y estrés</h1>
+        <span className="pill neutral">Saldo · QA · tarjeta física</span>
       </header>
-
       <div className="load-test-columns">
         <section className="panel">
           <div className="panel-heading">
-            <h2>Parámetros propuestos</h2>
-            <span className="pill">No persistidos</span>
+            <h2>Preparar prueba</h2>
+            <span className="pill neutral">Hasta 5 TPS</span>
           </div>
-          <form className="load-test-form" onSubmit={(event) => void prepare(event)}>
-            <label>
-              Tipo de corrida
-              <select
-                value={fields.mode}
-                onChange={(event) => update('mode', event.target.value as LoadTestMode)}
-                disabled={disabled || preparing}
-              >
-                <option value="LOAD">Carga sostenida</option>
-                <option value="STRESS">Estrés gradual</option>
-              </select>
-            </label>
+          <div className="load-test-form">
             <label>
               Perfil ATM QA
               <select
-                value={fields.atmId}
-                onChange={(event) => update('atmId', event.target.value)}
-                disabled={disabled || preparing || !isQa || !availableAtms.length}
+                aria-label="Perfil ATM QA"
+                value={atmId}
+                disabled={locked || disabled}
+                onChange={(event) => setAtmId(event.target.value)}
               >
                 <option value="">Selecciona un perfil</option>
-                {availableAtms.map((atm) => (
-                  <option key={atm.id} value={atm.id}>
+                {available.map((atm) => (
+                  <option value={atm.id} key={atm.id}>
                     {atm.alias} · {atm.terminalId}
                   </option>
                 ))}
               </select>
             </label>
-
+            <label>
+              Tipo de corrida
+              <select
+                aria-label="Tipo de corrida"
+                value={mode}
+                disabled={locked || disabled}
+                onChange={(event) => setMode(event.target.value as LoadTestMode)}
+              >
+                <option value="LOAD">Carga sostenida</option>
+                <option value="STRESS">Aumento gradual</option>
+              </select>
+            </label>
             <label>
               Máximo de operaciones
               <input
                 type="number"
                 min="1"
-                step="1"
-                value={fields.maxTransactions}
-                onChange={(event) => update('maxTransactions', event.target.value)}
-                disabled={disabled || preparing}
-                required
+                max="100"
+                value={count}
+                disabled={locked || disabled}
+                onChange={(event) => setCount(event.target.value)}
               />
             </label>
             <label>
               TPS objetivo
               <input
                 type="number"
-                min="0.001"
-                max={LOAD_TEST_LOCAL_MAX_TPS}
-                step="0.001"
-                value={fields.targetTps}
-                onChange={(event) => update('targetTps', event.target.value)}
-                disabled={disabled || preparing}
-                required
-              />
-              <small className="load-test-hint">
-                Tope local solicitado: {LOAD_TEST_LOCAL_MAX_TPS} TPS. No representa una medición ni
-                aprobación del Switch.
-              </small>
-            </label>
-            <label>
-              Concurrencia
-              <input
-                type="number"
-                min="1"
-                step="1"
-                value={fields.concurrency}
-                onChange={(event) => update('concurrency', event.target.value)}
-                disabled={disabled || preparing}
-                required
-              />
-            </label>
-            <label>
-              Aumento gradual (segundos)
-              <input
-                type="number"
-                min={fields.mode === 'STRESS' ? '1' : '0'}
-                step="1"
-                value={fields.rampUpSeconds}
-                onChange={(event) => update('rampUpSeconds', event.target.value)}
-                disabled={disabled || preparing}
-                required
+                min="0.1"
+                step="0.1"
+                max="5"
+                value={tps}
+                disabled={locked || disabled}
+                onChange={(event) => setTps(event.target.value)}
               />
             </label>
             <label>
@@ -218,96 +185,169 @@ export function LoadTestView({ environment, atms, disabled, onPrepare }: LoadTes
               <input
                 type="number"
                 min="1"
-                step="1"
-                value={fields.durationSeconds}
-                onChange={(event) => update('durationSeconds', event.target.value)}
-                disabled={disabled || preparing}
-                required
+                max="300"
+                value={duration}
+                disabled={locked || disabled}
+                onChange={(event) => setDuration(event.target.value)}
               />
             </label>
-
-            {!isQa && (
-              <p className="load-test-error" role="alert">
-                La planificación y las corridas financieras solo están disponibles para QA.
-              </p>
+            <label>
+              Concurrencia
+              <input value="1 · una tarjeta física" readOnly />
+            </label>
+            {mode === 'STRESS' && (
+              <label>
+                Aumento gradual (segundos)
+                <input
+                  type="number"
+                  min="1"
+                  max="299"
+                  value={ramp}
+                  disabled={locked || disabled}
+                  onChange={(event) => setRamp(event.target.value)}
+                />
+              </label>
             )}
-            {isQa && !availableAtms.length && (
-              <p className="load-test-error" role="status">
-                No hay perfiles ATM QA activos cargados.
-              </p>
+          </div>
+          <div className="load-card-source">
+            <h3>Tarjeta de la prueba</h3>
+            {!active && !starting ? (
+              <CardReaderView
+                environment="QA"
+                transaction
+                disabled={disabled || uncertain}
+                selectedReadId={card?.readId}
+                onUseCard={setCard}
+                onClearCard={() => setCard(undefined)}
+              />
+            ) : (
+              <p>Consultas con la tarjeta seleccionada. Mantenla insertada hasta terminar.</p>
             )}
-            {error && (
-              <p className="load-test-error" role="alert">
-                {error}
-              </p>
-            )}
-            <div className="load-test-actions">
-              <button type="submit" className="primary" disabled={disabled || preparing || !valid}>
-                {preparing ? 'Preparando…' : 'Preparar borrador'}
-              </button>
-            </div>
-          </form>
-        </section>
-
-        <aside className="load-test-side">
-          <section className="panel">
-            <div className="panel-heading">
-              <h2>Estado de ejecución</h2>
-              <span className="pill amber">Bloqueada</span>
-            </div>
-            <div className="preparation load-test-blocker">
-              <strong>La ejecución real todavía está bloqueada</strong>
-              <p>
-                El servicio financiero actual procesa una operación a la vez y exige PIN y EMV
-                nuevos por consulta. El pool virtual QA está autorizado, pero todavía no está
-                integrado; tampoco hay un motor de carga conectado a ese proveedor.
-              </p>
-            </div>
-            <p className="load-test-no-send">
-              Preparar un borrador no abre conexiones financieras, no solicita PIN y no genera
-              tramas. El tope de 5 TPS solo limita el borrador; faltan definir la ventana, la
-              concurrencia y el máximo de operaciones de la prueba.
+            <p className="load-test-hint">
+              Consulta de ahorros. El PIN se solicita una vez; cada consulta genera seguridad y
+              secuencia nuevas. El lector trabaja en serie: los TPS reales pueden ser inferiores al
+              objetivo.
             </p>
-          </section>
-
-          {plan && (
-            <section className="panel" aria-live="polite">
-              <div className="panel-heading">
-                <h2>Borrador preparado</h2>
-                <span className="pill amber">Bloqueada</span>
-              </div>
-              <dl className="load-test-summary">
-                <div>
-                  <dt>Referencia del plan</dt>
-                  <dd className="mono">{plan.planId}</dd>
-                </div>
-                <div>
-                  <dt>Operación y ATM</dt>
-                  <dd>Consulta de saldo · {selectedAtm?.alias ?? plan.draft.atmId}</dd>
-                </div>
-                <div>
-                  <dt>Alcance propuesto</dt>
-                  <dd>
-                    {plan.draft.mode === 'LOAD' ? 'Carga sostenida' : 'Estrés gradual'}
-                    {' · '}
-                    {plan.draft.maxTransactions} operaciones · {plan.draft.targetTps} TPS ·{' '}
-                    {plan.draft.concurrency} concurrentes · rampa {plan.draft.rampUpSeconds} s ·{' '}
-                    {plan.draft.durationSeconds} s
-                  </dd>
-                </div>
-              </dl>
-              {plan.blockers.map((blocker) => (
-                <p className="load-test-error" key={blocker.id}>
-                  {blocker.label}
-                </p>
-              ))}
-              <p className="load-test-no-send">
-                Envíos: {plan.transmissionAttempted ? 'sí' : 'ninguno'} · Tramas:{' '}
-                {plan.frameGenerated ? 'generadas' : 'ninguna'}
-              </p>
-            </section>
+          </div>
+          {environment !== 'QA' && <p role="alert">La ejecución está disponible solo en QA.</p>}
+          {error && (
+            <p className="saved-card-error" role="alert">
+              {error}
+            </p>
           )}
-        </aside>
+          {uncertain && (
+            <p role="alert">
+              No se confirmó el inicio. Revisa el estado y detén la corrida si aparece activa; no
+              repitas la solicitud.
+            </p>
+          )}
+          <div className="load-run-actions">
+            <button
+              className="primary"
+              disabled={!valid || disabled || locked || !statusReady || environment !== 'QA'}
+              onClick={() => void start()}
+            >
+              <Icon name="load" size={16} />
+              {starting ? 'Verificando…' : 'Iniciar prueba de saldo'}
+            </button>
+            {active && (
+              <button
+                className="secondary"
+                disabled={run.state === 'STOPPING'}
+                onClick={() => void stop()}
+              >
+                {run.state === 'STOPPING' ? 'Deteniendo…' : 'Detener prueba'}
+              </button>
+            )}
+          </div>
+          <small className="load-test-hint">
+            Se detiene al alcanzar cantidad o duración, retirar la tarjeta o recibir el primer
+            rechazo/error. Sin reintentos automáticos.
+          </small>
+        </section>
+        <section className="panel load-run-result" aria-label="Resultado de carga">
+          <div className="panel-heading">
+            <h2>{run ? 'Resultado de la corrida' : 'Estado de ejecución'}</h2>
+            <span className={`pill ${active ? 'amber' : 'neutral'}`}>
+              {run ? labels[run.state] : 'Sin iniciar'}
+            </span>
+          </div>
+          {run && metrics ? (
+            <>
+              <p role="status">
+                {active
+                  ? run.message
+                  : run.state === 'COMPLETED'
+                    ? 'Se alcanzó el límite de cantidad o duración.'
+                    : run.message}
+              </p>
+              <div className="load-metrics">
+                {[
+                  ['Enviadas', metrics.sent],
+                  ['Respuestas', metrics.received],
+                  ['Aprobadas', metrics.approved],
+                  ['Rechazadas', metrics.declined],
+                  ['Timeouts', metrics.timeouts],
+                  ['Errores', metrics.errors],
+                  ['TPS alcanzados', metrics.tps.toFixed(2)],
+                  ['En curso', run.active],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <span>{label}</span>
+                    <strong>{value}</strong>
+                  </div>
+                ))}
+              </div>
+              <p className="load-test-hint">
+                Latencia de respuestas: p50 {latency(metrics.p50)} · p95 {latency(metrics.p95)} ·
+                p99 {latency(metrics.p99)}
+              </p>
+              <details className="inline-details">
+                <summary>Detalle y correlación</summary>
+                <p>Run ID: {run.runId}</p>
+                <p>
+                  Objetivo: {run.draft.targetTps} TPS · {run.draft.maxTransactions} consultas ·{' '}
+                  {run.draft.durationSeconds} s
+                </p>
+                <p>
+                  Inicio: {new Date(run.startedAt).toLocaleString()} · transcurrido:{' '}
+                  {(run.elapsedMs / 1000).toFixed(1)} s
+                </p>
+                <p>
+                  Mín. {latency(metrics.min)} · Media {latency(metrics.avg)} · Máx.{' '}
+                  {latency(metrics.max)} · p90 {latency(metrics.p90)}
+                </p>
+                <div className="load-run-table">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>STAN</th>
+                        <th>Resultado</th>
+                        <th>RC</th>
+                        <th>Tiempo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {run.items.map((item) => (
+                        <tr key={item.requestId}>
+                          <td>{item.correlation?.stan ?? 'Sin envío'}</td>
+                          <td>{item.outcome}</td>
+                          <td>{item.responseCode ?? '—'}</td>
+                          <td>{latency(item.elapsedMs)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            </>
+          ) : (
+            <p className="load-test-hint">
+              Selecciona el ATM, lee tu tarjeta e inicia la prueba. Antes del primer envío se
+              verifican el perfil financiero, el cifrado y las secuencias disponibles.
+            </p>
+          )}
+        </section>
       </div>
     </div>
   );

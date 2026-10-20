@@ -1,48 +1,67 @@
-# Carga y estres
+# Carga y estrés de saldo en QA
 
-## Preparacion en modo bloqueado
+## Ejecutar el piloto con tarjeta física
 
-La pantalla permite definir un borrador QA para consultas de saldo y un perfil
-ATM. El operador indica cantidad, modo de carga sostenida o estres gradual, TPS
-objetivo, concurrencia, rampa y duracion. Main vuelve a validar el contrato.
-Retiros quedaron fuera del alcance inicial de esta pantalla.
+1. Abrir **Carga y estrés** en QA y seleccionar el ATM configurado para saldo.
+2. Mantener la tarjeta en el lector. Se puede elegir una referencia guardada,
+   pero hay que leer el chip antes de iniciar.
+3. Usar inicialmente 10 consultas, objetivo 5 TPS, 60 segundos y concurrencia 1.
+4. Pulsar **Iniciar prueba de saldo** e ingresar el PIN en el diálogo nativo.
+   El PIN se pide una vez por corrida, según autorización del usuario.
+5. Observar enviados, respuestas, aprobaciones, rechazos, errores, TPS reales
+   y percentiles. **Detener prueba** cancela el trabajo y cierra el socket.
 
-El usuario reporta que el Switch soporta como maximo 5 TPS por el momento. La UI
-y Main aplican 5 TPS como techo local: todo valor superior se rechaza. Este
-techo es provisional y no representa una aprobacion formal ni una medicion del
-Switch. El preparador genera un plan UUID en UTC con estado
-`BLOCKED_EXECUTION`; la propuesta no se persiste ni se publica. No solicita PIN,
-no consulta proveedores QA, no crea tramas y no abre sockets financieros. La
-vista descarta el plan temporal al editar la propuesta o salir de la pagina.
+La interfaz reemplaza el planificador bloqueado por un ejecutor físico
+secuencial. El límite es lo primero que ocurra: cantidad o tiempo. Se detiene
+ante el primer rechazo/error o retiro de tarjeta. No hay reintentos automáticos.
+No hace falta mantener la página abierta: al volver se recupera la corrida.
 
-## Requisitos para habilitar ejecucion
+## Requisitos comprobados por Main
 
-El primer alcance es exclusivamente consulta de saldo en QA. Aunque se reporto
-un tope de 5 TPS, siguen pendientes una ventana autorizada, concurrencia,
-cantidad maxima y duracion maxima. La pantalla todavia no tiene endpoint de
-ejecucion de carga.
+Solo QA/LOCAL/ahorros/consulta de saldo. El destino y los plazos provienen de
+Configuración; no se inventan desde la pantalla de carga. Se comprueban revisión
+ATM, lectura vigente, perfil financiero, cifrado, secuencias suficientes y
+espacio para toda la cantidad en el diario de saldo (máximo existente: 200).
+Si falla una comprobación se muestra su causa sin arrancar el worker.
 
-El usuario confirma que existe un pool virtual QA autorizado. La pantalla
-Tarjetas ahora genera referencias VISA ficticias para validaciones visuales
-locales; no contiene PAN, PIN ni EMV y no sirve como pool financiero. Aun falta
-la interfaz aprobada del pool real: el proveedor transaccional activo requiere
-una tarjeta con PIN y EMV nuevos por consulta, y el servicio admite una sola
-operacion activa. No se puede producir 5 TPS con el lector actual ni abrir
-varias consultas contra la misma sesion. No se reutilizan PAN, PIN Block, ARQC
-ni tramas capturadas como estrategia de carga.
+Los máximos locales son 5 TPS, una operación simultánea, 100 consultas y
+300 segundos. El lector, las operaciones EMV, el cifrado y la respuesta del host
+pueden impedir alcanzar 5 TPS. El tiempo incluye la entrada inicial del PIN.
+Esta prueba no certifica la capacidad máxima del switch.
 
-Antes de enviar debe conocerse la interfaz aprobada del pool y confirmar que
-puede suministrar datos de tarjeta de prueba y PIN/EMV dinamicos nuevos para cada
-consulta. Faltan tambien concurrencia, cantidad/duracion, ventana, politica de
-parada y suficientes secuencias QA no recicladas.
+## Motor, seguridad y métricas
 
-El futuro ejecutor requiere coordinador en Main y workers fuera del Renderer,
-limitador de tasa que nunca exceda 5 TPS, rampa controlada, backpressure,
-cancelacion inmediata, cierre ordenado y metricas de enviados/recibidos/
-aprobados/rechazados/timeout/errores, TPS y percentiles. Cada envio debe
-conservar perfil y destino vigentes, secuencia reservada, credenciales QA
-aprobadas, idempotencia y resultado incierto sin reintento.
+Un worker agenda cada operación sin ráfagas de recuperación; espera la respuesta
+antes de agendar la siguiente. Main coordina hardware y transporte existentes.
+Cada consulta vuelve a leer el chip, genera seguridad y reserva una secuencia
+nueva. La misma tarjeta debe permanecer insertada. El PIN de sesión permanece
+solo en memoria y se borra al terminar o detenerse, sin pasar por Renderer.
+Ver [ADR-020](../adr/ADR-020-PHYSICAL-CARD-LOAD.md).
 
-Produccion permanece bloqueada. PREPROD, retiros, multiples ATM, carga
-distribuida y ejecuciones desde mas de una estacion no forman parte de este
-preparador.
+Las transacciones comparten `runId`, conservando `transactionId`, `requestId`
+y STAN/RRN propios. Se persisten parámetros inmutables y resultados públicos en
+`qa-load-runs.json`, hasta 100 corridas; no se borra historia automáticamente.
+TPS = envíos con bytes encolados / tiempo total. Los percentiles usan únicamente
+respuestas recibidas y su tiempo de transporte, sin contar como respuesta una
+lectura o preparación local. La UI distingue operaciones en curso de envíos.
+
+Un envío cancelado después de transmitir conserva estado incierto y bloquea
+continuaciones automáticas. Al reiniciar, una corrida activa se marca
+interrumpida; no se retoma ni se repite. Debe revisarse el diario antes de otra
+prueba. Los servicios reales siguen protegiendo solicitudes duplicadas.
+Una operación `PENDING` impide iniciar. Los errores históricos ya finalizados
+se conservan y no impiden iniciar explícitamente nuevas consultas de saldo
+con identificadores nuevos; nunca se repite la consulta anterior.
+
+## Alcance pendiente
+
+TODO-DATA LOAD-VIRTUAL-PROVIDER: falta el contrato de un proveedor financiero QA
+para un pool virtual y concurrencia mayor a uno. Las referencias VISA ficticias
+y las tarjetas guardadas no contienen PIN/EMV reutilizable. Ese alcance queda
+separado del piloto ejecutable con tarjeta física. PREPROD, retiros, múltiples
+ATM y carga distribuida no se habilitan aquí.
+
+Validación del cambio: pruebas de dominio, sesión PIN, worker real, persistencia,
+cancelación TCP loopback, reutilización del flujo de saldo y UI Electron con
+fuente sintética. La primera corrida real debe iniciarla el operador; no se ha
+enviado carga al switch durante el desarrollo.

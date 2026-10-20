@@ -20,9 +20,64 @@ import { networkEvidence } from '../helpers/network-evidence';
 import { decodeResponse } from '../../apps/desktop/src/main/adapters/mediator-observer';
 import { observationBatch } from '../helpers/observations';
 import { approvedWithdrawalExecution } from '../helpers/withdrawal';
+import { build } from 'esbuild';
 
 let directory: string;
 let app: ElectronApplication | undefined;
+
+test('carga de saldo: iniciar, medir, recuperar y detener con motor real y fuente sintética', async () => {
+  test.setTimeout(60000);
+  const window = await prepareBalanceSubmission();
+  await mkdir('artifacts', { recursive: true });
+  await build({
+    entryPoints: ['tests/helpers/load-electron.ts'],
+    outfile: 'artifacts/load-electron.cjs',
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    external: ['electron'],
+  });
+  const sample = approvedWithdrawalExecution();
+  delete sample.withdrawal;
+  await app!.evaluate(
+    ({ ipcMain, BrowserWindow }, options) => {
+      const require = process.getBuiltinModule('module').createRequire(options.fixture);
+      require(options.fixture).install(ipcMain, options.file, options.worker, options.sample);
+      BrowserWindow.getAllWindows()[0]?.setContentSize(1366, 900);
+    },
+    {
+      fixture: resolve('artifacts/load-electron.cjs'),
+      file: join(directory, 'load-ui.json'),
+      worker: resolve('dist/load-worker.cjs'),
+      sample,
+    },
+  );
+  await window.getByRole('button', { name: 'Carga y estrés', exact: true }).click();
+  await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  const start = window.getByRole('button', { name: 'Iniciar prueba de saldo', exact: true });
+  await window.getByLabel('Máximo de operaciones').fill('3');
+  await window.getByLabel('TPS objetivo').fill('6');
+  await expect(start).toBeDisabled();
+  await window.getByLabel('TPS objetivo').fill('5');
+  await expect(start).toBeEnabled();
+  await window.screenshot({ path: 'artifacts/load-ready.png', fullPage: true });
+  await start.click();
+  const result = window.getByRole('region', { name: 'Resultado de carga', exact: true });
+  await expect(result).toContainText('Completada', { timeout: 10000 });
+  await expect(result.locator('.load-metrics')).toContainText('Aprobadas3');
+  await window.screenshot({ path: 'artifacts/load-completed.png', fullPage: true });
+  await window.getByRole('button', { name: 'Inicio', exact: true }).click();
+  await window.getByRole('button', { name: 'Carga y estrés', exact: true }).click();
+  await expect(result).toContainText('Completada');
+  await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await window.getByLabel('Máximo de operaciones').fill('100');
+  await start.click();
+  await window.getByRole('button', { name: 'Detener prueba', exact: true }).click();
+  await expect(result).toContainText('Detenida', { timeout: 10000 });
+  expect(await window.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+    true,
+  );
+});
 
 async function launch(development = false) {
   const env: Record<string, string> = {};
