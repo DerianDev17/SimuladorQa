@@ -20,6 +20,9 @@ Ver [guía de ejecución](docs/implementation/LOAD_TEST.md).
 - Monitoreo: dashboard realtime de todas las instancias de la app.
 - Correlacion: Switch Coonecta + Core mediante adaptadores.
 
+Estado de perfiles múltiples, clonación segura, historial por ATM y datos
+pendientes para habilitar ATM20524: [perfiles ATM múltiples](docs/implementation/MULTI_ATM_PROFILES.md).
+
 ## Principio rector
 
 No inventar reglas transaccionales. Toda regla ISO8583, framing TCP, timeout, PIN/HSM, campos fijos/dinamicos y criterios de correlacion debe provenir de documentacion o evidencia real del proyecto.

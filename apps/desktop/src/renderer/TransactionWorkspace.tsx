@@ -106,6 +106,7 @@ export function TransactionWorkspace({
   const [requestOperation, setRequestOperation] = useState<'BALANCE' | 'WITHDRAWAL'>('BALANCE');
   const [sessionExecutions, setSessionExecutions] = useState<readonly BalanceExecution[]>([]);
   const [balanceHistory, setBalanceHistory] = useState<readonly BalanceExecution[]>();
+  const [historyAtmId, setHistoryAtmId] = useState('');
   const executionLock = useRef(false);
   useEffect(() => {
     if (!executingBalance || !balanceRequestId || requestOperation !== 'WITHDRAWAL') return;
@@ -148,6 +149,7 @@ export function TransactionWorkspace({
       setBalanceExecution(undefined);
       setBalanceRequestId(undefined);
       setBalanceHistory(undefined);
+      setHistoryAtmId('');
       setSessionExecutions([]);
       setReceiptPreference('WITHOUT_PRINT');
       setWithReversal(false);
@@ -700,6 +702,7 @@ export function TransactionWorkspace({
                 : monetary && balanceReadiness && !balanceReadiness.ready
                   ? balanceReadiness.blockers[0]?.label
                   : 'El PIN se solicitará en una ventana protegida al enviar.';
+  const atmHistory = balanceHistory?.filter((item) => !historyAtmId || item.atmId === historyAtmId);
 
   return (
     <div className="transaction-workspace">
@@ -1402,6 +1405,17 @@ export function TransactionWorkspace({
       {snapshot?.environment === 'QA' && (
         <details className="section-details balance-history-details">
           <summary>Historial de transacciones QA</summary>
+          <label>
+            ATM del historial
+            <select value={historyAtmId} onChange={(event) => setHistoryAtmId(event.target.value)}>
+              <option value="">Todos los ATM</option>
+              {catalog?.atms.map((atm) => (
+                <option key={atm.id} value={atm.id}>
+                  {atm.alias} · {atm.terminalId}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             className="text-button"
             disabled={fieldsDisabled}
@@ -1409,9 +1423,9 @@ export function TransactionWorkspace({
           >
             Actualizar historial
           </button>
-          {balanceHistory &&
-            (balanceHistory.length ? (
-              balanceHistory.map((execution) => (
+          {atmHistory &&
+            (atmHistory.length ? (
+              atmHistory.map((execution) => (
                 <BalanceExecutionView
                   key={execution.requestId}
                   execution={execution}
@@ -1422,7 +1436,7 @@ export function TransactionWorkspace({
                 />
               ))
             ) : (
-              <p>No hay transacciones ejecutadas registradas.</p>
+              <p>No hay transacciones registradas para este ATM en el historial disponible.</p>
             ))}
         </details>
       )}
