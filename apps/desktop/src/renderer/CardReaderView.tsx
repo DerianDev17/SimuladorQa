@@ -10,6 +10,7 @@ import { selectedReader, matchingCardIdentity } from './card-reader-state';
 import { availableTransactionCard, matchesSavedCardProfile } from './transaction-card';
 import type { TransactionCard } from './transaction-card';
 import { SavedCardProfilesView } from './SavedCardProfilesView';
+import { CardReaderWorkspace } from './CardReaderWorkspace';
 
 const stateLabels = {
   CARD_PRESENT: 'Tarjeta presente',
@@ -17,7 +18,7 @@ const stateLabels = {
   UNAVAILABLE: 'Lector no disponible',
 } satisfies Record<ReaderDevice['state'], string>;
 
-interface CardReaderPanelProps {
+export interface CardReaderPanelProps {
   snapshot: CardReaderSnapshot | undefined;
   error: string | undefined;
   refreshing: boolean;
@@ -25,13 +26,11 @@ interface CardReaderPanelProps {
   onSelect: (name: string) => void;
   onRefresh: () => void;
   compact: boolean;
-  workspace?: boolean;
   reading?: boolean;
   readError?: string | undefined;
   onRead?: (readerName: string, applicationId?: string) => void;
   countryCode?: string;
   onCountryChange?: (value: string) => void;
-  canSave?: boolean;
 }
 
 export function CardReaderPanel({
@@ -42,13 +41,11 @@ export function CardReaderPanel({
   onSelect,
   onRefresh,
   compact,
-  workspace = false,
   reading = false,
   readError,
   onRead,
   countryCode = '',
   onCountryChange,
-  canSave = false,
 }: CardReaderPanelProps) {
   const reader = selectedReader(snapshot, selectedName);
   const present = !error && reader?.state === 'CARD_PRESENT';
@@ -83,9 +80,7 @@ export function CardReaderPanel({
           ? 'Sin lector conectado'
           : 'Sin tarjeta detectada';
   const hint = present
-    ? workspace
-      ? 'Lee el chip para confirmar sus datos y habilitar el guardado.'
-      : 'Estos son los datos disponibles de la tarjeta en esta interfaz.'
+    ? 'Estos son los datos disponibles de la tarjeta en esta interfaz.'
     : error
       ? 'Comprueba el lector y vuelve a consultar.'
       : !reader
@@ -96,7 +91,7 @@ export function CardReaderPanel({
 
   return (
     <section
-      className={`panel card-reader-view ${compact ? 'card-reader-compact' : ''} ${workspace ? 'card-reader-workspace-panel' : ''}`}
+      className={`panel card-reader-view ${compact ? 'card-reader-compact' : ''}`}
       aria-label="Estado del lector"
     >
       <div className="panel-heading">
@@ -106,11 +101,7 @@ export function CardReaderPanel({
           </span>
           <div>
             <h2>Lector de tarjetas</h2>
-            <p>
-              {workspace
-                ? 'Inserta la tarjeta y mantenla en el lector durante la lectura.'
-                : 'Detección PC/SC'}
-            </p>
+            <p>Detección PC/SC</p>
           </div>
         </div>
         <button
@@ -125,9 +116,7 @@ export function CardReaderPanel({
       <div className="card-reader-status" role="status" aria-live="polite">
         <span className={`reader-status-dot ${present ? 'is-present' : ''}`} />
         <strong>{status}</strong>
-        <span>
-          {workspace ? (reader?.name ?? 'Sin lector seleccionado') : 'Actualización automática'}
-        </span>
+        <span>Actualización automática</span>
       </div>
       {error && (
         <p className="card-reader-error" role="alert">
@@ -167,27 +156,17 @@ export function CardReaderPanel({
             </div>
             <div className="detected-card-bottom">
               <div>
-                <small>
-                  {read ? (workspace ? 'APLICACIÓN' : 'TITULAR') : 'IDENTIDAD DE TARJETA'}
-                </small>
+                <small>{read ? 'TITULAR' : 'IDENTIDAD DE TARJETA'}</small>
                 <strong>
                   {read
-                    ? workspace
-                      ? (identity.applicationLabel ?? 'Aplicación EMV')
-                      : (identity.cardholderName ?? 'No disponible en el chip')
+                    ? (identity.cardholderName ?? 'No disponible en el chip')
                     : present
                       ? 'Pendiente de lectura'
                       : cardPlaceholder}
                 </strong>
               </div>
               <span>
-                {read
-                  ? workspace
-                    ? 'CHIP LEÍDO'
-                    : (identity.expiry ?? 'CHIP LEÍDO')
-                  : present
-                    ? 'DETECTADA'
-                    : 'EN ESPERA'}
+                {read ? (identity.expiry ?? 'CHIP LEÍDO') : present ? 'DETECTADA' : 'EN ESPERA'}
               </span>
             </div>
           </div>
@@ -203,91 +182,61 @@ export function CardReaderPanel({
               {read ? 'Leído del chip' : present ? 'Presencia confirmada' : 'Sin lectura'}
             </span>
           </div>
-          <dl className={`card-data-list ${workspace ? 'card-data-list-workspace' : ''}`}>
-            {workspace ? (
-              <>
-                <div>
-                  <dt>Aplicación</dt>
-                  <dd>{identity?.applicationLabel ?? (read ? 'Sin etiqueta' : unavailable)}</dd>
-                </div>
-                <div>
-                  <dt>AID</dt>
-                  <dd>{identity?.applicationId ?? (read ? 'No disponible' : unavailable)}</dd>
-                </div>
-                <div>
-                  <dt>Datos solicitados</dt>
-                  <dd>
-                    {read && identity.transactionDataRequirements?.cdol1?.length
-                      ? `CDOL1 · ${identity.transactionDataRequirements.cdol1.length} campos`
-                      : read
-                        ? 'El chip no informó CDOL1'
-                        : unavailable}
-                    {read && identity.transactionDataRequirements?.cdol2?.length
-                      ? ` · CDOL2 · ${identity.transactionDataRequirements.cdol2.length} campos`
-                      : ''}
-                  </dd>
-                </div>
-              </>
-            ) : (
-              <>
-                <div>
-                  <dt>Lector</dt>
-                  <dd>{reader?.name ?? 'No disponible'}</dd>
-                </div>
-                <div>
-                  <dt>Estado</dt>
-                  <dd>{status}</dd>
-                </div>
-                <div>
-                  <dt>ATR</dt>
-                  <dd className="card-atr">
-                    {present && reader.atr ? (
-                      <code>{reader.atr.match(/.{2}/g)?.join(' ')}</code>
-                    ) : present ? (
-                      'No disponible'
-                    ) : (
-                      'Sin lectura'
-                    )}
-                  </dd>
-                </div>
-                <div>
-                  <dt>Número de tarjeta</dt>
-                  <dd className={identity?.panMasked ? '' : 'card-data-pending'}>
-                    {identity?.panMasked ?? unavailable}
-                  </dd>
-                </div>
-                {!compact && (
-                  <>
-                    <div>
-                      <dt>Titular</dt>
-                      <dd className={identity?.cardholderName ? '' : 'card-data-pending'}>
-                        {identity?.cardholderName ?? unavailable}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Vencimiento</dt>
-                      <dd className={identity?.expiry ? '' : 'card-data-pending'}>
-                        {identity?.expiry ?? unavailable}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Aplicación del chip</dt>
-                      <dd>
-                        {identity?.applicationLabel ?? identity?.applicationId ?? 'Sin lectura'}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Entidad / producto</dt>
-                      <dd className="card-data-pending">Perfil no asociado</dd>
-                    </div>
-                  </>
+          <dl className="card-data-list">
+            <div>
+              <dt>Lector</dt>
+              <dd>{reader?.name ?? 'No disponible'}</dd>
+            </div>
+            <div>
+              <dt>Estado</dt>
+              <dd>{status}</dd>
+            </div>
+            <div>
+              <dt>ATR</dt>
+              <dd className="card-atr">
+                {present && reader.atr ? (
+                  <code>{reader.atr.match(/.{2}/g)?.join(' ')}</code>
+                ) : present ? (
+                  'No disponible'
+                ) : (
+                  'Sin lectura'
                 )}
+              </dd>
+            </div>
+            <div>
+              <dt>Número de tarjeta</dt>
+              <dd className={identity?.panMasked ? '' : 'card-data-pending'}>
+                {identity?.panMasked ?? unavailable}
+              </dd>
+            </div>
+            {!compact && (
+              <>
+                <div>
+                  <dt>Titular</dt>
+                  <dd className={identity?.cardholderName ? '' : 'card-data-pending'}>
+                    {identity?.cardholderName ?? unavailable}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Vencimiento</dt>
+                  <dd className={identity?.expiry ? '' : 'card-data-pending'}>
+                    {identity?.expiry ?? unavailable}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Aplicación del chip</dt>
+                  <dd>{identity?.applicationLabel ?? identity?.applicationId ?? 'Sin lectura'}</dd>
+                </div>
+                <div>
+                  <dt>Entidad / producto</dt>
+                  <dd className="card-data-pending">Perfil no asociado</dd>
+                </div>
               </>
             )}
           </dl>
           {onRead && (
             <div className="card-reader-controls">
-              {onCountryChange && !workspace && (
+              {onCountryChange && (
                 <label className="card-country-field">
                   País del terminal (ISO numérico)
                   <input
@@ -306,44 +255,9 @@ export function CardReaderPanel({
                 onClick={() => reader && onRead(reader.name)}
               >
                 <Icon name="card" size={16} />
-                {reading
-                  ? 'Leyendo chip…'
-                  : read && workspace
-                    ? 'Leer de nuevo'
-                    : 'Leer datos del chip'}
+                {reading ? 'Leyendo chip…' : 'Leer datos del chip'}
               </button>
-              {workspace && canSave && read && (
-                <button
-                  className="card-save-action"
-                  type="button"
-                  onClick={() => {
-                    const form = document.getElementById('saved-card-profile-form');
-                    const aliasInput = document.getElementById('saved-card-alias');
-                    form?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    aliasInput?.focus({ preventScroll: true });
-                  }}
-                  aria-controls="saved-card-profile-form"
-                >
-                  Guardar tarjeta QA
-                </button>
-              )}
-              {workspace && onCountryChange && (
-                <details className="card-reader-options">
-                  <summary>Parámetros de lectura</summary>
-                  <label className="card-country-field">
-                    País del terminal (ISO numérico)
-                    <input
-                      aria-label="País del terminal (ISO numérico)"
-                      inputMode="numeric"
-                      maxLength={3}
-                      value={countryCode}
-                      onChange={(event) => onCountryChange(event.target.value)}
-                      disabled={reading}
-                    />
-                  </label>
-                </details>
-              )}
-              {!workspace && <small>Inserta la tarjeta por contacto. Lectura EMV manual.</small>}
+              <small>Inserta la tarjeta por contacto. Lectura EMV manual.</small>
               {read && <small>Lectura: {new Date(identity.readAt).toLocaleTimeString()}</small>}
               {identity?.status === 'DIRECTORY_UNAVAILABLE' && (
                 <p>
@@ -384,52 +298,30 @@ export function CardReaderPanel({
           )}
         </div>
       </div>
-      {!!snapshot?.readers.length &&
-        (!workspace || snapshot.readers.length > 1) &&
-        (workspace ? (
-          <details className="reader-devices reader-devices-details">
-            <summary>Lectores disponibles ({snapshot.readers.length})</summary>
-            {snapshot.readers.map((device, index) => (
-              <button
-                className="reader-device"
-                key={`${device.name}-${index}`}
-                aria-pressed={reader?.name === device.name}
-                onClick={() => onSelect(device.name)}
-                disabled={reading}
-              >
-                <Icon name="reader" size={18} />
-                <span>
-                  <strong>{device.name}</strong>
-                  <small>{stateLabels[device.state]}</small>
-                </span>
-                <Icon name={reader?.name === device.name ? 'check' : 'arrow'} size={16} />
-              </button>
-            ))}
-          </details>
-        ) : (
-          <div className="reader-devices" aria-label="Interfaces del lector">
-            <div className="reader-devices-heading">
-              <h3>Interfaces del lector</h3>
-              <span>{snapshot.readers.length} interfaces</span>
-            </div>
-            {snapshot.readers.map((device, index) => (
-              <button
-                className="reader-device"
-                key={`${device.name}-${index}`}
-                aria-pressed={reader?.name === device.name}
-                onClick={() => onSelect(device.name)}
-                disabled={reading}
-              >
-                <Icon name="reader" size={18} />
-                <span>
-                  <strong>{device.name}</strong>
-                  <small>{stateLabels[device.state]}</small>
-                </span>
-                <Icon name={reader?.name === device.name ? 'check' : 'arrow'} size={16} />
-              </button>
-            ))}
+      {!!snapshot?.readers.length && (
+        <div className="reader-devices" aria-label="Interfaces del lector">
+          <div className="reader-devices-heading">
+            <h3>Interfaces del lector</h3>
+            <span>{snapshot.readers.length} interfaces</span>
           </div>
-        ))}
+          {snapshot.readers.map((device, index) => (
+            <button
+              className="reader-device"
+              key={`${device.name}-${index}`}
+              aria-pressed={reader?.name === device.name}
+              onClick={() => onSelect(device.name)}
+              disabled={reading}
+            >
+              <Icon name="reader" size={18} />
+              <span>
+                <strong>{device.name}</strong>
+                <small>{stateLabels[device.state]}</small>
+              </span>
+              <Icon name={reader?.name === device.name ? 'check' : 'arrow'} size={16} />
+            </button>
+          ))}
+        </div>
+      )}
       <div className="card-reader-footer">
         <Icon name="clock" size={14} />
         <span>
@@ -929,32 +821,29 @@ export function CardReaderView({
         </details>
       </div>
     );
-  const readerContent = (
-    <>
-      <CardReaderPanel
-        snapshot={snapshot}
-        error={error}
-        refreshing={refreshing}
-        selectedName={selectedName}
-        onSelect={setSelectedName}
-        onRefresh={() => refreshRef.current?.()}
-        compact={compact}
-        workspace={!compact && !transaction}
+  const panelProps = {
+    snapshot,
+    error,
+    refreshing,
+    selectedName,
+    onSelect: setSelectedName,
+    onRefresh: () => refreshRef.current?.(),
+    compact,
+    reading,
+    readError,
+    onRead: (name: string, applicationId?: string) => void readChip(name, applicationId),
+    countryCode,
+    onCountryChange: setCountryCode,
+  };
+  if (!compact && environment)
+    return (
+      <SavedCardProfilesView
+        environment={environment}
+        identity={error ? undefined : identity}
         reading={reading}
-        readError={readError}
-        onRead={(name, applicationId) => void readChip(name, applicationId)}
-        countryCode={countryCode}
-        onCountryChange={setCountryCode}
-        canSave={environment === 'QA'}
-      />
-      {!compact && !transaction && environment && (
-        <SavedCardProfilesView environment={environment} identity={identity} />
-      )}
-    </>
-  );
-  return !compact && !transaction ? (
-    <div className="cards-workspace">{readerContent}</div>
-  ) : (
-    readerContent
-  );
+      >
+        <CardReaderWorkspace {...panelProps} />
+      </SavedCardProfilesView>
+    );
+  return <CardReaderPanel {...panelProps} />;
 }

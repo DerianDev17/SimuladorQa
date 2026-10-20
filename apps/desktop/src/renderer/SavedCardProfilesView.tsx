@@ -1,4 +1,9 @@
 import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
+import {
+  isValidCardProfileAlias,
+  suggestCardProfileAlias,
+} from '../../../../packages/domain/src/saved-card-profiles';
 import type { Environment } from '../../../../packages/domain/src/index';
 import type { CardIdentityReading } from '../../../../packages/domain/src/card-reader';
 import { accountTypes } from '../../../../packages/domain/src/transaction-draft';
@@ -8,11 +13,18 @@ import { DesktopClient } from './desktop-client';
 import { Icon } from './Icon';
 
 interface SavedCardProfilesViewProps {
+  children: ReactNode;
+  reading: boolean;
   environment: Environment;
   identity: CardIdentityReading | undefined;
 }
 
-export function SavedCardProfilesView({ environment, identity }: SavedCardProfilesViewProps) {
+export function SavedCardProfilesView({
+  environment,
+  identity,
+  children,
+  reading,
+}: SavedCardProfilesViewProps) {
   const [profiles, setProfiles] = useState<readonly SavedCardProfile[]>([]);
   const [alias, setAlias] = useState('');
   const [defaultAccount, setDefaultAccount] = useState<AccountType | ''>('SAVINGS');
@@ -24,18 +36,13 @@ export function SavedCardProfilesView({ environment, identity }: SavedCardProfil
   const [error, setError] = useState<string>();
   const [success, setSuccess] = useState<string>();
   const client = new DesktopClient(window.desktop);
-  const lastFour =
-    identity?.status === 'READ' ? identity.panMasked?.match(/\d{4}$/)?.[0] : undefined;
-  const applicationName =
-    identity?.status === 'READ' ? (identity.applicationLabel ?? 'Tarjeta QA') : '';
-  const suggestedAlias =
-    identity?.status === 'READ'
-      ? `${applicationName.slice(0, lastFour ? 25 : 40)}${lastFour ? ` · •••• ${lastFour}` : ''}`
-      : '';
+  const suggestedAlias = suggestCardProfileAlias(identity);
+  const aliasValid = isValidCardProfileAlias(alias);
 
   useEffect(() => {
     setAlias(suggestedAlias);
     setSuccess(undefined);
+    setError(undefined);
   }, [identity?.readId, suggestedAlias]);
 
   useEffect(() => {
@@ -63,7 +70,8 @@ export function SavedCardProfilesView({ environment, identity }: SavedCardProfil
   }, [environment]);
 
   const save = async () => {
-    if (busy || environment !== 'QA' || identity?.status !== 'READ' || !alias.trim()) return;
+    if (busy || reading || environment !== 'QA' || identity?.status !== 'READ' || !aliasValid)
+      return;
     setBusy(true);
     setError(undefined);
     setSuccess(undefined);
@@ -78,7 +86,6 @@ export function SavedCardProfilesView({ environment, identity }: SavedCardProfil
     if (result.ok) {
       setProfiles(result.value);
       setSuccess(`Tarjeta «${alias.trim()}» guardada en este equipo.`);
-      setAlias('');
     } else setError(result.error.message);
   };
 
@@ -90,7 +97,8 @@ export function SavedCardProfilesView({ environment, identity }: SavedCardProfil
   };
 
   const update = async () => {
-    if (busy || environment !== 'QA' || !editingProfileId || !editAlias.trim()) return;
+    if (busy || environment !== 'QA' || !editingProfileId || !isValidCardProfileAlias(editAlias))
+      return;
     setBusy(true);
     setError(undefined);
     const result = await client.call((api) =>
@@ -111,6 +119,7 @@ export function SavedCardProfilesView({ environment, identity }: SavedCardProfil
     if (busy || environment !== 'QA') return;
     setBusy(true);
     setError(undefined);
+    setSuccess(undefined);
     const result = await client.call((api) => api.deleteCardProfile({ id }));
     setBusy(false);
     if (result.ok) setProfiles(result.value);
@@ -119,45 +128,30 @@ export function SavedCardProfilesView({ environment, identity }: SavedCardProfil
 
   return (
     <section
-      className="panel saved-card-profiles"
+      className="panel saved-card-profiles card-workbench"
       aria-label="Guardar tarjeta y administrar perfiles QA"
       id="saved-card-profile-form"
     >
-      <div className="panel-heading">
-        <div>
-          <h2>{environment === 'QA' ? 'Guardar tarjeta QA' : 'Referencias de tarjeta'}</h2>
-          <p>
-            {environment === 'QA'
-              ? 'Referencia local de esta tarjeta física'
-              : 'El guardado de perfiles está disponible solo en QA.'}
-          </p>
-        </div>
-        <span className="pill neutral">{environment === 'QA' ? 'Solo referencia' : 'Solo QA'}</span>
-      </div>
-      {environment === 'QA' ? (
-        <>
-          {identity?.status === 'READ' && (
+      <div className="card-workbench-grid">
+        {children}
+        <div className="card-profile-editor">
+          <div className="card-section-title">
+            <span>02</span>
+            <h2>Guardar tarjeta</h2>
+          </div>
+          <p className="card-section-help">Asigna un nombre para reconocerla en tus pruebas.</p>
+          {environment !== 'QA' ? (
+            <p>El guardado está disponible solo en QA.</p>
+          ) : (
             <>
-              <div className="saved-card-ready" role="status">
-                <span className="saved-card-ready-icon">
-                  <Icon name="check" size={16} />
-                </span>
-                <div>
-                  <strong>Tarjeta leída y lista para guardar</strong>
-                  <small>
-                    {identity.applicationLabel ?? 'Aplicación EMV'}
-                    {identity.panMasked?.match(/\d{4}$/)?.[0]
-                      ? ` · termina en ${identity.panMasked.match(/\d{4}$/)?.[0]}`
-                      : ''}
-                  </small>
-                </div>
-              </div>
               <div className="saved-card-form">
                 <label>
                   Alias de la tarjeta
                   <input
                     id="saved-card-alias"
                     aria-label="Alias de la tarjeta QA"
+                    aria-invalid={!!alias && !aliasValid}
+                    aria-describedby={alias && !aliasValid ? 'card-alias-help' : undefined}
                     autoComplete="off"
                     maxLength={40}
                     placeholder="Ej. Visa débito de pruebas"
@@ -166,7 +160,7 @@ export function SavedCardProfilesView({ environment, identity }: SavedCardProfil
                       setAlias(event.target.value);
                       setSuccess(undefined);
                     }}
-                    disabled={busy}
+                    disabled={busy || reading || identity?.status !== 'READ'}
                   />
                 </label>
                 <label>
@@ -174,8 +168,11 @@ export function SavedCardProfilesView({ environment, identity }: SavedCardProfil
                   <select
                     aria-label="Cuenta predeterminada de la tarjeta"
                     value={defaultAccount}
-                    onChange={(event) => setDefaultAccount(event.target.value as AccountType | '')}
-                    disabled={busy}
+                    onChange={(event) => {
+                      setDefaultAccount(event.target.value as AccountType | '');
+                      setSuccess(undefined);
+                    }}
+                    disabled={busy || reading || identity?.status !== 'READ'}
                   >
                     <option value="">Elegir en cada operación</option>
                     {accountTypes.map((account) => (
@@ -187,160 +184,153 @@ export function SavedCardProfilesView({ environment, identity }: SavedCardProfil
                 </label>
                 <button
                   className="primary"
-                  disabled={busy || alias.trim().length < 2}
+                  disabled={
+                    busy || reading || identity?.status !== 'READ' || !aliasValid || !!success
+                  }
                   onClick={() => void save()}
                 >
                   <Icon name="card" size={16} />
-                  {busy ? 'Guardando…' : 'Guardar tarjeta'}
+                  {busy ? 'Guardando…' : success ? 'Tarjeta guardada' : 'Guardar tarjeta'}
                 </button>
               </div>
-              <div className="saved-card-capture" aria-label="Datos que se guardarán">
-                <div>
-                  <span>Identificación</span>
-                  <strong>Últimos cuatro · AID</strong>
-                </div>
-                <div>
-                  <span>Aplicación</span>
-                  <strong>{identity.applicationLabel ?? 'Etiqueta no disponible'}</strong>
-                </div>
-                <div>
-                  <span>Datos solicitados</span>
-                  <strong>
-                    {identity.transactionDataRequirements?.cdol1?.length
-                      ? `CDOL1 · ${identity.transactionDataRequirements.cdol1.length} campos`
-                      : 'CDOL1 no informado'}
-                    {identity.transactionDataRequirements?.cdol2?.length
-                      ? ` · CDOL2 · ${identity.transactionDataRequirements.cdol2.length} campos`
-                      : ''}
-                  </strong>
-                </div>
-              </div>
+              {alias && !aliasValid && (
+                <p id="card-alias-help" className="saved-card-error" role="alert">
+                  Usa de 2 a 40 caracteres: letras, números, espacios, punto, guion o guion bajo. No
+                  incluyas números completos de tarjeta.
+                </p>
+              )}
+              {identity?.status !== 'READ' && (
+                <p className="saved-card-hint">
+                  {reading ? 'Leyendo el chip…' : 'Lee la tarjeta para habilitar el guardado.'}
+                </p>
+              )}
+              {error && (
+                <p className="saved-card-error" role="alert">
+                  {error}
+                </p>
+              )}
+              {success && (
+                <p className="saved-card-success" role="status">
+                  {success}
+                </p>
+              )}
             </>
           )}
-          {identity?.status !== 'READ' && (
-            <p className="saved-card-hint">
-              Inserta la tarjeta, espera a que el lector la detecte y pulsa «Leer datos del chip».
-              La opción para guardarla aparecerá al terminar.
-            </p>
-          )}
-          {error && (
-            <p className="saved-card-error" role="alert">
-              {error}
-            </p>
-          )}
-          {success && (
-            <p className="saved-card-success" role="status">
-              {success}
-            </p>
-          )}
-          <div className="saved-card-privacy">
-            <Icon name="shield" size={16} />
+          <p className="card-profile-note">
+            <Icon name="shield" size={15} />
+            Referencia local. Mantén la tarjeta en el lector para operar.
+          </p>
+          <details className="inline-details">
+            <summary>Qué datos se guardan</summary>
             <p>
-              Se guardan solo alias, últimos cuatro, AID, aplicación, estructura CDOL y cuenta
-              elegida. No se guarda PAN completo ni datos de autenticación.
+              Alias, últimos cuatro, AID, aplicación, estructura CDOL y cuenta elegida. No se
+              guardan PAN completo ni datos de autenticación.
             </p>
-          </div>
-          <details className="saved-card-inventory">
-            <summary>Perfiles guardados ({loading ? '…' : profiles.length})</summary>
-            <div className="saved-card-list" aria-live="polite">
-              {profiles.map((profile) => (
-                <article className="saved-card-row" key={profile.id}>
-                  <span className="saved-card-mark" aria-hidden="true">
-                    CHIP
-                  </span>
-                  <div>
-                    <strong>{profile.alias}</strong>
-                    <small>
-                      {profile.lastFour ? `•••• ${profile.lastFour}` : 'Número no disponible'}
-                      {profile.applicationLabel ? ` · ${profile.applicationLabel}` : ''}
-                    </small>
-                    <small>
-                      {profile.applicationId ? `AID ${profile.applicationId}` : 'AID no disponible'}
-                      {profile.defaultAccount
-                        ? ` · Cuenta predeterminada: ${accountTypes.find((item) => item.id === profile.defaultAccount)?.label}`
-                        : ' · Cuenta por operación'}
-                    </small>
-                    {profile.transactionDataRequirements?.cdol1 && (
-                      <small>
-                        CDOL1:{' '}
-                        {profile.transactionDataRequirements.cdol1
-                          .map((item) => item.tag)
-                          .join(' · ')}
-                      </small>
-                    )}
-                    <small>Guardada {new Date(profile.savedAt).toLocaleString('es-EC')}</small>
-                  </div>
-                  <button
-                    className="text-button"
-                    aria-label={`Editar perfil ${profile.alias}`}
-                    disabled={busy}
-                    onClick={() => edit(profile)}
-                  >
-                    Editar
-                  </button>
-                  <button
-                    className="text-button"
-                    aria-label={`Eliminar perfil ${profile.alias}`}
-                    disabled={busy}
-                    onClick={() => void remove(profile.id)}
-                  >
-                    Eliminar
-                  </button>
-                </article>
-              ))}
-              {editingProfileId && (
-                <div className="saved-card-edit" aria-label="Editar tarjeta QA">
-                  <label>
-                    Alias
-                    <input
-                      aria-label="Editar alias de tarjeta"
-                      maxLength={40}
-                      value={editAlias}
-                      disabled={busy}
-                      onChange={(event) => setEditAlias(event.target.value)}
-                    />
-                  </label>
-                  <label>
-                    Cuenta predeterminada
-                    <select
-                      aria-label="Editar cuenta predeterminada"
-                      value={editDefaultAccount}
-                      disabled={busy}
-                      onChange={(event) =>
-                        setEditDefaultAccount(event.target.value as AccountType | '')
-                      }
-                    >
-                      <option value="">Elegir en cada operación</option>
-                      {accountTypes.map((account) => (
-                        <option key={account.id} value={account.id}>
-                          {account.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <button
-                    className="primary"
-                    disabled={busy || editAlias.trim().length < 2}
-                    onClick={() => void update()}
-                  >
-                    {busy ? 'Guardando…' : 'Guardar cambios'}
-                  </button>
-                  <button
-                    className="text-button"
-                    disabled={busy}
-                    onClick={() => setEditingProfileId(undefined)}
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              )}
-              {!loading && profiles.length === 0 && (
-                <p className="saved-card-empty">Todavía no guardaste referencias de tarjetas.</p>
-              )}
-            </div>
           </details>
-        </>
-      ) : null}
+        </div>
+      </div>
+      {environment === 'QA' && (
+        <section className="saved-card-inventory" aria-label="Tarjetas guardadas">
+          <div className="panel-heading">
+            <h2>Tarjetas guardadas</h2>
+            <span className="pill neutral">{loading ? 'Cargando…' : profiles.length}</span>
+          </div>
+          <div className="saved-card-list" aria-live="polite">
+            {profiles.map((profile) => (
+              <article className="saved-card-row" key={profile.id}>
+                <span className="saved-card-mark" aria-hidden="true">
+                  CHIP
+                </span>
+                <div>
+                  <strong>{profile.alias}</strong>
+                  <small>
+                    {profile.lastFour ? `•••• ${profile.lastFour}` : 'Número no disponible'}
+                    {profile.applicationLabel ? ` · ${profile.applicationLabel}` : ''}
+                  </small>
+                  <small>
+                    {profile.defaultAccount
+                      ? accountTypes.find((item) => item.id === profile.defaultAccount)?.label
+                      : 'Cuenta por operación'}
+                  </small>
+                  <small>Guardada {new Date(profile.savedAt).toLocaleString('es-EC')}</small>
+                </div>
+                <button
+                  className="text-button"
+                  aria-label={`Editar perfil ${profile.alias}`}
+                  disabled={busy}
+                  onClick={() => edit(profile)}
+                >
+                  Editar
+                </button>
+                <button
+                  className="text-button"
+                  aria-label={`Eliminar perfil ${profile.alias}`}
+                  disabled={busy}
+                  onClick={() => void remove(profile.id)}
+                >
+                  Eliminar
+                </button>
+              </article>
+            ))}
+            {editingProfileId && (
+              <div className="saved-card-edit" aria-label="Editar tarjeta QA">
+                <label>
+                  Alias
+                  <input
+                    aria-label="Editar alias de tarjeta"
+                    maxLength={40}
+                    value={editAlias}
+                    disabled={busy}
+                    aria-invalid={!isValidCardProfileAlias(editAlias)}
+                    onChange={(event) => setEditAlias(event.target.value)}
+                  />
+                  {!isValidCardProfileAlias(editAlias) && (
+                    <small role="alert">
+                      Usa un alias de 2 a 40 caracteres, sin símbolos ni números completos de
+                      tarjeta.
+                    </small>
+                  )}
+                </label>
+                <label>
+                  Cuenta predeterminada
+                  <select
+                    aria-label="Editar cuenta predeterminada"
+                    value={editDefaultAccount}
+                    disabled={busy}
+                    onChange={(event) =>
+                      setEditDefaultAccount(event.target.value as AccountType | '')
+                    }
+                  >
+                    <option value="">Elegir en cada operación</option>
+                    {accountTypes.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  className="primary"
+                  disabled={busy || !isValidCardProfileAlias(editAlias)}
+                  onClick={() => void update()}
+                >
+                  {busy ? 'Guardando…' : 'Guardar cambios'}
+                </button>
+                <button
+                  className="text-button"
+                  disabled={busy}
+                  onClick={() => setEditingProfileId(undefined)}
+                >
+                  Cancelar
+                </button>
+              </div>
+            )}
+            {!loading && profiles.length === 0 && (
+              <p className="saved-card-empty">Todavía no guardaste referencias de tarjetas.</p>
+            )}
+          </div>
+        </section>
+      )}
     </section>
   );
 }

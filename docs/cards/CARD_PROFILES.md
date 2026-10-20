@@ -2,11 +2,19 @@
 
 ## Uso
 
-El operador deja la tarjeta insertada, elige el lector y pulsa **Leer datos del
-chip** cuando el simulador la detecta. La lectura es manual. Al completarse, la
-pantalla habilita **Guardar tarjeta QA** y propone un alias editable con la
+El operador deja la tarjeta insertada, elige el lector y pulsa **Leer tarjeta**
+cuando el simulador la detecta. La lectura es manual. Al completarse, la
+pantalla habilita **Guardar tarjeta** y propone un alias editable con la
 aplicación y, si está disponible, los últimos cuatro. El operador puede guardar
 el perfil con una cuenta predeterminada opcional sin retirar la tarjeta.
+
+Lectura y guardado comparten un panel compacto. El botón de guardar persiste el
+perfil y muestra la confirmación y el inventario, sin desplazar al operador a
+otro formulario. El alias sugerido (por ejemplo, `VISA DEBITO - 2267`) usa la
+misma validación que Main: 2 a 40 caracteres, letras, números, espacios, punto,
+guion o guion bajo, sin secuencias largas que puedan ser un PAN. Los errores
+aparecen junto al formulario. Las opciones del terminal y los datos técnicos
+se consultan en un desplegable. Retirar la tarjeta deshabilita el guardado.
 
 En Transacciones, un perfil guardado preselecciona el AID y, si se configuró,
 la cuenta. Antes de usarlo el simulador vuelve a leer la tarjeta presente y

@@ -363,9 +363,6 @@ export function App() {
             <div className="page-heading">
               <div>
                 <h1>{page === 'dashboard' ? 'Inicio' : current?.label}</h1>
-                {page === 'cards' && (
-                  <p>Lee una tarjeta física y guarda una referencia para las pruebas QA.</p>
-                )}
               </div>
             </div>
           )}

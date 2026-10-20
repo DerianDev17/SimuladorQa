@@ -119,7 +119,6 @@ test('lector PC/SC usa IPC protegido y mantiene separada la identidad', async ()
   const window = await launch();
   await window.getByRole('button', { name: 'Tarjetas', exact: true }).click();
   await expect(window.getByRole('region', { name: 'Estado del lector' })).toBeVisible();
-  await expect(window.getByText('La presencia de la tarjeta', { exact: false })).toBeVisible();
   const api = await window.evaluate(() => ({
     available: typeof globalThis.window.desktop?.getReaderSnapshot === 'function',
     nodeAvailable: 'require' in globalThis.window,
@@ -135,18 +134,13 @@ test('lector PC/SC usa IPC protegido y mantiene separada la identidad', async ()
   }
   await expect(window.getByText('Consultando lector…')).toHaveCount(0);
   const readerPanel = window.getByRole('region', { name: 'Estado del lector' });
-  await expect(readerPanel.getByRole('heading', { name: 'Datos de la tarjeta' })).toBeVisible();
-  await expect(readerPanel.locator('.detected-card')).toBeVisible();
-  await expect(readerPanel.getByText('No leído', { exact: true })).toHaveCount(3);
+  await expect(readerPanel.getByRole('heading', { name: 'Lector de tarjetas' })).toBeVisible();
+  await expect(readerPanel.locator('.card-read-summary')).toBeVisible();
+  await expect(window.getByRole('button', { name: 'Guardar tarjeta', exact: true })).toBeDisabled();
   const refresh = readerPanel.getByRole('button', { name: 'Actualizar', exact: true });
   await expect(refresh).toBeEnabled();
   await refresh.click();
   await expect(refresh).toBeEnabled({ timeout: 15000 });
-  const devices = readerPanel.locator('.reader-device');
-  if (await devices.count()) {
-    await devices.last().click();
-    await expect(devices.last()).toHaveAttribute('aria-pressed', 'true');
-  }
   await mkdir('artifacts', { recursive: true });
   await window.screenshot({ path: 'artifacts/card-reader-desktop.png', fullPage: true });
   await app?.evaluate(({ BrowserWindow }) =>
@@ -157,7 +151,7 @@ test('lector PC/SC usa IPC protegido y mantiene separada la identidad', async ()
       () => document.documentElement.scrollWidth <= globalThis.window.innerWidth,
     ),
   ).toBe(true);
-  await expect(readerPanel.locator('.detected-card')).toBeVisible();
+  await expect(readerPanel.locator('.card-read-summary')).toBeVisible();
 });
 
 test('tarjeta visual sigue inserción, retiro y recuperación con IPC sintético', async () => {
@@ -179,20 +173,20 @@ test('tarjeta visual sigue inserción, retiro y recuperación con IPC sintético
   await setResult(success(readers));
   await window.getByRole('button', { name: 'Tarjetas', exact: true }).click();
   const panel = window.getByRole('region', { name: 'Estado del lector' });
-  await expect(panel.locator('.detected-card.is-present')).toBeVisible();
-  await expect(panel.locator('.card-atr')).toHaveText('3B 00');
-  await panel.getByRole('button', { name: 'CI Contact Sin tarjeta' }).click();
-  await expect(panel.locator('.detected-card.is-empty')).toBeVisible();
-  await expect(panel.locator('.card-atr')).toHaveText('Sin lectura');
-  await panel.getByRole('button', { name: 'CI Contactless Tarjeta presente' }).click();
-  await expect(panel.locator('.card-atr')).toHaveText('3B 00');
+  await expect(panel.locator('.card-read-summary.is-present')).toBeVisible();
+  await expect(panel.locator('.card-read-status')).toHaveText('Tarjeta detectada');
+  await panel.getByLabel('Lector', { exact: true }).selectOption('CI Contact');
+  await expect(panel.locator('.card-read-summary:not(.is-present)')).toBeVisible();
+  await expect(window.getByRole('button', { name: 'Guardar tarjeta', exact: true })).toBeDisabled();
+  await panel.getByLabel('Lector', { exact: true }).selectOption('CI Contactless');
+  await expect(panel.locator('.card-read-status')).toHaveText('Tarjeta detectada');
   await mkdir('artifacts', { recursive: true });
   await window.screenshot({ path: 'artifacts/card-reader-detected.png', fullPage: true });
   const refresh = panel.getByRole('button', { name: 'Actualizar', exact: true });
   await setResult(success([{ name: 'CI Contactless', state: 'EMPTY', atr: null }]));
   await refresh.click();
-  await expect(panel.locator('.detected-card.is-empty')).toBeVisible();
-  await expect(panel.locator('.card-atr')).toHaveText('Sin lectura');
+  await expect(panel.locator('.card-read-summary:not(.is-present)')).toBeVisible();
+  await expect(window.getByRole('button', { name: 'Guardar tarjeta', exact: true })).toBeDisabled();
   await setResult({
     ok: false,
     error: { code: 'TIMEOUT', message: 'El lector no respondió a tiempo.' },
@@ -203,12 +197,12 @@ test('tarjeta visual sigue inserción, retiro y recuperación con IPC sintético
   await setResult(success(readers));
   await refresh.click();
   await expect(panel.getByRole('alert')).toHaveCount(0);
-  await expect(panel.locator('.detected-card.is-present')).toBeVisible();
-  await expect(panel.locator('.card-atr')).toHaveText('3B 00');
+  await expect(panel.locator('.card-read-summary.is-present')).toBeVisible();
+  await expect(panel.locator('.card-read-status')).toHaveText('Tarjeta detectada');
   await setResult(success([]));
   await refresh.click();
-  await expect(panel.locator('.card-reader-status')).toContainText('No hay lectores conectados');
-  await expect(panel.locator('.card-atr')).toHaveText('Sin lectura');
+  await expect(panel.locator('.card-read-status')).toContainText('Conecta un lector');
+  await expect(window.getByRole('button', { name: 'Guardar tarjeta', exact: true })).toBeDisabled();
 });
 
 test('lectura manual muestra identidad protegida y valida país en la pantalla', async () => {
@@ -247,9 +241,10 @@ test('lectura manual muestra identidad protegida y valida país en la pantalla',
   }, reading);
   await window.getByRole('button', { name: 'Tarjetas', exact: true }).click();
   const panel = window.getByRole('region', { name: 'Estado del lector' });
+  await panel.getByText('Opciones y datos del chip', { exact: true }).click();
   const country = panel.getByLabel('País del terminal (ISO numérico)');
   await expect(country).toHaveValue('218');
-  const read = panel.getByRole('button', { name: 'Leer datos del chip', exact: true });
+  const read = panel.getByRole('button', { name: 'Leer tarjeta', exact: true });
   await country.fill('xx');
   await read.click();
   await expect(panel.getByRole('alert')).toContainText('tres dígitos');
@@ -257,12 +252,12 @@ test('lectura manual muestra identidad protegida y valida país en la pantalla',
   await country.fill('218');
   await read.click();
   await expect(panel.getByRole('alert')).toHaveCount(0);
-  await expect(panel.getByText('Leído del chip', { exact: true })).toBeVisible();
-  await expect(panel.locator('.detected-card')).toContainText('QA TESTER');
-  await expect(panel.locator('.detected-card')).toContainText('12/29');
-  await expect(panel.locator('.detected-card')).toContainText(reading.panMasked!);
+  await expect(panel.getByText('Lectura completada', { exact: true })).toBeVisible();
+  await expect(panel.getByText('QA TESTER', { exact: true })).toHaveCount(0);
+  await expect(panel.getByText('12/29', { exact: true })).toHaveCount(0);
+  await expect(panel.locator('.card-read-summary')).toContainText('•••• 4444');
   await panel.getByRole('button', { name: 'Actualizar', exact: true }).click();
-  await expect(panel.locator('.detected-card')).toContainText(reading.panMasked!);
+  await expect(panel.locator('.card-read-summary')).toContainText('•••• 4444');
   await mkdir('artifacts', { recursive: true });
   await window.screenshot({ path: 'artifacts/card-identity-synthetic.png', fullPage: true });
 });
@@ -2939,31 +2934,24 @@ test('bugs tarjeta: errores por interfaz y selección estable tras desconexión'
   });
   await window.getByRole('button', { name: 'Tarjetas', exact: true }).click();
   const panel = window.getByRole('region', { name: 'Estado del lector' });
-  const preferred = panel.getByRole('button', {
-    name: 'Synthetic Preferred Tarjeta presente',
-    exact: true,
-  });
-  const backup = panel.getByRole('button', {
-    name: 'Synthetic Backup Tarjeta presente',
-    exact: true,
-  });
-  await preferred.click();
-  await panel.getByRole('button', { name: 'Leer datos del chip', exact: true }).click();
+  const selector = panel.getByLabel('Lector', { exact: true });
+  await selector.selectOption('Synthetic Preferred');
+  await panel.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
   await expect(panel.getByRole('alert')).toContainText('La lectura sintética no respondió.');
   await expect(panel.getByRole('button', { name: 'Actualizar', exact: true })).toBeEnabled();
-  await backup.click();
+  await selector.selectOption('Synthetic Backup');
   await expect(panel.getByRole('alert')).toHaveCount(0);
-  await preferred.click();
+  await selector.selectOption('Synthetic Preferred');
   await setDevices([devices[1]!]);
   await panel.getByRole('button', { name: 'Actualizar', exact: true }).click();
-  await expect(backup).toHaveAttribute('aria-pressed', 'true');
+  await expect(selector).toHaveValue('Synthetic Backup');
   await setDevices(devices);
   await panel.getByRole('button', { name: 'Actualizar', exact: true }).click();
-  await expect(backup).toHaveAttribute('aria-pressed', 'true');
-  await expect(preferred).toHaveAttribute('aria-pressed', 'false');
+  await expect(selector).toHaveValue('Synthetic Backup');
   await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
-  await expect(panel.locator('.detected-card-top')).toContainText('LECTURA DE TARJETA');
-  await expect(panel.locator('.detected-card-top')).not.toContainText('QA · TARJETAS');
+  await expect(
+    window.getByText('El guardado está disponible solo en QA.', { exact: true }),
+  ).toBeVisible();
 });
 
 test('bugs tarjeta: rechaza una identidad de otro lector y actualiza el retiro después del fallo', async () => {

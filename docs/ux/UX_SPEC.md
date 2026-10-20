@@ -89,3 +89,8 @@ El dashboard debe permanecer util incluso con miles de transacciones; mostrar ag
 - Selector de tarjeta con estados explicitos de consulta, lectura, ausencia y error.
   Opciones del chip asociadas a la interfaz seleccionada; consulta automatica pausada
   durante la lectura manual, sin solapar operaciones de la vista.
+- Tarjetas reúne lector y guardado en dos columnas dentro de un panel blanco,
+  apiladas en ventanas estrechas. La tarjeta detectada ocupa un resumen compacto;
+  AID, ATR, CDOL y país se muestran bajo demanda. Un único botón Guardar tarjeta
+  persiste el perfil y confirma el resultado junto al inventario visible.
+  El alias sugerido debe poder guardarse sin edición y comparte validador con Main.
