@@ -271,6 +271,50 @@ test('tarjeta visual sigue inserción, retiro y recuperación con IPC sintético
   await expect(window.getByRole('button', { name: 'Guardar tarjeta', exact: true })).toBeDisabled();
 });
 
+test('Inicio permite leer el chip y muestra identidad enmascarada sin enviar transacción', async () => {
+  const window = await launch();
+  const reading: CardIdentityReading = {
+    readId: '2b86d181-9efb-4808-b8a8-876a843876b8',
+    readAt: '2026-10-08T20:00:00.000Z',
+    readerName: 'CI Reader',
+    status: 'READ',
+    applications: [],
+    applicationId: 'A0000000031010',
+    applicationLabel: 'QA CARD',
+    panMasked: '*'.repeat(12) + '4444',
+    cardholderName: 'QA TESTER',
+    expiry: '12/29',
+  };
+  await app!.evaluate(({ ipcMain }, identity) => {
+    let current: typeof identity | null = null;
+    ipcMain.removeHandler('reader:inspect');
+    ipcMain.handle('reader:inspect', () => ({
+      ok: true,
+      value: {
+        checkedAt: identity.readAt,
+        identityStatus: current ? 'READ' : 'NOT_READ',
+        readers: [{ name: identity.readerName, state: 'CARD_PRESENT', atr: '3B00' }],
+        identity: current,
+      },
+    }));
+    ipcMain.removeHandler('reader:identity:read');
+    ipcMain.handle('reader:identity:read', () => {
+      current = identity;
+      return { ok: true, value: identity };
+    });
+  }, reading);
+  const panel = window.getByRole('region', { name: 'Estado del lector' });
+  await panel.getByRole('button', { name: 'Actualizar', exact: true }).click();
+  const read = panel.getByRole('button', { name: 'Leer datos del chip', exact: true });
+  await expect(read).toBeInViewport();
+  await read.click();
+  await expect(panel).toContainText(reading.panMasked!);
+  await expect(panel).toContainText('QA TESTER');
+  await expect(panel).toContainText('12/29');
+  await expect(panel).toContainText('QA CARD');
+  await expect(panel.getByRole('button', { name: 'Volver a leer chip' })).toBeVisible();
+});
+
 test('lectura manual muestra identidad protegida y valida país en la pantalla', async () => {
   const window = await launch();
   const reading: CardIdentityReading = {

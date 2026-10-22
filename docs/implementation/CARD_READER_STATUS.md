@@ -1,5 +1,15 @@
 # Estado del lector PC/SC en Windows
 
+## Inicio: lectura visible
+
+La tarjeta presente confirma solo el estado PC/SC. En Inicio, el botón **Leer datos
+del chip** aparece junto al estado y ejecuta la misma lectura EMV manual de Main
+que la vista Tarjetas. Después de una lectura válida, Inicio muestra PAN
+enmascarado, titular, vencimiento y aplicación solo cuando el chip los aporta.
+Si falta un campo, se indica como no disponible; un retiro invalida la identidad.
+El resumen de Transacciones usa la referencia enmascarada de su propia lectura
+manual antes del envío. La presencia sola no selecciona una tarjeta para enviar.
+
 ## Comportamiento
 
 Actualizacion 2026-10-15: la app utiliza WindowsPcscMonitor y un unico helper

@@ -2824,6 +2824,17 @@ td {
   gap: 9px;
   margin-top: 16px;
 }
+.card-reader-quick-read {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 12px;
+}
+.card-reader-quick-read span {
+  color: var(--muted);
+  font-size: 12px;
+}
 .card-chip-read {
   background: #245eae;
   color: white;

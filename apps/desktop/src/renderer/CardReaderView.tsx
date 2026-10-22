@@ -80,7 +80,9 @@ export function CardReaderPanel({
           ? 'Sin lector conectado'
           : 'Sin tarjeta detectada';
   const hint = present
-    ? 'Estos son los datos disponibles de la tarjeta en esta interfaz.'
+    ? read
+      ? 'Identidad leída del chip; número de tarjeta enmascarado.'
+      : 'Tarjeta presente. Pulsa Leer datos del chip para ver su identidad.'
     : error
       ? 'Comprueba el lector y vuelve a consultar.'
       : !reader
@@ -118,6 +120,19 @@ export function CardReaderPanel({
         <strong>{status}</strong>
         <span>Actualización automática</span>
       </div>
+      {compact && onRead && (
+        <div className="card-reader-quick-read">
+          <button
+            className="card-chip-read"
+            disabled={!present || reading || refreshing}
+            onClick={() => reader && onRead(reader.name)}
+          >
+            <Icon name="card" size={16} />
+            {reading ? 'Leyendo chip…' : read ? 'Volver a leer chip' : 'Leer datos del chip'}
+          </button>
+          <span>Lectura manual por contacto</span>
+        </div>
+      )}
       {error && (
         <p className="card-reader-error" role="alert">
           {error}
@@ -209,7 +224,7 @@ export function CardReaderPanel({
                 {identity?.panMasked ?? unavailable}
               </dd>
             </div>
-            {!compact && (
+            {read && (
               <>
                 <div>
                   <dt>Titular</dt>
@@ -249,15 +264,17 @@ export function CardReaderPanel({
                   />
                 </label>
               )}
-              <button
-                className="card-chip-read"
-                disabled={!present || reading}
-                onClick={() => reader && onRead(reader.name)}
-              >
-                <Icon name="card" size={16} />
-                {reading ? 'Leyendo chip…' : 'Leer datos del chip'}
-              </button>
-              <small>Inserta la tarjeta por contacto. Lectura EMV manual.</small>
+              {!compact && (
+                <button
+                  className="card-chip-read"
+                  disabled={!present || reading || refreshing}
+                  onClick={() => reader && onRead(reader.name)}
+                >
+                  <Icon name="card" size={16} />
+                  {reading ? 'Leyendo chip…' : 'Leer datos del chip'}
+                </button>
+              )}
+              {!compact && <small>Inserta la tarjeta por contacto. Lectura EMV manual.</small>}
               {read && <small>Lectura: {new Date(identity.readAt).toLocaleTimeString()}</small>}
               {identity?.status === 'DIRECTORY_UNAVAILABLE' && (
                 <p>

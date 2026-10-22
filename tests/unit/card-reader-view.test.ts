@@ -17,6 +17,7 @@ function render(
     error?: string;
     selectedName?: string;
     compact?: boolean;
+    onRead?: boolean;
     identity?: CardIdentityReading;
     identityStatus?: CardReaderSnapshot['identityStatus'];
   } = {},
@@ -37,6 +38,7 @@ function render(
       onSelect: () => undefined,
       onRefresh: () => undefined,
       compact: options.compact ?? false,
+      ...(options.onRead ? { onRead: () => undefined } : {}),
     }),
   );
 }
@@ -113,6 +115,33 @@ describe('presentación de tarjeta detectada', () => {
     expect(markup).toContain('card-reader-compact');
     expect(markup).toContain('<code>3B 00</code>');
     expect(markup).not.toContain('<dt>Titular</dt>');
+  });
+  it('ofrece lectura visible en Inicio y muestra solo la identidad protegida después de leer', () => {
+    const pending = render([present], { compact: true, onRead: true });
+    expect(pending).toContain('Leer datos del chip');
+    expect(pending).toContain('Pulsa Leer datos del chip');
+    expect(pending.indexOf('Leer datos del chip')).toBeLessThan(
+      pending.indexOf('detected-card is-present'),
+    );
+
+    const identity: CardIdentityReading = {
+      readId: '2b86d181-9efb-4808-b8a8-876a843876b8',
+      readAt: '2026-10-08T20:00:00.000Z',
+      readerName: present.name,
+      status: 'READ',
+      applications: [],
+      applicationId: 'A0000000031010',
+      applicationLabel: 'QA CARD',
+      panMasked: '*'.repeat(12) + '4444',
+      cardholderName: 'QA TESTER',
+      expiry: '12/29',
+    };
+    const markup = render([present], { compact: true, onRead: true, identity });
+    expect(markup).toContain('Volver a leer chip');
+    expect(markup).toContain(identity.panMasked);
+    expect(markup).toContain('QA TESTER');
+    expect(markup).toContain('12/29');
+    expect(markup).toContain('QA CARD');
   });
   it('muestra los datos leídos y no los atribuye a una interfaz distinta', () => {
     const identity: CardIdentityReading = {
