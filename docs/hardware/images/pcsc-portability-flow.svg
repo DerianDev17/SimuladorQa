@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">Flujo de presencia, lectura EMV e invalidación</title>
+  <desc id="desc">El sistema observa presencia sin APDU, espera acción del usuario, abre sesión, lee solo el perfil aprobado, entrega identidad enmascarada e invalida al retirar la tarjeta.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth"><path d="M0 0 L10 5 L0 10 Z" fill="#537493"/></marker>
+    <style>
+      .bg{fill:#f7fafc}.heading{font:700 29px 'Segoe UI',Arial,sans-serif;fill:#183349}.sub{font:16px 'Segoe UI',Arial,sans-serif;fill:#536b7b}.lane{font:700 18px 'Segoe UI',Arial,sans-serif;fill:#183349}.txt{font:16px 'Segoe UI',Arial,sans-serif;fill:#354e61}.note{font:14px 'Segoe UI',Arial,sans-serif;fill:#5b6875}.box{fill:#fff;stroke:#bbcad6;stroke-width:2}.blue{fill:#e8f1fb;stroke:#7495ba;stroke-width:2}.teal{fill:#e8f4f5;stroke:#6aa7ac;stroke-width:2}.red{fill:#fff0ee;stroke:#ca8178;stroke-width:2}.stripe{stroke:#d1dce5;stroke-width:2;stroke-dasharray:7 8}.arrow{stroke:#537493;stroke-width:2.5;fill:none;marker-end:url(#arrow)}.return{stroke:#537493;stroke-width:2;stroke-dasharray:7 5;fill:none;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect class="bg" width="1200" height="760"/>
+  <text class="heading" x="48" y="54">Presencia ≠ lectura ≠ transacción</text>
+  <text class="sub" x="48" y="83">Secuencia mínima para conservar vigencia y proteger datos de la tarjeta.</text>
+  <text class="lane" x="104" y="133">Operador / UI</text>
+  <text class="lane" x="438" y="133">Servicio local</text>
+  <text class="lane" x="793" y="133">PC/SC + tarjeta</text>
+  <path class="stripe" d="M230 153 V708 M548 153 V708 M929 153 V708"/>
+
+  <rect class="blue" x="765" y="177" width="325" height="66" rx="12"/>
+  <text class="txt" x="788" y="204">1 · Inserción / retiro</text>
+  <text class="note" x="788" y="226">Evento y ATR; cero APDU</text>
+  <path class="arrow" d="M764 209 H573"/>
+  <rect class="box" x="385" y="177" width="175" height="66" rx="12"/>
+  <text class="txt" x="402" y="204">2 · Estado público</text>
+  <text class="note" x="402" y="226">CARD_PRESENT</text>
+  <path class="return" d="M384 209 H255"/>
+
+  <rect class="teal" x="78" y="278" width="290" height="66" rx="12"/>
+  <text class="txt" x="100" y="306">3 · Pulsar «Leer tarjeta»</text>
+  <text class="note" x="100" y="327">Elegir lector y país válidos</text>
+  <path class="arrow" d="M368 311 H385"/>
+  <rect class="box" x="385" y="278" width="278" height="66" rx="12"/>
+  <text class="txt" x="405" y="306">4 · Validar y reservar</text>
+  <text class="note" x="405" y="327">Plazo, bloqueo, readId</text>
+  <path class="arrow" d="M663 311 H765"/>
+
+  <rect class="blue" x="765" y="379" width="325" height="110" rx="12"/>
+  <text class="txt" x="787" y="407">5 · Sesión + perfil EMV</text>
+  <text class="note" x="787" y="433">SELECT PSE / AID · GPO</text>
+  <text class="note" x="787" y="457">READ RECORD según AFL</text>
+  <path class="return" d="M764 433 H663"/>
+  <rect class="teal" x="385" y="379" width="278" height="110" rx="12"/>
+  <text class="txt" x="405" y="407">6 · Validar y sanear</text>
+  <text class="note" x="405" y="433">TLV/DOL acotados</text>
+  <text class="note" x="405" y="457">PAN enmascarado</text>
+  <path class="return" d="M384 433 H368"/>
+  <rect class="box" x="78" y="379" width="290" height="110" rx="12"/>
+  <text class="txt" x="100" y="407">7 · Mostrar identidad</text>
+  <text class="note" x="100" y="433">Solo lectura vigente</text>
+  <text class="note" x="100" y="457">Sin Track 2 ni APDU</text>
+
+  <rect class="red" x="765" y="533" width="325" height="85" rx="12"/>
+  <text class="txt" x="787" y="562">8 · Retiro, reset o timeout</text>
+  <text class="note" x="787" y="586">La tarjeta deja de ser válida</text>
+  <path class="arrow" d="M764 575 H663"/>
+  <rect class="red" x="385" y="533" width="278" height="85" rx="12"/>
+  <text class="txt" x="405" y="562">9 · Invalidar y limpiar</text>
+  <text class="note" x="405" y="586">Cerrar handle y descartar readId</text>
+  <path class="return" d="M384 575 H368"/>
+  <rect class="box" x="78" y="533" width="290" height="85" rx="12"/>
+  <text class="txt" x="100" y="562">10 · Borrar identidad</text>
+  <text class="note" x="100" y="586">Pedir nueva lectura manual</text>
+
+  <text class="note" x="48" y="683">Para operar en QA: revalidar la misma tarjeta, obtener PIN/EMV nuevos y aplicar el contrato financiero aprobado.</text>
+  <text class="note" x="48" y="710">Una respuesta tardía o un ATR repetido no restauran la identidad descartada.</text>
+</svg>

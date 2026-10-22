@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 660" role="img" aria-labelledby="title desc">
+  <title id="title">Arquitectura portable de lector PC/SC</title>
+  <desc id="desc">Interfaz, servicio local, adaptador PC/SC, sistema operativo y lector físico. El motor transaccional y la seguridad aprobada son una ruta separada.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth"><path d="M0 0 L10 5 L0 10 Z" fill="#537493"/></marker>
+    <style>
+      .bg{fill:#f7fafc}.panel{fill:#fff;stroke:#b8c9d7;stroke-width:2}.accent{fill:#e8f4f5;stroke:#6aa7ac;stroke-width:2}.security{fill:#fff7e8;stroke:#d6aa5d;stroke-width:2}
+      .title{font:700 29px 'Segoe UI',Arial,sans-serif;fill:#183349}.subtitle{font:17px 'Segoe UI',Arial,sans-serif;fill:#536b7b}.head{font:700 21px 'Segoe UI',Arial,sans-serif;fill:#183349}.body{font:16px 'Segoe UI',Arial,sans-serif;fill:#354e61}.small{font:14px 'Segoe UI',Arial,sans-serif;fill:#536b7b}.tag{font:700 13px 'Segoe UI',Arial,sans-serif;letter-spacing:1px;fill:#39757a}
+      .line{stroke:#537493;stroke-width:3;fill:none;marker-end:url(#arrow)}.dash{stroke:#9a7844;stroke-width:2.5;stroke-dasharray:8 6;fill:none;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect class="bg" width="1200" height="660"/>
+  <text class="title" x="56" y="58">Arquitectura de integración PC/SC</text>
+  <text class="subtitle" x="56" y="88">Porta los límites entre componentes; sustituye solo el adaptador propio de cada lenguaje y sistema operativo.</text>
+
+  <rect class="panel" x="48" y="150" width="242" height="250" rx="20"/>
+  <text class="tag" x="73" y="185">CAPA 1</text>
+  <text class="head" x="73" y="219">Interfaz</text>
+  <text class="body" x="73" y="254">Muestra presencia</text>
+  <text class="body" x="73" y="281">Solicita lectura manual</text>
+  <text class="body" x="73" y="308">Recibe PAN enmascarado</text>
+  <text class="small" x="73" y="358">Sin APDU, PIN ni secretos</text>
+
+  <rect class="accent" x="339" y="150" width="250" height="250" rx="20"/>
+  <text class="tag" x="364" y="185">CAPA 2</text>
+  <text class="head" x="364" y="219">Servicio local</text>
+  <text class="body" x="364" y="254">Valida solicitudes</text>
+  <text class="body" x="364" y="281">Controla sesión y plazo</text>
+  <text class="body" x="364" y="308">Lee y sanea identidad</text>
+  <text class="small" x="364" y="358">Invalida al retirar tarjeta</text>
+
+  <rect class="panel" x="638" y="150" width="240" height="250" rx="20"/>
+  <text class="tag" x="663" y="185">CAPA 3</text>
+  <text class="head" x="663" y="219">Adaptador PC/SC</text>
+  <text class="body" x="663" y="254">Enumera lectores</text>
+  <text class="body" x="663" y="281">Espera cambios</text>
+  <text class="body" x="663" y="308">Conecta y transmite</text>
+  <text class="small" x="663" y="358">WinSCard / PC/SC Lite</text>
+
+  <rect class="panel" x="927" y="150" width="225" height="250" rx="20"/>
+  <text class="tag" x="952" y="185">CAPA 4</text>
+  <text class="head" x="952" y="219">Estación física</text>
+  <text class="body" x="952" y="254">Servicio del SO</text>
+  <text class="body" x="952" y="281">OMNIKEY 5422</text>
+  <text class="body" x="952" y="308">Tarjeta QA</text>
+  <text class="small" x="952" y="358">Contacto validado</text>
+
+  <path class="line" d="M290 275 H329"/><path class="line" d="M589 275 H628"/><path class="line" d="M878 275 H917"/>
+  <text class="small" x="76" y="133">Datos públicos protegidos</text>
+  <text class="small" x="657" y="133">Acceso al hardware</text>
+
+  <rect class="security" x="339" y="464" width="539" height="135" rx="20"/>
+  <text class="tag" x="364" y="498" fill="#9a7844">SOLO SI HAY OPERACIONES QA APROBADAS</text>
+  <text class="head" x="364" y="532">Motor transaccional + proveedor PIN/EMV</text>
+  <text class="body" x="364" y="563">Datos frescos por operación · contrato host validado</text>
+  <path class="dash" d="M464 400 V454"/>
+  <path class="dash" d="M758 464 V411"/>
+  <text class="small" x="48" y="631">Frontera: la presencia y el ATR no prueban identidad, autorización ni compatibilidad financiera.</text>
+</svg>
