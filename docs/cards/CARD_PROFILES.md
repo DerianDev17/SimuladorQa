@@ -26,13 +26,15 @@ transacción sin lector.
 
 | Fuente | Datos | Uso |
 | --- | --- | --- |
-| Lectura EMV | PAN enmascarado (solo últimos cuatro), AID y etiqueta de aplicación | Reconocer la referencia y seleccionar la aplicación actual |
+| Lectura EMV | PAN enmascarado en sesión (primeros seis y últimos cuatro), AID y etiqueta de aplicación | Reconocer la referencia y seleccionar la aplicación actual |
 | Lectura EMV | CDOL1/CDOL2: tags y longitudes | Mostrar los campos que solicita el chip, sin guardar sus valores |
 | Operador | Alias y cuenta predeterminada opcional (Ahorros/Corriente) | Identificar el perfil y preparar la cuenta en Transacciones |
 
 El inventario local QA guarda estos datos en `qa-card-profiles.json` dentro de
 `userData`. La versión 2 migra perfiles antiguos que solo tenían alias, últimos
 cuatro, AID y fecha. PREPROD no puede listar ni cambiar perfiles.
+El inventario sigue guardando solo los últimos cuatro del PAN; el prefijo
+visible durante la lectura no se persiste (ADR-021).
 
 ## Datos que no se guardan ni se editan como valores de tarjeta
 

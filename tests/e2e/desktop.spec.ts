@@ -281,7 +281,7 @@ test('Inicio permite leer el chip y muestra identidad enmascarada sin enviar tra
     applications: [],
     applicationId: 'A0000000031010',
     applicationLabel: 'QA CARD',
-    panMasked: '*'.repeat(12) + '4444',
+    panMasked: '412345******4444',
     cardholderName: 'QA TESTER',
     expiry: '12/29',
   };
@@ -325,7 +325,7 @@ test('lectura manual muestra identidad protegida y valida país en la pantalla',
     applications: [],
     applicationId: null,
     applicationLabel: 'QA CARD',
-    panMasked: '*'.repeat(12) + '4444',
+    panMasked: '412345******4444',
     cardholderName: 'QA TESTER',
     expiry: '12/29',
   };
@@ -365,9 +365,9 @@ test('lectura manual muestra identidad protegida y valida país en la pantalla',
   await expect(panel.getByText('Lectura completada', { exact: true })).toBeVisible();
   await expect(panel.getByText('QA TESTER', { exact: true })).toHaveCount(0);
   await expect(panel.getByText('12/29', { exact: true })).toHaveCount(0);
-  await expect(panel.locator('.card-read-summary')).toContainText('•••• 4444');
+  await expect(panel.locator('.card-read-summary')).toContainText(reading.panMasked!);
   await panel.getByRole('button', { name: 'Actualizar', exact: true }).click();
-  await expect(panel.locator('.card-read-summary')).toContainText('•••• 4444');
+  await expect(panel.locator('.card-read-summary')).toContainText(reading.panMasked!);
   await mkdir('artifacts', { recursive: true });
   await window.screenshot({ path: 'artifacts/card-identity-synthetic.png', fullPage: true });
 });
@@ -441,7 +441,7 @@ const transactionIdentity: CardIdentityReading = {
   applications: [],
   applicationId: null,
   applicationLabel: 'TEST CARD',
-  panMasked: '*'.repeat(12) + '4444',
+  panMasked: '412345******4444',
   cardholderName: null,
   expiry: null,
 };

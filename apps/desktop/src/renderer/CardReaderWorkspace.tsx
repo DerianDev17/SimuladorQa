@@ -67,9 +67,7 @@ export function CardReaderWorkspace({
           <h3>{read ? (identity.applicationLabel ?? 'Tarjeta EMV') : 'Tarjeta física'}</h3>
           <p>
             {read
-              ? identity.panMasked?.match(/\d{4}$/)?.[0]
-                ? `•••• ${identity.panMasked.match(/\d{4}$/)?.[0]}`
-                : 'Número no disponible'
+              ? (identity.panMasked ?? 'Número no disponible')
               : present
                 ? 'Lista para leer sus datos'
                 : 'Inserta la tarjeta en el lector'}

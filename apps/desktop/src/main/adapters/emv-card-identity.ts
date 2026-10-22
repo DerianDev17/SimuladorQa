@@ -1,4 +1,5 @@
 import { redactCardDisplayText } from '../../../../../packages/domain/src/card-reader';
+import { maskPan } from '../../../../../packages/domain/src/index';
 import type {
   CardApplication,
   CardIdentityReading,
@@ -164,7 +165,7 @@ export function decodeCardFields(
   if (pan) {
     const digits = hex(pan).replace(/F+$/, '');
     if (!/^\d{12,19}$/.test(digits) || pan.length > 10) invalid();
-    panMasked = '*'.repeat(digits.length - 4) + digits.slice(-4);
+    panMasked = maskPan(digits);
   }
   const date = unique(nodes, '5F24');
   let expiry: string | null = null;

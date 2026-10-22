@@ -78,7 +78,9 @@ Fuentes de Windows:
 - [SCardDisconnect](https://learn.microsoft.com/en-us/windows/win32/api/winscard/nf-winscard-scarddisconnect).
 
 PAN completo y respuestas APDU no salen de Main/helper, no se registran ni
-persisten. La proyeccion conserva solo los ultimos cuatro digitos del PAN;
+persisten. Por solicitud del operador del 2026-10-22, la proyeccion de sesion
+conserva los primeros seis y los ultimos cuatro digitos, con el centro
+enmascarado; el perfil guardado conserva solo los ultimos cuatro. Ver ADR-021.
 Track 2 y otros tags sensibles se descartan. El helper limpia buffers nativos.
 No se expone transmisor APDU generico por preload. Textos de titular/aplicacion
 y nombres de lector protegen secuencias de 12 o mas digitos, incluidos espacios

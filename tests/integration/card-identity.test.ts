@@ -67,7 +67,7 @@ while ($null -ne ($line = [Console]::ReadLine())) {
       const result = await service.read({ readerName: 'CI Reader' });
       expect(result).toMatchObject({
         ok: true,
-        value: { status: 'READ', expiry: '12/29', panMasked: '*'.repeat(12) + '4444' },
+        value: { status: 'READ', expiry: '12/29', panMasked: '444444******4444' },
       });
       expect(JSON.stringify(result).includes(syntheticPan)).toBe(false);
       expect(result).not.toHaveProperty('response');

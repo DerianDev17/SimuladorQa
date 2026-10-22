@@ -36,7 +36,7 @@ describe('identidad EMV de contacto', () => {
     const result = await readEmvIdentity(session, base);
     expect(result).toMatchObject({
       status: 'READ',
-      panMasked: '*'.repeat(12) + '4444',
+      panMasked: '444444******4444',
       cardholderName: 'QA TESTER',
       expiry: '12/29',
       applicationLabel: 'QA CARD',
@@ -268,7 +268,7 @@ describe('identidad EMV de contacto', () => {
       value: { status: 'READ' },
     });
     expect(fake.state.released).toBe(true);
-    expect(await service.current()).toMatchObject({ panMasked: '*'.repeat(12) + '4444' });
+    expect(await service.current()).toMatchObject({ panMasked: '444444******4444' });
     fake.state.valid = false;
     expect(await service.current()).toBeNull();
     expect(fake.state.closed).toBe(true);
