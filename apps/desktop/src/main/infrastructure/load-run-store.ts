@@ -7,7 +7,7 @@ import { parseLoadTestDraft } from '../../../../../packages/domain/src/load-test
 import type { LoadRunSnapshot } from '../../../../../packages/domain/src/load-run';
 import type { LoadRunStore } from '../load-run-service';
 
-function valid(value: unknown): value is LoadRunSnapshot {
+export function validLoadRunSnapshot(value: unknown): value is LoadRunSnapshot {
   if (
     !isRecord(value) ||
     Object.keys(value).length !== 10 ||
@@ -116,21 +116,28 @@ function valid(value: unknown): value is LoadRunSnapshot {
     );
   });
 }
+export async function readLegacyLoadRuns(file: string): Promise<LoadRunSnapshot[]> {
+  let bytes: Buffer;
+  try {
+    bytes = await readFile(file);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw error;
+  }
+  if (bytes.length > 4 * 1024 * 1024) throw Error('LOAD_STORE_LIMIT');
+  const value: unknown = JSON.parse(bytes.toString('utf8'));
+  if (!Array.isArray(value) || value.length > 100 || !value.every(validLoadRunSnapshot))
+    throw Error('LOAD_STORE_INVALID');
+  const runIds = new Set(value.map((run) => run.runId));
+  const requestIds = new Set(value.map((run) => run.requestId));
+  if (runIds.size !== value.length || requestIds.size !== value.length)
+    throw Error('LOAD_STORE_INVALID');
+  return value;
+}
 export class FileLoadRunStore implements LoadRunStore {
   constructor(private readonly file: string) {}
   private async all(): Promise<LoadRunSnapshot[]> {
-    let bytes: Buffer;
-    try {
-      bytes = await readFile(this.file);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
-      throw error;
-    }
-    if (bytes.length > 4 * 1024 * 1024) throw Error('LOAD_STORE_LIMIT');
-    const value: unknown = JSON.parse(bytes.toString('utf8'));
-    if (!Array.isArray(value) || value.length > 100 || !value.every(valid))
-      throw Error('LOAD_STORE_INVALID');
-    return value;
+    return readLegacyLoadRuns(this.file);
   }
   async read(): Promise<LoadRunSnapshot | null> {
     return (await this.all()).at(-1) ?? null;
@@ -139,13 +146,18 @@ export class FileLoadRunStore implements LoadRunStore {
     return (await this.all()).some((item) => item.requestId === id);
   }
   async write(run: LoadRunSnapshot): Promise<void> {
-    if (!valid(run)) throw Error('LOAD_RUN_INVALID');
+    if (!validLoadRunSnapshot(run)) throw Error('LOAD_RUN_INVALID');
     const runs = await this.all();
     const index = runs.findIndex((item) => item.runId === run.runId);
     if (index < 0) {
+      if (runs.some((item) => item.requestId === run.requestId))
+        throw Error('LOAD_RUN_DUPLICATE_REQUEST');
       if (runs.length >= 100) throw Error('LOAD_STORE_FULL');
       runs.push(run);
-    } else runs[index] = run;
+    } else {
+      if (runs[index]!.requestId !== run.requestId) throw Error('LOAD_RUN_INVALID');
+      runs[index] = run;
+    }
     const temporary = `${this.file}.${randomUUID()}.tmp`;
     const serialized = JSON.stringify(runs);
     if (Buffer.byteLength(serialized) > 4 * 1024 * 1024) throw Error('LOAD_STORE_LIMIT');

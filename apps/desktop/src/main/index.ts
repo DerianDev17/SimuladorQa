@@ -1,7 +1,7 @@
 import { LoadPinSession } from './adapters/load-pin-session';
 import { LoadRunService } from './load-run-service';
 import { PhysicalCardLoadDriver } from './physical-card-load-driver';
-import { FileLoadRunStore } from './infrastructure/load-run-store';
+import { SqliteLoadRunStore } from './infrastructure/sqlite-load-run-store';
 import { workerLoadScheduler } from './infrastructure/load-scheduler';
 import { app, BrowserWindow, dialog, ipcMain, session } from 'electron';
 import { randomUUID } from 'node:crypto';
@@ -75,6 +75,7 @@ let withdrawalService: WithdrawalService | undefined;
 let withdrawalReceipts: WithdrawalReceiptService | undefined;
 let loadRun: LoadRunService | undefined;
 let loadTestService: LoadTestService | undefined;
+let loadRunStore: SqliteLoadRunStore | undefined;
 let virtualCardGenerator: VirtualCardGeneratorService | undefined;
 let savedCardProfiles: SavedCardProfileService | undefined;
 let financialApplication: DesktopApplication | undefined;
@@ -368,6 +369,10 @@ void startupReady
       withdrawalService,
     );
     financialApplication = application;
+    loadRunStore = new SqliteLoadRunStore(
+      join(app.getPath('userData'), 'qa-load-runs.sqlite'),
+      join(app.getPath('userData'), 'qa-load-runs.json'),
+    );
     loadRun = new LoadRunService(
       runtime,
       new PhysicalCardLoadDriver(
@@ -378,7 +383,7 @@ void startupReady
         runtime,
         () => void publishReaderSnapshot(),
       ),
-      new FileLoadRunStore(join(app.getPath('userData'), 'qa-load-runs.json')),
+      loadRunStore,
       workerLoadScheduler(join(__dirname, 'load-worker.cjs')),
     );
     withdrawalReceipts = new WithdrawalReceiptService(
@@ -597,6 +602,7 @@ app.on('before-quit', (event) => {
         observer?.close();
         cardReader?.close();
         cardIdentity?.close();
+        await loadRunStore?.close().catch(() => undefined);
         await Promise.allSettled(financialJournals.map((journal) => journal.close()));
         await catalogs?.close().catch(() => undefined);
       } finally {

@@ -49,7 +49,7 @@ test('carga de saldo: iniciar, medir, recuperar y detener con motor real y fuent
     },
     {
       fixture: resolve('artifacts/load-electron.cjs'),
-      file: join(directory, 'load-ui.json'),
+      file: join(directory, 'load-ui.sqlite'),
       worker: resolve('dist/load-worker.cjs'),
       sample,
     },

@@ -57,7 +57,10 @@ Ver [ADR-020](../adr/ADR-020-PHYSICAL-CARD-LOAD.md).
 
 Las transacciones comparten `runId`, conservando `transactionId`, `requestId`
 y STAN/RRN propios. Se persisten parámetros inmutables y resultados públicos en
-`qa-load-runs.json`, hasta 100 corridas; no se borra historia automáticamente.
+`qa-load-runs.sqlite`, sin límite de 100 corridas ni borrado automático. Al primer
+acceso se importa el JSON anterior dentro de una transacción; el archivo original
+permanece como respaldo. Si está corrupto, el inicio se bloquea hasta revisarlo.
+Cada `requestId` queda como clave única, incluso después de reiniciar.
 TPS = envíos con bytes encolados / tiempo total. Los percentiles usan únicamente
 respuestas recibidas y su tiempo de transporte, sin contar como respuesta una
 lectura o preparación local. La UI distingue operaciones en curso de envíos.

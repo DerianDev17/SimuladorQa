@@ -1,7 +1,7 @@
 import type { IpcMain } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { LoadRunService } from '../../apps/desktop/src/main/load-run-service';
-import { FileLoadRunStore } from '../../apps/desktop/src/main/infrastructure/load-run-store';
+import { SqliteLoadRunStore } from '../../apps/desktop/src/main/infrastructure/sqlite-load-run-store';
 import { workerLoadScheduler } from '../../apps/desktop/src/main/infrastructure/load-scheduler';
 import type { BalanceExecution } from '../../packages/domain/src/balance-inquiry';
 
@@ -59,7 +59,7 @@ export function install(ipc: IpcMain, file: string, worker: string, sample: Bala
         },
       }),
     },
-    new FileLoadRunStore(file),
+    new SqliteLoadRunStore(file, `${file}.json`),
     workerLoadScheduler(worker),
   );
   for (const channel of ['load:run:start', 'load:run:status', 'load:run:stop'])

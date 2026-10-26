@@ -29,7 +29,7 @@ de 5 TPS con el lector. La entrada del PIN y la lectura consumen tiempo de corri
 
 El usuario elige ATM/cantidad/tiempo y pulsa Iniciar. Main vuelve a comprobar
 QA, destino, revisión ATM, tarjeta vigente, perfil de cifrado, cantidad de
-secuencias y espacio en el diario antes de abrir el worker.
+secuencias y ausencia de operaciones financieras pendientes antes de abrir el worker.
 La sesión excluye modificaciones de contexto y otras ejecuciones desde IPC.
 Detener cancela generación y sockets; un envío sin respuesta queda incierto,
 sin reintento automático. Se detiene al primer rechazo/error.
@@ -37,9 +37,11 @@ sin reintento automático. Se detiene al primer rechazo/error.
 ## Evidencia y recuperación
 
 Cada operación conserva `requestId`, `transactionId`, STAN/RRN y el `runId`
-común en el diario financiero. `qa-load-runs.json` conserva hasta 100 corridas
-con parámetros inmutables y métricas públicas. No elimina evidencia para hacer
-espacio. Un cierre inesperado marca la corrida interrumpida; no se reanuda.
+común en el diario financiero. `qa-load-runs.sqlite` conserva las corridas
+con parámetros inmutables y métricas públicas, sin borrar evidencia para hacer
+espacio. Importa una vez el JSON anterior, conservándolo como respaldo. La base
+impide reutilizar `requestId`. Un cierre inesperado marca la corrida interrumpida;
+no se reanuda.
 Las pruebas usan hardware sintético y TCP loopback. No se ejecutó carga real
 como parte de esta implementación.
 
