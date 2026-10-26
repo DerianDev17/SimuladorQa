@@ -50,6 +50,9 @@ export class LoadRunService {
   private finishReason: 'COMPLETED' | 'STOPPED' | 'FAILED' | undefined;
   private writes: Promise<void> = Promise.resolve();
   private finishing = false;
+  private closing = false;
+  private idle: Promise<void> = Promise.resolve();
+  private resolveIdle: (() => void) | undefined;
   private durationDrainTimer: ReturnType<typeof setTimeout> | undefined;
   constructor(
     private readonly identity: RuntimeIdentity,
@@ -66,6 +69,14 @@ export class LoadRunService {
   }
   isBusy(): boolean {
     return this.busy;
+  }
+  whenIdle(): Promise<void> {
+    return this.idle;
+  }
+  private markIdle(): void {
+    this.busy = false;
+    this.resolveIdle?.();
+    this.resolveIdle = undefined;
   }
   observeReaders(readers: readonly { name: string; state: string }[] | null): void {
     if (
@@ -113,6 +124,7 @@ export class LoadRunService {
     }
   }
   async start(payload: unknown): Promise<Result<LoadRunSnapshot>> {
+    if (this.closing) return failure('SERVICE_UNAVAILABLE', 'La aplicación se está cerrando.');
     const request = parseLoadRunRequest(payload);
     if (!request)
       return failure(
@@ -121,6 +133,9 @@ export class LoadRunService {
       );
     if (this.busy) return failure('CONFLICT', 'Ya hay una corrida activa.');
     this.busy = true;
+    this.idle = new Promise<void>((resolve) => {
+      this.resolveIdle = resolve;
+    });
     this.started = performance.now();
     try {
       const previous = this.run ?? (await this.store.read());
@@ -134,8 +149,13 @@ export class LoadRunService {
           'CONFLICT',
           'Hay una corrida interrumpida. Revisa su historial antes de preparar otra.',
         );
+      if (this.closing) return failure('SERVICE_UNAVAILABLE', 'La aplicación se está cerrando.');
       const prepared = await this.driver.prepare(structuredClone(request));
       if (!prepared.ok) return prepared;
+      if (this.closing) {
+        prepared.value.close();
+        return failure('SERVICE_UNAVAILABLE', 'La aplicación se está cerrando.');
+      }
       this.source = prepared.value;
       this.abort = new AbortController();
       this.finishReason = undefined;
@@ -153,6 +173,11 @@ export class LoadRunService {
         elapsedMs: 0,
       };
       await this.persist();
+      if (this.closing) {
+        this.finishReason = 'STOPPED';
+        await this.finish();
+        return failure('SERVICE_UNAVAILABLE', 'La aplicación se está cerrando.');
+      }
       this.scheduler = this.schedule(
         request,
         () => void this.tick(),
@@ -199,7 +224,7 @@ export class LoadRunService {
       if (!this.scheduler) {
         this.releaseSource();
         this.source = undefined;
-        this.busy = false;
+        this.markIdle();
       }
     }
   }
@@ -224,7 +249,8 @@ export class LoadRunService {
     return { ok: true, value: this.snapshot() };
   }
   close(): void {
-    if (this.run && this.busy) this.stop({ runId: this.run.runId });
+    this.closing = true;
+    if (this.run && this.busy && this.scheduler) this.stop({ runId: this.run.runId });
   }
   private async tick(): Promise<void> {
     if (!this.run || !this.busy || this.run.active || this.finishReason) return;
@@ -305,7 +331,7 @@ export class LoadRunService {
       this.run.state = 'FAILED';
       this.run.message = 'No se pudo guardar el cierre. Revisa el historial transaccional.';
     } finally {
-      this.busy = false;
+      this.markIdle();
     }
   }
 }

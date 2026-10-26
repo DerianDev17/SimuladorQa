@@ -168,6 +168,40 @@ describe('worker de carga con persistencia real', () => {
     expect((await finished(service)).state).toBe('FAILED');
     expect(close).toHaveBeenCalled();
   });
+  it('espera el cierre de la corrida y no arranca si se cierra durante la preparación', async () => {
+    const { service, driver, store, close } = setup(async () => ({
+      ok: true,
+      value: result(),
+    }));
+    let releasePrepare: ((value: Awaited<ReturnType<typeof driver.prepare>>) => void) | undefined;
+    driver.prepare.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releasePrepare = resolve;
+        }),
+    );
+    const starting = service.start(request());
+    await vi.waitFor(() => expect(releasePrepare).toBeDefined());
+    const idle = service.whenIdle();
+    service.close();
+    releasePrepare!({
+      ok: true,
+      value: {
+        readerName: 'Synthetic',
+        execute: async () => ({ ok: true, value: result() }),
+        close,
+      },
+    });
+    expect(await starting).toMatchObject({ ok: false, error: { code: 'SERVICE_UNAVAILABLE' } });
+    await idle;
+    expect(service.isBusy()).toBe(false);
+    expect(close).toHaveBeenCalledOnce();
+    expect(await store.read()).toBeNull();
+    expect(await service.start(request())).toMatchObject({
+      ok: false,
+      error: { code: 'SERVICE_UNAVAILABLE' },
+    });
+  });
   it('el límite de duración espera la respuesta de la operación ya iniciada', async () => {
     const execute = vi.fn(async (signal: AbortSignal) => {
       await new Promise((done) => setTimeout(done, 1200));

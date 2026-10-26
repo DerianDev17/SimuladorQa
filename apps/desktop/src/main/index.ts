@@ -57,6 +57,7 @@ import { LoadTestService } from './load-test-service';
 import { VirtualCardGeneratorService } from './virtual-card-generator-service';
 import { SavedCardProfileService } from './saved-card-profile-service';
 import { FileSavedCardProfileStore } from './infrastructure/saved-card-profile-store';
+import { drainBeforeQuit } from './shutdown-drain';
 
 const development = process.argv.includes('--dev');
 // Vite serves development assets directly; avoid reusing a corrupt HTTP disk cache.
@@ -76,6 +77,7 @@ let loadRun: LoadRunService | undefined;
 let loadTestService: LoadTestService | undefined;
 let virtualCardGenerator: VirtualCardGeneratorService | undefined;
 let savedCardProfiles: SavedCardProfileService | undefined;
+let financialApplication: DesktopApplication | undefined;
 let quitting = false;
 let developmentReload = false;
 let developmentReloadTimer: ReturnType<typeof setTimeout> | undefined;
@@ -360,6 +362,7 @@ void startupReady
       switchConnection,
       withdrawalService,
     );
+    financialApplication = application;
     loadRun = new LoadRunService(
       runtime,
       new PhysicalCardLoadDriver(
@@ -392,6 +395,7 @@ void startupReady
           )
         )
           return failure('FORBIDDEN', 'Solicitud no autorizada.');
+        if (quitting) return failure('SERVICE_UNAVAILABLE', 'La aplicación se está cerrando.');
         if (
           loadRun?.isBusy() &&
           new Set<string>([
@@ -572,13 +576,26 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', (event) => {
   clearTimeout(developmentReloadTimer);
-  loadRun?.close();
-  switchConnection?.disconnect('APP_CLOSED');
-  observer?.close();
-  cardReader?.close();
-  cardIdentity?.close();
-  if (quitting || !catalogs) return;
+  if (quitting) return;
   event.preventDefault();
   quitting = true;
-  void catalogs.close().finally(() => app.quit());
+  loadRun?.close();
+  void (async () => {
+    try {
+      await drainBeforeQuit([
+        financialApplication?.whenFinancialIdle() ?? Promise.resolve(),
+        loadRun?.whenIdle() ?? Promise.resolve(),
+      ]);
+    } finally {
+      try {
+        switchConnection?.disconnect('APP_CLOSED');
+        observer?.close();
+        cardReader?.close();
+        cardIdentity?.close();
+        await catalogs?.close().catch(() => undefined);
+      } finally {
+        app.quit();
+      }
+    }
+  })();
 });

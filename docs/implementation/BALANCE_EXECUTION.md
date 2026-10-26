@@ -628,6 +628,10 @@ Se guarda PENDING antes del posible write. Tras reinicio, repetir requestId
 devuelve ese registro sin volver a enviar. Si falla guardar el resultado, la
 UI conserva la referencia y advierte no repetir. Un timeout IPC tampoco cancela
 un envio iniciado; Consultar resultado e Historial permiten recuperar evidencia.
+Al cerrar Electron, Main deja de aceptar IPC, detiene la carga y espera hasta
+120 segundos para que las operaciones financieras y sus escrituras terminen antes
+de liberar lector y diario. Si la dependencia no termina, el proceso sale y el
+registro `PENDING` conserva la entrega como incierta; no hay reenvio automatico.
 Los IDs de revision/plan documental son distintos de runId/transactionId.
 
 Limite: 200 registros, sin eviction automatica de claves de idempotencia. Al

@@ -278,7 +278,12 @@ describe('Main, proveedor y diario de saldo real en archivo', () => {
     });
     const executing = f.app.executeBalance(f.request);
     expect(f.app.isFinancialBusy()).toBe(true);
+    let drained = false;
+    const idle = f.app.whenFinancialIdle().then(() => {
+      drained = true;
+    });
     await vi.waitFor(() => expect(complete).toBeDefined());
+    expect(drained).toBe(false);
     expect(await f.app.executeBalance(f.request)).toMatchObject({
       ok: false,
       error: { code: 'CONFLICT' },
@@ -297,6 +302,8 @@ describe('Main, proveedor y diario de saldo real en archivo', () => {
     });
     complete!(balanceLease(f.target));
     expect(await executing).toMatchObject({ ok: true, value: { outcome: 'APPROVED' } });
+    await idle;
+    expect(drained).toBe(true);
     expect(f.app.isFinancialBusy()).toBe(false);
   });
   it('conserva archivos corruptos/futuros, límites y registros con datos adicionales', async () => {

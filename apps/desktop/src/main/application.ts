@@ -61,8 +61,13 @@ export class DesktopApplication {
   private environmentRevision = 0;
   private observationBusy = false;
   private balanceBusy: string | undefined;
+  private financialIdle: Promise<void> = Promise.resolve();
+  private resolveFinancialIdle: (() => void) | undefined;
   isFinancialBusy(): boolean {
     return this.balanceBusy !== undefined;
+  }
+  whenFinancialIdle(): Promise<void> {
+    return this.financialIdle;
   }
   constructor(
     private readonly store: PreferencesStore,
@@ -564,6 +569,9 @@ export class DesktopApplication {
         'Ya hay una transacción en curso. Consulta su referencia sin repetir el envío.',
       );
     this.balanceBusy = request.requestId;
+    this.financialIdle = new Promise<void>((resolve) => {
+      this.resolveFinancialIdle = resolve;
+    });
     try {
       const context = await this.balanceTarget({
         draft: request.draft,
@@ -600,6 +608,8 @@ export class DesktopApplication {
       );
     } finally {
       this.balanceBusy = undefined;
+      this.resolveFinancialIdle?.();
+      this.resolveFinancialIdle = undefined;
     }
   }
   getBalanceExecution(
