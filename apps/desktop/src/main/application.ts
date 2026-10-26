@@ -246,8 +246,8 @@ export class DesktopApplication {
         preferences: await this.store.read(),
         revision: this.environmentRevision,
       }));
-      if (initial.preferences.environment !== 'PREPROD')
-        return failure('CONFLICT', 'Selecciona PREPROD para consultar Mediator.');
+      if (initial.preferences.environment !== request.environment)
+        return failure('CONFLICT', 'El ambiente cambió. Repite la consulta.');
       if (!this.observer?.live)
         return failure('SERVICE_UNAVAILABLE', 'El observador de Mediator no está configurado.');
       const result = await this.observer.live(request);
@@ -255,7 +255,10 @@ export class DesktopApplication {
         preferences: await this.store.read(),
         revision: this.environmentRevision,
       }));
-      if (current.revision !== initial.revision || current.preferences.environment !== 'PREPROD')
+      if (
+        current.revision !== initial.revision ||
+        current.preferences.environment !== request.environment
+      )
         return failure('CONFLICT', 'El ambiente cambió durante la consulta.');
       return result.ok
         ? { ok: true, value: { ...result.value, queriedAt: this.identity.now() } }

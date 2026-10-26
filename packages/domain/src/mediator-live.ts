@@ -1,8 +1,8 @@
-// A bounded projection from MDT_Journal/MDT_Message. SQL masks the card before
-// any row crosses the database boundary; no account or XML is included.
+// A bounded projection from MDT_Journal/MDT_Message. SQL derives a protected
+// card reference before any row crosses the database boundary.
 export interface MediatorLiveRequest {
   mode: 'live';
-  environment: 'PREPROD';
+  environment: 'QA' | 'PREPROD';
   entityId: 205;
   channelId: 1;
   limit: number;
@@ -16,7 +16,7 @@ export interface MediatorLiveRow {
   transactionCode: string | null;
   messageType: number | null;
   returnCode: number | null;
-  cardMasked: string | null;
+  cardReference: string | null;
   valueText: string | null;
 }
 
@@ -35,7 +35,7 @@ export function parseMediatorLiveRequest(value: unknown): MediatorLiveRequest | 
   if (
     Object.keys(record).length !== 5 ||
     record.mode !== 'live' ||
-    record.environment !== 'PREPROD' ||
+    (record.environment !== 'QA' && record.environment !== 'PREPROD') ||
     record.entityId !== 205 ||
     record.channelId !== 1 ||
     typeof record.limit !== 'number' ||

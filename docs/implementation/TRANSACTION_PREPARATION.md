@@ -186,7 +186,6 @@ pendiente; los errores del lector se muestran en Elegir tarjeta.
 
 Fuente: [revision CMS v3.6](../protocols/EXTREME_MEDIATOR_CMS_REVIEW.md), pp. 17 y
 20 del original. Prioridad sobre el mockup autorizada por el usuario el 2026-10-06.
-Diseno inicial: [revision del mockup](../mockups/MOCKUP_REVIEW.md).
 Presentacion actual: [UX minimalista](../ux/UX_SPEC.md), solicitada el 2026-10-11.
 
 Pruebas: `tests/unit/transaction-draft.test.ts` (catalogo, entradas, escenarios,

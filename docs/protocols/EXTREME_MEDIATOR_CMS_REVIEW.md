@@ -149,7 +149,7 @@ ejemplos no forman una pareja transaccional validada ni fixtures de QA.
 
 ## Orden de implementacion y evidencia de cierre
 
-1. Adaptar la pantalla a [la revision del mockup](../mockups/MOCKUP_REVIEW.md):
+1. Adaptar la pantalla a [la especificacion UX vigente](../ux/UX_SPEC.md):
    formulario, pasos, timeline, inspector y estados vacios/bloqueados.
 2. Recibir diccionario ATM, framing, request/response QA y mapeo ISO/CMS aprobado.
    Cada regla debe enlazar fuente/pagina, escenario, campo y prueba.

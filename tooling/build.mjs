@@ -21,6 +21,7 @@ export async function buildMain() {
   });
   for (const name of [
     'mediator-query.ps1',
+    'mediator-live-query.ps1',
     'mediator-redaction.ps1',
     'mediator-command.ps1',
     'cms-financial-fields.json',

@@ -21,12 +21,13 @@ Fuente, limites financieros y pendientes: docs/transactions/WITHDRAWAL.md.
 
 ## Navegacion principal
 
-Inicio prioriza Nueva transacción y una tabla de actividad QA de esta estación,
-actualizada cada dos segundos desde los diarios existentes. Permite pausar,
-filtrar por ATM y buscar por referencia. No muestra métricas fijas ni controles
+Inicio prioriza Nueva transacción y una tabla de las últimas 50 filas de Mediator
+para entidad 205/canal 1, tanto en QA como en PREPROD. Consulta cada cinco segundos
+solo mientras la vista está abierta. Permite pausar, filtrar por terminal y buscar
+por referencia de tarjeta, código o TraceId. No muestra métricas fijas ni controles
 de lectura de chip; el lector se resume con su disponibilidad y la lectura
-permanece en Tarjetas/Transacciones. La tabla omite PAN y separa el reverso
-solo cuando consta intento de transmisión. Alcance y fuente externa pendiente:
+permanece en Tarjetas/Transacciones. La tabla omite PAN y no atribuye significado
+financiero a TrnCode/RetCode. Alcance y límites:
 [actividad de Inicio](../implementation/DASHBOARD_LIVE_FEED.md).
 
 Los casos guardados admiten una expectativa opcional declarada por el operador:

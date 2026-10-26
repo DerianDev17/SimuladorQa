@@ -2,11 +2,10 @@
 
 Aplicacion desktop para QA orientada a simular transacciones ATM de la Red Coonecta, ejecutar pruebas funcionales, carga y estres, y correlacionar cada transaccion con SmartVista/SVFE y el Core correspondiente.
 
-Inicio muestra las transacciones QA de esta estación desde el diario local cada
-dos segundos. En PREPROD consulta las últimas 50 filas de Mediator para entidad
-205/canal 1 cada tres segundos, con la tarjeta reducida a sus últimos cuatro
-dígitos. Ambas vistas ofrecen pausa y filtros. La cobertura de todos los
-ATM/POS del Switch y el acceso SQL seguro siguen pendientes de validación. Ver
+Inicio muestra en QA y PREPROD las últimas 50 transacciones de Mediator para
+entidad 205/canal 1. Consulta cada cinco segundos mientras la vista está abierta,
+con pausa y filtros. La referencia de tarjeta se deriva en SQL sin entregar su
+valor protegido al Renderer. Ver
 [actividad de Inicio](docs/implementation/DASHBOARD_LIVE_FEED.md).
 
 Los casos guardados admiten una expectativa opcional de resultado del host,
@@ -324,7 +323,7 @@ inspeccionado con la configuracion existente, sin ejecutar procedimientos.
 - `docs/INPUT_CHECKLIST.md`: informacion que falta subir.
 - `docs/protocols/EXTREME_MEDIATOR_CMS_REVIEW.md`: reglas CMS recibidas, matriz MVP y diferencias pendientes con ATM.
 - `docs/protocols/PCAP_REVIEW.md`: inventario de capturas, encapsulado confirmado, verificacion y pendientes.
-- `docs/mockups/MOCKUP_REVIEW.md`: revision del mockup y criterios para la pantalla de transacciones.
+- `docs/ux/UX_SPEC.md`: interfaz vigente y criterios de interacción.
 - `docs/BACKLOG.md`: backlog inicial.
 - `docs/testing/TEST_STRATEGY.md`: estrategia QA.
 - `docs/security/SECURITY.md`: controles de seguridad.

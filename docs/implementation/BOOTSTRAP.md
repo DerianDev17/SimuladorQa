@@ -49,7 +49,7 @@ Es una compilación ejecutable con las dependencias instaladas; aún no es un in
 
 ## Comportamiento entregado
 
-- Dashboard inspirado en docs/mockups/desktop_dashboard_concept.png, con valores vacíos reales.
+- Dashboard inicial con valores vacíos reales; Inicio vigente se describe en `DASHBOARD_LIVE_FEED.md`.
 - Navegación a transacciones, ATM, tarjetas, carga, monitor, historial y configuración.
 - Selección QA/PREPROD, banner PREPROD y auditoría persistida desde Main.
 - Revisión de requisitos de los cinco flujos MVP y los cuatro escenarios; respuesta BLOCKED sin generar ni enviar ISO, crear runs o fingir resultados.

@@ -34,9 +34,10 @@ Permitir que varias estaciones QA ejecuten transacciones ATM funcionales y carga
 4. **Observers**
    - SmartVista Observer: consulta datos de correlacion del Switch.
    - Core Observer: valida aplicacion contable o respuesta Core.
-   - Consulta Mediator PREPROD: puerto independiente, SQL parametrizado y
-     redaccion XML en proceso PowerShell/.NET externo al Renderer. La vista
-     no asigna resultados transaccionales. Ver ADR-009.
+   - Consulta Mediator: Inicio usa el mismo origen SQL para QA y PREPROD;
+     Historial conserva su consulta manual PREPROD. Ambos viven fuera del
+     Renderer. Inicio proyecta una referencia protegida de tarjeta y no asigna
+     resultados financieros. Ver ADR-009.
 
 La evidencia documental de red se carga en Main desde un archivo privado
 acotado mediante NetworkEvidenceCatalog. Se valida y se proyecta por ambiente

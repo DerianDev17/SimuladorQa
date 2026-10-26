@@ -18,13 +18,15 @@ secuencia bigint y RetCode son opcionales. No se consulta por cuenta ni PAN.
 Una ventana de hasta 24 horas es un limite tecnico de esta entrega, no una regla
 financiera del proveedor. No hay polling automatico.
 
-Inicio agrega una consulta separada de polling PREPROD cada tres segundos para
-entidad 205/canal 1. Usa la misma configuracion privada y guard de lectura,
-pero proyecta las ultimas 50 filas Journal/Message sin XML. SQL reduce
-`jnlCardNumber` a `**** ` y cuatro digitos cuando es numerico de 12 a 19
-digitos; de otro modo devuelve NULL. Main vuelve a validar el formato y solo
-entrega campos permitidos al Renderer. Ver `DASHBOARD_LIVE_FEED.md` para
-alcance, retencion de ventana y limites de cobertura.
+Inicio agrega una consulta separada cada cinco segundos para entidad 205/canal 1
+en QA y PREPROD. Usa el mismo archivo privado PREPROD y un proceso de lectura
+que reutiliza una conexión SQL, atiende un sondeo a la vez y se cierra tras
+12 segundos de inactividad. Proyecta las ultimas 50 filas Journal/Message sin
+XML. SQL transforma `jnlCardNumber`: PAN numerico valido a `**** ` y
+ultimos cuatro; valor hexadecimal de 32 caracteres a `REF-` mas 12 digitos
+hexadecimales de SHA-256. No muestra ultimos digitos del valor hexadecimal,
+porque no representan digitos comprobados de PAN. Main valida la referencia y
+solo entrega campos permitidos al Renderer. Ver `DASHBOARD_LIVE_FEED.md`.
 
 SQL usa proyeccion explicita, parametros tipados y TOP limite + 1 para indicar
 si hay mas resultados. `jnlRealDate` ya es datetime; el filtro no aplica CONVERT
@@ -53,20 +55,21 @@ Archivo privado `mediator-observer.json` en el directorio userData de Electron:
 
 La credencial es un PSCredential protegido por Windows con Export-Clixml e
 Import-Clixml bajo el mismo usuario/equipo. No incluir password en JSON ni Git.
-Solo se admite PREPROD y la base Mediator. Un administrador debe proporcionar
-una cuenta con SELECT sobre ambas tablas y un endpoint PREPROD autorizado.
-El guard rechaza db_owner/sysadmin y permisos de escritura/administracion
-visibles en la base o tablas observadas. ApplicationIntent=ReadOnly es solo
-una pista de enrutamiento, no una restriccion de permisos.
+El archivo privado sigue identificado como PREPROD; Inicio lo comparte cuando
+la UI selecciona QA o PREPROD por instruccion del usuario. Historial mantiene
+su guard contra db_owner/sysadmin y permisos de escritura/administracion.
+ApplicationIntent=ReadOnly es solo una pista de enrutamiento.
 
-Encrypt=true y TrustServerCertificate=false son obligatorios. No hay fallback
-ni opcion de omitir validacion en la configuracion. La excepcion de ADR-006
-continua limitada a la inspeccion anterior de metadatos.
+Historial conserva Encrypt=true y TrustServerCertificate=false. Inicio usa
+Encrypt=true y TrustServerCertificate=true por excepcion explicita del usuario
+el 2026-10-26, con la cuenta existente que tiene permisos elevados. Solo se
+permite el SELECT fijo y acotado de Inicio; la configuracion no expone un
+interruptor para ampliar esa excepcion. Ver addendum de ADR-009.
 
-La prueba segura del 2026-10-07 con la credencial local existente recibio
-TLS_ERROR. El servidor respondio, pero no se autentico ni se leyeron registros.
-La inspeccion anterior identifico db_owner: falta reemplazar esa credencial por
-una cuenta de lectura antes de utilizar este observador.
+La consulta estricta de Historial sigue recibiendo TLS_ERROR. La consulta de
+Inicio con la excepcion autorizada leyo 50 filas reales el 2026-10-26 y proyecto
+referencia de tarjeta en las 50, sin emitir valores originales. La cuenta de
+solo lectura y CA/nombre TLS confiables siguen siendo la solucion permanente.
 
 ## Proteccion y disponibilidad
 

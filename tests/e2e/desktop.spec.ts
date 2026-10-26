@@ -111,76 +111,8 @@ async function launch(development = false) {
   return window;
 }
 
-test('Inicio actualiza el diario local, pausa, filtra y conserva filas ante error', async () => {
-  const window = await launch();
-  const first = approvedWithdrawalExecution();
-  const second = {
-    ...approvedWithdrawalExecution(),
-    startedAt: '2026-10-19T20:01:00.000Z',
-    atmId: randomUUID(),
-    correlation: { stan: '000124', rrn: '6292' + '00000124', terminalId: 'ATM20301' },
-  };
-  const feed = window.getByRole('region', { name: 'Transacciones en vivo' });
-  await app!.evaluate(({ ipcMain }, record) => {
-    ipcMain.removeHandler('transaction:balance:history');
-    ipcMain.removeHandler('transaction:withdrawal:history');
-    ipcMain.handle('transaction:balance:history', () => ({ ok: true, value: [] }));
-    ipcMain.handle('transaction:withdrawal:history', () => ({ ok: true, value: [record] }));
-  }, first);
-  await expect(feed.locator('tbody tr')).toHaveCount(1, { timeout: 10000 });
-  await expect(feed).toContainText('ATM20521');
-  await expect(feed).toContainText('Autorizado por el host');
-  await expect(feed).not.toContainText(first.cardReadId);
-  await feed.getByRole('button', { name: 'Pausar' }).click();
-  await app!.evaluate(
-    ({ ipcMain }, records) => {
-      ipcMain.removeHandler('transaction:withdrawal:history');
-      ipcMain.handle('transaction:withdrawal:history', () => ({ ok: true, value: records }));
-    },
-    [first, second],
-  );
-  await window.waitForTimeout(2300);
-  await expect(feed.locator('tbody tr')).toHaveCount(1);
-  await feed.getByRole('button', { name: 'Reanudar' }).click();
-  await expect(feed.locator('tbody tr')).toHaveCount(2, { timeout: 10000 });
-  await mkdir('artifacts', { recursive: true });
-  await window.screenshot({ path: 'artifacts/dashboard-live-feed.png', fullPage: true });
-  await feed.getByLabel('Filtrar por ATM').selectOption(second.atmId);
-  await expect(feed.locator('tbody tr')).toHaveCount(1);
-  await expect(feed).toContainText('ATM20301');
-  await feed.getByLabel('Filtrar por ATM').selectOption('');
-  await feed.getByLabel('Buscar transacciones').fill('000124');
-  await expect(feed.locator('tbody tr')).toHaveCount(1);
-  await feed.getByLabel('Buscar transacciones').fill('');
-  await app!.evaluate(({ ipcMain }) => {
-    ipcMain.removeHandler('transaction:balance:history');
-    ipcMain.removeHandler('transaction:withdrawal:history');
-    const unavailable = {
-      ok: false,
-      error: { code: 'STORAGE_UNAVAILABLE', message: 'Diario no disponible.' },
-    };
-    ipcMain.handle('transaction:balance:history', () => unavailable);
-    ipcMain.handle('transaction:withdrawal:history', () => unavailable);
-  });
-  await expect(feed.getByRole('alert')).toContainText('Diario no disponible.', { timeout: 10000 });
-  await expect(feed.locator('tbody tr')).toHaveCount(2);
-  await app!.evaluate(({ ipcMain }) => {
-    ipcMain.removeHandler('transaction:balance:history');
-    ipcMain.removeHandler('transaction:withdrawal:history');
-    ipcMain.handle('transaction:balance:history', () => new Promise(() => {}));
-    ipcMain.handle('transaction:withdrawal:history', () => new Promise(() => {}));
-  });
-  await expect(feed.getByRole('alert')).toContainText('no respondió a tiempo', { timeout: 12000 });
-  await expect(feed.locator('tbody tr')).toHaveCount(2);
-  await app!.evaluate(({ BrowserWindow }) =>
-    BrowserWindow.getAllWindows()[0]?.setContentSize(1024, 768),
-  );
-  expect(await window.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-    true,
-  );
-});
-
-test('Inicio PREPROD muestra tarjeta enmascarada del feed Mediator y controla pausa', async () => {
+test('Inicio muestra el mismo feed Mediator en QA y PREPROD y controla pausa', async () => {
+  test.setTimeout(60000);
   const window = await launch();
   const feed = window.getByRole('region', { name: 'Transacciones en vivo' });
   await app!.evaluate(({ ipcMain }) => {
@@ -197,7 +129,7 @@ test('Inicio PREPROD muestra tarjeta enmascarada del feed Mediator y controla pa
             transactionCode: '003000',
             messageType: 2,
             returnCode: 16,
-            cardMasked: '**** 2267',
+            cardReference: 'REF-123456ABCDEF',
             valueText: '40',
           },
         ],
@@ -207,12 +139,15 @@ test('Inicio PREPROD muestra tarjeta enmascarada del feed Mediator y controla pa
     }));
   });
   await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
-  await expect(feed).toContainText('**** 2267', { timeout: 10000 });
+  await window.getByLabel('Ambiente', { exact: true }).selectOption('QA');
+  await expect(feed).toContainText('REF-123456ABCDEF', { timeout: 10000 });
+  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
+  await expect(feed).toContainText('REF-123456ABCDEF', { timeout: 10000 });
   await expect(feed).toContainText('31580471');
   await expect(feed).toContainText('hay más anteriores');
   await mkdir('artifacts', { recursive: true });
   await window.screenshot({ path: 'artifacts/dashboard-mediator-live.png', fullPage: true });
-  await feed.getByLabel('Buscar transacciones').fill('2267');
+  await feed.getByLabel('Buscar transacciones').fill('ABCDEF');
   await expect(feed.locator('tbody tr')).toHaveCount(1);
   await feed.getByLabel('Buscar transacciones').fill('9999');
   await expect(feed).toContainText('No hay filas que coincidan');
@@ -226,11 +161,11 @@ test('Inicio PREPROD muestra tarjeta enmascarada del feed Mediator y controla pa
       error: { code: 'TIMEOUT', message: 'Mediator no respondió.' },
     }));
   });
-  await window.waitForTimeout(3300);
+  await window.waitForTimeout(5300);
   await expect(feed).not.toContainText('Mediator no respondió.');
   await feed.getByRole('button', { name: 'Reanudar' }).click();
   await expect(feed.getByRole('alert')).toContainText('Mediator no respondió.', { timeout: 10000 });
-  await expect(feed).toContainText('**** 2267');
+  await expect(feed).toContainText('REF-123456ABCDEF');
 });
 
 async function seedWithdrawalJournal(record: BalanceExecution): Promise<void> {

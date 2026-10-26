@@ -131,7 +131,7 @@ describe('observador y ambiente persistido', () => {
       expect(JSON.stringify(result)).not.toContain('private-secret');
     }
   });
-  it('limita el feed a PREPROD, valida entradas y descarta respuestas tardías', async () => {
+  it('valida el feed en ambos ambientes y descarta respuestas tardías', async () => {
     let release!: () => void;
     const pending = new Promise<void>((resolve) => {
       release = resolve;
@@ -167,7 +167,7 @@ describe('observador y ambiente persistido', () => {
     release();
     expect(await running).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
   });
-  it('entrega el feed PREPROD y maneja timeout o proveedor no disponible', async () => {
+  it('entrega el mismo feed en QA y PREPROD y maneja timeout o proveedor no disponible', async () => {
     const row = {
       traceId: '123',
       terminalId: 'ATM22004',
@@ -176,7 +176,7 @@ describe('observador y ambiente persistido', () => {
       transactionCode: '003000',
       messageType: 2,
       returnCode: 0,
-      cardMasked: '**** 2267',
+      cardReference: 'REF-123456ABCDEF',
       valueText: '40',
     };
     const working = application({
@@ -186,7 +186,15 @@ describe('observador y ambiente persistido', () => {
     await working.setEnvironment({ environment: 'PREPROD' });
     expect(await working.getMediatorLive(liveRequest)).toMatchObject({
       ok: true,
-      value: { rows: [{ cardMasked: '**** 2267' }], queriedAt: '2026-10-07T12:00:00.000Z' },
+      value: {
+        rows: [{ cardReference: 'REF-123456ABCDEF' }],
+        queriedAt: '2026-10-07T12:00:00.000Z',
+      },
+    });
+    await working.setEnvironment({ environment: 'QA' });
+    expect(await working.getMediatorLive({ ...liveRequest, environment: 'QA' })).toMatchObject({
+      ok: true,
+      value: { rows: [{ cardReference: 'REF-123456ABCDEF' }] },
     });
     for (const observer of [
       undefined,
@@ -213,7 +221,7 @@ describe('observador y ambiente persistido', () => {
       transactionCode: '003000',
       messageType: 2,
       returnCode: 0,
-      cardMasked: '**** 2267',
+      cardReference: '**** 2267',
       valueText: '40',
       privatePan: fullPan,
     };
@@ -221,13 +229,30 @@ describe('observador y ambiente persistido', () => {
       JSON.stringify({ ok: true, value: { rows: [row], hasMore: false } }),
       50,
     );
-    expect(valid).toMatchObject({ ok: true, value: { rows: [{ cardMasked: '**** 2267' }] } });
+    expect(valid).toMatchObject({ ok: true, value: { rows: [{ cardReference: '**** 2267' }] } });
     expect(JSON.stringify(valid)).not.toContain(fullPan);
     expect(
       decodeLiveResponse(
         JSON.stringify({
           ok: true,
-          value: { rows: [{ ...row, cardMasked: fullPan }], hasMore: false },
+          value: {
+            rows: [{ ...row, cardReference: 'REF-123456ABCDEF' }],
+            hasMore: false,
+          },
+        }),
+        50,
+      ),
+    ).toMatchObject({
+      ok: true,
+      value: {
+        rows: [{ cardReference: 'REF-123456ABCDEF' }],
+      },
+    });
+    expect(
+      decodeLiveResponse(
+        JSON.stringify({
+          ok: true,
+          value: { rows: [{ ...row, cardReference: fullPan }], hasMore: false },
         }),
         50,
       ),
@@ -257,6 +282,51 @@ describe('observador y ambiente persistido', () => {
         ok: false,
         error: { code: 'SERVICE_UNAVAILABLE' },
       });
+    },
+  );
+  it.runIf(process.platform === 'win32')(
+    'reutiliza un solo proceso de lectura en vivo y lo cierra al terminar',
+    async () => {
+      await writeFile(
+        join(directory, 'mediator-live-query.ps1'),
+        `param([string] $ConfigurationPath)\n$n = 0\nwhile ($null -ne [Console]::ReadLine()) {\n  $n++\n  [Console]::WriteLine((@{ ok = $true; value = @{ rows = @(@{ traceId = [string] $n; occurredAt = '2026-10-26 12:00:00.000'; terminalId = 'ATM22004'; terminalSequence = '6'; transactionCode = '003000'; messageType = 2; returnCode = 0; cardReference = 'REF-123456ABCDEF'; valueText = '40' }); hasMore = $false } } | ConvertTo-Json -Depth 5 -Compress))\n}\n`,
+      );
+      const observer = new MediatorObserver(
+        join(directory, 'mediator-query.ps1'),
+        join(directory, 'private.json'),
+      );
+      expect(await observer.live({ ...liveRequest, environment: 'QA' })).toMatchObject({
+        ok: true,
+        value: { rows: [{ traceId: '1' }] },
+      });
+      expect(await observer.live(liveRequest)).toMatchObject({
+        ok: true,
+        value: { rows: [{ traceId: '2' }] },
+      });
+      observer.close();
+      expect(await observer.live(liveRequest)).toMatchObject({
+        ok: false,
+        error: { code: 'SERVICE_UNAVAILABLE' },
+      });
+    },
+  );
+  it.runIf(process.platform === 'win32')(
+    'termina el proceso de lectura en vivo si no responde',
+    async () => {
+      await writeFile(
+        join(directory, 'mediator-live-query.ps1'),
+        `param([string] $ConfigurationPath)\n[Console]::ReadLine() | Out-Null\nStart-Sleep -Seconds 2\n`,
+      );
+      const observer = new MediatorObserver(
+        join(directory, 'mediator-query.ps1'),
+        join(directory, 'private.json'),
+        100,
+      );
+      expect(await observer.live(liveRequest)).toMatchObject({
+        ok: false,
+        error: { code: 'TIMEOUT' },
+      });
+      observer.close();
     },
   );
   it.runIf(process.platform === 'win32')(
@@ -354,7 +424,7 @@ describe('observador y ambiente persistido', () => {
         child.on('close', (code) =>
           code === 0 ? resolveOutput(stdout) : reject(new Error('Live query construction failed')),
         );
-        child.stdin.end(JSON.stringify(liveRequest));
+        child.stdin.end(JSON.stringify({ ...liveRequest, environment: 'QA' }));
       });
       const result = JSON.parse(output) as {
         sql: string;
@@ -362,6 +432,7 @@ describe('observador y ambiente persistido', () => {
       };
       expect(result.sql).toContain('j.jnlTraceId = m.msgTraceId');
       expect(result.sql).toContain('RIGHT(LTRIM(RTRIM(j.jnlCardNumber)), 4)');
+      expect(result.sql).toContain("HASHBYTES('SHA2_256', j.jnlCardNumber)");
       expect(result.sql).toContain('ORDER BY m.msgTraceId DESC');
       expect(result.sql).not.toMatch(/SELECT\s+\*|msgRequest|msgResponse|jnlAccountNum/);
       expect(result.parameters).toEqual(

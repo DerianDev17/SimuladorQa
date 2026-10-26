@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import type {
   ObservationBatch,
   ObservationRequest,
@@ -63,7 +63,7 @@ export function decodeResponse(output: string, limit: number): Result<Observatio
           (typeof row.terminalSequence !== 'string' ||
             !/^-?\d{1,19}$/.test(row.terminalSequence))) ||
         (row.terminalId !== null &&
-          (typeof row.terminalId !== 'string' || !/^[A-Za-z0-9_-]{1,10}$/.test(row.terminalId))) ||
+          (typeof row.terminalId !== 'string' || !/^[A-Za-z0-9_.-]{1,10}$/.test(row.terminalId))) ||
         (row.transactionCode !== null &&
           (typeof row.transactionCode !== 'string' || !/^\d{6}$/.test(row.transactionCode))) ||
         (row.occurredAt !== null &&
@@ -147,12 +147,12 @@ export function decodeLiveResponse(output: string, limit: number): Result<Mediat
       return {
         traceId,
         occurredAt: nullable('occurredAt', /^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{3}$/),
-        terminalId: nullable('terminalId', /^[A-Za-z0-9_-]{1,10}$/),
+        terminalId: nullable('terminalId', /^[A-Za-z0-9_.-]{1,10}$/),
         terminalSequence: nullable('terminalSequence', /^-?\d{1,19}$/),
         transactionCode: nullable('transactionCode', /^\d{6}$/),
         messageType: messageType as number | null,
         returnCode: returnCode as number | null,
-        cardMasked: nullable('cardMasked', /^\*{4} \d{4}$/),
+        cardReference: nullable('cardReference', /^(?:\*{4} \d{4}|REF-[0-9A-F]{12})$/),
         valueText: nullable('valueText', /^-?\d{1,20}(?:\.\d{1,20})?(?:[eE][+-]?\d{1,3})?$/),
       };
     });
@@ -165,6 +165,16 @@ export function decodeLiveResponse(output: string, limit: number): Result<Mediat
 export class MediatorObserver implements TransactionObserver {
   private stop: (() => void) | undefined;
   private closed = false;
+  private liveChild: ReturnType<typeof spawn> | undefined;
+  private liveBuffer = '';
+  private liveIdle: ReturnType<typeof setTimeout> | undefined;
+  private livePending:
+    | {
+        resolve: (result: Result<MediatorLiveBatch>) => void;
+        timer: ReturnType<typeof setTimeout>;
+        limit: number;
+      }
+    | undefined;
   constructor(
     private readonly script: string,
     private readonly configuration: string,
@@ -180,7 +190,98 @@ export class MediatorObserver implements TransactionObserver {
   live(request: MediatorLiveRequest): Promise<Result<MediatorLiveBatch>> {
     if (!parseMediatorLiveRequest(request))
       return Promise.resolve(failure('VALIDATION_ERROR', 'Consulta en vivo de Mediator inválida.'));
-    return this.execute(request, (output) => decodeLiveResponse(output, request.limit));
+    if (this.closed || process.platform !== 'win32')
+      return Promise.resolve(failure('SERVICE_UNAVAILABLE', 'El observador requiere Windows.'));
+    if (this.livePending)
+      return Promise.resolve(failure('CONFLICT', 'Ya hay una consulta de Mediator en curso.'));
+    clearTimeout(this.liveIdle);
+    if (!this.liveChild) this.startLiveProcess();
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        this.dropLive(failure('TIMEOUT', 'La consulta de Mediator excedió el tiempo permitido.'));
+      }, this.timeoutMs);
+      this.livePending = { resolve, timer, limit: request.limit };
+      try {
+        this.liveChild?.stdin?.write(`${JSON.stringify(request)}\n`, (error) => {
+          if (error)
+            this.dropLive(failure('SERVICE_UNAVAILABLE', 'No se pudo consultar Mediator.'));
+        });
+      } catch {
+        this.dropLive(failure('SERVICE_UNAVAILABLE', 'No se pudo consultar Mediator.'));
+      }
+    });
+  }
+
+  private startLiveProcess(): void {
+    const child = spawn(
+      join(
+        process.env.SystemRoot ?? 'C:\\Windows',
+        'System32',
+        'WindowsPowerShell',
+        'v1.0',
+        'powershell.exe',
+      ),
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        join(dirname(this.script), 'mediator-live-query.ps1'),
+        '-ConfigurationPath',
+        this.configuration,
+      ],
+      { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] },
+    );
+    this.liveChild = child;
+    this.liveBuffer = '';
+    child.stdout?.setEncoding('utf8');
+    child.stdout?.on('data', (chunk: string) => {
+      if (this.liveChild !== child) return;
+      this.liveBuffer += chunk;
+      if (Buffer.byteLength(this.liveBuffer, 'utf8') > 1_000_000) {
+        this.dropLive(failure('SERVICE_UNAVAILABLE', 'La respuesta excedió el límite permitido.'));
+        return;
+      }
+      const newline = this.liveBuffer.indexOf('\n');
+      if (newline < 0) return;
+      const line = this.liveBuffer.slice(0, newline).trim();
+      this.liveBuffer = this.liveBuffer.slice(newline + 1);
+      const pending = this.livePending;
+      if (!pending || this.liveBuffer.trim()) {
+        this.dropLive(failure('SERVICE_UNAVAILABLE', 'Respuesta inesperada de Mediator.'));
+        return;
+      }
+      this.livePending = undefined;
+      clearTimeout(pending.timer);
+      pending.resolve(decodeLiveResponse(line, pending.limit));
+      this.liveIdle = setTimeout(() => this.dropLive(), 12_000);
+    });
+    child.on('error', () => {
+      if (this.liveChild === child)
+        this.dropLive(failure('SERVICE_UNAVAILABLE', 'No se pudo iniciar Mediator.'));
+    });
+    child.on('close', () => {
+      if (this.liveChild === child)
+        this.dropLive(failure('SERVICE_UNAVAILABLE', 'Se cerró la conexión de Mediator.'));
+    });
+  }
+
+  private dropLive(result?: Result<MediatorLiveBatch>): void {
+    clearTimeout(this.liveIdle);
+    this.liveIdle = undefined;
+    const child = this.liveChild;
+    this.liveChild = undefined;
+    this.liveBuffer = '';
+    const pending = this.livePending;
+    this.livePending = undefined;
+    if (pending) {
+      clearTimeout(pending.timer);
+      pending.resolve(
+        result ?? failure('SERVICE_UNAVAILABLE', 'Se cerró la conexión de Mediator.'),
+      );
+    }
+    child?.kill();
   }
 
   private execute<T>(
@@ -257,5 +358,6 @@ export class MediatorObserver implements TransactionObserver {
   close(): void {
     this.closed = true;
     this.stop?.();
+    this.dropLive();
   }
 }

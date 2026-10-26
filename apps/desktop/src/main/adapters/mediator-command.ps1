@@ -51,11 +51,15 @@ WHERE j.jnlEntityId = @entity AND j.jnlChannelId = @channel
     return $command
 }
 
-function New-MediatorLiveQuery($Connection, $Request) {
-    if ($Request.mode -cne 'live' -or $Request.environment -cne 'PREPROD' -or
+function Assert-MediatorLiveRequest($Request) {
+    if ($Request.mode -cne 'live' -or $Request.environment -cnotin @('QA', 'PREPROD') -or
         [int] $Request.entityId -ne 205 -or [int] $Request.channelId -ne 1 -or
         [int] $Request.limit -lt 1 -or [int] $Request.limit -gt 50 -or
         @($Request.PSObject.Properties).Count -ne 5) { throw 'Invalid live request' }
+}
+
+function New-MediatorLiveQuery($Connection, $Request) {
+    Assert-MediatorLiveRequest $Request
     $command = $Connection.CreateCommand()
     $command.CommandTimeout = 5
     # The database projects only a masked card. Full PAN and XML never leave SQL Server.
@@ -71,7 +75,10 @@ SELECT TOP (@take)
   CASE WHEN LEN(LTRIM(RTRIM(j.jnlCardNumber))) BETWEEN 12 AND 19
     AND LTRIM(RTRIM(j.jnlCardNumber)) COLLATE Latin1_General_BIN2 NOT LIKE '%[^0-9]%'
     THEN '**** ' + RIGHT(LTRIM(RTRIM(j.jnlCardNumber)), 4)
-    ELSE NULL END AS cardMasked,
+    WHEN LEN(LTRIM(RTRIM(j.jnlCardNumber))) = 32
+    AND LTRIM(RTRIM(j.jnlCardNumber)) COLLATE Latin1_General_BIN2 NOT LIKE '%[^0-9A-Fa-f]%'
+    THEN 'REF-' + LEFT(CONVERT(varchar(64), HASHBYTES('SHA2_256', j.jnlCardNumber), 2), 12)
+    ELSE NULL END AS cardReference,
   CONVERT(varchar(32), j.jnlValueTrn) AS valueText
 FROM [Mediator].[dbo].[MDT_Journal] AS j WITH (NOLOCK)
 INNER JOIN [Mediator].[dbo].[MDT_Message] AS m ON j.jnlTraceId = m.msgTraceId

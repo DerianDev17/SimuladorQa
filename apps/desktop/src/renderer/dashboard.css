@@ -211,33 +211,6 @@
   text-align: center !important;
   white-space: normal !important;
 }
-.dashboard-result {
-  display: inline-block;
-  max-width: 220px;
-  padding: 5px 9px;
-  border-radius: 20px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  vertical-align: middle;
-  font-size: 11px;
-  font-weight: 600;
-}
-.dashboard-result.success {
-  color: #087c57;
-  background: #e6f7ef;
-}
-.dashboard-result.danger {
-  color: #b34750;
-  background: #fdecee;
-}
-.dashboard-result.pending {
-  color: #946219;
-  background: #fff3db;
-}
-.dashboard-result.neutral {
-  color: #5b6e87;
-  background: #eef2f7;
-}
 .dashboard-feed-footer {
   border-top: 1px solid #e8edf4;
   color: #7a8da5;

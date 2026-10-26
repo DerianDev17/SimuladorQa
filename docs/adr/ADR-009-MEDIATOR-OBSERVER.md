@@ -40,3 +40,20 @@ Referencias: [observador](../implementation/MEDIATOR_OBSERVER.md),
 [schema](../core/MEDIATOR_SCHEMA_REVIEW.md),
 [SqlClient TLS](https://learn.microsoft.com/en-us/dotnet/api/system.data.sqlclient.sqlconnectionstringbuilder.trustservercertificate?view=netframework-4.8.1),
 [XmlReader DTD](https://learn.microsoft.com/en-us/dotnet/api/system.xml.xmlreadersettings.dtdprocessing?view=netframework-4.8.1).
+
+## Addendum: Inicio compartido QA/PREPROD (2026-10-26)
+
+El usuario autorizo explicitamente consumir la configuracion SQL existente en
+Inicio para QA y PREPROD, sin instalar certificado y con la cuenta actual aun
+elevada. La excepcion se limita al modo `live`: `Encrypt=true`,
+`TrustServerCertificate=true`, SELECT fijo con entidad 205/canal 1, TOP 51,
+campos proyectados y referencia de tarjeta derivada dentro de SQL. El Renderer
+no recibe credencial, SQL, XML, PAN ni valor protegido de tarjeta. Un proceso
+PowerShell conserva una sola conexión entre sondeos, atiende un SELECT a la vez
+y se cierra tras 12 segundos de inactividad o al salir de la app. El sondeo se
+repite cada cinco segundos mientras Inicio esta visible, con espera mayor ante
+error. Historial conserva
+validacion TLS y rechazo de credenciales elevadas. Esta excepcion no cambia PROD
+ni autoriza otras consultas. El riesgo residual es una conexion cifrada sin
+autenticacion del servidor y una cuenta SQL con mas permisos de los necesarios;
+se debe sustituir por CA/nombre confiables y cuenta de solo lectura.

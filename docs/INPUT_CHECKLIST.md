@@ -1,12 +1,5 @@
 # Checklist de informacion por subir
 
-TODO-DATA DASHBOARD-SWITCH-LIVE-FEED (2026-10-26): falta una fuente aprobada de
-eventos o consulta incremental para observar en Inicio todas las transacciones
-del Switch, incluidas las externas al simulador. Confirmar acceso, campos
-permitidos, correlación, zona horaria, reconexión y retención. La vista actual
-usa exclusivamente los diarios QA de esta estación. Ver
-[alcance](implementation/DASHBOARD_LIVE_FEED.md).
-
 TODO-DATA CASE-FIELD-ORACLES (2026-10-26): para comparar campos ISO, secuencias
 de gestion de red y reversos al estilo VTS3 se requiere fuente aprobada por
 perfil ATM Coonecta, obligatoriedad/encoding, respuesta esperada, temporizadores
@@ -687,9 +680,9 @@ antes de ejecutar desde ADQCLONE. Ver `docs/protocols/ISOBASEI_REVIEW.md` y
 - **TODO-DATA ENTITY-CLASSIFICATION**: ENTITY_MODEL propone red/membresia separadas y ENTITY_TEMPLATE mezcla FRONT/BACK/EXTERNA/BANRED como Tipo. Se solicito validacion; el CRUD usa los campos comunes y difiere membresia, BIN/Core y deteccion automatica de escenarios.
 - **TODO-DATA HARDWARE / CARD-IDENTITY-APDU / CARD-TRANSACTION-SECURITY**: OMNIKEY 5422 detectado en Windows, ambas interfaces con tarjeta presente y ATR. Lectura manual por contacto y guardado QA de referencia implementados; el inventario conserva alias, ultimos cuatro, AID y fecha, no datos de autenticacion. Faltan otros PDOL/perfiles/contactless, asociacion de cuenta y proveedor PIN/HSM/EMV dinamico; identidad guardada no habilita envio financiero. Ver `docs/implementation/CARD_READER_STATUS.md` y ADR-018.
 - **TODO-DATA OBSERVERS**: faltan SQL/API y reglas de correlacion aprobadas de SmartVista/Core. Consulta Journal/Message aportada por el usuario e implementada para Mediator; no completa validacion de resultados ni SmartVista.
-- **TODO-DATA MEDIATOR-OBSERVER-ACCESS / MEDIATOR-JOURNAL-CORRELATION**: implementada consulta acotada PREPROD por TraceId a partir del SQL del usuario (2026-10-07). Falta cuenta de lectura, TLS con CA/nombre aprobado, mapeo entidad/canal y correlacion con ISO/runId/transactionId. La prueba segura actual devuelve TLS_ERROR, sin autenticar ni leer registros. Ver `docs/implementation/MEDIATOR_OBSERVER.md` y ADR-009; ADR-006 sigue limitado a metadatos.
+- **TODO-DATA MEDIATOR-OBSERVER-ACCESS / MEDIATOR-JOURNAL-CORRELATION**: Historial mantiene consulta acotada PREPROD por TraceId y exige cuenta de lectura/TLS validado. Inicio tiene una excepción explícita del usuario para consultar el mismo Mediator desde QA/PREPROD con la credencial existente: SELECT fijo, TLS cifrado sin validar certificado. La lectura real de 50 filas pasó el 2026-10-26; faltan mínimo privilegio permanente, mapeo entidad/canal y correlación con ISO/runId/transactionId. Ver `docs/implementation/MEDIATOR_OBSERVER.md` y ADR-009.
 - **TODO-DATA MEDIATOR-SQL-TIMEZONE / MEDIATOR-MESSAGE-PROJECTION**: confirmar zona de fechas SQL y aprobar allowlist de valores XML visibles. La consulta conserva hora SQL sin inferir UTC y protege todos los valores XML.
-- **TODO-DATA DASHBOARD-SWITCH-LIVE-FEED**: Inicio consulta en PREPROD las 50 filas más recientes de MDT_Journal/MDT_Message para entidad 205/canal 1, con tarjeta reducida a últimos cuatro dígitos dentro de SQL. Falta confirmar cobertura de todos los ATM/POS, semántica de jnlCardNumber, mapeo RetCode/TrnCode, zona SQL y acceso con TLS/cuenta de lectura. Polling no garantiza captura completa bajo alto volumen. Ver `docs/implementation/DASHBOARD_LIVE_FEED.md`.
+- **TODO-DATA DASHBOARD-SWITCH-LIVE-FEED**: Inicio consulta en QA y PREPROD las 50 filas más recientes de MDT_Journal/MDT_Message para entidad 205/canal 1. `jnlCardNumber` se observó como 32 caracteres hexadecimales en las 50 filas; se muestra una referencia SHA-256 abreviada, nunca los últimos dígitos del valor protegido. Falta confirmar si esa referencia identifica una tarjeta de forma estable entre todas las sesiones, cobertura de ATM/POS, mapeo RetCode/TrnCode y zona SQL. Polling no garantiza captura completa bajo alto volumen. Ver `docs/implementation/DASHBOARD_LIVE_FEED.md`.
 - **TODO-DATA LOAD-LIMITS / QA-CARD-POOL-INTEGRATION**: el usuario reporta un techo actual de 5 TPS y confirma que existe un pool virtual QA autorizado. El generador local solo crea referencias VISA opacas para UI; no representa el pool. La ejecucion sigue bloqueada hasta conocer la API/SDK/servicio aprobado y confirmar PIN/EMV dinamicos; faltan tambien ventana, concurrencia, maximo de operaciones/duracion, politica de parada y motor de carga. El techo local de 5 TPS es provisional y no valida capacidad ni aprobacion formal. Ver [carga y estres](implementation/LOAD_TEST.md).
 
 La documentacion describe los flujos, pero no aporta evidencia suficiente para ejecutarlos.
@@ -782,7 +775,7 @@ Detalle y pruebas: `docs/implementation/TRANSACTION_PREPARATION.md`.
 
 - [x] Proyecto Simulador Banred revisado estaticamente: EXE/PDB .NET, ContextoISO.xml y 15 logs. Rol servidor 4946 confirmado; 12 pares echo y un par financiero recorridos con el diccionario sin residuo, otros dos eventos no reconocidos. No es cliente ATM ni evidencia Core CB. Ver `docs/protocols/BANRED_SIMULATOR_REVIEW.md`.
 - [x] Logs tcpcomms01.out / nwint00_22150.out del 8 de octubre y bloque contemporaneo de la PC: listener/cajero autorizados, origen PC 10.10.10.21 rechazado como direccion invalida tras busqueda de dispositivo. Usuario confirma CB 205 = PID 82052 / 49212 y alcance exclusivo CB. Muestra USD 20 de 82032 apartada; admision ATM QA para PC y request ATM propio de CB pendientes. Ver `docs/protocols/QA_SWITCH_ADMISSION_REVIEW.md`.
-- [x] Mockup `mockup.png`, revisado: `docs/mockups/MOCKUP_REVIEW.md`.
+- [x] Mockup inicial revisado; la interfaz vigente está en `docs/ux/UX_SPEC.md`.
 - [x] Manual local Extreme Mediator CMS v3.6 (24 paginas, revision 13-04-2023).
 - [x] Matriz de evidencia para los cinco flujos: `docs/protocols/EXTREME_MEDIATOR_CMS_REVIEW.md`.
 - [x] Prioridad de 301000/302000 del documento sobre 310000 del mockup: usuario indico seguir el documento el 2026-10-06. No valida por si sola el formato de la trama ATM.

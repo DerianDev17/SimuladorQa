@@ -381,7 +381,6 @@ export function App() {
           {page === 'dashboard' && (
             <DashboardView
               environment={environment}
-              catalog={catalog}
               connection={link.connection}
               connectionError={link.error}
               busy={busy || !snapshot}

@@ -1,12 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { BalanceExecution } from '../../../../packages/domain/src/balance-inquiry';
 import type { CardReaderSnapshot } from '../../../../packages/domain/src/card-reader';
 import type { Environment } from '../../../../packages/domain/src/index';
 import type { MediatorLiveRow } from '../../../../packages/domain/src/mediator-live';
 import type { SwitchConnectionSnapshot } from '../../../../packages/domain/src/switch-connection';
-import type { CatalogSnapshot } from '../../../../packages/domain/src/catalogs';
 import type { Result } from '../../../../packages/shared/src/contracts';
-import { dashboardActivityRows } from './dashboard-activity';
 import { DesktopClient } from './desktop-client';
 import { Icon } from './Icon';
 import './dashboard.css';
@@ -15,7 +12,6 @@ const client = new DesktopClient(window.desktop);
 
 interface Props {
   environment: Environment | undefined;
-  catalog: CatalogSnapshot | undefined;
   connection: SwitchConnectionSnapshot | undefined;
   connectionError: string | undefined;
   busy: boolean;
@@ -24,13 +20,11 @@ interface Props {
 
 export function DashboardView({
   environment,
-  catalog,
   connection,
   connectionError,
   busy,
   onNewTransaction,
 }: Props) {
-  const [executions, setExecutions] = useState<readonly BalanceExecution[]>([]);
   const [mediatorRows, setMediatorRows] = useState<readonly MediatorLiveRow[]>([]);
   const [mediatorHasMore, setMediatorHasMore] = useState(false);
   const [reader, setReader] = useState<CardReaderSnapshot>();
@@ -43,12 +37,7 @@ export function DashboardView({
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    setExecutions([]);
-    setMediatorRows([]);
-    setMediatorHasMore(false);
     setFeedError(undefined);
-    setUpdatedAt(undefined);
-    setSelectedAtm('');
     setPaused(false);
   }, [environment]);
 
@@ -81,44 +70,15 @@ export function DashboardView({
   }, []);
 
   useEffect(() => {
-    if (environment !== 'QA' || paused) return;
-    let active = true;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    async function poll() {
-      const [balances, withdrawals] = await Promise.all([
-        client.call((api) => api.getBalanceHistory('QA')),
-        client.call((api) => api.getWithdrawalHistory('QA')),
-      ]);
-      if (!active) return;
-      const available = [balances, withdrawals].filter(
-        (result): result is { ok: true; value: readonly BalanceExecution[] } => result.ok,
-      );
-      if (available.length) {
-        setExecutions(available.flatMap((result) => result.value));
-        setUpdatedAt(Date.now());
-      }
-      const unavailable = [balances, withdrawals].find((result) => !result.ok);
-      setFeedError(unavailable && !unavailable.ok ? unavailable.error.message : undefined);
-      setLoading(false);
-      timer = setTimeout(() => void poll(), 2000);
-    }
-    setLoading(true);
-    void poll();
-    return () => {
-      active = false;
-      clearTimeout(timer);
-    };
-  }, [environment, paused]);
-
-  useEffect(() => {
-    if (environment !== 'PREPROD' || paused) return;
+    if (!environment || paused) return;
+    const selectedEnvironment = environment;
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     async function poll() {
       const result = await client.call((api) =>
         api.getMediatorLive({
           mode: 'live',
-          environment: 'PREPROD',
+          environment: selectedEnvironment,
           entityId: 205,
           channelId: 1,
           limit: 50,
@@ -134,7 +94,10 @@ export function DashboardView({
         setFeedError(result.error.message);
       }
       setLoading(false);
-      timer = setTimeout(() => void poll(), 3000);
+      timer = setTimeout(
+        () => void poll(),
+        result.ok ? 5000 : result.error.code === 'CONFLICT' ? 1000 : 15000,
+      );
     }
     setLoading(true);
     void poll();
@@ -144,42 +107,23 @@ export function DashboardView({
     };
   }, [environment, paused]);
 
-  const rows = useMemo(() => dashboardActivityRows(executions), [executions]);
   const atmOptions = useMemo(() => {
     const choices = new Map<string, string>();
-    if (environment === 'PREPROD') {
-      for (const row of mediatorRows)
-        if (row.terminalId) choices.set(row.terminalId, row.terminalId);
-      return [...choices].sort((a, b) => a[1].localeCompare(b[1]));
-    }
-    for (const row of rows) {
-      const label = row.terminalId ?? catalog?.atms.find((atm) => atm.id === row.atmId)?.terminalId;
-      choices.set(row.atmId, label ?? 'ATM no disponible');
-    }
+    for (const row of mediatorRows) if (row.terminalId) choices.set(row.terminalId, row.terminalId);
     return [...choices].sort((a, b) => a[1].localeCompare(b[1]));
-  }, [rows, catalog, mediatorRows, environment]);
-  const shown = rows.filter((row) => {
-    if (selectedAtm && row.atmId !== selectedAtm) return false;
-    const term = search.trim().toLocaleLowerCase('es-EC');
-    if (!term) return true;
-    return [
-      row.operation,
-      row.terminalId ?? '',
-      catalog?.atms.find((atm) => atm.id === row.atmId)?.alias ?? '',
-      row.searchReference,
-    ]
-      .join(' ')
-      .toLocaleLowerCase('es-EC')
-      .includes(term);
-  });
+  }, [mediatorRows]);
   const liveShown = mediatorRows.filter((row) => {
     if (selectedAtm && row.terminalId !== selectedAtm) return false;
     const term = search.trim().toLocaleLowerCase('es-EC');
     return (
       !term ||
-      [row.traceId, row.terminalId, row.terminalSequence, row.transactionCode, row.cardMasked].some(
-        (part) => part?.toLocaleLowerCase('es-EC').includes(term),
-      )
+      [
+        row.traceId,
+        row.terminalId,
+        row.terminalSequence,
+        row.transactionCode,
+        row.cardReference,
+      ].some((part) => part?.toLocaleLowerCase('es-EC').includes(term))
     );
   });
   const readerAvailable = !!reader?.readers.some((device) => device.state !== 'UNAVAILABLE');
@@ -243,14 +187,12 @@ export function DashboardView({
                 ? 'En pausa'
                 : feedError
                   ? 'Actualización interrumpida'
-                  : environment === 'PREPROD'
-                    ? 'Actualización cada 3 s'
-                    : 'Actualización cada 2 s'}
+                  : 'Actualización cada 5 s'}
             </span>
           </div>
           <div className="dashboard-feed-controls">
             <label>
-              <span className="visually-hidden">Filtrar por ATM</span>
+              <span className="visually-hidden">Filtrar por terminal</span>
               <select value={selectedAtm} onChange={(event) => setSelectedAtm(event.target.value)}>
                 <option value="">Todos los terminales</option>
                 {atmOptions.map(([id, label]) => (
@@ -265,11 +207,7 @@ export function DashboardView({
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder={
-                  environment === 'PREPROD'
-                    ? 'Buscar tarjeta, código o TraceId'
-                    : 'Buscar referencia o ATM'
-                }
+                placeholder="Buscar tarjeta, código o TraceId"
               />
             </label>
             <button onClick={() => setPaused((value) => !value)} disabled={!environment}>
@@ -278,9 +216,8 @@ export function DashboardView({
           </div>
         </div>
         <p className="dashboard-feed-scope">
-          {environment === 'PREPROD'
-            ? 'Mediator PREPROD · entidad 205 · canal 1 · últimas 50 filas del Journal/Message. Hora SQL sin zona confirmada; NOLOCK puede mostrar datos sin confirmar.'
-            : 'Ejecuciones de esta estación en QA. Las transacciones externas se consultan en PREPROD.'}
+          Mediator · entidad 205 · canal 1 · últimas 50 filas del Journal/Message en QA y PREPROD.
+          Hora SQL sin zona confirmada; NOLOCK puede mostrar datos sin confirmar.
         </p>
         {feedError && (
           <p className="dashboard-feed-error" role="alert">
@@ -293,21 +230,21 @@ export function DashboardView({
               <tr>
                 <th>Hora</th>
                 <th>Terminal</th>
-                <th>Tarjeta</th>
-                <th>{environment === 'PREPROD' ? 'TrnCode' : 'Operación'}</th>
-                <th>{environment === 'PREPROD' ? 'Valor registrado' : 'Monto'}</th>
-                <th>{environment === 'PREPROD' ? 'RetCode' : 'Resultado'}</th>
-                <th>{environment === 'PREPROD' ? 'Secuencia' : 'Tiempo'}</th>
-                <th>{environment === 'PREPROD' ? 'TraceId' : 'Referencia'}</th>
+                <th>Referencia de tarjeta</th>
+                <th>TrnCode</th>
+                <th>Valor registrado</th>
+                <th>RetCode</th>
+                <th>Secuencia</th>
+                <th>TraceId</th>
               </tr>
             </thead>
             <tbody>
-              {environment === 'PREPROD' && liveShown.length ? (
+              {liveShown.length ? (
                 liveShown.map((row) => (
                   <tr key={row.traceId}>
                     <td>{row.occurredAt ?? '—'}</td>
                     <td>{row.terminalId ?? '—'}</td>
-                    <td>{row.cardMasked ?? '—'}</td>
+                    <td>{row.cardReference ?? '—'}</td>
                     <td>{row.transactionCode ?? '—'}</td>
                     <td>{row.valueText ?? '—'}</td>
                     <td>{row.returnCode ?? '—'}</td>
@@ -315,56 +252,18 @@ export function DashboardView({
                     <td>{row.traceId}</td>
                   </tr>
                 ))
-              ) : environment === 'PREPROD' ? (
-                <tr>
-                  <td colSpan={8} className="dashboard-feed-empty">
-                    {loading && !updatedAt
-                      ? 'Consultando Mediator…'
-                      : mediatorRows.length
-                        ? 'No hay filas que coincidan con los filtros.'
-                        : feedError
-                          ? 'No se pudo consultar Mediator.'
-                          : 'No hay filas en la ventana consultada.'}
-                  </td>
-                </tr>
-              ) : environment !== 'QA' ? (
-                <tr>
-                  <td colSpan={8} className="dashboard-feed-empty">
-                    Selecciona QA o PREPROD para consultar transacciones.
-                  </td>
-                </tr>
-              ) : shown.length ? (
-                shown.map((row) => (
-                  <tr key={row.id}>
-                    <td>{new Date(row.occurredAt).toLocaleString('es-EC')}</td>
-                    <td>
-                      {row.terminalId ??
-                        catalog?.atms.find((atm) => atm.id === row.atmId)?.terminalId ??
-                        '—'}
-                    </td>
-                    <td>—</td>
-                    <td>{row.operation}</td>
-                    <td>{row.amount ? `USD ${row.amount}` : '—'}</td>
-                    <td>
-                      <span className={`dashboard-result ${row.tone}`}>
-                        {row.outcome}
-                        {row.responseCode ? ` · ${row.responseCode}` : ''}
-                      </span>
-                    </td>
-                    <td>{row.elapsedMs === null ? '—' : `${row.elapsedMs} ms`}</td>
-                    <td title={row.searchReference}>{row.reference}</td>
-                  </tr>
-                ))
               ) : (
                 <tr>
                   <td colSpan={8} className="dashboard-feed-empty">
-                    {loading && !updatedAt
-                      ? 'Cargando transacciones…'
-                      : rows.length
-                        ? 'No hay transacciones que coincidan con los filtros.'
-                        : feedError
-                          ? 'No se pudo cargar el historial local.'
-                          : 'Aún no hay transacciones transmitidas desde esta estación.'}
+                    {!environment
+                      ? 'Selecciona QA o PREPROD para consultar Mediator.'
+                      : loading && !updatedAt
+                        ? 'Consultando Mediator…'
+                        : mediatorRows.length
+                          ? 'No hay filas que coincidan con los filtros.'
+                          : feedError
+                            ? 'No se pudo consultar Mediator.'
+                            : 'No hay filas en la ventana consultada.'}
                   </td>
                 </tr>
               )}
@@ -373,9 +272,7 @@ export function DashboardView({
         </div>
         <div className="dashboard-feed-footer">
           <span>
-            {environment === 'PREPROD'
-              ? `${liveShown.length} filas visibles${mediatorHasMore ? ' · hay más anteriores' : ''} · solo últimos 4 dígitos de tarjeta`
-              : `Últimas ${shown.length} de hasta 50 operaciones · tarjeta no disponible en el diario local`}
+            {`${liveShown.length} filas visibles${mediatorHasMore ? ' · hay más anteriores' : ''} · tarjeta protegida`}
           </span>
           <span>
             {updatedAt

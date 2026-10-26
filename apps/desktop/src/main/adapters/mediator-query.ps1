@@ -18,6 +18,8 @@ try {
     $credential = Import-Clixml -LiteralPath $config.credentialFile
     if ($credential -isnot [System.Management.Automation.PSCredential]) { throw 'Invalid credential' }
     $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
+    $live = @($request.PSObject.Properties.Name) -ccontains 'mode' -and $request.mode -ceq 'live'
+    if ($live) { Assert-MediatorLiveRequest $request }
     $builder = [System.Data.SqlClient.SqlConnectionStringBuilder]::new()
     $builder['Data Source'] = $config.server
     $builder['Initial Catalog'] = 'Mediator'
@@ -32,8 +34,8 @@ try {
     $connection = [System.Data.SqlClient.SqlConnection]::new($builder.ConnectionString)
     $builder.Clear()
     $connection.Open()
-    # ApplicationIntent no limita permisos. Rechazar cuentas elevadas o con escritura
-    # visible en la base o en las tablas observadas antes de leer transacciones.
+    # Este proceso mantiene TLS validado y el guard de permisos. La excepcion de
+    # Inicio existe solo en mediator-live-query.ps1.
     $command = $connection.CreateCommand()
     $command.CommandTimeout = 5
     $command.CommandText = @'
@@ -49,7 +51,6 @@ SELECT CASE WHEN IS_ROLEMEMBER('db_owner') = 1 OR IS_SRVROLEMEMBER('sysadmin') =
         return
     }
     $command.Dispose()
-    $live = @($request.PSObject.Properties.Name) -ccontains 'mode' -and $request.mode -ceq 'live'
     $command = if ($live) { New-MediatorLiveQuery $connection $request } else { New-MediatorQuery $connection $request }
     $reader = $command.ExecuteReader()
     $rows = [System.Collections.Generic.List[object]]::new()
@@ -62,7 +63,7 @@ SELECT CASE WHEN IS_ROLEMEMBER('db_owner') = 1 OR IS_SRVROLEMEMBER('sysadmin') =
             $row[$key] = if ($value -is [System.DBNull]) { $null } else { $value }
         }
         if ($live) {
-            foreach ($key in @('cardMasked', 'valueText')) {
+            foreach ($key in @('cardReference', 'valueText')) {
                 $value = $reader[$key]
                 $row[$key] = if ($value -is [System.DBNull]) { $null } else { $value }
             }
