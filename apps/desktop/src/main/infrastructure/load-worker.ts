@@ -1,6 +1,7 @@
 import { parentPort, workerData } from 'node:worker_threads';
 import { performance } from 'node:perf_hooks';
 import { parseLoadTestDraft } from '../../../../../packages/domain/src/load-test';
+import { loadPacingDelay } from './load-pacing';
 
 const plan = parseLoadTestDraft(workerData);
 if (!parentPort || !plan || plan.concurrency !== 1) throw Error('INVALID_LOAD_PLAN');
@@ -30,7 +31,7 @@ function schedule() {
           plan!.targetTps * Math.min(1, elapsed / (plan!.rampUpSeconds * 1000)),
         )
       : plan!.targetTps;
-  const wait = sent === 0 ? 0 : Math.max(0, last + 1000 / rate - performance.now());
+  const wait = loadPacingDelay(sent, last, performance.now(), rate);
   timer = setTimeout(() => {
     if (stopped) return;
     last = performance.now();

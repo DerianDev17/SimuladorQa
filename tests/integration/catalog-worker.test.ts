@@ -78,7 +78,7 @@ describe('adaptador Worker con procesos reales', () => {
       hung,
       "const {parentPort}=require('node:worker_threads'); parentPort.on('message',()=>{});",
     );
-    const store = new WorkerCatalogStore(hung, join(directory, 'recovered.sqlite'), 300);
+    const store = new WorkerCatalogStore(hung, join(directory, 'recovered.sqlite'));
     stores.push(store);
     expect(await store.execute({ kind: 'list', environment: 'QA' }, context)).toMatchObject({
       ok: false,
