@@ -123,6 +123,17 @@ app.setName('Coonecta ATM Simulator');
 // Solo se permite redirigir datos locales al lanzar tests con una carpeta temporal explícita.
 const dataArgument = process.argv.find((argument) => argument.startsWith('--user-data-dir='));
 if (dataArgument) app.setPath('userData', dataArgument.slice('--user-data-dir='.length));
+// Two processes using the same journals can both observe an absent requestId
+// and send it before either sees the other's PENDING record.
+const ownsInstanceLock = app.requestSingleInstanceLock();
+if (!ownsInstanceLock) app.quit();
+else
+  app.on('second-instance', () => {
+    const activeWindow = window ?? BrowserWindow.getAllWindows()[0];
+    if (!activeWindow) return;
+    if (activeWindow.isMinimized()) activeWindow.restore();
+    activeWindow.focus();
+  });
 
 async function createWindow(): Promise<void> {
   window = new BrowserWindow({
@@ -156,9 +167,10 @@ async function createWindow(): Promise<void> {
   else await window.loadFile(rendererFile);
 }
 
-void app
-  .whenReady()
+const startupReady = ownsInstanceLock ? app.whenReady() : Promise.resolve();
+void startupReady
   .then(async () => {
+    if (!ownsInstanceLock) return;
     session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) =>
       callback(false),
     );

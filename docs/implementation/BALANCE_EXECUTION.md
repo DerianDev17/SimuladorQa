@@ -632,8 +632,10 @@ Los IDs de revision/plan documental son distintos de runId/transactionId.
 
 Limite: 200 registros, sin eviction automatica de claves de idempotencia. Al
 alcanzarlo se bloquean consultas nuevas para conservar evidencias. La cola y
-proteccion de concurrencia corresponden a una instancia Main; no existe bloqueo
-de archivo entre procesos Electron independientes ni auditoria certificada.
+proteccion de concurrencia corresponden a una instancia Main. Electron obtiene
+un bloqueo de instancia antes de abrir los diarios de `userData`: otro proceso
+con el mismo directorio sale sin abrir una segunda ventana ni ejecutar envios.
+No existe bloqueo de archivo para procesos externos ni auditoria certificada.
 
 ## Dependencias externas pendientes
 

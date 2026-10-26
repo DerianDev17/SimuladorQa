@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { resolve, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { execFile, spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { promisify } from 'node:util';
 import type { Environment } from '../../packages/domain/src/index';
 import type {
@@ -111,6 +112,40 @@ async function launch(development = false) {
 
 test.beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'coonecta-e2e-'));
+});
+
+test('impide una segunda instancia sobre el mismo diario financiero', async () => {
+  const window = await launch();
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined && key !== 'ELECTRON_RUN_AS_NODE') env[key] = value;
+  }
+  const binary = createRequire(import.meta.url)('electron') as string;
+  const duplicate = spawn(binary, [resolve('dist/main.cjs'), `--user-data-dir=${directory}`], {
+    env,
+    stdio: 'ignore',
+    windowsHide: true,
+  });
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      new Promise<void>((resolveExit, rejectExit) => {
+        duplicate.once('exit', () => resolveExit());
+        duplicate.once('error', rejectExit);
+      }),
+      new Promise<never>((_, rejectTimeout) => {
+        timeout = setTimeout(() => rejectTimeout(Error('SECOND_INSTANCE_DID_NOT_EXIT')), 10_000);
+      }),
+    ]);
+    expect(duplicate.exitCode).toBe(0);
+    await expect(window.getByRole('heading', { name: 'Inicio' })).toBeVisible();
+    expect(await app!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(
+      1,
+    );
+  } finally {
+    clearTimeout(timeout);
+    if (duplicate.exitCode === null) duplicate.kill();
+  }
 });
 
 test('retiro con reverso: cuenta regresiva, resultado separado y comprobante', async () => {
