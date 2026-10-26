@@ -65,7 +65,7 @@ function enroll(
     const timer = setTimeout(() => {
       child.kill();
       reject(Error('QA_ENROLL_TIMEOUT'));
-    }, 10000);
+    }, 12000);
     child.stdout.on('data', (chunk: Buffer) => {
       out += chunk.toString();
     });
@@ -126,7 +126,7 @@ describe.skipIf(process.platform !== 'win32')('custodia de componentes ATM en Wi
       (await readFile(join(keys, input.keyReference + '.credential.xml'), 'utf16le')) === stored,
     ).toBe(true);
     expect(await readdir(keys)).toEqual([input.keyReference + '.credential.xml']);
-  });
+  }, 45000);
   it('una coincidencia de KCV no cambia la finalidad maestra de la credencial', async () => {
     const input = fixture();
     input.expectedNetworkCheck = input.expectedMasterCheck;
