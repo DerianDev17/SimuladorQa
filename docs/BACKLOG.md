@@ -61,6 +61,7 @@ un borrador no completa esos requisitos.
 - [x] resumen del contexto revisado por Main con UUID y timestamp UTC
 - [x] borrador conservado al navegar durante la sesion y accion Limpiar borrador
 - [x] guardar/cargar/eliminar casos DRAFT persistentes por ambiente con referencias documentales sanitizadas y revalidacion de ATM
+- [x] expectativas opcionales por caso, migracion v3 y veredicto local para respuestas financieras correlacionadas sin modificar el envio
 - [x] recorrido UI de datos, lectura/seleccion manual de tarjeta y resumen sin envio
 - [x] configuracion rapida entidad/ATM con retorno al borrador y seleccion del perfil activo creado
 - [x] busqueda local y filtros de operacion/vigencia en casos con recuperacion de errores

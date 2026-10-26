@@ -144,6 +144,37 @@ describe('casos con Main, Worker y SQLite reales', () => {
     expect(result.audit.every((entry) => entry.resource === 'CASE')).toBe(true);
     expect(JSON.stringify(result.audit)).not.toContain('Consulta');
   });
+  it('conserva expectativas editadas sin alterar el borrador ni su aislamiento', async () => {
+    const original = value(await application.catalog('saveCase', request)).cases[0]!;
+    expect(original.expectation).toBeUndefined();
+    const expectation = {
+      outcome: 'NOT_APPROVED' as const,
+      responseCode: '05',
+      source: 'docs/transactions/BALANCE_INQUIRY.md',
+    };
+    const updated = value(
+      await application.catalog('saveCase', {
+        ...request,
+        id: original.id,
+        revision: original.revision,
+        values: { ...request.values, expectation },
+      }),
+    ).cases[0]!;
+    expect(updated.expectation).toEqual(expectation);
+    expect(updated.draft).toEqual(original.draft);
+    await store.close();
+    start();
+    expect((await list()).cases[0]?.expectation).toEqual(expectation);
+    const without = value(
+      await application.catalog('saveCase', {
+        ...request,
+        id: updated.id,
+        revision: updated.revision,
+      }),
+    ).cases[0]!;
+    expect(without.expectation).toBeUndefined();
+    expect(without.revision).toBe(updated.revision + 1);
+  });
   it('mantiene QA/PREPROD separados y rechaza ambiente obsoleto, PROD y evidencia externa', async () => {
     const saved = value(await application.catalog('saveCase', request)).cases[0]!;
     await application.setEnvironment({ environment: 'PREPROD' });
@@ -312,5 +343,25 @@ describe('casos con Main, Worker y SQLite reales', () => {
     );
     expect(saved.atms[0]).toEqual(atm);
     expect(saved.cases).toHaveLength(1);
+  });
+  it('migra una base v2 con casos existentes sin asignarles expectativas', async () => {
+    const saved = value(await application.catalog('saveCase', request)).cases[0]!;
+    await store.close();
+    const database = new DatabaseSync(file);
+    try {
+      database.exec(
+        'ALTER TABLE saved_cases DROP COLUMN expectation_json; PRAGMA user_version = 2;',
+      );
+    } finally {
+      database.close();
+    }
+    const migrated = new SqliteCatalog(file);
+    try {
+      const cases = value(migrated.execute({ kind: 'list', environment: 'QA' }, context)).cases;
+      expect(cases).toEqual([saved]);
+      expect(cases[0]?.expectation).toBeUndefined();
+    } finally {
+      migrated.close();
+    }
   });
 });

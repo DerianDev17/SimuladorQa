@@ -88,10 +88,22 @@ INSERT INTO catalog_audit SELECT * FROM catalog_audit_v1;
 DROP TABLE catalog_audit_v1;
 PRAGMA user_version = 2;`;
 
+const caseExpectationsMigration = `
+ALTER TABLE saved_cases ADD COLUMN expectation_json TEXT;
+PRAGMA user_version = 3;`;
+
 function savedCase(row: Record<string, unknown>): SavedCase {
   if (typeof row.draft_json !== 'string' || typeof row.evidence_json !== 'string')
     throw new Error('INVALID_CASE');
-  const values = parseCaseValues({ name: row.name, draft: JSON.parse(row.draft_json) });
+  if (row.expectation_json !== null && typeof row.expectation_json !== 'string')
+    throw new Error('INVALID_CASE_EXPECTATION');
+  const values = parseCaseValues({
+    name: row.name,
+    draft: JSON.parse(row.draft_json),
+    ...(typeof row.expectation_json === 'string'
+      ? { expectation: JSON.parse(row.expectation_json) }
+      : {}),
+  });
   if (!values || !isEnvironment(row.environment) || values.draft.environment !== row.environment)
     throw new Error('INVALID_CASE');
   const evidenceDocuments = caseEvidenceDocuments(values.draft);
@@ -152,8 +164,11 @@ export class SqliteCatalog {
       this.database.exec('BEGIN IMMEDIATE');
       const version = this.database.prepare('PRAGMA user_version').get()?.user_version;
       if (version === 0) this.database.exec(schema);
-      else if (version !== 1 && version !== 2) throw new Error('UNSUPPORTED_SCHEMA');
+      else if (version !== 1 && version !== 2 && version !== 3)
+        throw new Error('UNSUPPORTED_SCHEMA');
       if (version === 0 || version === 1) this.database.exec(casesMigration);
+      if (version === 0 || version === 1 || version === 2)
+        this.database.exec(caseExpectationsMigration);
       this.database.exec('COMMIT');
     } catch (error) {
       this.database.close();
@@ -423,18 +438,21 @@ export class SqliteCatalog {
           if (id)
             this.database
               .prepare(
-                'UPDATE saved_cases SET name=?,draft_json=?,evidence_json=?,revision=revision+1,updated_at=? WHERE id=?',
+                'UPDATE saved_cases SET name=?,draft_json=?,evidence_json=?,expectation_json=?,revision=revision+1,updated_at=? WHERE id=?',
               )
               .run(
                 values.name,
                 JSON.stringify(values.draft),
                 JSON.stringify(evidenceDocuments),
+                values.expectation ? JSON.stringify(values.expectation) : null,
                 context.timestamp,
                 id,
               );
           else
             this.database
-              .prepare('INSERT INTO saved_cases VALUES (?,?,?,?,?,?,?,?)')
+              .prepare(
+                'INSERT INTO saved_cases (id,environment,name,draft_json,evidence_json,revision,created_at,updated_at,expectation_json) VALUES (?,?,?,?,?,?,?,?,?)',
+              )
               .run(
                 recordId,
                 environment,
@@ -444,6 +462,7 @@ export class SqliteCatalog {
                 1,
                 context.timestamp,
                 context.timestamp,
+                values.expectation ? JSON.stringify(values.expectation) : null,
               );
           this.audit(context, environment, 'CASE', recordId, id ? 'UPDATED' : 'CREATED');
           break;

@@ -21,7 +21,7 @@ interface Props {
   disabled: boolean;
   canSave: boolean;
   onCatalogChange(catalog: CatalogSnapshot): void;
-  onLoad(draft: DraftRequest, warning: string | undefined): void;
+  onLoad(draft: DraftRequest, warning: string | undefined, saved: SavedCase): void;
   onOpenChange(open: boolean): void;
 }
 
@@ -37,6 +37,10 @@ export function CaseLibrary({
 }: Props) {
   const [mode, setMode] = useState<'save' | 'list'>();
   const [name, setName] = useState('');
+  const [editing, setEditing] = useState<SavedCase>();
+  const [expectedOutcome, setExpectedOutcome] = useState('');
+  const [expectedCode, setExpectedCode] = useState('');
+  const [expectationSource, setExpectationSource] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -70,6 +74,7 @@ export function CaseLibrary({
 
   function close() {
     setMode(undefined);
+    setEditing(undefined);
     setDeleting(undefined);
     setError('');
     onOpenChange(false);
@@ -82,7 +87,11 @@ export function CaseLibrary({
     setMode(next);
     onOpenChange(true);
     if (next === 'save') {
+      setEditing(undefined);
       setName('');
+      setExpectedOutcome('');
+      setExpectedCode('');
+      setExpectationSource('');
       return;
     }
     await refresh();
@@ -105,18 +114,35 @@ export function CaseLibrary({
   }
   async function save() {
     if (busy || needsReload) return;
-    if (!draft || !parseCaseValues({ name, draft })) {
-      setError('Escribe un nombre de hasta 80 caracteres, sin datos de tarjeta ni secretos.');
+    const caseDraft = editing?.draft ?? draft;
+    const values = {
+      name,
+      draft: caseDraft,
+      ...(expectedOutcome
+        ? {
+            expectation: {
+              outcome: expectedOutcome,
+              responseCode: expectedCode === '' ? null : expectedCode,
+              source: expectationSource,
+            },
+          }
+        : {}),
+    };
+    const parsed = parseCaseValues(values);
+    if (!caseDraft || !parsed) {
+      setError(
+        'Escribe un nombre de hasta 80 caracteres, sin datos de tarjeta ni secretos. Revisa la expectativa y su fuente; el código debe tener dos caracteres.',
+      );
       return;
     }
     setBusy(true);
     setError('');
     const result = await client.call((api) =>
       api.saveCase({
-        environment: draft.environment,
-        id: null,
-        revision: null,
-        values: { name, draft },
+        environment: caseDraft.environment,
+        id: editing?.id ?? null,
+        revision: editing?.revision ?? null,
+        values: parsed,
       }),
     );
     if (!active.current) return;
@@ -128,7 +154,9 @@ export function CaseLibrary({
     }
     onCatalogChange(result.value);
     close();
-    setMessage('Caso guardado como borrador local. No se ha ejecutado ninguna transacción.');
+    setMessage(
+      'Caso guardado. La expectativa declarada se evaluará solo contra una ejecución nueva de este caso.',
+    );
   }
   async function load(saved: SavedCase) {
     if (busy || needsReload) return;
@@ -145,6 +173,7 @@ export function CaseLibrary({
       available
         ? undefined
         : 'El ATM guardado cambió o no está disponible. Selecciona un perfil actual y vuelve a revisar los requisitos.',
+      current,
     );
     close();
     setMessage(`Caso «${current.name}» cargado. Revisa los requisitos antes de continuar.`);
@@ -194,10 +223,16 @@ export function CaseLibrary({
           if (!busy) close();
         }}
       >
-        <h2 id="case-dialog-title">{mode === 'save' ? 'Guardar caso local' : 'Casos guardados'}</h2>
+        <h2 id="case-dialog-title">
+          {mode === 'save'
+            ? editing
+              ? 'Editar expectativa del caso'
+              : 'Guardar caso local'
+            : 'Casos guardados'}
+        </h2>
         <p>
-          Borradores de {draft?.environment}. Las referencias son documentales; guardar o cargar un
-          caso no habilita el envío.
+          Borradores de {draft?.environment}. Las expectativas son declaradas por el operador;
+          guardar o cargar un caso no habilita el envío.
         </p>
         {error && <p role="alert">{error}</p>}
         {mode === 'save' ? (
@@ -217,6 +252,41 @@ export function CaseLibrary({
                 onChange={(event) => setName(event.target.value)}
               />
             </label>
+            <label>
+              Resultado esperado del host
+              <select
+                value={expectedOutcome}
+                disabled={busy}
+                onChange={(event) => setExpectedOutcome(event.target.value)}
+              >
+                <option value="">Sin expectativa</option>
+                <option value="APPROVED">Aprobado</option>
+                <option value="NOT_APPROVED">No aprobado</option>
+              </select>
+            </label>
+            {expectedOutcome && (
+              <>
+                <label>
+                  Código de respuesta esperado (opcional)
+                  <input
+                    value={expectedCode}
+                    maxLength={2}
+                    disabled={busy}
+                    onChange={(event) => setExpectedCode(event.target.value)}
+                  />
+                </label>
+                <label>
+                  Fuente de la expectativa
+                  <input
+                    value={expectationSource}
+                    maxLength={120}
+                    disabled={busy}
+                    placeholder="Documento o evidencia QA aprobada"
+                    onChange={(event) => setExpectationSource(event.target.value)}
+                  />
+                </label>
+              </>
+            )}
             <div className="catalog-actions">
               {needsReload && (
                 <button type="button" disabled={busy} onClick={() => void open('list')}>
@@ -231,7 +301,7 @@ export function CaseLibrary({
                 disabled={busy || needsReload || !name.trim()}
                 type="submit"
               >
-                {busy ? 'Guardando…' : 'Guardar caso'}
+                {busy ? 'Guardando…' : editing ? 'Guardar expectativa' : 'Guardar caso'}
               </button>
             </div>
           </form>
@@ -363,6 +433,11 @@ export function CaseLibrary({
                         {saved.draft.amount ? ' · ' + saved.draft.amount : ''}
                       </small>
                       <small>{new Date(saved.updatedAt).toLocaleString('es-EC')}</small>
+                      <small>
+                        {saved.expectation
+                          ? `Esperado: ${saved.expectation.outcome === 'APPROVED' ? 'Aprobado' : 'No aprobado'}${saved.expectation.responseCode ? ` · RC ${saved.expectation.responseCode}` : ''}`
+                          : 'Sin expectativa de resultado'}
+                      </small>
                       {!caseAtmAvailable(saved, catalog) && (
                         <p>ATM pendiente de seleccionar de nuevo.</p>
                       )}
@@ -376,6 +451,20 @@ export function CaseLibrary({
                       </details>
                     </div>
                     <div className="catalog-actions">
+                      <button
+                        disabled={busy || needsReload || !caseAtmAvailable(saved, catalog)}
+                        aria-label={`Editar expectativa de ${saved.name}`}
+                        onClick={() => {
+                          setEditing(saved);
+                          setName(saved.name);
+                          setExpectedOutcome(saved.expectation?.outcome ?? '');
+                          setExpectedCode(saved.expectation?.responseCode ?? '');
+                          setExpectationSource(saved.expectation?.source ?? '');
+                          setMode('save');
+                        }}
+                      >
+                        Expectativa
+                      </button>
                       <button
                         disabled={busy || needsReload}
                         aria-label={`Cargar ${saved.name}`}

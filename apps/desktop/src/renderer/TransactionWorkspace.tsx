@@ -25,6 +25,8 @@ import { DraftSummary } from './DraftSummary';
 import { DestinationCompatibilityView } from './DestinationCompatibilityView';
 import { CaptureEvidenceView } from './CaptureEvidenceView';
 import { CaseLibrary } from './CaseLibrary';
+import { caseMatchesDraft, evaluateCase } from '../../../../packages/domain/src/saved-cases';
+import type { SavedCase } from '../../../../packages/domain/src/saved-cases';
 import { CardReaderView } from './CardReaderView';
 import type { TransactionCard } from './transaction-card';
 import { resolveAtmSelection } from './transaction-setup';
@@ -100,6 +102,8 @@ export function TransactionWorkspace({
   const [review, setReview] = useState<ReviewedDraft>();
   const [balanceReadiness, setBalanceReadiness] = useState<BalanceReadiness>();
   const [balanceExecution, setBalanceExecution] = useState<BalanceExecution>();
+  const [selectedCase, setSelectedCase] = useState<SavedCase>();
+  const [caseRun, setCaseRun] = useState<{ saved: SavedCase; requestId: string }>();
   const [executingBalance, setExecutingBalance] = useState(false);
   const [recoveringBalance, setRecoveringBalance] = useState(false);
   const [checkingBalance, setCheckingBalance] = useState(false);
@@ -148,6 +152,8 @@ export function TransactionWorkspace({
   useEffect(() => {
     if (!executionLock.current) {
       setBalanceExecution(undefined);
+      setSelectedCase(undefined);
+      setCaseRun(undefined);
       setBalanceRequestId(undefined);
       setBalanceHistory(undefined);
       setHistoryAtmId('');
@@ -452,6 +458,7 @@ export function TransactionWorkspace({
   }
   function reset() {
     invalidate();
+    setSelectedCase(undefined);
     setCaseWarning(undefined);
     selectedCardRef.current = undefined;
     setSelectedCard(undefined);
@@ -482,8 +489,9 @@ export function TransactionWorkspace({
       if (balanceExecution) setBalanceRequestId(undefined);
     }
   }
-  function loadCase(saved: DraftRequest, warning: string | undefined) {
+  function loadCase(saved: DraftRequest, warning: string | undefined, testCase: SavedCase) {
     invalidate();
+    setSelectedCase(warning ? undefined : testCase);
     selectedCardRef.current = undefined;
     setSelectedCard(undefined);
     setTransaction(saved.transaction);
@@ -547,6 +555,15 @@ export function TransactionWorkspace({
   async function executeBalance() {
     if (executionLock.current || fieldsDisabled || !balanceContext || balanceRequestId) return;
     const requestId = crypto.randomUUID();
+    const currentCase = selectedCase && catalog?.cases.find((item) => item.id === selectedCase.id);
+    setCaseRun(
+      currentCase &&
+        currentCase.revision === selectedCase?.revision &&
+        draft &&
+        caseMatchesDraft(currentCase, draft)
+        ? { saved: currentCase, requestId }
+        : undefined,
+    );
     receiptRequest.current = monetary && receiptPreference === 'WITH_PRINT' ? requestId : undefined;
     executionLock.current = true;
     setExecutingBalance(true);
@@ -741,6 +758,19 @@ export function TransactionWorkspace({
       {caseWarning && (
         <div className="document-note" role="status">
           {caseWarning}
+        </div>
+      )}
+      {selectedCase && (
+        <div className="document-note" role="status">
+          Caso cargado: «{selectedCase.name}».{' '}
+          {catalog?.cases.find((item) => item.id === selectedCase.id)?.revision !==
+          selectedCase.revision
+            ? 'El caso cambió; vuelve a cargarlo antes de ejecutar la prueba.'
+            : draft && caseMatchesDraft(selectedCase, draft)
+              ? selectedCase.expectation
+                ? 'Su expectativa se evaluará tras una nueva respuesta correlacionada.'
+                : 'Sin expectativa configurada; el resultado de prueba será inconcluso.'
+              : 'El formulario cambió; esta ejecución no se asociará al caso.'}
         </div>
       )}
       <div className="transaction-columns direct-transaction-columns">
@@ -1310,13 +1340,36 @@ export function TransactionWorkspace({
             </div>
           )}
           {balanceExecution ? (
-            <BalanceExecutionView
-              execution={balanceExecution}
-              onReceipt={(execution) => {
-                const preview = createWithdrawalReceipt(execution);
-                if (preview) setReceipt(preview);
-              }}
-            />
+            <>
+              <BalanceExecutionView
+                execution={balanceExecution}
+                onReceipt={(execution) => {
+                  const preview = createWithdrawalReceipt(execution);
+                  if (preview) setReceipt(preview);
+                }}
+              />
+              {caseRun?.requestId === balanceExecution.requestId &&
+                (() => {
+                  const verdict = evaluateCase(caseRun.saved, balanceExecution);
+                  return (
+                    <section className="document-note" aria-label="Evaluación del caso">
+                      <strong>
+                        Prueba «{caseRun.saved.name}»: {verdict.status}
+                      </strong>
+                      <p>{verdict.reason}</p>
+                      {caseRun.saved.expectation && (
+                        <small>Fuente declarada: {caseRun.saved.expectation.source}</small>
+                      )}
+                      {verdict.checks.map((check) => (
+                        <p key={check.field}>
+                          {check.field}: esperado {check.expected} · recibido {check.actual}{' '}
+                          {check.pass ? '✓' : '✕'}
+                        </p>
+                      ))}
+                    </section>
+                  );
+                })()}
+            </>
           ) : (
             <>
               <div className="result-empty" role="status">

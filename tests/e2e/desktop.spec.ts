@@ -2670,6 +2670,35 @@ test('mejoras UI: buscar y filtrar casos conserva controles de vigencia y errore
   ).toBeDisabled();
 });
 
+test('caso QA permite guardar y editar expectativa sin ejecutar una transacción', async () => {
+  const window = await launch();
+  await createTestEntity(window);
+  await createTestAtm(window, 'ATM para expectativa');
+  await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
+  await window
+    .getByLabel('Perfil ATM', { exact: true })
+    .selectOption({ label: 'ATM para expectativa' });
+  await window.getByRole('button', { name: 'Guardar como caso', exact: true }).click();
+  const dialog = window.getByRole('dialog');
+  await dialog.getByLabel('Nombre del caso').fill('Saldo QA esperado');
+  await dialog.getByLabel('Resultado esperado del host').selectOption('APPROVED');
+  await dialog.getByLabel('Código de respuesta esperado (opcional)').fill('00');
+  await dialog.getByLabel('Fuente de la expectativa').fill('docs/transactions/BALANCE_INQUIRY.md');
+  await dialog.getByRole('button', { name: 'Guardar caso', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await window.getByRole('button', { name: 'Casos guardados (1)', exact: true }).click();
+  await expect(dialog.getByText('Esperado: Aprobado · RC 00')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Editar expectativa de Saldo QA esperado' }).click();
+  await dialog.getByLabel('Resultado esperado del host').selectOption('NOT_APPROVED');
+  await dialog.getByLabel('Código de respuesta esperado (opcional)').fill('05');
+  await dialog.getByRole('button', { name: 'Guardar expectativa', exact: true }).click();
+  await window.getByRole('button', { name: 'Casos guardados (1)', exact: true }).click();
+  await expect(dialog.getByText('Esperado: No aprobado · RC 05')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Cargar Saldo QA esperado' }).click();
+  await expect(window.getByText(/Caso cargado: «Saldo QA esperado»/)).toBeVisible();
+  await expect(window.getByLabel('Resultado')).toContainText('Aún no hay resultado');
+});
+
 test('mejoras UI: revisión ocupada mantiene el ambiente bloqueado al salir del lector', async () => {
   const window = await launch();
   await installTransactionReader();

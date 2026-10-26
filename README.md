@@ -2,6 +2,14 @@
 
 Aplicacion desktop para QA orientada a simular transacciones ATM de la Red Coonecta, ejecutar pruebas funcionales, carga y estres, y correlacionar cada transaccion con SmartVista/SVFE y el Core correspondiente.
 
+Los casos guardados admiten una expectativa opcional de resultado del host,
+codigo de respuesta y fuente declarada. Al cargar un caso y ejecutar una nueva
+transaccion con el mismo contexto, Resultado muestra PASS/FAIL/INCONCLUSIVE
+como comparacion local separada de la respuesta financiera. No cambia el envio
+ni certifica el resultado en Visa, Switch o Core. Ver
+[casos locales](docs/implementation/SAVED_CASES.md) y
+[ADR-022](docs/adr/ADR-022-LOCAL-CASE-VERDICTS.md).
+
 La pantalla **Carga y estrés** ofrece escenarios rápida/1/3/5 TPS y ejecuta consultas
 de saldo QA con una tarjeta física, PIN una vez por corrida y seguridad nueva por
 operación. Muestra TPS reales, tiempos por etapa y permite detener. El pool virtual,

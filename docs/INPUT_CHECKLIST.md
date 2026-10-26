@@ -1,5 +1,12 @@
 # Checklist de informacion por subir
 
+TODO-DATA CASE-FIELD-ORACLES (2026-10-26): para comparar campos ISO, secuencias
+de gestion de red y reversos al estilo VTS3 se requiere fuente aprobada por
+perfil ATM Coonecta, obligatoriedad/encoding, respuesta esperada, temporizadores
+y criterios de correlacion. La expectativa local actual compara solo resultado
+del host y codigo declarado por el operador; no importa reglas VIP ni atribuye
+certificacion a un PASS.
+
 TODO-DATA WITHDRAWAL-DEBIT-AND-REMAINING (2026-10-19): confirmar la semantica
 F54 01/02 por perfil, si el disponible corresponde al saldo posterior al retiro
 y la fuente del debito total efectivo con comisiones. El comprobante local

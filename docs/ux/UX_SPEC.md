@@ -20,6 +20,13 @@
 Fuente, limites financieros y pendientes: docs/transactions/WITHDRAWAL.md.
 
 ## Navegacion principal
+
+Los casos guardados admiten una expectativa opcional declarada por el operador:
+resultado del host, codigo de respuesta y fuente. La biblioteca permite editarla
+sin crear otra transaccion. Una nueva ejecucion de un caso cargado muestra
+PASS/FAIL/INCONCLUSIVE aparte de Aprobado/No aprobado del host. El veredicto
+local no aparece para ejecuciones previas ni se asocia a un formulario modificado.
+
 - Inicio
 - Transacciones
 - ATM Profiles
