@@ -23,6 +23,8 @@ import type { DestinationInspector } from '../../../../packages/domain/src/desti
 import type { CaptureEvidenceCatalog } from '../../../../packages/domain/src/capture-evidence';
 import { parseSaveCaseRequest } from '../../../../packages/domain/src/saved-cases';
 import { parseObservationRequest } from '../../../../packages/domain/src/observations';
+import { parseMediatorLiveRequest } from '../../../../packages/domain/src/mediator-live';
+import type { MediatorLiveSnapshot } from '../../../../packages/domain/src/mediator-live';
 import type { ObservationSearch } from '../../../../packages/domain/src/observations';
 import type { TransactionObserver } from './observation-port';
 import type { NetworkEvidenceCatalog } from '../../../../packages/domain/src/network-evidence';
@@ -228,6 +230,41 @@ export class DesktopApplication {
         : result;
     } catch {
       return failure('SERVICE_UNAVAILABLE', 'No se pudo completar la consulta de Mediator.');
+    } finally {
+      this.observationBusy = false;
+    }
+  }
+
+  async getMediatorLive(payload: unknown): Promise<Result<MediatorLiveSnapshot>> {
+    const request = parseMediatorLiveRequest(payload);
+    if (!request) return failure('VALIDATION_ERROR', 'Consulta en vivo de Mediator inválida.');
+    if (this.observationBusy)
+      return failure('CONFLICT', 'Ya hay una consulta de Mediator en curso.');
+    this.observationBusy = true;
+    try {
+      const initial = await this.serialize(async () => ({
+        preferences: await this.store.read(),
+        revision: this.environmentRevision,
+      }));
+      if (initial.preferences.environment !== 'PREPROD')
+        return failure('CONFLICT', 'Selecciona PREPROD para consultar Mediator.');
+      if (!this.observer?.live)
+        return failure('SERVICE_UNAVAILABLE', 'El observador de Mediator no está configurado.');
+      const result = await this.observer.live(request);
+      const current = await this.serialize(async () => ({
+        preferences: await this.store.read(),
+        revision: this.environmentRevision,
+      }));
+      if (current.revision !== initial.revision || current.preferences.environment !== 'PREPROD')
+        return failure('CONFLICT', 'El ambiente cambió durante la consulta.');
+      return result.ok
+        ? { ok: true, value: { ...result.value, queriedAt: this.identity.now() } }
+        : result;
+    } catch {
+      return failure(
+        'SERVICE_UNAVAILABLE',
+        'No se pudo completar la consulta en vivo de Mediator.',
+      );
     } finally {
       this.observationBusy = false;
     }

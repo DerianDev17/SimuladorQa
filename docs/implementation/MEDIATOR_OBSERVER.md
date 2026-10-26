@@ -18,6 +18,14 @@ secuencia bigint y RetCode son opcionales. No se consulta por cuenta ni PAN.
 Una ventana de hasta 24 horas es un limite tecnico de esta entrega, no una regla
 financiera del proveedor. No hay polling automatico.
 
+Inicio agrega una consulta separada de polling PREPROD cada tres segundos para
+entidad 205/canal 1. Usa la misma configuracion privada y guard de lectura,
+pero proyecta las ultimas 50 filas Journal/Message sin XML. SQL reduce
+`jnlCardNumber` a `**** ` y cuatro digitos cuando es numerico de 12 a 19
+digitos; de otro modo devuelve NULL. Main vuelve a validar el formato y solo
+entrega campos permitidos al Renderer. Ver `DASHBOARD_LIVE_FEED.md` para
+alcance, retencion de ventana y limites de cobertura.
+
 SQL usa proyeccion explicita, parametros tipados y TOP limite + 1 para indicar
 si hay mas resultados. `jnlRealDate` ya es datetime; el filtro no aplica CONVERT
 a la columna. Conserva BETWEEN inclusivo y NOLOCK solamente en Journal, como

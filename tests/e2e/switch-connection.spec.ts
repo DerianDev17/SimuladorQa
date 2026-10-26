@@ -40,9 +40,11 @@ test('el indicador sigue un socket real y ofrece conexión independiente del PIN
       env,
     });
     const window = await app.firstWindow();
-    await expect(window.getByRole('heading', { name: 'Inicio', exact: true })).toBeVisible();
-    const panel = window.getByRole('region', { name: 'Conexión al Switch', exact: true });
-    await expect(panel.getByRole('button', { name: 'Conectar al Switch' })).toBeEnabled();
+    await expect(
+      window.getByRole('heading', { name: 'Estación de pruebas', exact: true }),
+    ).toBeVisible();
+    const panel = window.getByRole('region', { name: 'Estado de la estación', exact: true });
+    await expect(window.getByRole('button', { name: 'Conectar', exact: true })).toBeEnabled();
     expect(peers.size).toBe(0);
     const setup = await window.evaluate(async () => {
       const current = await globalThis.window.desktop!.getSendConfiguration('QA');
@@ -59,9 +61,16 @@ test('el indicador sigue un socket real y ofrece conexión independiente del PIN
       });
     });
     expect(setup.ok).toBe(true);
-    await panel.getByRole('button', { name: 'Conectar al Switch' }).click();
-    await expect(panel.getByRole('status')).toContainText('TCP conectado');
-    await expect(panel).toContainText('Gestión recibida: 0800/072');
+    await window.getByRole('button', { name: 'Conectar', exact: true }).click();
+    await expect(panel).toContainText('Conectado');
+    await expect
+      .poll(async () => {
+        const state = await window.evaluate(() =>
+          globalThis.window.desktop!.getSwitchConnection('QA'),
+        );
+        return state.ok ? state.value.networkMessage?.code : null;
+      })
+      .toBe('072');
     await expect(window.locator('.topbar-network')).toHaveText('TCP conectado');
     await expect.poll(() => peers.size).toBe(1);
     const invalid = await window.evaluate(() =>
@@ -72,17 +81,16 @@ test('el indicador sigue un socket real y ofrece conexión independiente del PIN
     );
     expect(invalid.ok).toBe(false);
     for (const peer of peers) peer.end();
-    await expect(panel.getByRole('status')).toContainText('Desconectado');
-    await expect(panel).toContainText('El servidor cerró la conexión.');
-    await panel.getByRole('button', { name: 'Conectar al Switch' }).click();
-    await expect(panel.getByRole('status')).toContainText('TCP conectado');
-    await panel.getByRole('button', { name: 'Desconectar', exact: true }).click();
-    await expect(panel).toContainText('Desconectado por el operador.');
-    await panel.getByRole('button', { name: 'Conectar al Switch' }).click();
-    await expect(panel.getByRole('status')).toContainText('TCP conectado');
+    await expect(panel).toContainText('Desconectado');
+    await window.getByRole('button', { name: 'Conectar', exact: true }).click();
+    await expect(panel).toContainText('Conectado');
+    await window.getByRole('button', { name: 'Desconectar', exact: true }).click();
+    await expect(panel).toContainText('Desconectado');
+    await window.getByRole('button', { name: 'Conectar', exact: true }).click();
+    await expect(panel).toContainText('Conectado');
     await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
     await expect.poll(() => peers.size).toBe(0);
-    await expect(panel.getByRole('button', { name: 'Conectar al Switch' })).toBeDisabled();
+    await expect(window.getByRole('button', { name: 'Conectar', exact: true })).toBeDisabled();
     expect(written).toBe(0);
   } finally {
     await app?.close();

@@ -73,6 +73,12 @@ describe('diario financiero SQLite', () => {
     );
     expect(done).toMatchObject({ ok: true, value: { outcome: 'APPROVED' } });
     expect(await journal.read()).toHaveLength(201);
+    const recent = await journal.recent(50);
+    expect(recent).toHaveLength(50);
+    expect(recent[0]?.requestId).toBe(request.requestId);
+    expect(recent.some((item) => item.requestId === legacy[0]?.requestId)).toBe(false);
+    expect(await service.history()).toMatchObject({ ok: true, value: recent });
+    await expect(journal.recent(51)).rejects.toThrow('BALANCE_JOURNAL_LIMIT_INVALID');
     expect(
       await service.execute(request, target, { connect: 100, response: 100 }, async () => true),
     ).toEqual(done);

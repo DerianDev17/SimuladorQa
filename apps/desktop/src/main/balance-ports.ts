@@ -66,5 +66,6 @@ export interface BalanceTransport {
 }
 export interface BalanceJournal {
   read(): Promise<BalanceExecution[]>;
+  recent?(limit: number): Promise<BalanceExecution[]>;
   write(executions: readonly BalanceExecution[]): Promise<void>;
 }

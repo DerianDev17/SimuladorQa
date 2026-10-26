@@ -535,6 +535,8 @@ void startupReady
             return application.getBalanceHistory(payload);
           case channels.observations:
             return application.searchObservations(payload);
+          case channels.mediatorLive:
+            return application.getMediatorLive(payload);
           case channels.prepareLoadTest:
             return (
               loadTestService?.prepare(payload) ??

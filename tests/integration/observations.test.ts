@@ -10,6 +10,7 @@ import { removeTestDirectory } from '../helpers/temporary-directory';
 import { observationRequest, observationBatch } from '../helpers/observations';
 import {
   decodeResponse,
+  decodeLiveResponse,
   MediatorObserver,
 } from '../../apps/desktop/src/main/adapters/mediator-observer';
 import { cmsFinancialFields } from '../../apps/desktop/src/main/adapters/cms-financial-contract';
@@ -17,6 +18,13 @@ import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 
 describe('observador y ambiente persistido', () => {
+  const liveRequest = {
+    mode: 'live' as const,
+    environment: 'PREPROD' as const,
+    entityId: 205 as const,
+    channelId: 1 as const,
+    limit: 50,
+  };
   let directory: string;
   beforeEach(async () => {
     directory = await mkdtemp(join(tmpdir(), 'coonecta-observations-'));
@@ -123,6 +131,108 @@ describe('observador y ambiente persistido', () => {
       expect(JSON.stringify(result)).not.toContain('private-secret');
     }
   });
+  it('limita el feed a PREPROD, valida entradas y descarta respuestas tardías', async () => {
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const app = application({
+      search: async () => ({ ok: true, value: observationBatch() }),
+      live: async () => {
+        entered();
+        await pending;
+        return { ok: true, value: { rows: [], hasMore: false } };
+      },
+    });
+    expect(await app.getMediatorLive(liveRequest)).toMatchObject({
+      ok: false,
+      error: { code: 'CONFLICT' },
+    });
+    await app.setEnvironment({ environment: 'PREPROD' });
+    expect(await app.getMediatorLive({ ...liveRequest, limit: 100 })).toMatchObject({
+      ok: false,
+      error: { code: 'VALIDATION_ERROR' },
+    });
+    const running = app.getMediatorLive(liveRequest);
+    await started;
+    expect(await app.getMediatorLive(liveRequest)).toMatchObject({
+      ok: false,
+      error: { code: 'CONFLICT' },
+    });
+    await app.setEnvironment({ environment: 'QA' });
+    release();
+    expect(await running).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+  });
+  it('entrega el feed PREPROD y maneja timeout o proveedor no disponible', async () => {
+    const row = {
+      traceId: '123',
+      terminalId: 'ATM22004',
+      terminalSequence: '6',
+      occurredAt: '2026-10-26 12:00:00.000',
+      transactionCode: '003000',
+      messageType: 2,
+      returnCode: 0,
+      cardMasked: '**** 2267',
+      valueText: '40',
+    };
+    const working = application({
+      search: async () => ({ ok: true, value: observationBatch() }),
+      live: async () => ({ ok: true, value: { rows: [row], hasMore: false } }),
+    });
+    await working.setEnvironment({ environment: 'PREPROD' });
+    expect(await working.getMediatorLive(liveRequest)).toMatchObject({
+      ok: true,
+      value: { rows: [{ cardMasked: '**** 2267' }], queriedAt: '2026-10-07T12:00:00.000Z' },
+    });
+    for (const observer of [
+      undefined,
+      {
+        search: async () => ({ ok: true as const, value: observationBatch() }),
+        live: async () => ({
+          ok: false as const,
+          error: { code: 'TIMEOUT' as const, message: 'Mediator no respondió' },
+        }),
+      },
+    ]) {
+      const app = application(observer);
+      await app.setEnvironment({ environment: 'PREPROD' });
+      expect(await app.getMediatorLive(liveRequest)).toMatchObject({ ok: false });
+    }
+  });
+  it('rechaza PAN completo en la salida y conserva solo campos permitidos', () => {
+    const fullPan = ['428150', '0000002267'].join('');
+    const row = {
+      traceId: '123',
+      terminalId: 'ATM22004',
+      terminalSequence: '6',
+      occurredAt: '2026-10-26 12:00:00.000',
+      transactionCode: '003000',
+      messageType: 2,
+      returnCode: 0,
+      cardMasked: '**** 2267',
+      valueText: '40',
+      privatePan: fullPan,
+    };
+    const valid = decodeLiveResponse(
+      JSON.stringify({ ok: true, value: { rows: [row], hasMore: false } }),
+      50,
+    );
+    expect(valid).toMatchObject({ ok: true, value: { rows: [{ cardMasked: '**** 2267' }] } });
+    expect(JSON.stringify(valid)).not.toContain(fullPan);
+    expect(
+      decodeLiveResponse(
+        JSON.stringify({
+          ok: true,
+          value: { rows: [{ ...row, cardMasked: fullPan }], hasMore: false },
+        }),
+        50,
+      ),
+    ).toMatchObject({ ok: false });
+  });
   it.runIf(process.platform === 'win32')(
     'ejecuta el adaptador real: configuración ausente y timeout del proceso',
     async () => {
@@ -210,6 +320,55 @@ describe('observador y ambiente persistido', () => {
           expect.objectContaining({ name: '@from', type: 'DateTime', kind: 'Unspecified' }),
           expect.objectContaining({ name: '@terminal', type: 'VarChar', value: 'ATM22004' }),
           expect.objectContaining({ name: '@code', type: 'VarChar', value: '003000' }),
+        ]),
+      );
+    },
+  );
+  it.runIf(process.platform === 'win32')(
+    'construye el feed limitado y enmascara tarjeta dentro de SQL',
+    async () => {
+      const script = join(directory, 'live-command-test.ps1');
+      const helper = resolve('apps/desktop/src/main/adapters/mediator-command.ps1').replace(
+        /'/g,
+        "''",
+      );
+      await writeFile(
+        script,
+        `Add-Type -AssemblyName System.Data\n. '${helper}'\n$request = [Console]::In.ReadToEnd() | ConvertFrom-Json\n$connection = [System.Data.SqlClient.SqlConnection]::new()\n$command = New-MediatorLiveQuery $connection $request\n@{ sql = $command.CommandText; parameters = @($command.Parameters | ForEach-Object { @{ name = $_.ParameterName; value = $_.Value.ToString() } }) } | ConvertTo-Json -Depth 5 -Compress\n$command.Dispose()\n$connection.Dispose()\n`,
+      );
+      const output = await new Promise<string>((resolveOutput, reject) => {
+        const child = spawn(
+          join(
+            process.env.SystemRoot ?? 'C:\\Windows',
+            'System32/WindowsPowerShell/v1.0/powershell.exe',
+          ),
+          ['-NoProfile', '-NonInteractive', '-File', script],
+          { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] },
+        );
+        let stdout = '';
+        child.stdout.setEncoding('utf8');
+        child.stdout.on('data', (chunk: string) => {
+          stdout += chunk;
+        });
+        child.on('error', reject);
+        child.on('close', (code) =>
+          code === 0 ? resolveOutput(stdout) : reject(new Error('Live query construction failed')),
+        );
+        child.stdin.end(JSON.stringify(liveRequest));
+      });
+      const result = JSON.parse(output) as {
+        sql: string;
+        parameters: { name: string; value: string }[];
+      };
+      expect(result.sql).toContain('j.jnlTraceId = m.msgTraceId');
+      expect(result.sql).toContain('RIGHT(LTRIM(RTRIM(j.jnlCardNumber)), 4)');
+      expect(result.sql).toContain('ORDER BY m.msgTraceId DESC');
+      expect(result.sql).not.toMatch(/SELECT\s+\*|msgRequest|msgResponse|jnlAccountNum/);
+      expect(result.parameters).toEqual(
+        expect.arrayContaining([
+          { name: '@take', value: '51' },
+          { name: '@entity', value: '205' },
+          { name: '@channel', value: '1' },
         ]),
       );
     },

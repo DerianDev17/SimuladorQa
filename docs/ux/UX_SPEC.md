@@ -21,6 +21,14 @@ Fuente, limites financieros y pendientes: docs/transactions/WITHDRAWAL.md.
 
 ## Navegacion principal
 
+Inicio prioriza Nueva transacción y una tabla de actividad QA de esta estación,
+actualizada cada dos segundos desde los diarios existentes. Permite pausar,
+filtrar por ATM y buscar por referencia. No muestra métricas fijas ni controles
+de lectura de chip; el lector se resume con su disponibilidad y la lectura
+permanece en Tarjetas/Transacciones. La tabla omite PAN y separa el reverso
+solo cuando consta intento de transmisión. Alcance y fuente externa pendiente:
+[actividad de Inicio](../implementation/DASHBOARD_LIVE_FEED.md).
+
 Los casos guardados admiten una expectativa opcional declarada por el operador:
 resultado del host, codigo de respuesta y fuente. La biblioteca permite editarla
 sin crear otra transaccion. Una nueva ejecucion de un caso cargado muestra

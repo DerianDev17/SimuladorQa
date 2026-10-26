@@ -107,13 +107,29 @@ export class SqliteBalanceJournal implements BalanceJournal {
       const rows = database
         .prepare('SELECT request_id, payload FROM executions ORDER BY sequence')
         .all() as unknown as StoredRow[];
-      return rows.map((row) => {
-        if (typeof row.request_id !== 'string' || typeof row.payload !== 'string')
-          throw Error('BALANCE_JOURNAL_INVALID');
-        const item = this.parseItem(JSON.parse(row.payload) as unknown);
-        if (item.requestId !== row.request_id) throw Error('BALANCE_JOURNAL_INVALID');
-        return item;
-      });
+      return this.parseRows(rows);
+    });
+  }
+
+  async recent(limit: number): Promise<BalanceExecution[]> {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50)
+      throw Error('BALANCE_JOURNAL_LIMIT_INVALID');
+    return this.serialize(async () => {
+      const database = await this.open();
+      const rows = database
+        .prepare('SELECT request_id, payload FROM executions ORDER BY sequence DESC LIMIT ?')
+        .all(limit) as unknown as StoredRow[];
+      return this.parseRows(rows);
+    });
+  }
+
+  private parseRows(rows: readonly StoredRow[]): BalanceExecution[] {
+    return rows.map((row) => {
+      if (typeof row.request_id !== 'string' || typeof row.payload !== 'string')
+        throw Error('BALANCE_JOURNAL_INVALID');
+      const item = this.parseItem(JSON.parse(row.payload) as unknown);
+      if (item.requestId !== row.request_id) throw Error('BALANCE_JOURNAL_INVALID');
+      return item;
     });
   }
 

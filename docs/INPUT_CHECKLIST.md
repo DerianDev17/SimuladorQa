@@ -1,5 +1,12 @@
 # Checklist de informacion por subir
 
+TODO-DATA DASHBOARD-SWITCH-LIVE-FEED (2026-10-26): falta una fuente aprobada de
+eventos o consulta incremental para observar en Inicio todas las transacciones
+del Switch, incluidas las externas al simulador. Confirmar acceso, campos
+permitidos, correlación, zona horaria, reconexión y retención. La vista actual
+usa exclusivamente los diarios QA de esta estación. Ver
+[alcance](implementation/DASHBOARD_LIVE_FEED.md).
+
 TODO-DATA CASE-FIELD-ORACLES (2026-10-26): para comparar campos ISO, secuencias
 de gestion de red y reversos al estilo VTS3 se requiere fuente aprobada por
 perfil ATM Coonecta, obligatoriedad/encoding, respuesta esperada, temporizadores
@@ -682,6 +689,7 @@ antes de ejecutar desde ADQCLONE. Ver `docs/protocols/ISOBASEI_REVIEW.md` y
 - **TODO-DATA OBSERVERS**: faltan SQL/API y reglas de correlacion aprobadas de SmartVista/Core. Consulta Journal/Message aportada por el usuario e implementada para Mediator; no completa validacion de resultados ni SmartVista.
 - **TODO-DATA MEDIATOR-OBSERVER-ACCESS / MEDIATOR-JOURNAL-CORRELATION**: implementada consulta acotada PREPROD por TraceId a partir del SQL del usuario (2026-10-07). Falta cuenta de lectura, TLS con CA/nombre aprobado, mapeo entidad/canal y correlacion con ISO/runId/transactionId. La prueba segura actual devuelve TLS_ERROR, sin autenticar ni leer registros. Ver `docs/implementation/MEDIATOR_OBSERVER.md` y ADR-009; ADR-006 sigue limitado a metadatos.
 - **TODO-DATA MEDIATOR-SQL-TIMEZONE / MEDIATOR-MESSAGE-PROJECTION**: confirmar zona de fechas SQL y aprobar allowlist de valores XML visibles. La consulta conserva hora SQL sin inferir UTC y protege todos los valores XML.
+- **TODO-DATA DASHBOARD-SWITCH-LIVE-FEED**: Inicio consulta en PREPROD las 50 filas más recientes de MDT_Journal/MDT_Message para entidad 205/canal 1, con tarjeta reducida a últimos cuatro dígitos dentro de SQL. Falta confirmar cobertura de todos los ATM/POS, semántica de jnlCardNumber, mapeo RetCode/TrnCode, zona SQL y acceso con TLS/cuenta de lectura. Polling no garantiza captura completa bajo alto volumen. Ver `docs/implementation/DASHBOARD_LIVE_FEED.md`.
 - **TODO-DATA LOAD-LIMITS / QA-CARD-POOL-INTEGRATION**: el usuario reporta un techo actual de 5 TPS y confirma que existe un pool virtual QA autorizado. El generador local solo crea referencias VISA opacas para UI; no representa el pool. La ejecucion sigue bloqueada hasta conocer la API/SDK/servicio aprobado y confirmar PIN/EMV dinamicos; faltan tambien ventana, concurrencia, maximo de operaciones/duracion, politica de parada y motor de carga. El techo local de 5 TPS es provisional y no valida capacidad ni aprobacion formal. Ver [carga y estres](implementation/LOAD_TEST.md).
 
 La documentacion describe los flujos, pero no aporta evidencia suficiente para ejecutarlos.

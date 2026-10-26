@@ -32,7 +32,9 @@ test.beforeEach(async () => {
     env,
   });
   const window = await app.firstWindow();
-  await expect(window.getByRole('heading', { name: 'Inicio', exact: true })).toBeVisible();
+  await expect(
+    window.getByRole('heading', { name: 'Estación de pruebas', exact: true }),
+  ).toBeVisible();
   await app.evaluate(
     ({ ipcMain, BrowserWindow }, options) => {
       const require = process.getBuiltinModule('module').createRequire(options.fixture);

@@ -12,7 +12,8 @@ import type { CatalogMutation } from './CatalogView';
 import { DesktopClient } from './desktop-client';
 import { Icon } from './Icon';
 import { CardReaderView } from './CardReaderView';
-import { SwitchConnectionView, connectionTitle, useSwitchConnection } from './SwitchConnectionView';
+import { connectionTitle, useSwitchConnection } from './SwitchConnectionView';
+import { DashboardView } from './DashboardView';
 import type { IconName } from './Icon';
 import type { AtmSelection } from './transaction-setup';
 import { LoadTestView } from './LoadTestView';
@@ -357,10 +358,10 @@ export function App() {
               </button>
             </div>
           )}
-          {page !== 'transactions' && page !== 'load' && (
+          {page !== 'dashboard' && page !== 'transactions' && page !== 'load' && (
             <div className="page-heading">
               <div>
-                <h1>{page === 'dashboard' ? 'Inicio' : current?.label}</h1>
+                <h1>{current?.label}</h1>
               </div>
             </div>
           )}
@@ -378,123 +379,14 @@ export function App() {
           )}
 
           {page === 'dashboard' && (
-            <>
-              <section className="metrics-grid" aria-label="Métricas de la estación">
-                {[
-                  {
-                    label: 'Transacciones ejecutadas',
-                    value: '0',
-                    note: 'Sin ejecuciones todavía',
-                    icon: 'transaction' as const,
-                    color: 'blue',
-                  },
-                  {
-                    label: 'Flujos MVP habilitados',
-                    value: '0 / 5',
-                    note: 'Pendientes de evidencia',
-                    icon: 'check' as const,
-                    color: 'green',
-                  },
-                  {
-                    label: 'Conexión al Switch',
-                    value: linkTitle,
-                    note: link.connection?.endpoint
-                      ? `${link.connection.endpoint.host}:${link.connection.endpoint.port}`
-                      : 'Conecta desde el panel de enlace',
-                    icon: 'monitor' as const,
-                    color: 'amber',
-                  },
-                  {
-                    label: 'Latencia end-to-end',
-                    value: '—',
-                    note: 'Disponible al ejecutar',
-                    icon: 'clock' as const,
-                    color: 'purple',
-                  },
-                ].map((metric) => (
-                  <article className="metric-card" key={metric.label}>
-                    <div className="metric-top">
-                      <span>{metric.label}</span>
-                      <span className={`metric-icon ${metric.color}`}>
-                        <Icon name={metric.icon} size={18} />
-                      </span>
-                    </div>
-                    <strong className={metric.value.length > 10 ? 'metric-text' : ''}>
-                      {metric.value}
-                    </strong>
-                    <small>{metric.note}</small>
-                  </article>
-                ))}
-              </section>
-              <SwitchConnectionView
-                connection={link.connection}
-                error={link.error}
-                pending={link.pending}
-                disabled={
-                  busy || environment !== 'QA' || transactionBusy || sendConfigurationEditing
-                }
-                endpoint={
-                  snapshot?.networkEvidence.status === 'DOCUMENTED'
-                    ? snapshot.networkEvidence.evidence.ingress
-                    : undefined
-                }
-                onChange={(action) => void link.change(action)}
-              />
-              <div className="dashboard-grid">
-                <section className="panel">
-                  <div className="panel-heading">
-                    <h2>Preparar una transacción</h2>
-                    <span className="pill neutral">Funcional</span>
-                  </div>
-                  <div className="new-transaction-action">
-                    <button
-                      className="primary"
-                      disabled={busy || !snapshot}
-                      onClick={goToTransactions}
-                    >
-                      Nueva transacción <Icon name="arrow" size={16} />
-                    </button>
-                    <span>Completa los datos, elige una tarjeta y revisa el resumen.</span>
-                  </div>
-                </section>
-                <CardReaderView compact />
-              </div>
-              <div className="dashboard-grid bottom-grid">
-                <section className="panel">
-                  <div className="panel-heading">
-                    <h2>Requisitos del primer flujo</h2>
-                    <button className="text-button" onClick={() => setPage('settings')}>
-                      Ver detalle <Icon name="arrow" size={14} />
-                    </button>
-                  </div>
-                  <details className="section-details">
-                    <summary>Ver requisitos pendientes</summary>
-                    {blockerList()}
-                  </details>
-                </section>
-                <section className="panel">
-                  <div className="panel-heading">
-                    <h2>Últimas transacciones</h2>
-                    <span className="pill neutral">0 registros</span>
-                  </div>
-                  <div className="table-header">
-                    <span>Hora</span>
-                    <span>ATM</span>
-                    <span>Transacción</span>
-                    <span>Estado</span>
-                  </div>
-                  <div className="empty-state compact">
-                    <span className="empty-icon">
-                      <Icon name="history" size={27} />
-                    </span>
-                    <h3>Sin transacciones ejecutadas</h3>
-                    <button className="text-button" onClick={goToTransactions}>
-                      Preparar transacción <Icon name="arrow" size={15} />
-                    </button>
-                  </div>
-                </section>
-              </div>
-            </>
+            <DashboardView
+              environment={environment}
+              catalog={catalog}
+              connection={link.connection}
+              connectionError={link.error}
+              busy={busy || !snapshot}
+              onNewTransaction={goToTransactions}
+            />
           )}
 
           <div hidden={page !== 'transactions'}>

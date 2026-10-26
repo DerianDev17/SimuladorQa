@@ -19,6 +19,7 @@ import type {
 import type { CaptureEvidence } from '../../domain/src/capture-evidence';
 import type { SaveCaseRequest } from '../../domain/src/saved-cases';
 import type { ObservationRequest, ObservationSearch } from '../../domain/src/observations';
+import type { MediatorLiveRequest, MediatorLiveSnapshot } from '../../domain/src/mediator-live';
 import type { LoadTestDraft, LoadTestPlan } from '../../domain/src/load-test';
 import type { NetworkEvidenceSnapshot } from '../../domain/src/network-evidence';
 import type { SwitchConnectionSnapshot } from '../../domain/src/switch-connection';
@@ -80,6 +81,7 @@ export const channels = {
   executeWithdrawal: 'transaction:withdrawal:execute',
   withdrawalExecution: 'transaction:withdrawal:result',
   withdrawalHistory: 'transaction:withdrawal:history',
+  mediatorLive: 'mediator:live',
   printWithdrawalReceipt: 'transaction:withdrawal:receipt:print',
   catalog: 'catalog:list',
   saveEntity: 'catalog:entity:save',
@@ -208,6 +210,7 @@ export interface DesktopApi {
   saveCase(request: SaveCaseRequest): Promise<Result<CatalogSnapshot>>;
   deleteCase(request: DeleteRequest): Promise<Result<CatalogSnapshot>>;
   searchObservations(request: ObservationRequest): Promise<Result<ObservationSearch>>;
+  getMediatorLive(request: MediatorLiveRequest): Promise<Result<MediatorLiveSnapshot>>;
   prepareLoadTest(request: LoadTestDraft): Promise<Result<LoadTestPlan>>;
   startLoadRun(request: LoadRunRequest): Promise<Result<LoadRunSnapshot>>;
   getLoadRun(): Promise<Result<LoadRunSnapshot | null>>;

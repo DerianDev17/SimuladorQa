@@ -199,7 +199,12 @@ export class BalanceInquiryService {
 
   async history(): Promise<Result<readonly BalanceExecution[]>> {
     try {
-      return { ok: true, value: (await this.journal.read()).slice(-50).reverse() };
+      return {
+        ok: true,
+        value: this.journal.recent
+          ? await this.journal.recent(50)
+          : (await this.journal.read()).slice(-50).reverse(),
+      };
     } catch {
       return failure('STORAGE_UNAVAILABLE', 'No se pudo leer el historial de transacciones.');
     }

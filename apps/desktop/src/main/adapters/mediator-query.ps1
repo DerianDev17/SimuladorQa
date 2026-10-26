@@ -49,7 +49,8 @@ SELECT CASE WHEN IS_ROLEMEMBER('db_owner') = 1 OR IS_SRVROLEMEMBER('sysadmin') =
         return
     }
     $command.Dispose()
-    $command = New-MediatorQuery $connection $request
+    $live = @($request.PSObject.Properties.Name) -ccontains 'mode' -and $request.mode -ceq 'live'
+    $command = if ($live) { New-MediatorLiveQuery $connection $request } else { New-MediatorQuery $connection $request }
     $reader = $command.ExecuteReader()
     $rows = [System.Collections.Generic.List[object]]::new()
     $hasMore = $false
@@ -60,8 +61,15 @@ SELECT CASE WHEN IS_ROLEMEMBER('db_owner') = 1 OR IS_SRVROLEMEMBER('sysadmin') =
             $value = $reader[$key]
             $row[$key] = if ($value -is [System.DBNull]) { $null } else { $value }
         }
-        $row['requestStructure'] = Protect-MediatorXml ([string] $reader['requestXml'])
-        $row['responseStructure'] = Protect-MediatorXml ([string] $reader['responseXml'])
+        if ($live) {
+            foreach ($key in @('cardMasked', 'valueText')) {
+                $value = $reader[$key]
+                $row[$key] = if ($value -is [System.DBNull]) { $null } else { $value }
+            }
+        } else {
+            $row['requestStructure'] = Protect-MediatorXml ([string] $reader['requestXml'])
+            $row['responseStructure'] = Protect-MediatorXml ([string] $reader['responseXml'])
+        }
         $rows.Add([pscustomobject] $row)
     }
     [Console]::WriteLine((@{ ok = $true; value = @{ rows = @($rows.ToArray()); hasMore = $hasMore } } | ConvertTo-Json -Depth 8 -Compress))

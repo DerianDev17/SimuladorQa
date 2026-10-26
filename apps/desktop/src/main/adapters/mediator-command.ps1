@@ -50,3 +50,39 @@ WHERE j.jnlEntityId = @entity AND j.jnlChannelId = @channel
     $command.CommandText += ' ORDER BY m.msgTraceId DESC;'
     return $command
 }
+
+function New-MediatorLiveQuery($Connection, $Request) {
+    if ($Request.mode -cne 'live' -or $Request.environment -cne 'PREPROD' -or
+        [int] $Request.entityId -ne 205 -or [int] $Request.channelId -ne 1 -or
+        [int] $Request.limit -lt 1 -or [int] $Request.limit -gt 50 -or
+        @($Request.PSObject.Properties).Count -ne 5) { throw 'Invalid live request' }
+    $command = $Connection.CreateCommand()
+    $command.CommandTimeout = 5
+    # The database projects only a masked card. Full PAN and XML never leave SQL Server.
+    $command.CommandText = @'
+SET LOCK_TIMEOUT 3000;
+SELECT TOP (@take)
+  CONVERT(varchar(20), j.jnlTraceId) AS traceId,
+  NULLIF(RTRIM(j.jnlTerminalId), '') AS terminalId,
+  CONVERT(varchar(20), j.jnlTerminalSeq) AS terminalSequence,
+  CONVERT(varchar(23), j.jnlRealDate, 121) AS occurredAt,
+  j.jnlTrnCode AS transactionCode, j.jnlMsgType AS messageType,
+  j.jnlRetCode AS returnCode,
+  CASE WHEN LEN(LTRIM(RTRIM(j.jnlCardNumber))) BETWEEN 12 AND 19
+    AND LTRIM(RTRIM(j.jnlCardNumber)) COLLATE Latin1_General_BIN2 NOT LIKE '%[^0-9]%'
+    THEN '**** ' + RIGHT(LTRIM(RTRIM(j.jnlCardNumber)), 4)
+    ELSE NULL END AS cardMasked,
+  CONVERT(varchar(32), j.jnlValueTrn) AS valueText
+FROM [Mediator].[dbo].[MDT_Journal] AS j WITH (NOLOCK)
+INNER JOIN [Mediator].[dbo].[MDT_Message] AS m ON j.jnlTraceId = m.msgTraceId
+WHERE j.jnlEntityId = @entity AND j.jnlChannelId = @channel
+ORDER BY m.msgTraceId DESC;
+'@
+    [void] $command.Parameters.Add('@take', [System.Data.SqlDbType]::Int)
+    $command.Parameters['@take'].Value = [int] $Request.limit + 1
+    [void] $command.Parameters.Add('@entity', [System.Data.SqlDbType]::SmallInt)
+    $command.Parameters['@entity'].Value = [int16] $Request.entityId
+    [void] $command.Parameters.Add('@channel', [System.Data.SqlDbType]::SmallInt)
+    $command.Parameters['@channel'].Value = [int16] $Request.channelId
+    return $command
+}
