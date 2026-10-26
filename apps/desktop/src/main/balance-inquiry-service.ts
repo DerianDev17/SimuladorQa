@@ -321,11 +321,6 @@ export class BalanceInquiryService {
         },
       };
     }
-    if (records.length >= 200)
-      return failure(
-        'STORAGE_UNAVAILABLE',
-        'El historial alcanzó su límite. Se conserva para impedir envíos duplicados.',
-      );
     let lease: BalanceContextLease | undefined;
     let wire: Buffer | undefined;
     let transportStarted = false;

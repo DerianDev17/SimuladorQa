@@ -22,6 +22,7 @@ import { decodeResponse } from '../../apps/desktop/src/main/adapters/mediator-ob
 import { observationBatch } from '../helpers/observations';
 import { approvedWithdrawalExecution } from '../helpers/withdrawal';
 import { build } from 'esbuild';
+import { SqliteBalanceJournal } from '../../apps/desktop/src/main/infrastructure/sqlite-balance-journal';
 
 let directory: string;
 let app: ElectronApplication | undefined;
@@ -108,6 +109,32 @@ async function launch(development = false) {
   const window = await app.firstWindow();
   await expect(window.getByRole('heading', { name: 'Inicio' })).toBeVisible();
   return window;
+}
+
+async function seedWithdrawalJournal(record: BalanceExecution): Promise<void> {
+  const journal = new SqliteBalanceJournal(
+    join(directory, 'withdrawal-executions.sqlite'),
+    join(directory, 'withdrawal-executions.json'),
+    'WITHDRAWAL',
+  );
+  try {
+    await journal.write([record]);
+  } finally {
+    await journal.close();
+  }
+}
+
+async function readWithdrawalJournal(): Promise<BalanceExecution[]> {
+  const journal = new SqliteBalanceJournal(
+    join(directory, 'withdrawal-executions.sqlite'),
+    join(directory, 'withdrawal-executions.json'),
+    'WITHDRAWAL',
+  );
+  try {
+    return await journal.read();
+  } finally {
+    await journal.close();
+  }
 }
 
 test.beforeEach(async () => {
@@ -651,8 +678,7 @@ test('retiro 91 historico y actual finalizan sin paso de conciliacion y permiten
     },
   };
   // Seed only the isolated application's historical public journal.
-  const journal = join(directory, 'withdrawal-executions.json');
-  await writeFile(journal, JSON.stringify({ version: 1, executions: [previous] }));
+  await seedWithdrawalJournal(previous);
   await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
   await window.getByLabel('Monto de prueba').fill('20.00');
   const result = window.getByRole('region', { name: 'Resultado', exact: true });
@@ -703,10 +729,10 @@ test('retiro 91 historico y actual finalizan sin paso de conciliacion y permiten
     });
   });
   await expect(send).toBeDisabled();
-  const saved = JSON.parse(await readFile(journal, 'utf8')).executions;
+  const saved = await readWithdrawalJournal();
   expect(saved).toHaveLength(1);
   expect(saved[0]).toMatchObject({ ...previous });
-  expect(saved[0].qaContinuation).toBeUndefined();
+  expect(saved[0]?.qaContinuation).toBeUndefined();
   const sent = () =>
     app!.evaluate(
       () =>
@@ -766,8 +792,7 @@ test('retiro RC 59 conserva su bloqueo financiero y permite una consulta de sald
       account: 'SAVINGS',
     },
   };
-  const journal = join(directory, 'withdrawal-executions.json');
-  await writeFile(journal, JSON.stringify({ version: 1, executions: [previous] }));
+  await seedWithdrawalJournal(previous);
   await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
   const result = window.getByRole('region', { name: 'Resultado', exact: true });
   const send = window.getByRole('button', { name: 'Enviar transacción', exact: true });
@@ -829,7 +854,7 @@ test('retiro RC 59 conserva su bloqueo financiero y permite una consulta de sald
         (globalThis as typeof globalThis & { balanceAfter59Calls?: number }).balanceAfter59Calls,
     ),
   ).toBe(1);
-  expect(JSON.parse(await readFile(journal, 'utf8')).executions).toEqual([previous]);
+  expect(await readWithdrawalJournal()).toEqual([previous]);
 });
 
 test('retiro QA: monto, bloqueo real y recuperación conservan la operación original', async () => {
@@ -997,10 +1022,7 @@ for (const withPrint of [false, true]) {
     );
     expect(state.sends).toBe(1);
     expect(state.prints).toBe(0);
-    await writeFile(
-      join(directory, 'withdrawal-executions.json'),
-      JSON.stringify({ version: 1, executions: [state.saved] }),
-    );
+    await seedWithdrawalJournal(state.saved);
     if (withPrint) await dialog.getByRole('button', { name: 'Cerrar', exact: true }).click();
     const result = window.getByLabel('Resultado de retiro', { exact: true });
     await expect(result).toContainText('USD 123.45');
@@ -1054,9 +1076,7 @@ for (const withPrint of [false, true]) {
     ).toBeInViewport();
     await window.screenshot({ path: 'artifacts/withdrawal-receipt-compact.png', scale: 'css' });
     await window.keyboard.press('Escape');
-    expect(
-      JSON.parse(await readFile(join(directory, 'withdrawal-executions.json'), 'utf8')).executions,
-    ).toEqual([state.saved]);
+    expect(await readWithdrawalJournal()).toEqual([state.saved]);
   });
 }
 

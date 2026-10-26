@@ -43,7 +43,7 @@ import {
 } from './infrastructure/qa-cms-atm-evidence';
 import { WindowsQaPinEntry } from './adapters/qa-pin-entry';
 import { WindowsQaPinCipher } from './adapters/qa-pin-cipher';
-import { FileBalanceJournal } from './infrastructure/balance-journal';
+import { SqliteBalanceJournal } from './infrastructure/sqlite-balance-journal';
 import { BalanceTcpTransport } from './adapters/balance-tcp-transport';
 import { WithdrawalReversalTransport } from './adapters/withdrawal-reversal-transport';
 import { FileNetworkEvidence } from './adapters/file-network-evidence';
@@ -78,6 +78,7 @@ let loadTestService: LoadTestService | undefined;
 let virtualCardGenerator: VirtualCardGeneratorService | undefined;
 let savedCardProfiles: SavedCardProfileService | undefined;
 let financialApplication: DesktopApplication | undefined;
+let financialJournals: SqliteBalanceJournal[] = [];
 let quitting = false;
 let developmentReload = false;
 let developmentReloadTimer: ReturnType<typeof setTimeout> | undefined;
@@ -327,7 +328,8 @@ void startupReady
     const connection = new QaSwitchConnection();
     switchConnection = connection;
     const balanceTransport = new BalanceTcpTransport();
-    const balanceJournal = new FileBalanceJournal(
+    const balanceJournal = new SqliteBalanceJournal(
+      join(app.getPath('userData'), 'balance-executions.sqlite'),
       join(app.getPath('userData'), 'balance-executions.json'),
     );
     balanceService = new BalanceInquiryService(
@@ -338,11 +340,14 @@ void startupReady
       90000,
     );
     const withdrawalTransport = new WithdrawalReversalTransport();
+    const withdrawalJournal = new SqliteBalanceJournal(
+      join(app.getPath('userData'), 'withdrawal-executions.sqlite'),
+      join(app.getPath('userData'), 'withdrawal-executions.json'),
+      'WITHDRAWAL',
+    );
+    financialJournals = [balanceJournal, withdrawalJournal];
     withdrawalService = new WithdrawalService(
-      new FileBalanceJournal(
-        join(app.getPath('userData'), 'withdrawal-executions.json'),
-        'WITHDRAWAL',
-      ),
+      withdrawalJournal,
       connection.manageTransport(withdrawalTransport),
       runtime,
       withdrawalContexts,
@@ -592,6 +597,7 @@ app.on('before-quit', (event) => {
         observer?.close();
         cardReader?.close();
         cardIdentity?.close();
+        await Promise.allSettled(financialJournals.map((journal) => journal.close()));
         await catalogs?.close().catch(() => undefined);
       } finally {
         app.quit();

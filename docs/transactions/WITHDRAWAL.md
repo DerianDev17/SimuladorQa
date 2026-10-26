@@ -275,9 +275,9 @@ Evidencia local sanitizada: artifacts/qa-withdrawal-readiness-20261016.json.
   91 se clasifica NOT_APPROVED conforme a la correccion de resultado descrita arriba.
   A falta del contrato ISO de rechazos/parciales, no se convierte el RetCode
   de CMS en F39 ni se considera un rechazo definitivo. No hay reverso automatico.
-- El diario `withdrawal-executions.json` persiste PENDING antes de transmitir,
-  sin bytes privados. El diario de saldo mantiene su formato y se rechazan
-  operaciones de otro tipo al abrir cada archivo. Un retiro incierto impide
+- El diario `withdrawal-executions.sqlite` persiste PENDING antes de transmitir,
+  sin bytes privados. Saldo usa otra base SQLite; ambos importan su JSON anterior
+  una sola vez y rechazan operaciones del otro tipo. Un retiro incierto impide
   enviar otro retiro, incluso con UUID nuevo o tras reiniciar. Un 91 confirmado
   no activa ese bloqueo; el registro original se conserva sin retransmitirlo.
 - La UI recupera por el canal de la operacion original aunque se edite el

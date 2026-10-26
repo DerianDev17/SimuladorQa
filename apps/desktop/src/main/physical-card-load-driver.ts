@@ -72,11 +72,6 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
         'CONFLICT',
         'El diario contiene una operación pendiente. Revisa su correlación antes de otra corrida.',
       );
-    if (history.length + request.draft.maxTransactions > 200)
-      return failure(
-        'CONFLICT',
-        'El diario transaccional no tiene espacio para esta corrida. Reduce la cantidad o revisa su archivo con el responsable QA.',
-      );
     this.pins.begin();
     let first = true;
     let closed = false;

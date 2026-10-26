@@ -619,10 +619,14 @@ documental; esta primera ejecucion financiera se inicia manualmente con Enviar.
 
 ## Historial y resultados inciertos
 
-balance-executions.json vive en userData. Guarda UUID, UTC, contexto tecnico,
+balance-executions.sqlite vive en userData. Guarda UUID, UTC, contexto tecnico,
 correlacion, resultado, importes proyectados y metricas; no guarda PAN completo,
-PIN, PIN Block, EMV, Track o tramas. Usa esquema estricto, lectura acotada de
-512 KiB y escritura temporal/rename atomico. Conserva archivos corruptos.
+PIN, PIN Block, EMV, Track o tramas. SQLite conserva cada requestId como clave
+unica y confirma sus escrituras con sincronizacion completa. Al primer acceso
+importa el diario JSON anterior, validado con su esquema estricto y limite de
+512 KiB, dentro de una transaccion; el JSON original queda intacto como respaldo.
+Si el origen esta corrupto o la migracion falla, se bloquea la ejecucion y no
+se sustituye la evidencia.
 
 Se guarda PENDING antes del posible write. Tras reinicio, repetir requestId
 devuelve ese registro sin volver a enviar. Si falla guardar el resultado, la
@@ -634,8 +638,8 @@ de liberar lector y diario. Si la dependencia no termina, el proceso sale y el
 registro `PENDING` conserva la entrega como incierta; no hay reenvio automatico.
 Los IDs de revision/plan documental son distintos de runId/transactionId.
 
-Limite: 200 registros, sin eviction automatica de claves de idempotencia. Al
-alcanzarlo se bloquean consultas nuevas para conservar evidencias. La cola y
+No se eliminan registros ni claves de idempotencia al superar 200 operaciones.
+El historial visible sigue mostrando las ultimas 50 entradas. La cola y
 proteccion de concurrencia corresponden a una instancia Main. Electron obtiene
 un bloqueo de instancia antes de abrir los diarios de `userData`: otro proceso
 con el mismo directorio sale sin abrir una segunda ventana ni ejecutar envios.

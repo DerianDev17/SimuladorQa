@@ -24,7 +24,7 @@ No hace falta mantener la página abierta: al volver se recupera la corrida.
 Solo QA/LOCAL/ahorros/consulta de saldo. El destino y los plazos provienen de
 Configuración; no se inventan desde la pantalla de carga. Se comprueban revisión
 ATM, lectura vigente, perfil financiero, cifrado, secuencias suficientes y
-espacio para toda la cantidad en el diario de saldo (máximo existente: 200).
+ausencia de operaciones `PENDING` en el diario de saldo.
 Si falla una comprobación se muestra su causa sin arrancar el worker.
 
 Los máximos locales son 5 TPS, una operación simultánea, 100 consultas y

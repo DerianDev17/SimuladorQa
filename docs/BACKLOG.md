@@ -8,7 +8,7 @@
 - [x] seleccion de ambiente persistida y auditoria local
 - [ ] configuracion completa de endpoints y limites (TODO-DATA ENVIRONMENT)
 - [x] SQLite/Worker para catalogos de entidades y ATM, con auditoria atomica
-- [ ] SQLite para historial transaccional; diario de saldo en archivo implementado, ver BALANCE_EXECUTION
+- [x] SQLite para diarios financieros de saldo y retiro; migracion del JSON anterior, ver BALANCE_EXECUTION
 - [ ] logging transaccional sanitizado y rotacion
 
 La primera entrega tiene pruebas unitarias, integracion y E2E Electron. Ver `docs/implementation/BOOTSTRAP.md`.
