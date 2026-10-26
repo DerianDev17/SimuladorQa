@@ -24,7 +24,8 @@ Ver [guía de ejecución](docs/implementation/LOAD_TEST.md).
 - Hardware: HID OMNIKEY 5422 mediante PC/SC.
 - Tarjetas: lectura fisica + perfiles de prueba configurables.
 - MVP 1: consulta de saldo, retiro aprobado, retiro rechazado, reverso y reverso por timeout.
-- Carga: mismo ATM o multiples ATM, una o multiples tarjetas, TPS configurable.
+- Carga: piloto QA/LOCAL de saldo con una tarjeta fisica y un ATM por corrida,
+  TPS objetivo configurable. Multiples ATM/tarjetas y concurrencia pendientes.
 - Monitoreo: dashboard realtime de todas las instancias de la app.
 - Correlacion: Switch Coonecta + Core mediante adaptadores.
 

@@ -103,10 +103,17 @@ historico y prioriza el primer saldo nuevo CB 205/QA/ahorros. Ver
 - [ ] evidence view con resultados reales
 
 ## Epic 7 - Load
-- [ ] worker pool de carga
-- [ ] rate limiter
-- [ ] single/multi ATM
-- [ ] metrics de ejecucion
+- [x] worker secuencial para piloto fisico de saldo QA/LOCAL, una operacion en curso
+- [x] ritmo objetivo con rampa opcional y limite local de 5 TPS; tasa real no garantizada
+- [x] una tarjeta fisica y un ATM por corrida, con parada y recuperacion del estado
+- [x] metricas de envios, respuestas, resultados, TPS, latencias y tiempos por etapa
+- [ ] pool financiero virtual y concurrencia mayor a uno (TODO-DATA LOAD-VIRTUAL-PROVIDER)
+- [ ] multiples tarjetas/ATM por corrida y pruebas en PREPROD u otros flujos
+
+El piloto se verifica con pruebas unitarias, de integracion y Electron con fuente
+sintetica; no acredita capacidad del Switch ni una corrida de carga real.
+Ver `docs/implementation/LOAD_TEST.md` y los limites pendientes en
+`docs/INPUT_CHECKLIST.md`.
 
 ## Epic 8 - Distributed
 - [ ] Control Plane
