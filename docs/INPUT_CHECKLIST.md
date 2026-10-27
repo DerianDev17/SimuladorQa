@@ -43,6 +43,16 @@ con límites locales 5 TPS, 100 operaciones, 300 segundos y concurrencia 1;
 no requiere inventar el proveedor virtual. La capacidad real del switch sigue
 pendiente de medición; el desarrollo no inicia una corrida contra QA.
 
+Revisión carga/múltiples ATM (2026-10-27): corregidos parada por retiro de
+tarjeta, parada durante arranque, recuperación de IPC tardío, mínimo 0,1 TPS
+y gráfica de respuestas/rampa. La inspección local confirma ATM20521
+configurado con 959 reservas y ATM20524 con evidencia CMS únicamente.
+Permanecen TODO-DATA MULTI-ATM-EXECUTION-PROFILE, MULTI-ATM-PIN-KEY y
+MULTI-ATM-STAN-ALLOCATION para habilitar el segundo perfil contra QA.
+El recorrido reutilizable de ambos se verifica con datos sintéticos y TCP
+local. Ver [perfiles múltiples](implementation/MULTI_ATM_PROFILES.md) y
+[carga](implementation/LOAD_TEST.md).
+
 ## TODO-DATA activos de la primera entrega
 
 TODO-DATA QA-WITHDRAWAL-900114-WIRE: obtener NWINT/PROXY205 del19/10/2026,

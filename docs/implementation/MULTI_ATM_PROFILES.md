@@ -1,5 +1,29 @@
 # Perfiles ATM múltiples: estado comprobado
 
+## Revisión del 2026-10-27
+
+Inspección local de solo lectura en el AppData de Coonecta ATM Simulator:
+ambos ATM están activos, revisión 1. ATM20521 tiene perfil válido coincidente
+con el catálogo, credencial protegida de enlace presente y 959 secuencias
+restantes. ATM20524 conserva evidencia CMS; no aparece en el archivo de
+perfiles ejecutables y no tiene una reserva propia ni vínculo de cifrado
+directo configurados. Se conserva un informe sin secretos en
+`artifacts/atm-readiness-20261027.json`.
+
+El flujo de envío es reutilizable por perfil. La regresión integrada ejecuta
+ATM20521 → ATM20524 → ATM20521 en un servidor TCP local, con perfiles y
+tarjeta sintéticos, proveedor PIN/EMV real del simulador y cifrador sintético.
+Comprueba seguridad nueva, correlación por terminal, identificadores distintos
+y consumo separado de las reservas. Esto verifica que volver a usar ATM20521
+no exige recrear el servicio. No acredita la admisión financiera de ATM20524
+en QA ni instala esos perfiles sintéticos en la estación.
+
+Carga y estrés permite elegir cualquiera de los perfiles, uno por corrida, y
+muestra juntas las dependencias que impiden iniciar. La habilitación real de
+ATM20524 mantiene los TODO-DATA de perfil, vínculo de clave y secuencias
+enumerados abajo. La llave de enlace de ATM20521 ya está localizada; su
+existencia no documenta por sí sola la vinculación del segundo terminal.
+
 ## Referencia ATM20521
 
 El catálogo QA local contiene ATM20521 y ATM20524. La inspección de metadatos

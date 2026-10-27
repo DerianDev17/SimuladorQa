@@ -38,17 +38,21 @@ import { removeTestDirectory } from '../helpers/temporary-directory';
 
 describe('proveedor PIN/EMV conectado a lectura, ISO y TCP', () => {
   it.each(['BALANCE', 'WITHDRAWAL', 'WITHDRAWAL_BALANCE_PROFILE'] as const)(
-    'envia dos operaciones %s sinteticas nuevas y solo persiste correlacion/resultados',
+    'envía operaciones %s nuevas, reutiliza perfiles y solo persiste correlación/resultados',
     async (variant) => {
       const operation = variant === 'BALANCE' ? 'BALANCE' : 'WITHDRAWAL';
       const cash = variant === 'WITHDRAWAL';
       const directory = await mkdtemp(join(tmpdir(), 'coonecta-qa-execution-'));
       const { row, input, target } = qaExecutionFixture();
+      const other = qaExecutionFixture();
+      other.row.terminalId = other.target.terminalId = 'ATM20524';
+      other.row.reservedSequences = [650103];
       if (operation === 'WITHDRAWAL')
         target.draft = { ...target.draft, transaction: 'WITHDRAWAL_APPROVED', amount: '20.00' };
       const framing = new CapturedVisaFraming(),
         codec = new CapturedVisaBalance(operation);
-      const received: { stan: string; atc: string; unpredictable: string }[] = [];
+      const received: { stan: string; terminalId: string; atc: string; unpredictable: string }[] =
+        [];
       let serverFailure: unknown;
       const server = createServer((socket) => {
         const decoder = framing.decoder();
@@ -78,6 +82,7 @@ describe('proveedor PIN/EMV conectado a lectura, ISO y TCP', () => {
               );
               received.push({
                 stan: metadata.stan,
+                terminalId: metadata.terminalId,
                 atc: Buffer.from(emv.get('9F36')!).toString('hex'),
                 unpredictable: Buffer.from(emv.get('9F37')!).toString('hex'),
               });
@@ -92,7 +97,9 @@ describe('proveedor PIN/EMV conectado a lectura, ISO y TCP', () => {
               const response =
                 operation === 'WITHDRAWAL'
                   ? withdrawalResponse(metadata)
-                  : balanceResponse(metadata);
+                  : balanceResponse(metadata, '00', (responseFields) => {
+                      responseFields.set(41, Buffer.from(fields.get(41)!));
+                    });
               const wire = framing.encode(response, Buffer.alloc(2));
               socket.end(wire, () => wire.fill(0));
               response.fill(0);
@@ -109,6 +116,10 @@ describe('proveedor PIN/EMV conectado a lectura, ISO y TCP', () => {
       await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
       row.endpoint.port = (server.address() as AddressInfo).port;
       target.endpoint.port = row.endpoint.port;
+      if (operation === 'BALANCE') {
+        other.row.endpoint.port = other.target.endpoint.port = row.endpoint.port;
+        input.profiles.push(other.row);
+      }
       const path = join(directory, 'profile.json');
       await writeFile(path, JSON.stringify(input));
       const profiles = new FileQaExecutionProfiles(path),
@@ -184,6 +195,23 @@ describe('proveedor PIN/EMV conectado a lectura, ISO y TCP', () => {
         endpoint: profile.endpoint,
         provider,
       });
+      if (operation === 'BALANCE') {
+        const secondProfile = (await profiles.read()).profiles[1]!;
+        router.bind({
+          atmId: secondProfile.atmId,
+          atmRevision: secondProfile.atmRevision,
+          terminalId: secondProfile.terminalId,
+          endpoint: secondProfile.endpoint,
+          provider: new QaBalanceExecutionProvider(
+            secondProfile,
+            profiles,
+            cards,
+            pinEntry,
+            cipher,
+            () => qaNow,
+          ),
+        });
+      }
       let records: BalanceExecution[] = [];
       const Service = operation === 'WITHDRAWAL' ? WithdrawalService : BalanceInquiryService;
       const connection = new QaSwitchConnection();
@@ -209,16 +237,20 @@ describe('proveedor PIN/EMV conectado a lectura, ISO y TCP', () => {
         router,
       );
       try {
-        for (let index = 0; index < 2; index++) {
-          if (operation === 'WITHDRAWAL') target.draft.amount = index === 0 ? '20.00' : '50.00';
+        const targets = operation === 'BALANCE' ? [target, other.target, target] : [target, target];
+        const sequences =
+          operation === 'BALANCE' ? ['650101', '650103', '650102'] : ['650101', '650102'];
+        for (const [index, currentTarget] of targets.entries()) {
+          if (operation === 'WITHDRAWAL')
+            currentTarget.draft.amount = index === 0 ? '20.00' : '50.00';
           const reading = await cards.read({ readerName: 'Synthetic Reader' });
           expect(reading.ok).toBe(true);
           if (!reading.ok) throw Error('SYNTHETIC_READING_FAILED');
-          target.cardReadId = reading.value.readId;
-          expect((await service.inspect(target)).ready).toBe(true);
+          currentTarget.cardReadId = reading.value.readId;
+          expect((await service.inspect(currentTarget)).ready).toBe(true);
           const result = await service.execute(
-            balanceRequest(target),
-            target,
+            balanceRequest(currentTarget),
+            currentTarget,
             { connect: 1000, response: 1000 },
             async () => true,
           );
@@ -227,25 +259,33 @@ describe('proveedor PIN/EMV conectado a lectura, ISO y TCP', () => {
             value: {
               outcome: 'APPROVED',
               transmissionAttempted: true,
-              correlation: { stan: String(650101 + index) },
+              correlation: { stan: sequences[index], terminalId: currentTarget.terminalId },
             },
           });
           expect(await cards.current()).toBeNull();
           await expect.poll(() => connection.snapshot().state).toBe('CONNECTED');
         }
         expect(serverFailure).toBeUndefined();
-        expect(pins).toHaveLength(2);
+        expect(pins).toHaveLength(targets.length);
         expect(records[0]!.requestId).not.toBe(records[1]!.requestId);
         expect(records[0]!.cardReadId).not.toBe(records[1]!.cardReadId);
         if (operation === 'WITHDRAWAL')
           expect(records.map((record) => record.withdrawal?.amount)).toEqual(['20.00', '50.00']);
-        expect(received.map((item) => item.atc)).toEqual(['0001', '0002']);
+        expect(received.map((item) => item.atc)).toEqual(
+          targets.map((_, index) => String(index + 1).padStart(4, '0')),
+        );
+        expect(received.map((item) => item.terminalId)).toEqual(targets.map((t) => t.terminalId));
+        expect(new Set(records.map((record) => record.requestId)).size).toBe(targets.length);
         expect(received[0]!.unpredictable).not.toBe(received[1]!.unpredictable);
         expect(pins.every((pin) => pin.every((byte) => byte === 0))).toBe(true);
         expect(JSON.stringify(records)).not.toContain(syntheticPan);
         expect(JSON.stringify(records)).not.toContain('privateFields');
-        expect(records).toHaveLength(2);
-        expect((await profiles.read()).file.profiles[0]!.reservedSequences).toEqual([]);
+        expect(records).toHaveLength(targets.length);
+        expect(
+          (await profiles.read()).file.profiles.every(
+            (p) => (p.reservedSequences as number[]).length === 0,
+          ),
+        ).toBe(true);
       } finally {
         connection.disconnect('APP_CLOSED');
         cards.close();
