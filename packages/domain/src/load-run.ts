@@ -1,6 +1,6 @@
 import { isUuid } from './catalogs';
 import { isRecord } from './index';
-import { parseLoadTestDraft } from './load-test';
+import { LOAD_TEST_LOCAL_MIN_TPS, parseLoadTestDraft } from './load-test';
 import type { LoadTestDraft } from './load-test';
 import type { BalanceExecution } from './balance-inquiry';
 
@@ -59,6 +59,7 @@ export function parseLoadRunRequest(value: unknown): LoadRunRequest | undefined 
   const draft = parseLoadTestDraft(value.draft);
   if (
     !draft ||
+    draft.targetTps < LOAD_TEST_LOCAL_MIN_TPS ||
     draft.concurrency !== 1 ||
     draft.maxTransactions > LOAD_RUN_MAX_OPERATIONS ||
     draft.durationSeconds > LOAD_RUN_MAX_SECONDS ||
@@ -94,4 +95,23 @@ export function loadRunMetrics(run: LoadRunSnapshot) {
     p95: percentile(0.95),
     p99: percentile(0.99),
   };
+}
+
+// A completed send without a response must never appear in the response curve.
+// Omit the future part of a live run instead of plotting invented zeroes.
+export function loadResponseSeries(run: LoadRunSnapshot) {
+  const start = Date.parse(run.startedAt);
+  const events = run.items
+    .filter((item) => item.received && item.finishedAt)
+    .map((item) => Date.parse(item.finishedAt!) - start)
+    .filter((time) => Number.isFinite(time) && time >= 0 && time <= run.elapsedMs);
+  return Array.from({ length: 41 }, (_, index) => {
+    const elapsedMs = (run.elapsedMs * index) / 40;
+    const from = Math.max(0, elapsedMs - 10000);
+    const span = Math.max(1000, elapsedMs - from);
+    const count = events.filter(
+      (time) => time <= elapsedMs && (from === 0 ? time >= 0 : time > from),
+    ).length;
+    return { elapsedMs, tps: (count * 1000) / span };
+  });
 }

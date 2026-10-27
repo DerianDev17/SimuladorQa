@@ -1,11 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { AtmProfile } from '../../../../packages/domain/src/catalogs';
 import type { Environment } from '../../../../packages/domain/src/index';
 import type { LoadTestDraft, LoadTestMode } from '../../../../packages/domain/src/load-test';
 import {
+  LOAD_TEST_LOCAL_MIN_TPS,
+  LOAD_TEST_LOCAL_MAX_TPS,
+  loadTargetTps,
+} from '../../../../packages/domain/src/load-test';
+import {
   LOAD_RUN_MAX_OPERATIONS,
   LOAD_RUN_MAX_SECONDS,
   loadRunMetrics,
+  loadResponseSeries,
   parseLoadRunRequest,
 } from '../../../../packages/domain/src/load-run';
 import type { LoadRunSnapshot, LoadRunTimings } from '../../../../packages/domain/src/load-run';
@@ -13,6 +19,7 @@ import { DesktopClient } from './desktop-client';
 import { CardReaderView } from './CardReaderView';
 import type { TransactionCard } from './transaction-card';
 import { Icon } from './Icon';
+import type { Result } from '../../../../packages/shared/src/contracts';
 
 interface Props {
   environment: Environment | undefined;
@@ -76,31 +83,25 @@ const ms = (value: number | null | undefined) =>
   value == null ? '—' : Math.round(value).toLocaleString() + ' ms';
 
 function TpsChart({ run }: { run: LoadRunSnapshot }) {
-  const events = run.items
-    .filter((item) => item.sent && item.finishedAt)
-    .map((item) => Date.parse(item.finishedAt!) - Date.parse(run.startedAt))
-    .filter((value) => Number.isFinite(value) && value >= 0);
-  if (!events.length)
+  if (!run.items.some((item) => item.received && item.finishedAt))
     return (
       <p className="load-empty-chart">
-        La serie por segundo estará disponible en la próxima corrida.
+        Aún no hay respuestas con fecha registrada para mostrar la serie.
       </p>
     );
   const horizon = Math.max(
-    run.state === 'RUNNING' ? run.draft.durationSeconds * 1000 : run.elapsedMs,
+    run.state === 'RUNNING' ? run.draft.durationSeconds * 1000 : 0,
+    run.elapsedMs,
     1000,
   );
   const ceiling = Math.max(5, run.draft.targetTps);
-  const points = Array.from({ length: 41 }, (_, index) => {
+  const point = (time: number, rate: number) =>
+    `${Math.round((time * 500) / horizon)},${Math.round(112 - (Math.min(rate, ceiling) * 112) / ceiling)}`;
+  const points = loadResponseSeries(run).map(({ elapsedMs, tps }) => point(elapsedMs, tps));
+  const targets = Array.from({ length: 41 }, (_, index) => {
     const at = (horizon * index) / 40;
-    const from = Math.max(0, at - 10000);
-    const span = Math.max(1000, at - from);
-    const rate = (events.filter((time) => time > from && time <= at).length * 1000) / span;
-    return (
-      Math.round(index * 12.5) + ',' + Math.round(112 - (Math.min(rate, ceiling) * 112) / ceiling)
-    );
+    return point(at, loadTargetTps(run.draft, at));
   });
-  const targetY = Math.round(112 - (run.draft.targetTps * 112) / ceiling);
   return (
     <div className="load-chart">
       <svg viewBox="0 0 500 112" role="img" aria-label="Respuestas por segundo durante la corrida">
@@ -114,7 +115,7 @@ function TpsChart({ run }: { run: LoadRunSnapshot }) {
             className="load-gridline"
           />
         ))}
-        <line x1="0" x2="500" y1={targetY} y2={targetY} className="load-target-line" />
+        <polyline points={targets.join(' ')} fill="none" className="load-target-line" />
         <polyline points={points.join(' ')} className="load-actual-line" />
       </svg>
       <div className="load-chart-caption">
@@ -141,6 +142,9 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
   const [starting, setStarting] = useState(false);
   const [statusReady, setStatusReady] = useState(false);
   const [uncertain, setUncertain] = useState(false);
+  const pendingStart = useRef<string | null>(null);
+  const statusVersion = useRef(0);
+  const mounted = useRef(true);
   const active = !!run && ['RUNNING', 'STOPPING'].includes(run.state);
   const locked = active || starting || uncertain;
   const client = new DesktopClient(window.desktop);
@@ -166,21 +170,33 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
   }, [locked, onBusyChange]);
   useEffect(() => {
     let live = true;
+    mounted.current = true;
     let pending = false;
     const refresh = async () => {
       if (pending) return;
       pending = true;
+      const version = statusVersion.current;
       const result = await client.call((api) => api.getLoadRun());
       pending = false;
-      if (!live) return;
+      if (!live || version !== statusVersion.current) return;
       setStatusReady(result.ok);
-      if (result.ok) setRun(result.value);
-      else setError(result.error.message);
+      if (result.ok) {
+        setRun(result.value);
+        if (pendingStart.current && result.value?.requestId === pendingStart.current) {
+          pendingStart.current = null;
+          statusVersion.current++;
+          setStarting(false);
+          setUncertain(false);
+          setError(undefined);
+          setCard(undefined);
+        }
+      } else setError(result.error.message);
     };
     void refresh();
     const timer = setInterval(() => void refresh(), 1000);
     return () => {
       live = false;
+      mounted.current = false;
       clearInterval(timer);
     };
   }, []);
@@ -207,7 +223,11 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
     !Number.isSafeInteger(Number(count))
       ? ['La cantidad debe estar entre 1 y ' + LOAD_RUN_MAX_OPERATIONS + '.']
       : []),
-    ...(Number(tps) <= 0 || Number(tps) > 5 ? ['El objetivo debe estar entre 0,1 y 5 TPS.'] : []),
+    ...(!Number.isFinite(Number(tps)) ||
+    Number(tps) < LOAD_TEST_LOCAL_MIN_TPS ||
+    Number(tps) > LOAD_TEST_LOCAL_MAX_TPS
+      ? ['El objetivo debe estar entre 0,1 y 5 TPS.']
+      : []),
     ...(Number(duration) < 1 ||
     Number(duration) > LOAD_RUN_MAX_SECONDS ||
     !Number.isSafeInteger(Number(duration))
@@ -227,28 +247,48 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
     setDuration(String(choice.seconds));
   }
   async function start() {
-    if (!valid || !card || locked) return;
+    if (!valid || !card || locked || disabled || !statusReady || environment !== 'QA') return;
+    const requestId = crypto.randomUUID();
+    pendingStart.current = requestId;
+    statusVersion.current++;
     setStarting(true);
     setError(undefined);
+    const accept = (result: Result<LoadRunSnapshot>) => {
+      if (!mounted.current || pendingStart.current !== requestId) return;
+      pendingStart.current = null;
+      statusVersion.current++;
+      setStarting(false);
+      setUncertain(false);
+      if (result.ok) {
+        setRun(result.value);
+        setCard(undefined);
+        setError(undefined);
+      } else setError(result.error.message);
+    };
     const result = await client.call(
-      (api) => api.startLoadRun({ requestId: crypto.randomUUID(), cardReadId: card.readId, draft }),
+      async (api) => {
+        const confirmed = await api.startLoadRun({ requestId, cardReadId: card.readId, draft });
+        accept(confirmed);
+        return confirmed;
+      },
       20000,
+      'El inicio aún no está confirmado. Se consultará su estado sin repetir la solicitud.',
     );
-    if (result.ok) {
-      setRun(result.value);
-      setCard(undefined);
-    } else {
+    if (!mounted.current || pendingStart.current !== requestId) return;
+    if (!result.ok) {
       setError(result.error.message);
-      if (result.error.code === 'TIMEOUT') setUncertain(true);
+      setUncertain(true);
     }
     setStarting(false);
   }
   async function stop() {
     if (!run) return;
+    statusVersion.current++;
     const result = await client.call((api) => api.stopLoadRun({ runId: run.runId }));
+    if (!mounted.current) return;
+    statusVersion.current++;
     if (result.ok) {
       setRun(result.value);
-      setUncertain(false);
     } else setError(result.error.message);
   }
   const metrics = run ? loadRunMetrics(run) : null;
@@ -311,7 +351,7 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
           </div>
           <div className="load-step">
             <div className="load-step-title">
-              <h2>1. Selecciona los ATM</h2>
+              <h2>1. Selecciona el ATM</h2>
               <span>QA</span>
             </div>
             <details className="load-atm-picker">
@@ -326,28 +366,21 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
                 {available.map((atm) => (
                   <label key={atm.id}>
                     <input
-                      type="checkbox"
+                      type="radio"
+                      name="load-atm"
                       checked={atmIds.includes(atm.id)}
                       disabled={locked || disabled}
-                      onChange={(event) =>
-                        setAtmIds((ids) =>
-                          event.target.checked
-                            ? [...ids, atm.id]
-                            : ids.filter((id) => id !== atm.id),
-                        )
-                      }
+                      onChange={() => setAtmIds([atm.id])}
                     />
                     {atm.alias} · {atm.terminalId}
                   </label>
                 ))}
               </div>
             </details>
-            {atmIds.length > 1 && (
-              <p className="load-inline-note">
-                Varios ATM se pueden seleccionar para planificar; la ejecución financiera disponible
-                es de un ATM por corrida.
-              </p>
-            )}
+            <p className="load-inline-note">
+              Un ATM por corrida. Puedes elegir otra terminal para la siguiente prueba; cada una
+              requiere su perfil de envío configurado.
+            </p>
           </div>
           <div className="load-step">
             <div className="load-step-title">
@@ -393,7 +426,7 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
             </p>
           </div>
           <div className="load-fixed-operation">
-            <strong>Transacción: consulta de saldo (702)</strong>
+            <strong>Transacción: consulta de saldo</strong>
             <small>
               QA · ahorros · tarjeta presente. Otros flujos requieren contrato validado.
             </small>
@@ -420,8 +453,8 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
                   TPS objetivo
                   <input
                     type="number"
-                    min="0.1"
-                    max="5"
+                    min={LOAD_TEST_LOCAL_MIN_TPS}
+                    max={LOAD_TEST_LOCAL_MAX_TPS}
                     step="0.1"
                     value={tps}
                     disabled={locked || disabled}
@@ -535,7 +568,8 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
                 <div className="load-progress-label">
                   <span>{Math.round(progress)}% del primer límite</span>
                   <span>
-                    {Math.round(run.elapsedMs / 1000)} s / {run.draft.durationSeconds} s
+                    En curso: {run.active} · {Math.round(run.elapsedMs / 1000)} s /{' '}
+                    {run.draft.durationSeconds} s
                   </span>
                 </div>
                 <div className="load-metrics">
@@ -571,8 +605,10 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
                       ['Mín.', metrics.min],
                       ['Promedio', metrics.avg],
                       ['p50', metrics.p50],
+                      ['p90', metrics.p90],
                       ['p95', metrics.p95],
                       ['p99', metrics.p99],
+                      ['Máx.', metrics.max],
                     ].map(([label, value]) => (
                       <div key={String(label)}>
                         <span>{label}</span>

@@ -20,6 +20,16 @@ export const loadRequest = () => ({
   },
 });
 describe('corrida QA acotada', () => {
+  it('respeta el mínimo de la UI y rechaza tasas que desbordan el temporizador', () => {
+    const request = loadRequest();
+    expect(
+      parseLoadRunRequest({ ...request, draft: { ...request.draft, targetTps: 0.1 } }),
+    ).toBeDefined();
+    for (const targetTps of [0.09, 1e-10, NaN, Infinity, 0, -1])
+      expect(
+        parseLoadRunRequest({ ...request, draft: { ...request.draft, targetTps } }),
+      ).toBeUndefined();
+  });
   it('valida límites, fuente, ambiente y rampa sin aceptar secretos', () => {
     const request = loadRequest();
     expect(parseLoadRunRequest(request)).toEqual(request);

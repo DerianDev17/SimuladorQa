@@ -1,10 +1,15 @@
 import { parentPort, workerData } from 'node:worker_threads';
 import { performance } from 'node:perf_hooks';
-import { parseLoadTestDraft } from '../../../../../packages/domain/src/load-test';
+import {
+  LOAD_TEST_LOCAL_MIN_TPS,
+  loadTargetTps,
+  parseLoadTestDraft,
+} from '../../../../../packages/domain/src/load-test';
 import { loadPacingDelay } from './load-pacing';
 
 const plan = parseLoadTestDraft(workerData);
-if (!parentPort || !plan || plan.concurrency !== 1) throw Error('INVALID_LOAD_PLAN');
+if (!parentPort || !plan || plan.concurrency !== 1 || plan.targetTps < LOAD_TEST_LOCAL_MIN_TPS)
+  throw Error('INVALID_LOAD_PLAN');
 const port = parentPort;
 const start = performance.now();
 let sent = 0;
@@ -24,13 +29,7 @@ function schedule() {
   if (stopped) return;
   if (sent >= plan!.maxTransactions) return finish('COUNT');
   const elapsed = performance.now() - start;
-  const rate =
-    plan!.mode === 'STRESS'
-      ? Math.max(
-          Math.min(1, plan!.targetTps),
-          plan!.targetTps * Math.min(1, elapsed / (plan!.rampUpSeconds * 1000)),
-        )
-      : plan!.targetTps;
+  const rate = loadTargetTps(plan!, elapsed);
   const wait = loadPacingDelay(sent, last, performance.now(), rate);
   timer = setTimeout(() => {
     if (stopped) return;

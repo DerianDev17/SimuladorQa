@@ -81,12 +81,13 @@ export class LoadRunService {
   observeReaders(readers: readonly { name: string; state: string }[] | null): void {
     if (
       this.busy &&
+      this.run &&
       this.source &&
       !readers?.some(
         (reader) => reader.name === this.source!.readerName && reader.state === 'CARD_PRESENT',
       )
     )
-      this.close();
+      this.stop({ runId: this.run.runId });
   }
   private snapshot(): LoadRunSnapshot | null {
     if (!this.run) return null;
@@ -177,6 +178,12 @@ export class LoadRunService {
         this.finishReason = 'STOPPED';
         await this.finish();
         return failure('SERVICE_UNAVAILABLE', 'La aplicación se está cerrando.');
+      }
+      // A stop/reader event can arrive while the initial snapshot is being
+      // persisted, before there is a scheduler to receive the stop message.
+      if (this.finishReason) {
+        await this.finish();
+        return { ok: true, value: this.snapshot()! };
       }
       this.scheduler = this.schedule(
         request,

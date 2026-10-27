@@ -132,6 +132,28 @@ describe('adaptador de carga con tarjeta física', () => {
     expect(f.ask).not.toHaveBeenCalled();
     expect(f.application.executeBalance).not.toHaveBeenCalled();
   });
+  it('muestra todas las dependencias del ATM seleccionado sin pedir PIN ni transmitir', async () => {
+    const f = fixture();
+    vi.mocked(f.application.getBalanceReadiness).mockResolvedValue({
+      ok: true,
+      value: {
+        ready: false,
+        blockers: [
+          { id: 'QA-DIRECT-PIN-KEY-BINDING', label: 'ATM20524: falta vínculo de cifrado' },
+          { id: 'QA-EXECUTION-PROFILE-BINDING', label: 'Falta perfil ISO y reserva propia' },
+        ],
+      },
+    });
+    expect(await f.driver.prepare(f.input)).toMatchObject({
+      ok: false,
+      error: {
+        code: 'CONFLICT',
+        message: 'ATM20524: falta vínculo de cifrado. Falta perfil ISO y reserva propia',
+      },
+    });
+    expect(f.ask).not.toHaveBeenCalled();
+    expect(f.application.executeBalance).not.toHaveBeenCalled();
+  });
   it('detiene la corrida cuando cambia la tarjeta o falla la nueva lectura', async () => {
     const f = fixture();
     const source = await f.driver.prepare(f.input);

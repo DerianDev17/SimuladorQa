@@ -6,6 +6,7 @@ export type LoadTestMode = 'LOAD' | 'STRESS';
 // Temporary local ceiling reported by the user for the QA switch. This does
 // not represent a vendor-approved capacity or authorize a run by itself.
 export const LOAD_TEST_LOCAL_MAX_TPS = 5;
+export const LOAD_TEST_LOCAL_MIN_TPS = 0.1;
 
 export interface LoadTestDraft {
   environment: 'QA';
@@ -18,6 +19,15 @@ export interface LoadTestDraft {
   concurrency: number;
   rampUpSeconds: number;
   durationSeconds: number;
+}
+
+export function loadTargetTps(plan: LoadTestDraft, elapsedMs: number): number {
+  return plan.mode === 'STRESS'
+    ? Math.max(
+        Math.min(1, plan.targetTps),
+        plan.targetTps * Math.min(1, Math.max(0, elapsedMs) / (plan.rampUpSeconds * 1000)),
+      )
+    : plan.targetTps;
 }
 
 export interface LoadTestPlan {

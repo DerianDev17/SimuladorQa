@@ -1,5 +1,29 @@
 # Carga y estrés de saldo en QA
 
+## Correcciones verificables del 2026-10-27
+
+- Retirar la tarjeta o perder el lector detiene la corrida y libera la sesión
+  PIN. Tras una nueva lectura se puede iniciar otra corrida explícita, sin
+  reiniciar la aplicación. El cierre definitivo se reserva para salir de la app.
+- Detener durante la persistencia del inicio termina sin activar el worker;
+  ya no deja una corrida en `STOPPING` esperando su límite de duración.
+- Main y el worker admiten objetivos desde 0,1 hasta 5 TPS. El mínimo evita
+  desbordar el temporizador con tasas casi nulas. El lector de registros
+  anteriores conserva compatibilidad con los valores históricos.
+- Ante un timeout de IPC, la UI conserva el identificador de la solicitud y
+  recupera su estado confirmado o respuesta tardía. No crea otra corrida ni
+  deja un bloqueo permanente después de confirmar el resultado. Una respuesta
+  de polling anterior al inicio/parada no sobrescribe el estado nuevo.
+- La gráfica usa respuestas recibidas, omite el tramo futuro y representa el
+  objetivo gradual con la misma función del worker. Se muestran operaciones
+  en curso, p90 y latencia máxima además de las métricas existentes.
+- El selector elige un ATM por corrida; cambiar de terminal reemplaza la
+  selección. La validación presenta todas las dependencias pendientes del
+  perfil elegido. Se elimina la etiqueta ambigua «702» del flujo de saldo.
+
+Las regresiones usan worker real, almacenamiento temporal, TCP loopback y
+Electron con fuente sintética. No se ejecuta carga contra el switch QA.
+
 ## Ejecutar el piloto con tarjeta física
 
 1. Abrir **Carga y estrés** en QA y seleccionar el ATM configurado para saldo.
@@ -27,14 +51,15 @@ ATM, lectura vigente, perfil financiero, cifrado, secuencias suficientes y
 ausencia de operaciones `PENDING` en el diario de saldo.
 Si falla una comprobación se muestra su causa sin arrancar el worker.
 
-Los máximos locales son 5 TPS, una operación simultánea, 100 consultas y
+El intervalo permitido es 0,1–5 TPS. Los máximos locales son una operación simultánea, 100 consultas y
 300 segundos. El lector, las operaciones EMV, el cifrado y la respuesta del host
 pueden impedir alcanzar 5 TPS. El tiempo incluye la entrada inicial del PIN.
 Esta prueba no certifica la capacidad máxima del switch.
 La pantalla explica cuando la cantidad ingresada supera las 100 consultas y
 mantiene deshabilitado el inicio hasta corregirla.
-El selector permite ver varios ATM, pero Main ejecuta solo uno por corrida;
-seleccionar varios muestra la dependencia pendiente y deshabilita el inicio.
+El selector muestra los ATM disponibles y permite elegir uno por corrida.
+Para probar otra terminal, terminar la corrida, seleccionar su perfil y volver
+a leer la tarjeta. Main valida el perfil y las reservas de cada terminal.
 Los perfiles QA guardados son referencias de lectura y no credenciales virtuales.
 Las comprobaciones de perfil financiero y secuencias ocurren al iniciar en Main.
 

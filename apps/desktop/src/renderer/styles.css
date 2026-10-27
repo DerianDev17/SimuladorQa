@@ -4041,7 +4041,8 @@ td {
 }
 .load-latencies {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
+  row-gap: 12px;
 }
 .load-latencies > div {
   display: grid;

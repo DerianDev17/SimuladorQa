@@ -168,6 +168,61 @@ describe('worker de carga con persistencia real', () => {
     expect((await finished(service)).state).toBe('FAILED');
     expect(close).toHaveBeenCalled();
   });
+  it.each([
+    { readers: null },
+    { readers: [] },
+    { readers: [{ name: 'Synthetic', state: 'EMPTY' }] },
+  ])(
+    'retirar la tarjeta o perder el lector detiene la corrida y permite otra explícita: %j',
+    async ({ readers }) => {
+      const execute = vi.fn(
+        (signal: AbortSignal) =>
+          new Promise<Result<BalanceExecution>>((done) => {
+            signal.addEventListener(
+              'abort',
+              () =>
+                done({
+                  ok: false,
+                  error: { code: 'CONFLICT', message: 'Tarjeta retirada.' },
+                }),
+              { once: true },
+            );
+          }),
+      );
+      const { service, close } = setup(execute);
+      await service.start(request());
+      await vi.waitFor(() => expect(execute).toHaveBeenCalledOnce());
+      service.observeReaders(readers);
+      expect((await finished(service)).state).toBe('STOPPED');
+      expect(close).toHaveBeenCalledOnce();
+      execute.mockResolvedValue({ ok: true, value: result() });
+      expect((await service.start(request())).ok).toBe(true);
+      expect((await finished(service)).state).toBe('COMPLETED');
+    },
+  );
+  it('detener mientras se guarda el inicio nunca activa el worker ni deja la corrida bloqueada', async () => {
+    const execute = vi.fn(async () => ({ ok: true as const, value: result() }));
+    const { service, store, close } = setup(execute);
+    const write = store.write.bind(store);
+    let release: (() => void) | undefined;
+    vi.spyOn(store, 'write').mockImplementationOnce(async (snapshot) => {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      await write(snapshot);
+    });
+    const starting = service.start(request());
+    await vi.waitFor(() => expect(release).toBeDefined());
+    const current = await service.current(undefined);
+    if (!current.ok || !current.value) throw Error('NO_RUN');
+    service.stop({ runId: current.value.runId });
+    release!();
+    expect(await starting).toMatchObject({ ok: true, value: { state: 'STOPPED' } });
+    await service.whenIdle();
+    expect(execute).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalledOnce();
+    expect((await store.read())?.state).toBe('STOPPED');
+  });
   it('espera el cierre de la corrida y no arranca si se cierra durante la preparación', async () => {
     const { service, driver, store, close } = setup(async () => ({
       ok: true,

@@ -15,6 +15,7 @@ import type {
 } from '../../packages/domain/src/card-reader';
 import type { Result } from '../../packages/shared/src/contracts';
 import type { BalanceExecution } from '../../packages/domain/src/balance-inquiry';
+import type { LoadRunRequest, LoadRunSnapshot } from '../../packages/domain/src/load-run';
 import { createServer } from 'vite';
 import { removeTestDirectory } from '../helpers/temporary-directory';
 import { networkEvidence } from '../helpers/network-evidence';
@@ -69,6 +70,9 @@ test('carga de saldo: iniciar, medir, recuperar y detener con motor real y fuent
   await expect(window.locator('.load-validation')).toHaveCount(0);
   await window.getByLabel('TPS objetivo').fill('6');
   await expect(start).toBeDisabled();
+  await window.getByLabel('TPS objetivo').fill('0.01');
+  await expect(start).toBeDisabled();
+  await expect(window.locator('.load-validation')).toContainText('entre 0,1 y 5');
   await window.getByLabel('TPS objetivo').fill('5');
   await expect(start).toBeEnabled();
   await window.screenshot({ path: 'artifacts/load-ready.png', fullPage: true });
@@ -87,10 +91,130 @@ test('carga de saldo: iniciar, medir, recuperar y detener con motor real y fuent
   await start.click();
   await window.getByRole('button', { name: 'Detener prueba', exact: true }).click();
   await expect(result).toContainText('Detenida', { timeout: 10000 });
+  await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await window.getByLabel('Máximo de operaciones').fill('2');
+  await window.getByLabel('Duración máxima (segundos)').fill('5');
+  await window.getByLabel('Tipo de corrida').selectOption('STRESS');
+  await window.getByLabel('Aumento gradual (segundos)').fill('5');
+  await expect(start).toBeDisabled();
+  await window.getByLabel('Aumento gradual (segundos)').fill('1');
+  await start.click();
+  await expect(result).toContainText('Completada', { timeout: 10000 });
+  await expect(result.locator('.load-metrics')).toContainText('Aprobadas2');
   expect(await window.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
     true,
   );
 });
+
+test('carga: cambia de terminal sin seleccionar dos ATM ni perder los límites de cada corrida', async () => {
+  const window = await prepareBalanceSubmission();
+  await createTestAtm(window, 'Segundo ATM de saldo');
+  await window.getByRole('button', { name: 'Editar Segundo ATM de saldo', exact: true }).click();
+  await window.getByLabel('Terminal ID', { exact: true }).fill('ATM20524');
+  await window.getByRole('button', { name: 'Guardar borrador', exact: true }).click();
+  await window.getByRole('button', { name: 'Carga y estrés', exact: true }).click();
+  await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await window.locator('.load-atm-picker summary').click();
+  const first = window.getByRole('radio', { name: 'ATM de saldo · ATM20521', exact: true });
+  const second = window.getByRole('radio', {
+    name: 'Segundo ATM de saldo · ATM20524',
+    exact: true,
+  });
+  const start = window.getByRole('button', { name: 'Iniciar prueba', exact: true });
+  await first.check();
+  await expect(start).toBeEnabled();
+  await second.check();
+  await expect(first).not.toBeChecked();
+  await expect(second).toBeChecked();
+  await expect(start).toBeEnabled();
+  await first.check();
+  await expect(second).not.toBeChecked();
+  await expect(start).toBeEnabled();
+});
+
+for (const recovery of ['POLL', 'LATE_REJECTION'] as const) {
+  test(`carga: recupera un inicio incierto por ${recovery} sin repetir la solicitud`, async () => {
+    test.setTimeout(60000);
+    const window = await prepareBalanceSubmission();
+    await app!.evaluate(({ ipcMain }) => {
+      const state = globalThis as typeof globalThis & {
+        loadRecoveryCalls?: number;
+        publishLoadRecovery?: () => void;
+        rejectLoadRecovery?: () => void;
+      };
+      let current: LoadRunSnapshot | null = null;
+      state.loadRecoveryCalls = 0;
+      ipcMain.removeHandler('load:run:status');
+      ipcMain.handle('load:run:status', () => ({ ok: true, value: current }));
+      ipcMain.removeHandler('load:run:start');
+      ipcMain.handle('load:run:start', (_event, request: LoadRunRequest) => {
+        state.loadRecoveryCalls!++;
+        return new Promise((resolve) => {
+          state.publishLoadRecovery = () => {
+            current = {
+              runId: request.requestId,
+              requestId: request.requestId,
+              draft: request.draft,
+              state: 'COMPLETED',
+              active: 0,
+              items: [],
+              message: 'Resultado sintético recuperado',
+              startedAt: new Date().toISOString(),
+              finishedAt: new Date().toISOString(),
+              elapsedMs: 21000,
+            };
+          };
+          state.rejectLoadRecovery = () =>
+            resolve({
+              ok: false,
+              error: { code: 'CONFLICT', message: 'Perfil sintético no disponible; cero envíos.' },
+            });
+        });
+      });
+    });
+    await window.getByRole('button', { name: 'Carga y estrés', exact: true }).click();
+    await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+    const start = window.getByRole('button', { name: 'Iniciar prueba', exact: true });
+    await expect(start).toBeEnabled();
+    await window.clock.install();
+    try {
+      await start.click();
+      await expect(window.getByRole('button', { name: 'Verificando…' })).toBeDisabled();
+      await window.clock.runFor(20001);
+      await expect(
+        window.getByText('No se confirmó el inicio. Consulta el estado antes de otra solicitud.'),
+      ).toBeVisible();
+      await expect(start).toBeDisabled();
+      await app!.evaluate((_electron, kind) => {
+        const state = globalThis as typeof globalThis & {
+          publishLoadRecovery?: () => void;
+          rejectLoadRecovery?: () => void;
+        };
+        if (kind === 'POLL') state.publishLoadRecovery!();
+        else state.rejectLoadRecovery!();
+      }, recovery);
+      await window.clock.runFor(1100);
+      await expect(
+        window.getByText('No se confirmó el inicio. Consulta el estado antes de otra solicitud.'),
+      ).toHaveCount(0);
+      if (recovery === 'POLL') {
+        await expect(window.getByRole('region', { name: 'Resultado de carga' })).toContainText(
+          'Completada',
+        );
+        await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+      } else await expect(window.getByRole('alert')).toContainText('cero envíos');
+      await expect(start).toBeEnabled();
+      expect(
+        await app!.evaluate(
+          () =>
+            (globalThis as typeof globalThis & { loadRecoveryCalls?: number }).loadRecoveryCalls,
+        ),
+      ).toBe(1);
+    } finally {
+      await window.clock.resume();
+    }
+  });
+}
 
 async function launch(development = false) {
   const env: Record<string, string> = {};

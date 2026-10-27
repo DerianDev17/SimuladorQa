@@ -56,7 +56,8 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
     if (!ready.value.ready)
       return failure(
         'CONFLICT',
-        ready.value.blockers[0]?.label ?? 'El perfil de saldo no está listo.',
+        ready.value.blockers.map((blocker) => blocker.label).join('. ') ||
+          'El perfil de saldo no está listo.',
       );
     if (
       ready.value.sequencesRemaining === undefined ||
