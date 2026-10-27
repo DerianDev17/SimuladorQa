@@ -16,6 +16,9 @@ describe('archivo de contrato de retiro QA', () => {
       const policy = qaWithdrawalPolicy(qaExecutionFixture().profile);
       await writeFile(path, '\uFEFF' + JSON.stringify({ version: 1, policies: [policy] }));
       expect(await store.read()).toEqual([policy]);
+      policy.allowedAmounts = 'ANY_POSITIVE_AMOUNT';
+      await writeFile(path, JSON.stringify({ version: 1, policies: [policy] }));
+      expect(await store.read()).toEqual([policy]);
       await writeFile(path, JSON.stringify({ version: 1, policies: [] }));
       expect(await store.read()).toEqual([]);
       for (const invalid of ['{"PRIVATE":', ' '.repeat(65537)]) {

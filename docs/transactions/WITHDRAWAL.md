@@ -3,6 +3,44 @@
 ## Objetivo
 Simular retiro ATM exitoso.
 
+## Montos personalizados en QA — 2026-10-27
+
+Por solicitud explicita del usuario, el contrato de la plantilla ATM20521 permite
+un monto personalizado en QA/LOCAL/ahorros/USD. En **Monto de prueba**, escribir
+un valor positivo con punto y dos decimales, por ejemplo `30.00`, `75.25` o
+`1234.56`. Sustituye la restriccion local anterior de USD 20/50; los ATM que
+heredan esta plantilla reciben el mismo contrato.
+
+`allowedAmounts` admite ahora el valor explicito `ANY_POSITIVE_AMOUNT`, ademas
+de la lista exacta anterior. Las listas siguen restringiendo sus respectivos
+perfiles. Main valida siempre la sintaxis y el limite representable de F4:
+de `0.01` a `9999999999.99`, sin calculos en coma flotante. Es un limite tecnico,
+no un limite financiero ni una regla de denominaciones. El host determina
+la respuesta de cada prueba; TODO-DATA AMOUNT-RULES sigue pendiente para las
+reglas de negocio generales.
+
+La instruccion se registra como USER_QA_INSTRUCTION con referencia
+USER-QA-20261027-CUSTOM-WITHDRAWAL-AMOUNTS. Se conserva BOUND_PROFILE/ZERO,
+seguridad nueva por operacion, revalidacion del contrato antes de TCP y
+comparacion exacta de F4 en la respuesta. Ver la ampliacion de ADR-016.
+
+Pruebas: importes personalizados y extremos, entradas invalidas antes de PIN,
+revocacion, errores y timeout; archivo de politicas; PIN/EMV sinteticos y TCP
+loopback verifican F4 y diario con `75.25` y `1234.56`, tambien en un ATM derivado.
+La E2E comprueba formulario, IPC e importe del resultado con `75.25`.
+
+Validacion completada: 938 pruebas unitarias, 33 de integracion del modulo y
+dos E2E correctas; lint, typecheck, formato, build y check:security correctos.
+La prueba de dependencia ausente actualiza su expectativa al mensaje de la
+plantilla ATM20521 introducida por ADR-024.
+
+Contrato local instalado con respaldo y releido desde Electron nativo el
+2026-10-27T18:25:52.224Z, UUID `8ff818aa-0f20-4bb1-9e46-b9a524ecefe7`.
+El hash del perfil de saldo permanece igual, incluidas las reservas. Evidencias
+locales: `artifacts/custom-withdrawal-activation-20261027.json` y
+`artifacts/custom-withdrawal-native-verification.json`. Cero solicitudes PIN,
+comandos al chip o transmisiones financieras durante la instalacion.
+
 ## Comprobante local e importes — 2026-10-19
 
 El usuario confirma que Con impresion/Sin impresion corresponde a un comprobante
@@ -330,8 +368,9 @@ preparacion de saldo, incluido su monto EMV cero; siempre genera seguridad nueva
 Si el proveedor requiere otro contrato, esa parte necesita una implementacion
 basada en su especificacion; cambiar una etiqueta de aprobacion no basta.
 
-La lista privada `allowedAmounts` contiene importes exactos aprobados para
-pruebas (1 a 100 strings decimales positivos, sin duplicados). No se infieren
+La propiedad privada `allowedAmounts` contiene importes exactos aprobados para
+pruebas (1 a 100 strings decimales positivos, sin duplicados), o el valor explicito
+`ANY_POSITIVE_AMOUNT` para montos personalizados representables en F4. No se infieren
 minimos, maximos, denominaciones ni disponibilidad de billetes. No hay
 dispensador en este flujo. El contrato confirma `EXACT_AMOUNT_OR_REVIEW`:
 solo 00 con F4 exacto se considera autorizacion; los otros resultados
@@ -352,7 +391,7 @@ Campos obligatorios de cada fila de `policies` (archivo con `version: 1`):
 | transactionType / authorisedAmount | 01 / REQUESTED_AMOUNT, o BOUND_PROFILE / ZERO; otras combinaciones se rechazan |
 | field55Source | CDOL1_VALUES |
 | pinAndFixedFields | BOUND_PROFILE |
-| allowedAmounts | Lista de montos de prueba expresamente aprobados |
+| allowedAmounts | Lista de montos de prueba o ANY_POSITIVE_AMOUNT por instruccion explicita |
 | responsePolicy | EXACT_AMOUNT_OR_REVIEW |
 
 El lector admite hasta 64 KiB, rechaza propiedades extras, duplicados y

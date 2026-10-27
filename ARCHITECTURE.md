@@ -69,6 +69,9 @@ caso y preservan pendientes tras reinicio. QaWithdrawalExecutionProvider se
 vincula en Main y comparte infraestructura PIN/PCSC con saldo, parametrizada
 explicitamente para efectivo. FileQaWithdrawalPolicies mantiene un contrato
 independiente por huella del perfil, montos permitidos y resultado conservador.
+Desde el 2026-10-27 admite una lista exacta o ANY_POSITIVE_AMOUNT explicito,
+validando siempre importe positivo y representable en F4; la plantilla ATM20521
+usa montos personalizados por instruccion del usuario (ADR-016).
 Se revalida hasta antes de TCP; ausencia, revocacion o contradiccion impiden
 solo retiro. La implementacion CASH/01 no activa ATM20521 sin validacion de
 la discrepancia 9F02/9C. La instruccion posterior del usuario habilita un

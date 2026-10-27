@@ -951,7 +951,7 @@ export function TransactionWorkspace({
                 >
                   {amountInvalid
                     ? 'Usa un monto positivo, punto y dos decimales; hasta 10 dígitos enteros.'
-                    : 'El perfil QA valida los montos permitidos.'}
+                    : 'Escribe el monto que deseas probar, con punto y dos decimales (ej. 75.25).'}
                 </small>
               </label>
             )}

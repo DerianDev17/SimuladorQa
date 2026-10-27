@@ -1,5 +1,6 @@
 import type { BalanceContextProvider, BalanceContextLease, BalanceTarget } from './balance-ports';
 import type { BalanceReadiness } from '../../../../packages/domain/src/balance-inquiry';
+import { isWithdrawalAmount } from '../../../../packages/domain/src/withdrawal';
 import type { CardIdentityService } from './card-identity-service';
 import type {
   QaExecutionProfile,
@@ -38,7 +39,11 @@ export class QaWithdrawalExecutionProvider implements BalanceContextProvider {
       policy.profileFingerprint !== qaWithdrawalProfileFingerprint(this.profile)
     )
       throw Error('QA_WITHDRAWAL_POLICY_CHANGED');
-    if (!policy.allowedAmounts.includes(target.draft.amount ?? ''))
+    if (
+      !isWithdrawalAmount(target.draft.amount) ||
+      (policy.allowedAmounts !== 'ANY_POSITIVE_AMOUNT' &&
+        !policy.allowedAmounts.includes(target.draft.amount))
+    )
       throw Error('QA_WITHDRAWAL_AMOUNT_NOT_ALLOWED');
     return policy;
   }

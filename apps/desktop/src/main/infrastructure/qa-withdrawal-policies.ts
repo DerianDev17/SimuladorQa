@@ -20,7 +20,7 @@ export interface QaWithdrawalPolicy {
   authorisedAmount: 'REQUESTED_AMOUNT' | 'ZERO';
   field55Source: 'CDOL1_VALUES';
   pinAndFixedFields: 'BOUND_PROFILE';
-  allowedAmounts: readonly string[];
+  allowedAmounts: readonly string[] | 'ANY_POSITIVE_AMOUNT';
   responsePolicy: 'EXACT_AMOUNT_OR_REVIEW';
 }
 
@@ -85,11 +85,14 @@ export function parseQaWithdrawalPolicies(input: unknown): readonly QaWithdrawal
       value.field55Source !== 'CDOL1_VALUES' ||
       value.pinAndFixedFields !== 'BOUND_PROFILE' ||
       value.responsePolicy !== 'EXACT_AMOUNT_OR_REVIEW' ||
-      !Array.isArray(value.allowedAmounts) ||
-      !value.allowedAmounts.length ||
-      value.allowedAmounts.length > 100 ||
-      value.allowedAmounts.some((amount) => !isWithdrawalAmount(amount)) ||
-      new Set(value.allowedAmounts).size !== value.allowedAmounts.length
+      !(
+        value.allowedAmounts === 'ANY_POSITIVE_AMOUNT' ||
+        (Array.isArray(value.allowedAmounts) &&
+          value.allowedAmounts.length > 0 &&
+          value.allowedAmounts.length <= 100 &&
+          value.allowedAmounts.every((amount) => isWithdrawalAmount(amount)) &&
+          new Set(value.allowedAmounts).size === value.allowedAmounts.length)
+      )
     )
       return invalid();
     return {
@@ -105,7 +108,10 @@ export function parseQaWithdrawalPolicies(input: unknown): readonly QaWithdrawal
       authorisedAmount: value.authorisedAmount as QaWithdrawalPolicy['authorisedAmount'],
       field55Source: 'CDOL1_VALUES',
       pinAndFixedFields: 'BOUND_PROFILE',
-      allowedAmounts: [...value.allowedAmounts] as string[],
+      allowedAmounts:
+        value.allowedAmounts === 'ANY_POSITIVE_AMOUNT'
+          ? 'ANY_POSITIVE_AMOUNT'
+          : ([...value.allowedAmounts] as string[]),
       responsePolicy: 'EXACT_AMOUNT_OR_REVIEW',
     };
   });

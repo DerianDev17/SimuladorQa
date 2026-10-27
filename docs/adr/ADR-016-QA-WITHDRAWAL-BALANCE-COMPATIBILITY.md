@@ -1,7 +1,27 @@
 # ADR-016: retiro QA con la preparacion PIN/EMV de saldo
 
-Estado: autorizado por el usuario para la prueba QA ATM20521/USD 20; ampliado a USD 50 el 2026-10-19.
+Estado: autorizado por el usuario para la prueba QA ATM20521/USD 20; ampliado a USD 50 el 2026-10-19 y a montos personalizados el 2026-10-27.
 Fecha: 2026-10-16.
+
+## Ampliacion vigente: montos personalizados, 2026-10-27
+
+El usuario solicita poder enviar cualquier monto de retiro, no solo 20 y 50.
+Se habilita `allowedAmounts: "ANY_POSITIVE_AMOUNT"` para la plantilla QA ATM20521,
+con fuente USER_QA_INSTRUCTION y referencia
+USER-QA-20261027-CUSTOM-WITHDRAWAL-AMOUNTS. Los derivados de la plantilla
+heredan esta politica conforme a ADR-024. Se conservan QA/LOCAL/ahorros/USD y
+BOUND_PROFILE/ZERO; no se modifica el perfil de saldo, su clave ni su pool.
+
+Main exige monto positivo con dos decimales y hasta diez digitos enteros por
+la representacion existente de F4. No se atribuyen limites, denominaciones ni
+aceptacion financiera al proveedor: TODO-DATA AMOUNT-RULES mantiene esas reglas
+pendientes. Las listas exactas existentes siguen siendo validas y restrictivas
+para los contratos que las conserven. La preparacion PIN/EMV, revalidacion,
+idempotencia y comprobacion del importe autorizado mantienen su comportamiento.
+
+La instalacion reemplaza solo el contrato privado de retiro y guarda respaldo
+local del anterior; la comprobacion no necesita PIN, chip ni envio financiero.
+Las secciones siguientes conservan el historial de alcances anteriores.
 
 ## Decision y fuente
 

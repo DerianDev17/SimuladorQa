@@ -1,5 +1,12 @@
 # Checklist de informacion por subir
 
+Montos personalizados (2026-10-27): por instruccion del usuario se elimina la
+lista 20/50 del contrato de retiro de la plantilla QA ATM20521. Se admiten
+importes positivos con dos decimales dentro de la representacion existente de
+F4. TODO-DATA AMOUNT-RULES conserva pendientes los limites y denominaciones
+financieros; no bloquea estas pruebas QA expresamente solicitadas. Ver ADR-016
+y [retiro](transactions/WITHDRAWAL.md).
+
 TODO-DATA CASE-FIELD-ORACLES (2026-10-26): para comparar campos ISO, secuencias
 de gestion de red y reversos al estilo VTS3 se requiere fuente aprobada por
 perfil ATM Coonecta, obligatoriedad/encoding, respuesta esperada, temporizadores

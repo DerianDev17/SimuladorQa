@@ -96,6 +96,9 @@ describe('contrato privado de retiro', () => {
     { allowedAmounts: ['20.00', '20.00'] },
     { allowedAmounts: ['20,00'] },
     { allowedAmounts: [20] },
+    { allowedAmounts: 'ANY' },
+    { allowedAmounts: ['ANY_POSITIVE_AMOUNT'] },
+    { allowedAmounts: null },
     { approvalReference: '' },
     { validationSource: 'CAPTURE_IMPLIED' },
     { pin: 'PRIVATE' },
@@ -116,6 +119,36 @@ describe('contrato privado de retiro', () => {
 });
 
 describe('retiro con PIN y EMV nuevos', () => {
+  it.each(['0.01', '30.00', '75.25', '1234.56', '9999999999.99'])(
+    'permite monto personalizado %s con contrato explicito',
+    async (amount) => {
+      const f = setup();
+      f.policy.allowedAmounts = 'ANY_POSITIVE_AMOUNT';
+      f.target.draft.amount = amount;
+      expect(await f.provider.inspect(f.target)).toMatchObject({ ready: true });
+      const lease = await f.provider.acquire(f.target, new AbortController().signal);
+      expect(lease.amount).toBe(amount);
+      await lease.validate!();
+      f.policy.allowedAmounts = ['20.00'];
+      await expect(lease.validate!()).rejects.toThrow('QA_WITHDRAWAL_AMOUNT_NOT_ALLOWED');
+      lease.release();
+    },
+  );
+  it.each([null, '', '0.00', '-1.00', '1.001', '1,00', '1e2', '10000000000.00'])(
+    'rechaza monto personalizado invalido %s antes de PIN y reserva',
+    async (amount) => {
+      const f = setup();
+      f.policy.allowedAmounts = 'ANY_POSITIVE_AMOUNT';
+      f.target.draft.amount = amount;
+      expect(await f.provider.inspect(f.target)).toMatchObject({ ready: false });
+      await expect(f.provider.acquire(f.target, new AbortController().signal)).rejects.toThrow(
+        'QA_WITHDRAWAL_AMOUNT_NOT_ALLOWED',
+      );
+      expect(f.pinEntry.request).not.toHaveBeenCalled();
+      expect(f.profiles.reserve).not.toHaveBeenCalled();
+      expect(f.commands).toHaveLength(0);
+    },
+  );
   it.each(['20.00', '50.00'])(
     'retiro USD %s solicita PIN y aplica la preparacion de saldo',
     async (amount) => {
@@ -213,6 +246,8 @@ describe('retiro con PIN y EMV nuevos', () => {
     'conserva %s y no reintenta generacion',
     async (error) => {
       const f = setup();
+      f.policy.allowedAmounts = 'ANY_POSITIVE_AMOUNT';
+      f.target.draft.amount = '75.25';
       if (error === 'QA_PIN_TIMEOUT') f.pinEntry.request.mockRejectedValue(Error(error));
       else
         f.fake.session.transmit = vi.fn(async () => {

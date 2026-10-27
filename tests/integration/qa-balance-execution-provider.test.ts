@@ -49,11 +49,16 @@ describe('proveedor PIN/EMV conectado a lectura, ISO y TCP', () => {
     'BALANCE_TEMPLATE',
     'WITHDRAWAL_TEMPLATE',
     'WITHDRAWAL_BALANCE_PROFILE_TEMPLATE',
+    'WITHDRAWAL_CUSTOM_AMOUNT',
+    'WITHDRAWAL_BALANCE_PROFILE_CUSTOM_AMOUNT_TEMPLATE',
   ] as const)(
     'envía operaciones %s nuevas, reutiliza perfiles y solo persiste correlación/resultados',
     async (variant) => {
       const inherited = variant.endsWith('_TEMPLATE');
-      const mode = variant.replace(/_TEMPLATE$/, '');
+      const mode = variant.replace(/_TEMPLATE$/, '').replace('_CUSTOM_AMOUNT', '');
+      const customAmount = variant.includes('_CUSTOM_AMOUNT');
+      const amounts = customAmount ? ['75.25', '1234.56'] : ['20.00', '50.00'];
+      const amountAt = (index: number) => amounts[index === 0 ? 0 : 1]!;
       const operation = mode === 'BALANCE' ? 'BALANCE' : 'WITHDRAWAL';
       const cash = mode === 'WITHDRAWAL';
       const directory = await mkdtemp(join(tmpdir(), 'coonecta-qa-execution-'));
@@ -111,7 +116,12 @@ describe('proveedor PIN/EMV conectado a lectura, ISO y TCP', () => {
               });
               if (operation === 'WITHDRAWAL') {
                 expect(fields.get(4)).toEqual(
-                  Buffer.from((received.length === 1 ? '2000' : '5000').padStart(12, '0'), 'hex'),
+                  Buffer.from(
+                    amountAt(received.length - 1)
+                      .replace('.', '')
+                      .padStart(12, '0'),
+                    'hex',
+                  ),
                 );
                 expect(emv.get('9F02')).toEqual(cash ? fields.get(4) : Buffer.alloc(6));
                 expect(emv.get('9C')).toEqual(Buffer.of(cash ? 1 : 0x30));
@@ -151,7 +161,7 @@ describe('proveedor PIN/EMV conectado a lectura, ISO y TCP', () => {
         profile = (await profiles.read()).profiles[0]!;
       const policyPath = join(directory, 'qa-withdrawal-policies.json');
       const policy = qaWithdrawalPolicy(profile);
-      policy.allowedAmounts = ['20.00', '50.00'];
+      policy.allowedAmounts = customAmount ? 'ANY_POSITIVE_AMOUNT' : amounts;
       if (mode === 'WITHDRAWAL_BALANCE_PROFILE') {
         policy.validationSource = 'USER_QA_INSTRUCTION';
         policy.transactionType = 'BOUND_PROFILE';
@@ -294,8 +304,7 @@ describe('proveedor PIN/EMV conectado a lectura, ISO y TCP', () => {
         for (const [index, currentTarget] of targets.entries()) {
           if (inherited && index === 1)
             catalog.atms.push(templateAtm(other.target, catalog.entities[0]!.id));
-          if (operation === 'WITHDRAWAL')
-            currentTarget.draft.amount = index === 0 ? '20.00' : '50.00';
+          if (operation === 'WITHDRAWAL') currentTarget.draft.amount = amountAt(index);
           const reading = await cards.read({ readerName: 'Synthetic Reader' });
           expect(reading.ok).toBe(true);
           if (!reading.ok) throw Error('SYNTHETIC_READING_FAILED');
@@ -326,7 +335,7 @@ describe('proveedor PIN/EMV conectado a lectura, ISO y TCP', () => {
         expect(records[0]!.cardReadId).not.toBe(records[1]!.cardReadId);
         if (operation === 'WITHDRAWAL')
           expect(records.map((record) => record.withdrawal?.amount)).toEqual(
-            targets.map((_, index) => (index === 0 ? '20.00' : '50.00')),
+            targets.map((_, index) => amountAt(index)),
           );
         expect(received.map((item) => item.atc)).toEqual(
           targets.map((_, index) => String(index + 1).padStart(4, '0')),

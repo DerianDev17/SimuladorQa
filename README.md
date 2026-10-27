@@ -50,6 +50,11 @@ No inventar reglas transaccionales. Toda regla ISO8583, framing TCP, timeout, PI
 
 ## Desarrollo local
 
+Retiro con monto personalizado (2026-10-27): **Monto de prueba** permite escribir
+un valor positivo como `75.25` o `1234.56`. El contrato QA de ATM20521 y sus
+derivados sustituye la lista 20/50 por montos representables en F4, manteniendo
+PIN/EMV nuevo y validacion del importe recibido. Ver [retiro](docs/transactions/WITHDRAWAL.md).
+
 Retiro + reverso temporizado (2026-10-19): dentro de **Retiro aprobado**, elegir
 **Retiro + reverso** y la espera (5 s inicialmente, configurable entre 1 y 30 s).
 Tras 0210/00, Main espera y envia un 0420 vinculado al original; registra 0430
