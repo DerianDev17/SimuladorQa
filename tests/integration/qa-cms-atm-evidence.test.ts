@@ -11,6 +11,44 @@ import { QaBalanceContextRouter } from '../../apps/desktop/src/main/qa-balance-c
 import { BalanceInquiryService } from '../../apps/desktop/src/main/balance-inquiry-service';
 import { cmsEvidenceFixture } from '../helpers/qa-cms-atm-evidence';
 import { removeTestDirectory } from '../helpers/temporary-directory';
+import { SharedQaPinKey } from '../../apps/desktop/src/main/shared-qa-pin-key';
+import { FileQaExecutionProfiles } from '../../apps/desktop/src/main/infrastructure/qa-execution-profiles';
+import { qaExecutionFixture } from '../helpers/qa-execution';
+
+it('recupera la referencia compartida desde disco y detecta la rotación del origen', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'coonecta-cms-evidence-'));
+  try {
+    const source = qaExecutionFixture();
+    const { input, row, target } = cmsEvidenceFixture();
+    row.terminalId = target.terminalId = 'ATM20524';
+    row.directPinKey = {
+      keyReference: source.profile.keyReference,
+      sourceProfileId: source.profile.id,
+      approvalSource: 'USER_QA_INSTRUCTION',
+      approvedAt: row.verifiedAt,
+    };
+    const file = join(directory, 'cms.json');
+    const profileFile = join(directory, 'profiles.json');
+    await writeFile(file, JSON.stringify(input));
+    await writeFile(profileFile, JSON.stringify(source.input));
+    const evidence = (await new FileQaCmsAtmEvidence(file).read())[0]!;
+    const shared = new SharedQaPinKey(new FileQaExecutionProfiles(profileFile), {
+      available: async (reference) => reference === source.profile.keyReference,
+    });
+    const provider = documentedCmsAtmContextBinding(evidence, shared).provider;
+    expect((await provider.inspect(target)).blockers.map((b) => b.id)).toEqual([
+      'QA-EXECUTION-PROFILE-BINDING',
+    ]);
+    source.row.keyReference = randomUUID();
+    await writeFile(profileFile, JSON.stringify(source.input));
+    expect((await provider.inspect(target)).blockers.map((b) => b.id)).toEqual([
+      'QA-DIRECT-PIN-KEY-BINDING',
+      'QA-EXECUTION-PROFILE-BINDING',
+    ]);
+  } finally {
+    await removeTestDirectory(directory, 'coonecta-cms-evidence-');
+  }
+});
 
 it('persiste evidencia CMS y diagnostica ISO directo sin exigir TCS ni aceptar secretos', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'coonecta-cms-evidence-'));

@@ -1,6 +1,34 @@
 # Perfiles ATM múltiples: estado comprobado
 
-## Revisión del 2026-10-27
+## Clave de enlace compartida (2026-10-27)
+
+Por instrucción del usuario se implementa el vínculo de ATM20524 a la
+referencia protegida de enlace que usa ATM20521. Los perfiles ya permitían
+compartir `keyReference`; no se necesita una clave diferente por Terminal ID.
+El diagnóstico ahora comprueba el origen, destino y acceso al cifrador antes
+de retirar el bloqueo de clave. La maestra CMS permanece separada. Ver
+[ADR-023](../adr/ADR-023-SHARED-QA-LINK-KEY.md).
+
+Vínculo aplicado a la configuración local el 2026-10-27T16:25:30Z. El cifrador
+Windows confirmó acceso a la misma credencial protegida. La maestra CMS y el
+archivo de perfiles ejecutables conservan su contenido; cero solicitudes PIN,
+secuencias consumidas o envíos financieros. Respaldo creado antes del reemplazo
+atómico de la evidencia CMS. Informe sin secretos:
+`artifacts/shared-link-key-20261027-result.json`.
+
+Se intentó actualizar la fecha contable de ambos terminales mediante un SELECT
+parametrizado de solo lectura a las 2026-10-27T16:27:59Z. SQL volvió a fallar
+validación TLS; no se deshabilitó la comprobación del certificado ni se adoptó
+como actual la fecha histórica de ATM20524. Informe:
+`artifacts/two-atm-calendar-20261027.json`.
+
+El bloqueo local MULTI-ATM-PIN-KEY se resuelve mediante esa vinculación cuando
+la credencial está disponible. Siguen pendientes el perfil ISO y las reservas
+de ATM20524; compartir una clave no los define ni demuestra aceptación del
+host. Las pruebas de alternancia usan la misma referencia sintética para los
+dos ATM, con PIN/EMV nuevos y STAN separados.
+
+## Revisión inicial del 2026-10-27, antes de compartir la referencia
 
 Inspección local de solo lectura en el AppData de Coonecta ATM Simulator:
 ambos ATM están activos, revisión 1. ATM20521 tiene perfil válido coincidente
@@ -24,7 +52,7 @@ ATM20524 mantiene los TODO-DATA de perfil, vínculo de clave y secuencias
 enumerados abajo. La llave de enlace de ATM20521 ya está localizada; su
 existencia no documenta por sí sola la vinculación del segundo terminal.
 
-## Referencia ATM20521
+## Referencia ATM20521 y estado previo del segundo perfil
 
 El catálogo QA local contiene ATM20521 y ATM20524. La inspección de metadatos
 privados (sin imprimir claves, campos ISO ni secuencias) confirmó que ATM20521
@@ -72,6 +100,9 @@ y no autoriza cambiar el codec del enlace ATM 16100. Se conserva ATM20521.
   confirmar que aplican al nuevo modelo/enlace. El CRUD permanece disponible.
 - **TODO-DATA MULTI-ATM-PIN-KEY:** vincular por terminal una clave de enlace
   TEST aprobada, bajo custodia DPAPI, y comprobar su finalidad y formato PIN.
+  Para ATM20524 se implementa el vínculo compartido de ADR-023 por instrucción
+  del usuario; su comprobación local deja solo el perfil ISO pendiente en el
+  diagnóstico. La aceptación por el host se mantiene en MULTI-ATM-QA-RESULT.
   La maestra CMS de ATM20524 no cumple esta función.
 - **TODO-DATA MULTI-ATM-STAN-ALLOCATION:** confirmar una reserva exclusiva
   entre estaciones y cajeros físicos, incluido el historial de STAN ya usados.

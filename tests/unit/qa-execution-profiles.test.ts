@@ -80,6 +80,12 @@ describe('perfiles aprobados de ejecucion QA', () => {
     input.profiles.push(other);
     expect(() => parseQaExecutionProfileFile(input)).toThrow('QA_PROFILE_INVALID');
     other.reservedSequences = [654321];
-    expect(parseQaExecutionProfileFile(input).profiles).toHaveLength(2);
+    const profiles = parseQaExecutionProfileFile(input).profiles;
+    expect(profiles).toHaveLength(2);
+    // The link key may be shared; the remaining STAN reservations may not.
+    expect(profiles.map((profile) => profile.keyReference)).toEqual([
+      row.keyReference,
+      row.keyReference,
+    ]);
   });
 });

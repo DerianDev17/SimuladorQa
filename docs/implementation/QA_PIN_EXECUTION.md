@@ -1,5 +1,13 @@
 # Enviar una consulta nueva con PIN en QA
 
+Clave compartida (2026-10-27): no se exige una referencia distinta por ATM.
+La instrucción del usuario permite vincular ATM20524 a la clave de enlace
+existente de ATM20521 en la misma ruta QA. Main revalida la referencia, el
+destino y la disponibilidad DPAPI; una maestra CMS no satisface ese vínculo.
+El PIN/EMV se prepara de nuevo por operación. Los campos ISO y las reservas
+del segundo ATM siguen siendo dependencias independientes. Ver
+[ADR-023](../adr/ADR-023-SHARED-QA-LINK-KEY.md).
+
 Validación de perfiles múltiples (2026-10-20): el archivo privado rechaza
 reservas STAN solapadas entre ATM distintos. La asignación exclusiva histórica
 y entre estaciones sigue pendiente de contrato; esta comprobación cubre solo

@@ -29,6 +29,16 @@ export interface QaCmsAtmEvidence {
     networkCheckMatched: boolean;
     protectedAt: string;
   };
+  directPinKey?: {
+    sourceProfileId: string;
+    keyReference: string;
+    approvalSource: 'USER_QA_INSTRUCTION';
+    approvedAt: string;
+  };
+}
+
+export interface SharedQaPinKeyPort {
+  available(evidence: QaCmsAtmEvidence): Promise<boolean>;
 }
 
 const fields = [
@@ -80,10 +90,11 @@ export function parseQaCmsAtmEvidence(input: unknown): QaCmsAtmEvidence[] {
   for (const row of input.bindings) {
     if (
       !isRecord(row) ||
-      !exact(
-        row,
-        Object.hasOwn(row, 'masterKeyCustody') ? [...fields, 'masterKeyCustody'] : fields,
-      ) ||
+      !exact(row, [
+        ...fields,
+        ...(Object.hasOwn(row, 'masterKeyCustody') ? ['masterKeyCustody'] : []),
+        ...(Object.hasOwn(row, 'directPinKey') ? ['directPinKey'] : []),
+      ]) ||
       row.environment !== 'QA' ||
       row.entityCode !== '205' ||
       !isUuid(row.id) ||
@@ -110,6 +121,18 @@ export function parseQaCmsAtmEvidence(input: unknown): QaCmsAtmEvidence[] {
           !isUuid(row.masterKeyCustody.keyReference) ||
           typeof row.masterKeyCustody.networkCheckMatched !== 'boolean' ||
           !isUtcTimestamp(row.masterKeyCustody.protectedAt))) ||
+      (Object.hasOwn(row, 'directPinKey') &&
+        (!isRecord(row.directPinKey) ||
+          !exact(row.directPinKey, [
+            'sourceProfileId',
+            'keyReference',
+            'approvalSource',
+            'approvedAt',
+          ]) ||
+          !isUuid(row.directPinKey.sourceProfileId) ||
+          !isUuid(row.directPinKey.keyReference) ||
+          row.directPinKey.approvalSource !== 'USER_QA_INSTRUCTION' ||
+          !isUtcTimestamp(row.directPinKey.approvedAt))) ||
       ids.has(row.id) ||
       atms.has(row.atmId)
     )
@@ -140,9 +163,20 @@ export class FileQaCmsAtmEvidence {
 }
 
 class CmsAtmContext implements BalanceContextProvider {
-  constructor(private readonly row: QaCmsAtmEvidence) {}
+  constructor(
+    private readonly row: QaCmsAtmEvidence,
+    private readonly sharedKey?: SharedQaPinKeyPort,
+  ) {}
   async inspect(): Promise<BalanceReadiness> {
     const row = this.row;
+    let sharedKeyAvailable = false;
+    if (row.directPinKey && this.sharedKey) {
+      try {
+        sharedKeyAvailable = await this.sharedKey.available(structuredClone(row));
+      } catch {
+        // A failed key check remains a blocker without exposing backend details.
+      }
+    }
     const master = row.masterCheckMatched
       ? 'Maestra CMS verificada.'
       : 'Maestra CMS sin verificar.';
@@ -154,14 +188,21 @@ class CmsAtmContext implements BalanceContextProvider {
     return {
       ready: false,
       blockers: [
-        {
-          id: 'QA-DIRECT-PIN-KEY-BINDING',
-          label: `${row.terminalId} → ${row.senderEndpoint.host}:${row.senderEndpoint.port}. ${master}${custody}${directKey} Falta vincular el cifrado del PIN nuevo`,
-        },
+        ...(!sharedKeyAvailable
+          ? [
+              {
+                id: 'QA-DIRECT-PIN-KEY-BINDING',
+                label: row.directPinKey
+                  ? `${row.terminalId}: no se pudo validar la clave compartida del enlace. Revisa el perfil origen, el destino y el acceso a la credencial protegida`
+                  : `${row.terminalId} → ${row.senderEndpoint.host}:${row.senderEndpoint.port}. ${master}${custody}${directKey} Falta vincular el cifrado del PIN nuevo`,
+              },
+            ]
+          : []),
         {
           id: 'QA-EXECUTION-PROFILE-BINDING',
-          label:
-            'La ruta directa requiere un perfil de ejecución con formato PIN validado, secuencia propia y fecha contable vinculada. La evidencia CMS queda conservada',
+          label: sharedKeyAvailable
+            ? 'Clave de enlace compartida disponible. Falta completar el perfil ISO, la reserva de secuencias y la fecha contable de este ATM'
+            : 'La ruta directa requiere un perfil de ejecución con formato PIN validado, secuencia propia y fecha contable vinculada. La evidencia CMS queda conservada',
         },
       ],
     };
@@ -171,7 +212,10 @@ class CmsAtmContext implements BalanceContextProvider {
   }
 }
 
-export function documentedCmsAtmContextBinding(row: QaCmsAtmEvidence): QaAtmContextBinding {
+export function documentedCmsAtmContextBinding(
+  row: QaCmsAtmEvidence,
+  sharedKey?: SharedQaPinKeyPort,
+): QaAtmContextBinding {
   const evidence = parseQaCmsAtmEvidence({ version: 1, bindings: [row] })[0]!;
   return {
     atmId: evidence.atmId,
@@ -180,6 +224,6 @@ export function documentedCmsAtmContextBinding(row: QaCmsAtmEvidence): QaAtmCont
     // TCS source/listener and host key-change state belong to the terminal
     // route. They are retained as evidence, never prerequisites for direct ISO.
     endpoint: { ...evidence.senderEndpoint },
-    provider: new CmsAtmContext(evidence),
+    provider: new CmsAtmContext(evidence, sharedKey),
   };
 }

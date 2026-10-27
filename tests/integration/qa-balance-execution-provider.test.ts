@@ -46,6 +46,7 @@ describe('proveedor PIN/EMV conectado a lectura, ISO y TCP', () => {
       const { row, input, target } = qaExecutionFixture();
       const other = qaExecutionFixture();
       other.row.terminalId = other.target.terminalId = 'ATM20524';
+      other.row.keyReference = row.keyReference;
       other.row.reservedSequences = [650103];
       if (operation === 'WITHDRAWAL')
         target.draft = { ...target.draft, transaction: 'WITHDRAWAL_APPROVED', amount: '20.00' };
@@ -174,7 +175,14 @@ describe('proveedor PIN/EMV conectado a lectura, ISO y TCP', () => {
           return pin;
         },
       };
-      const cipher = { available: async () => true, encrypt: async () => Buffer.alloc(8, 0x17) };
+      const encryptedWith: string[] = [];
+      const cipher = {
+        available: async (reference: string) => reference === row.keyReference,
+        encrypt: async (_block: Uint8Array, reference: string) => {
+          encryptedWith.push(reference);
+          return Buffer.alloc(8, 0x17);
+        },
+      };
       const provider =
         operation === 'WITHDRAWAL'
           ? new QaWithdrawalExecutionProvider(
@@ -267,6 +275,7 @@ describe('proveedor PIN/EMV conectado a lectura, ISO y TCP', () => {
         }
         expect(serverFailure).toBeUndefined();
         expect(pins).toHaveLength(targets.length);
+        expect(encryptedWith).toEqual(targets.map(() => row.keyReference));
         expect(records[0]!.requestId).not.toBe(records[1]!.requestId);
         expect(records[0]!.cardReadId).not.toBe(records[1]!.cardReadId);
         if (operation === 'WITHDRAWAL')

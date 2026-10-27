@@ -47,8 +47,13 @@ Revisión carga/múltiples ATM (2026-10-27): corregidos parada por retiro de
 tarjeta, parada durante arranque, recuperación de IPC tardío, mínimo 0,1 TPS
 y gráfica de respuestas/rampa. La inspección local confirma ATM20521
 configurado con 959 reservas y ATM20524 con evidencia CMS únicamente.
-Permanecen TODO-DATA MULTI-ATM-EXECUTION-PROFILE, MULTI-ATM-PIN-KEY y
-MULTI-ATM-STAN-ALLOCATION para habilitar el segundo perfil contra QA.
+Permanecen TODO-DATA MULTI-ATM-EXECUTION-PROFILE y MULTI-ATM-STAN-ALLOCATION
+para habilitar el segundo perfil contra QA. La instrucción posterior del
+usuario resuelve la decisión de compartir la clave de enlace: implementado
+el vínculo local de ATM20524 a la referencia protegida de ATM20521, con
+validación de destino y disponibilidad. MULTI-ATM-QA-RESULT conserva la
+aceptación remota pendiente; no se afirma que el host seleccione esa clave
+solo por compartir endpoint. Ver [ADR-023](adr/ADR-023-SHARED-QA-LINK-KEY.md).
 El recorrido reutilizable de ambos se verifica con datos sintéticos y TCP
 local. Ver [perfiles múltiples](implementation/MULTI_ATM_PROFILES.md) y
 [carga](implementation/LOAD_TEST.md).

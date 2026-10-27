@@ -30,6 +30,7 @@ import { WithdrawalReceiptService } from './withdrawal-receipt-service';
 import { ElectronReceiptPrinter } from './adapters/electron-receipt-printer';
 import { QaBalanceContextRouter } from './qa-balance-context-router';
 import { QaBalanceExecutionProvider } from './qa-balance-execution-provider';
+import { SharedQaPinKey } from './shared-qa-pin-key';
 import { FileQaExecutionProfiles } from './infrastructure/qa-execution-profiles';
 import { FileQaWithdrawalPolicies } from './infrastructure/qa-withdrawal-policies';
 import { QaWithdrawalExecutionProvider } from './qa-withdrawal-execution-provider';
@@ -307,7 +308,12 @@ void startupReady
       ).read();
       for (const binding of cms) {
         if (!boundAtms.has(binding.atmId)) {
-          balanceContexts.bind(documentedCmsAtmContextBinding(binding));
+          balanceContexts.bind(
+            documentedCmsAtmContextBinding(
+              binding,
+              new SharedQaPinKey(executionProfiles, pinCipher),
+            ),
+          );
           boundAtms.add(binding.atmId);
         }
       }
