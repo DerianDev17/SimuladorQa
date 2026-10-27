@@ -1,5 +1,13 @@
 # Enviar una consulta nueva con PIN en QA
 
+Plantilla reutilizable (2026-10-27): Main deriva automáticamente los ATM QA/205
+del perfil funcional ATM20521, con la misma referencia de enlace, configuración
+ISO/EMV y pool persistente. No se requieren perfiles ni fechas contables por
+alta y no hace falta reiniciar. F15 conserva el valor de la plantilla y se
+muestra como fecha ISO enviada; la fecha efectiva la administra el switch.
+Ver [ADR-024](../adr/ADR-024-REUSABLE-ATM-TEMPLATE.md). Esta decisión sustituye
+los pendientes individuales descritos en la sección histórica siguiente.
+
 Clave compartida (2026-10-27): no se exige una referencia distinta por ATM.
 La instrucción del usuario permite vincular ATM20524 a la clave de enlace
 existente de ATM20521 en la misma ruta QA. Main revalida la referencia, el

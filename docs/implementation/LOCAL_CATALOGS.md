@@ -1,5 +1,14 @@
 # Catálogos de entidades y ATM
 
+Actualización 2026-10-27: en QA/205, **Nuevo perfil ATM** toma entidad y
+adquirente de ATM20521, y **Clonar** conserva esos datos del origen. Solo alias
+y Terminal ID deben diferenciar el nuevo registro. Main resuelve al usarlo la
+plantilla ISO/EMV/clave/operaciones y el pool compartido; no requiere archivo
+privado, fecha contable ni reinicio por alta. El switch mantiene su propia
+configuración/admisión. Ver [guía vigente](MULTI_ATM_PROFILES.md) y ADR-024.
+Las menciones históricas a clonación exclusivamente administrativa y bloqueo
+de todos los envíos no aplican a esta ruta QA de la entidad 205.
+
 ## Uso
 
 1. Iniciar con `npm run dev` o `npm run build` y `npm start`.

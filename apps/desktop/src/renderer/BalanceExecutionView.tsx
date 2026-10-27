@@ -270,7 +270,7 @@ export function BalanceExecutionView({
         )}
         {execution.diagnostics && (
           <>
-            <p>Fecha contable: {execution.diagnostics.accountingDate}</p>
+            <p>Fecha ISO enviada (F15): {execution.diagnostics.accountingDate}</p>
             <p>
               Versión terminal: {execution.diagnostics.terminalApplicationVersion} · versión chip:{' '}
               {execution.diagnostics.cardApplicationVersion}

@@ -28,20 +28,9 @@ import { BalanceInquiryService } from './balance-inquiry-service';
 import { WithdrawalService } from './withdrawal-service';
 import { WithdrawalReceiptService } from './withdrawal-receipt-service';
 import { ElectronReceiptPrinter } from './adapters/electron-receipt-printer';
-import { QaBalanceContextRouter } from './qa-balance-context-router';
-import { QaBalanceExecutionProvider } from './qa-balance-execution-provider';
-import { SharedQaPinKey } from './shared-qa-pin-key';
+import { QaAtmTemplate, QaTemplateContextProvider } from './qa-atm-template';
 import { FileQaExecutionProfiles } from './infrastructure/qa-execution-profiles';
 import { FileQaWithdrawalPolicies } from './infrastructure/qa-withdrawal-policies';
-import { QaWithdrawalExecutionProvider } from './qa-withdrawal-execution-provider';
-import {
-  FileQaAtmEvidenceBindings,
-  documentedQaAtmContextBinding,
-} from './infrastructure/qa-atm-evidence-bindings';
-import {
-  FileQaCmsAtmEvidence,
-  documentedCmsAtmContextBinding,
-} from './infrastructure/qa-cms-atm-evidence';
 import { WindowsQaPinEntry } from './adapters/qa-pin-entry';
 import { WindowsQaPinCipher } from './adapters/qa-pin-cipher';
 import { SqliteBalanceJournal } from './infrastructure/sqlite-balance-journal';
@@ -253,12 +242,9 @@ void startupReady
       runtime,
     );
     await sendConfiguration.initializeDocumentedQa();
-    const balanceContexts = new QaBalanceContextRouter();
-    const withdrawalContexts = new QaBalanceContextRouter('WITHDRAWAL');
     const withdrawalPolicies = new FileQaWithdrawalPolicies(
       join(app.getPath('userData'), 'qa-withdrawal-policies.json'),
     );
-    const boundAtms = new Set<string>();
     const executionProfiles = new FileQaExecutionProfiles(
       join(app.getPath('userData'), 'qa-execution-profiles.json'),
     );
@@ -267,71 +253,36 @@ void startupReady
       join(__dirname, 'qa-pin-cipher.ps1'),
       join(app.getPath('userData'), 'qa-test-keys'),
     );
-    try {
-      for (const profile of (await executionProfiles.read()).profiles) {
-        balanceContexts.bind({
-          atmId: profile.atmId,
-          atmRevision: profile.atmRevision,
-          terminalId: profile.terminalId,
-          endpoint: profile.endpoint,
-          provider: new QaBalanceExecutionProvider(
-            profile,
-            executionProfiles,
-            cardIdentity,
-            pinEntry,
-            pinCipher,
-          ),
-        });
-        boundAtms.add(profile.atmId);
-        withdrawalContexts.bind({
-          atmId: profile.atmId,
-          atmRevision: profile.atmRevision,
-          terminalId: profile.terminalId,
-          endpoint: profile.endpoint,
-          provider: new QaWithdrawalExecutionProvider(
-            profile,
-            executionProfiles,
-            withdrawalPolicies,
-            cardIdentity,
-            pinEntry,
-            pinCipher,
-          ),
-        });
-      }
-    } catch {
-      // Preserve absent/invalid private configuration. No guessed keys, serials
-      // or captured security is installed as a replacement provider.
-    }
-    try {
-      const cms = await new FileQaCmsAtmEvidence(
-        join(app.getPath('userData'), 'qa-cms-atm-evidence.json'),
-      ).read();
-      for (const binding of cms) {
-        if (!boundAtms.has(binding.atmId)) {
-          balanceContexts.bind(
-            documentedCmsAtmContextBinding(
-              binding,
-              new SharedQaPinKey(executionProfiles, pinCipher),
-            ),
-          );
-          boundAtms.add(binding.atmId);
-        }
-      }
-    } catch {
-      // A documentary terminal-master-key match never enables direct ISO PIN.
-    }
-    try {
-      const documented = await new FileQaAtmEvidenceBindings(
-        join(app.getPath('userData'), 'qa-atm-evidence-bindings.json'),
-      ).read();
-      for (const binding of documented) {
-        if (!boundAtms.has(binding.atmId))
-          balanceContexts.bind(documentedQaAtmContextBinding(binding));
-      }
-    } catch {
-      // Missing/invalid documentary data cannot activate financial execution.
-      // Valid executable providers above retain priority over documentary ones.
-    }
+    const template = new QaAtmTemplate(
+      executionProfiles,
+      async () => {
+        const snapshot = await catalogs!.execute(
+          { kind: 'list', environment: 'QA' },
+          {
+            user: runtime.user,
+            machine: runtime.hostname,
+            timestamp: runtime.now(),
+          },
+        );
+        if (!snapshot.ok) throw Error('QA_TEMPLATE_UNAVAILABLE');
+        return snapshot.value;
+      },
+      withdrawalPolicies,
+    );
+    const balanceContexts = new QaTemplateContextProvider(
+      template,
+      'BALANCE',
+      cardIdentity,
+      pinEntry,
+      pinCipher,
+    );
+    const withdrawalContexts = new QaTemplateContextProvider(
+      template,
+      'WITHDRAWAL',
+      cardIdentity,
+      pinEntry,
+      pinCipher,
+    );
     const connection = new QaSwitchConnection();
     switchConnection = connection;
     const balanceTransport = new BalanceTcpTransport();

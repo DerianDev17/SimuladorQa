@@ -2,6 +2,12 @@
 
 Aplicacion desktop para QA orientada a simular transacciones ATM de la Red Coonecta, ejecutar pruebas funcionales, carga y estres, y correlacionar cada transaccion con SmartVista/SVFE y el Core correspondiente.
 
+ATM20521 es la plantilla de envío para los ATM QA de la entidad 205. Crear o
+clonar hereda la configuración ISO/EMV, clave y operaciones existentes; no
+requiere otro perfil privado ni fecha contable por terminal. Los nuevos ATM
+están disponibles sin reiniciar y consumen el pool persistente compartido.
+Ver [uso de la plantilla](docs/implementation/MULTI_ATM_PROFILES.md).
+
 Inicio muestra en QA y PREPROD las últimas 50 transacciones de Mediator para
 entidad 205/canal 1. Consulta cada cinco segundos mientras la vista está abierta,
 con pausa y filtros. La referencia de tarjeta se deriva en SQL sin entregar su
@@ -35,8 +41,8 @@ Ver [guía de ejecución](docs/implementation/LOAD_TEST.md).
 - Monitoreo: dashboard realtime de todas las instancias de la app.
 - Correlacion: Switch Coonecta + Core mediante adaptadores.
 
-Estado de perfiles múltiples, clonación segura, historial por ATM y datos
-pendientes para habilitar ATM20524: [perfiles ATM múltiples](docs/implementation/MULTI_ATM_PROFILES.md).
+Plantilla reutilizable, clonación, historial por ATM y alcance de la validación
+en host: [perfiles ATM múltiples](docs/implementation/MULTI_ATM_PROFILES.md).
 
 ## Principio rector
 

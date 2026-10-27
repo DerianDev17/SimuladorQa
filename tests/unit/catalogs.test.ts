@@ -22,7 +22,7 @@ const atm = {
 };
 
 describe('validación de catálogos', () => {
-  it('clona solo la entidad administrativa y exige identidad nueva', () => {
+  it('clona entidad y adquirente, y exige identidad de terminal nueva', () => {
     const source = {
       ...atm,
       id,
@@ -37,7 +37,7 @@ describe('validación de catálogos', () => {
       alias: '',
       entityId: id,
       terminalId: '',
-      acquirerId: '',
+      acquirerId: source.acquirerId,
       active: true,
     });
     expect(parseAtmValues(draft)).toBeUndefined();

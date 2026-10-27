@@ -66,18 +66,34 @@ export function CatalogView({
   initialEntityId,
   onCancelCreation,
 }: Props) {
+  const templateAtm =
+    environment === 'QA'
+      ? catalog?.atms.find(
+          (atm) =>
+            atm.active &&
+            atm.terminalId === 'ATM20521' &&
+            catalog.entities.some(
+              (entity) => entity.id === atm.entityId && entity.active && entity.code === '205',
+            ),
+        )
+      : undefined;
+  function newAtm(entityId?: string): AtmValues {
+    const selected = entityId ?? templateAtm?.entityId ?? '';
+    return {
+      ...blankAtm,
+      entityId: selected,
+      acquirerId: templateAtm?.entityId === selected ? templateAtm.acquirerId : '',
+    };
+  }
   const [editor, setEditor] = useState<Editor | undefined>(() =>
     quickCreate
       ? {
           id: null,
           revision: null,
           entity: { ...blankEntity },
-          atm: {
-            ...blankAtm,
-            entityId:
-              catalog?.entities.find((entity) => entity.id === initialEntityId && entity.active)
-                ?.id ?? '',
-          },
+          atm: newAtm(
+            catalog?.entities.find((entity) => entity.id === initialEntityId && entity.active)?.id,
+          ),
         }
       : undefined,
   );
@@ -164,7 +180,7 @@ export function CatalogView({
                 acquirerId: item.acquirerId,
                 active: item.active,
               }
-            : { ...blankAtm },
+            : newAtm(),
     };
     baseline.current = next;
     setEditor(next);
@@ -205,6 +221,18 @@ export function CatalogView({
       const values = parseAtmValues(editor.atm);
       if (!values) {
         setFormError('Completa el alias, entidad, Terminal ID y Acquirer ID.');
+        return;
+      }
+      if (
+        environment === 'QA' &&
+        catalog?.entities.some(
+          (entity) => entity.id === values.entityId && entity.code === '205',
+        ) &&
+        (!/^[A-Z0-9]{8}$/.test(values.terminalId) || !/^\d{1,11}$/.test(values.acquirerId))
+      ) {
+        setFormError(
+          'Para enviar en QA, usa un Terminal ID de ocho letras mayúsculas o dígitos y un Acquirer ID numérico de hasta once dígitos.',
+        );
         return;
       }
       command = { kind: 'saveAtm', request: { ...metadata, values } };
@@ -391,7 +419,13 @@ export function CatalogView({
                         onChange={(event) =>
                           setEditor({
                             ...editor,
-                            atm: { ...editor.atm, entityId: event.target.value },
+                            atm: {
+                              ...editor.atm,
+                              entityId: event.target.value,
+                              ...(!editor.id
+                                ? { acquirerId: newAtm(event.target.value).acquirerId }
+                                : {}),
+                            },
                           })
                         }
                       >
@@ -451,7 +485,12 @@ export function CatalogView({
             <p className="form-note">
               {entitiesView
                 ? 'Guarda o cancela antes de salir.'
-                : 'Este registro es administrativo. La ejecución QA requiere una vinculación privada propia, secuencias exclusivas y validación de conectividad; guardar o clonar no habilita transacciones.'}
+                : environment === 'QA' &&
+                    catalog?.entities.some(
+                      (entity) => entity.id === editor.atm.entityId && entity.code === '205',
+                    )
+                  ? 'Usa la configuración de envío de ATM20521. Completa el alias y un Terminal ID distinto; al guardar podrás seleccionarlo en Transacciones y Carga y estrés.'
+                  : 'La plantilla ATM20521 está disponible para la entidad 205 en QA.'}
             </p>
             <details className="inline-details">
               <summary>Detalles del perfil</summary>

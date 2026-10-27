@@ -45,6 +45,15 @@ en Configuracion; no reemplaza los adaptadores de transporte ni autoriza sockets
 
 ## Restricciones
 
+Plantilla reutilizable (2026-10-27): QaAtmTemplate resuelve el catálogo actual
+y el perfil de ATM20521 en Main por operación. QaTemplateContextProvider
+proyecta identidad/adquirente para nuevos ATM QA/205 y comparte referencia
+DPAPI, parámetros ISO/EMV, contrato de retiro y pool persistente del origen.
+No exige un archivo por terminal ni reinicio tras el alta. Se revalida el
+contexto antes de TCP. La fecha F15 se hereda del mensaje funcional, sin
+consulta SQL por ATM ni afirmación sobre la contabilidad del switch. ADR-024
+sustituye el aprovisionamiento individual dentro del mismo enlace/entidad.
+
 Comprobante local de retiro (2026-10-19): WithdrawalReceiptService recibe un UUID
 por IPC validado y consulta el diario, sin invocar transporte financiero. El puerto
 ReceiptPrinter encapsula la impresion Electron en una ventana aislada sin Node/JS.

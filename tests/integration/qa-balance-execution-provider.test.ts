@@ -6,6 +6,11 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { QaBalanceExecutionProvider } from '../../apps/desktop/src/main/qa-balance-execution-provider';
 import { QaWithdrawalExecutionProvider } from '../../apps/desktop/src/main/qa-withdrawal-execution-provider';
+import {
+  QaAtmTemplate,
+  QaTemplateContextProvider,
+} from '../../apps/desktop/src/main/qa-atm-template';
+import { templateCatalog, templateAtm } from '../helpers/qa-template';
 import { FileQaWithdrawalPolicies } from '../../apps/desktop/src/main/infrastructure/qa-withdrawal-policies';
 import { WithdrawalService } from '../../apps/desktop/src/main/withdrawal-service';
 import { withdrawalResponse } from '../helpers/withdrawal';
@@ -37,19 +42,36 @@ import {
 import { removeTestDirectory } from '../helpers/temporary-directory';
 
 describe('proveedor PIN/EMV conectado a lectura, ISO y TCP', () => {
-  it.each(['BALANCE', 'WITHDRAWAL', 'WITHDRAWAL_BALANCE_PROFILE'] as const)(
+  it.each([
+    'BALANCE',
+    'WITHDRAWAL',
+    'WITHDRAWAL_BALANCE_PROFILE',
+    'BALANCE_TEMPLATE',
+    'WITHDRAWAL_TEMPLATE',
+    'WITHDRAWAL_BALANCE_PROFILE_TEMPLATE',
+  ] as const)(
     'envía operaciones %s nuevas, reutiliza perfiles y solo persiste correlación/resultados',
     async (variant) => {
-      const operation = variant === 'BALANCE' ? 'BALANCE' : 'WITHDRAWAL';
-      const cash = variant === 'WITHDRAWAL';
+      const inherited = variant.endsWith('_TEMPLATE');
+      const mode = variant.replace(/_TEMPLATE$/, '');
+      const operation = mode === 'BALANCE' ? 'BALANCE' : 'WITHDRAWAL';
+      const cash = mode === 'WITHDRAWAL';
       const directory = await mkdtemp(join(tmpdir(), 'coonecta-qa-execution-'));
       const { row, input, target } = qaExecutionFixture();
       const other = qaExecutionFixture();
       other.row.terminalId = other.target.terminalId = 'ATM20524';
       other.row.keyReference = row.keyReference;
       other.row.reservedSequences = [650103];
+      if (inherited) row.reservedSequences.push(650103);
       if (operation === 'WITHDRAWAL')
         target.draft = { ...target.draft, transaction: 'WITHDRAWAL_APPROVED', amount: '20.00' };
+      if (inherited && operation === 'WITHDRAWAL')
+        other.target.draft = {
+          ...other.target.draft,
+          transaction: 'WITHDRAWAL_APPROVED',
+          amount: '50.00',
+        };
+      const catalog = templateCatalog(target);
       const framing = new CapturedVisaFraming(),
         codec = new CapturedVisaBalance(operation);
       const received: { stan: string; terminalId: string; atc: string; unpredictable: string }[] =
@@ -97,7 +119,9 @@ describe('proveedor PIN/EMV conectado a lectura, ISO y TCP', () => {
               }
               const response =
                 operation === 'WITHDRAWAL'
-                  ? withdrawalResponse(metadata)
+                  ? withdrawalResponse(metadata, '00', (responseFields) => {
+                      responseFields.set(41, Buffer.from(fields.get(41)!));
+                    })
                   : balanceResponse(metadata, '00', (responseFields) => {
                       responseFields.set(41, Buffer.from(fields.get(41)!));
                     });
@@ -117,9 +141,9 @@ describe('proveedor PIN/EMV conectado a lectura, ISO y TCP', () => {
       await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
       row.endpoint.port = (server.address() as AddressInfo).port;
       target.endpoint.port = row.endpoint.port;
-      if (operation === 'BALANCE') {
+      if (operation === 'BALANCE' || inherited) {
         other.row.endpoint.port = other.target.endpoint.port = row.endpoint.port;
-        input.profiles.push(other.row);
+        if (!inherited) input.profiles.push(other.row);
       }
       const path = join(directory, 'profile.json');
       await writeFile(path, JSON.stringify(input));
@@ -128,7 +152,7 @@ describe('proveedor PIN/EMV conectado a lectura, ISO y TCP', () => {
       const policyPath = join(directory, 'qa-withdrawal-policies.json');
       const policy = qaWithdrawalPolicy(profile);
       policy.allowedAmounts = ['20.00', '50.00'];
-      if (variant === 'WITHDRAWAL_BALANCE_PROFILE') {
+      if (mode === 'WITHDRAWAL_BALANCE_PROFILE') {
         policy.validationSource = 'USER_QA_INSTRUCTION';
         policy.transactionType = 'BOUND_PROFILE';
         policy.authorisedAmount = 'ZERO';
@@ -195,30 +219,45 @@ describe('proveedor PIN/EMV conectado a lectura, ISO y TCP', () => {
               () => qaNow,
             )
           : new QaBalanceExecutionProvider(profile, profiles, cards, pinEntry, cipher, () => qaNow);
-      const router = new QaBalanceContextRouter(operation);
-      router.bind({
-        atmId: profile.atmId,
-        atmRevision: profile.atmRevision,
-        terminalId: profile.terminalId,
-        endpoint: profile.endpoint,
-        provider,
-      });
-      if (operation === 'BALANCE') {
-        const secondProfile = (await profiles.read()).profiles[1]!;
-        router.bind({
-          atmId: secondProfile.atmId,
-          atmRevision: secondProfile.atmRevision,
-          terminalId: secondProfile.terminalId,
-          endpoint: secondProfile.endpoint,
-          provider: new QaBalanceExecutionProvider(
-            secondProfile,
-            profiles,
+      const router = inherited
+        ? new QaTemplateContextProvider(
+            new QaAtmTemplate(
+              profiles,
+              async () => structuredClone(catalog),
+              new FileQaWithdrawalPolicies(policyPath),
+            ),
+            operation,
             cards,
             pinEntry,
             cipher,
             () => qaNow,
-          ),
+          )
+        : new QaBalanceContextRouter(operation);
+      if (router instanceof QaBalanceContextRouter) {
+        router.bind({
+          atmId: profile.atmId,
+          atmRevision: profile.atmRevision,
+          terminalId: profile.terminalId,
+          endpoint: profile.endpoint,
+          provider,
         });
+        if (operation === 'BALANCE') {
+          const secondProfile = (await profiles.read()).profiles[1]!;
+          router.bind({
+            atmId: secondProfile.atmId,
+            atmRevision: secondProfile.atmRevision,
+            terminalId: secondProfile.terminalId,
+            endpoint: secondProfile.endpoint,
+            provider: new QaBalanceExecutionProvider(
+              secondProfile,
+              profiles,
+              cards,
+              pinEntry,
+              cipher,
+              () => qaNow,
+            ),
+          });
+        }
       }
       let records: BalanceExecution[] = [];
       const Service = operation === 'WITHDRAWAL' ? WithdrawalService : BalanceInquiryService;
@@ -245,10 +284,16 @@ describe('proveedor PIN/EMV conectado a lectura, ISO y TCP', () => {
         router,
       );
       try {
-        const targets = operation === 'BALANCE' ? [target, other.target, target] : [target, target];
-        const sequences =
-          operation === 'BALANCE' ? ['650101', '650103', '650102'] : ['650101', '650102'];
+        const targets =
+          operation === 'BALANCE' || inherited ? [target, other.target, target] : [target, target];
+        const sequences = inherited
+          ? ['650101', '650102', '650103']
+          : operation === 'BALANCE'
+            ? ['650101', '650103', '650102']
+            : ['650101', '650102'];
         for (const [index, currentTarget] of targets.entries()) {
+          if (inherited && index === 1)
+            catalog.atms.push(templateAtm(other.target, catalog.entities[0]!.id));
           if (operation === 'WITHDRAWAL')
             currentTarget.draft.amount = index === 0 ? '20.00' : '50.00';
           const reading = await cards.read({ readerName: 'Synthetic Reader' });
@@ -262,6 +307,7 @@ describe('proveedor PIN/EMV conectado a lectura, ISO y TCP', () => {
             { connect: 1000, response: 1000 },
             async () => true,
           );
+          expect(serverFailure).toBeUndefined();
           expect(result).toMatchObject({
             ok: true,
             value: {
@@ -279,7 +325,9 @@ describe('proveedor PIN/EMV conectado a lectura, ISO y TCP', () => {
         expect(records[0]!.requestId).not.toBe(records[1]!.requestId);
         expect(records[0]!.cardReadId).not.toBe(records[1]!.cardReadId);
         if (operation === 'WITHDRAWAL')
-          expect(records.map((record) => record.withdrawal?.amount)).toEqual(['20.00', '50.00']);
+          expect(records.map((record) => record.withdrawal?.amount)).toEqual(
+            targets.map((_, index) => (index === 0 ? '20.00' : '50.00')),
+          );
         expect(received.map((item) => item.atc)).toEqual(
           targets.map((_, index) => String(index + 1).padStart(4, '0')),
         );
@@ -290,6 +338,7 @@ describe('proveedor PIN/EMV conectado a lectura, ISO y TCP', () => {
         expect(JSON.stringify(records)).not.toContain(syntheticPan);
         expect(JSON.stringify(records)).not.toContain('privateFields');
         expect(records).toHaveLength(targets.length);
+        if (inherited) expect((await profiles.read()).profiles).toHaveLength(1);
         expect(
           (await profiles.read()).file.profiles.every(
             (p) => (p.reservedSequences as number[]).length === 0,

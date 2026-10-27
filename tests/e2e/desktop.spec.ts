@@ -24,6 +24,7 @@ import { observationBatch } from '../helpers/observations';
 import { approvedWithdrawalExecution } from '../helpers/withdrawal';
 import { build } from 'esbuild';
 import { SqliteBalanceJournal } from '../../apps/desktop/src/main/infrastructure/sqlite-balance-journal';
+import { qaExecutionFixture } from '../helpers/qa-execution';
 
 let directory: string;
 let app: ElectronApplication | undefined;
@@ -1945,6 +1946,83 @@ async function createTestAtm(window: Page, alias: string) {
   await expect(window.getByRole('button', { name: `Editar ${alias}`, exact: true })).toBeVisible();
 }
 
+test('crear ATM desde plantilla hereda adquirente y resuelve envío en Main sin reiniciar', async () => {
+  const evidence = networkEvidence();
+  await writeFile(join(directory, 'network-evidence.json'), JSON.stringify(evidence));
+  const window = await launch();
+  await window.getByRole('button', { name: 'Entidades', exact: true }).click();
+  await window.getByRole('button', { name: 'Nueva entidad' }).click();
+  await window.getByLabel('Código de entidad').fill('205');
+  await window.getByLabel('Nombre de entidad').fill('Entidad plantilla');
+  await window.getByLabel('Red de entidad').selectOption('COONECTA');
+  await window.getByRole('button', { name: 'Guardar borrador' }).click();
+  await window.getByRole('button', { name: 'Perfiles ATM', exact: true }).click();
+  await window.getByRole('button', { name: 'Nuevo perfil ATM' }).click();
+  await window.getByLabel('Alias ATM').fill('Plantilla funcional');
+  await window.getByLabel('Entidad del ATM').selectOption({ label: '205 · Entidad plantilla' });
+  await window.getByLabel('Terminal ID', { exact: true }).fill('ATM20521');
+  await window.getByLabel('Acquirer ID', { exact: true }).fill('12345678901');
+  await window.getByRole('button', { name: 'Guardar borrador' }).click();
+  await expect(window.getByRole('button', { name: 'Editar Plantilla funcional' })).toBeVisible();
+  const readAtm = (terminal: string) => {
+    const database = new DatabaseSync(join(directory, 'catalogs.sqlite'), { readOnly: true });
+    try {
+      return database
+        .prepare('SELECT id,revision FROM atm_profiles WHERE terminal_id=?')
+        .get(terminal)!;
+    } finally {
+      database.close();
+    }
+  };
+  const source = readAtm('ATM20521');
+  const fixture = qaExecutionFixture();
+  fixture.row.atmId = String(source.id);
+  fixture.row.endpoint = evidence.ingress;
+  await writeFile(join(directory, 'qa-execution-profiles.json'), JSON.stringify(fixture.input));
+  await window.getByRole('button', { name: 'Nuevo perfil ATM' }).click();
+  await expect(window.getByLabel('Acquirer ID', { exact: true })).toHaveValue('12345678901');
+  await expect(window.getByLabel('Entidad del ATM')).not.toHaveValue('');
+  await window.getByLabel('Alias ATM').fill('Nuevo desde plantilla');
+  await window.getByLabel('Terminal ID', { exact: true }).fill('incorrecto');
+  await window.getByRole('button', { name: 'Guardar borrador' }).click();
+  await expect(window.getByRole('alert')).toContainText('ocho');
+  await window.getByLabel('Terminal ID', { exact: true }).fill('ATM20524');
+  await window.getByRole('button', { name: 'Guardar borrador' }).click();
+  await expect(window.getByRole('button', { name: 'Editar Nuevo desde plantilla' })).toBeVisible();
+  const created = readAtm('ATM20524');
+  const result = await window.evaluate(
+    async (request) => {
+      const config = await globalThis.window.desktop!.getSendConfiguration('QA');
+      if (!config.ok || !config.value.configuration) throw Error('TEST_CONFIG_MISSING');
+      return globalThis.window.desktop!.getBalanceReadiness({
+        ...request,
+        configurationRevision: config.value.configuration.revision,
+      });
+    },
+    {
+      cardReadId: fixture.target.cardReadId,
+      draft: {
+        ...fixture.target.draft,
+        atmId: String(created.id),
+        atmRevision: Number(created.revision),
+      },
+    },
+  );
+  expect(result.ok).toBe(true);
+  if (!result.ok) throw Error('TEST_READINESS_FAILED');
+  expect(result.value.sequencesRemaining).toBe(2);
+  expect(result.value.blockers.map((item) => item.id)).toEqual(
+    expect.arrayContaining(['QA-PIN-TEST-KEY', 'QA-CARD-SESSION']),
+  );
+  expect(result.value.blockers.some((item) => /TEMPLATE|PROFILE|SEQUENCE/.test(item.id))).toBe(
+    false,
+  );
+  await window.screenshot({ path: 'artifacts/atm-template-created.png' });
+  expect(
+    JSON.parse(await readFile(join(directory, 'qa-execution-profiles.json'), 'utf8')).profiles,
+  ).toHaveLength(1);
+});
+
 test('clonación ATM exige nueva identidad y conserva el origen', async () => {
   const window = await launch();
   await createTestEntity(window);
@@ -1952,7 +2030,7 @@ test('clonación ATM exige nueva identidad y conserva el origen', async () => {
   await window.getByRole('button', { name: 'Clonar ATM de origen' }).click();
   await expect(window.getByLabel('Alias ATM')).toHaveValue('');
   await expect(window.getByLabel('Terminal ID', { exact: true })).toHaveValue('');
-  await expect(window.getByLabel('Acquirer ID', { exact: true })).toHaveValue('');
+  await expect(window.getByLabel('Acquirer ID', { exact: true })).toHaveValue('Test-Acquirer');
   await expect(window.getByLabel('Entidad del ATM')).not.toHaveValue('');
   await window.getByLabel('Alias ATM').fill('ATM clonado');
   await window.getByLabel('Terminal ID', { exact: true }).fill('Test-Terminal');

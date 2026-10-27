@@ -1,120 +1,71 @@
-# Perfiles ATM múltiples: estado comprobado
+# ATM20521 como plantilla funcional
 
-## Clave de enlace compartida (2026-10-27)
+## Uso vigente (2026-10-27)
 
-Por instrucción del usuario se implementa el vínculo de ATM20524 a la
-referencia protegida de enlace que usa ATM20521. Los perfiles ya permitían
-compartir `keyReference`; no se necesita una clave diferente por Terminal ID.
-El diagnóstico ahora comprueba el origen, destino y acceso al cifrador antes
-de retirar el bloqueo de clave. La maestra CMS permanece separada. Ver
-[ADR-023](../adr/ADR-023-SHARED-QA-LINK-KEY.md).
+En QA, los ATM activos de la entidad 205 usan automáticamente la plantilla
+de envío ATM20521 cuando no tienen un perfil específico. Aplica también a
+ATM20524 ya existente. No hace falta aportar otro perfil ISO, importar una
+clave, asignar una fecha contable o repartir reservas por cada alta.
 
-Vínculo aplicado a la configuración local el 2026-10-27T16:25:30Z. El cifrador
-Windows confirmó acceso a la misma credencial protegida. La maestra CMS y el
-archivo de perfiles ejecutables conservan su contenido; cero solicitudes PIN,
-secuencias consumidas o envíos financieros. Respaldo creado antes del reemplazo
-atómico de la evidencia CMS. Informe sin secretos:
-`artifacts/shared-link-key-20261027-result.json`.
+1. Abrir **Perfiles ATM → Nuevo perfil ATM**, o **Clonar**.
+2. Completar alias y Terminal ID nuevo de ocho caracteres alfanuméricos en
+   mayúsculas. Crear preselecciona entidad y Acquirer ID de ATM20521; clonar
+   conserva los del origen.
+3. Guardar activo y seleccionarlo en **Transacciones** o **Carga y estrés**.
+   No se requiere reiniciar entre altas.
 
-Se intentó actualizar la fecha contable de ambos terminales mediante un SELECT
-parametrizado de solo lectura a las 2026-10-27T16:27:59Z. SQL volvió a fallar
-validación TLS; no se deshabilitó la comprobación del certificado ni se adoptó
-como actual la fecha histórica de ATM20524. Informe:
-`artifacts/two-atm-calendar-20261027.json`.
+El cajero debe existir y estar habilitado en el switch para que este lo acepte.
+La plantilla conserva el alcance de ATM20521: QA/205/LOCAL/ahorros, consulta y
+retiro con sus montos/políticas existentes. Carga continúa usando un ATM y una
+tarjeta física por corrida. La admisión remota se distingue de la preparación
+local; no se promete una aprobación financiera al crear el registro.
 
-El bloqueo local MULTI-ATM-PIN-KEY se resuelve mediante esa vinculación cuando
-la credencial está disponible. Siguen pendientes el perfil ISO y las reservas
-de ATM20524; compartir una clave no los define ni demuestra aceptación del
-host. Las pruebas de alternancia usan la misma referencia sintética para los
-dos ATM, con PIN/EMV nuevos y STAN separados.
+## Comportamiento
 
-## Revisión inicial del 2026-10-27, antes de compartir la referencia
+Main resuelve la plantilla y el catálogo en cada operación. Hereda campos ISO,
+EMV, endpoint y referencia protegida de enlace. Usa UUID, revisión, Terminal ID
+y adquirente del ATM seleccionado. No exporta secretos al Renderer ni duplica
+claves o datos de tarjeta. Un perfil privado específico tiene prioridad.
 
-Inspección local de solo lectura en el AppData de Coonecta ATM Simulator:
-ambos ATM están activos, revisión 1. ATM20521 tiene perfil válido coincidente
-con el catálogo, credencial protegida de enlace presente y 959 secuencias
-restantes. ATM20524 conserva evidencia CMS; no aparece en el archivo de
-perfiles ejecutables y no tiene una reserva propia ni vínculo de cifrado
-directo configurados. Se conserva un informe sin secretos en
-`artifacts/atm-readiness-20261027.json`.
+Todos los derivados consumen **un único pool persistente** del origen. El
+bloqueo de archivo evita reutilizar STAN; no se copian rangos ni se consulta el
+serial de un cajero físico. El pool es finito y al agotarse conserva el bloqueo
+existente de la estación. Reiniciar o crear otro ATM no lo repone.
 
-El flujo de envío es reutilizable por perfil. La regresión integrada ejecuta
-ATM20521 → ATM20524 → ATM20521 en un servidor TCP local, con perfiles y
-tarjeta sintéticos, proveedor PIN/EMV real del simulador y cifrador sintético.
-Comprueba seguridad nueva, correlación por terminal, identificadores distintos
-y consumo separado de las reservas. Esto verifica que volver a usar ATM20521
-no exige recrear el servicio. No acredita la admisión financiera de ATM20524
-en QA ni instala esos perfiles sintéticos en la estación.
+El contrato de retiro se hereda comprobando la huella de la plantilla. Los
+cambios/revocaciones durante una operación se verifican antes de TCP. Una
+nueva selección resuelve la versión actual, sin una vinculación obsoleta de
+arranque. Desactivar/eliminar un ATM o la entidad impide su uso.
 
-Carga y estrés permite elegir cualquiera de los perfiles, uno por corrida, y
-muestra juntas las dependencias que impiden iniciar. La habilitación real de
-ATM20524 mantiene los TODO-DATA de perfil, vínculo de clave y secuencias
-enumerados abajo. La llave de enlace de ATM20521 ya está localizada; su
-existencia no documenta por sí sola la vinculación del segundo terminal.
+No se solicita fecha contable por ATM ni se depende de SQL para crear/enviar.
+F15 conserva el valor de la plantilla funcional, identificado en UI como fecha
+ISO enviada. No se interpreta como fecha contable efectiva del switch ni se
+cambia el bitmap por suposición. Las fechas transaccionales y EMV se generan
+de nuevo según la zona configurada. Ver [ADR-024](../adr/ADR-024-REUSABLE-ATM-TEMPLATE.md).
 
-## Referencia ATM20521 y estado previo del segundo perfil
+## Evidencia y pendientes externos
 
-El catálogo QA local contiene ATM20521 y ATM20524. La inspección de metadatos
-privados (sin imprimir claves, campos ISO ni secuencias) confirmó que ATM20521
-tiene un perfil ejecutable vinculado a su UUID, revisión y Terminal ID, con
-reservas STAN propias. ATM20524 tiene evidencia CMS documental, pero no un perfil
-ejecutable ni una clave de enlace autorizada para cifrar el PIN de la ruta directa.
-Su aparición en el catálogo no constituye una prueba transaccional.
+Configuración real verificada el 2026-10-27T17:37:53Z: ATM20521 y ATM20524
+resuelven desde un único perfil privado, con la misma clave DPAPI disponible,
+contrato de retiro y 959 secuencias compartidas. ATM20524 tenía el adquirente
+abreviado; se alineó al de la plantilla mediante el catálogo con auditoría y
+respaldo SQLite, quedando revisión 2. ATM20521 y su archivo privado se mantienen
+intactos. Cero solicitudes PIN, secuencias consumidas, consultas SQL al host o
+envíos financieros. Informe local: `artifacts/atm-template-20261027-result.json`.
 
-El flujo ejecutable de ATM20521 está limitado a CB 205, QA, LOCAL, ahorros y
-consulta de saldo. Construye 0200 con F3=301000 y F4=0, F11 reservado, F37
-derivado de fecha y secuencia, F41 del Terminal ID, F52 cifrado y F55 generado
-para cada operación desde la tarjeta. Usa cabecera VISA de 22 bytes y envolvente
-de cuatro bytes (longitud BE16 del cuerpo más extensión opaca de dos bytes).
-Correlaciona la respuesta 0210 con STAN, RRN, terminal, código de procesamiento
-y moneda; F39 determina el resultado y el diario guarda duración y referencias
-sanitizadas. Fuentes: `CB_205_BALANCE_SAMPLE.md`, `ISOBASEI_REVIEW.md`,
-`BALANCE_EXECUTION.md` y el perfil privado aprobado de esta estación.
+Las pruebas integradas ejecutan ATM20521 → ATM20524 → ATM20521 por TCP local
+para saldo y retiro, con seguridad nueva y una sola referencia/pool. SQLite
+real verifica alta posterior al arranque, recuperación tras reinicio y
+agotamiento. E2E verifica herencia del adquirente y resolución real en Main.
 
-La propuesta de F3=702, VLI de dos bytes y cabecera de doce bytes no coincide
-con este flujo ATM comprobado. `ContextoISO.xml` pertenece al mock BANRED 4946
-y no autoriza cambiar el codec del enlace ATM 16100. Se conserva ATM20521.
+- **TODO-DATA MULTI-ATM-QA-RESULT:** comprobar respuesta del host para nuevos
+  Terminal ID, incluido ATM20524. Las pruebas locales no certifican Switch/Core.
+- **TODO-DATA MULTI-ATM-CONCURRENCY:** la ejecución actual es serial; múltiples
+  tarjetas, estaciones y rangos distribuidos requieren coordinación separada.
 
-## Entregado
-
-- El catálogo permite clonar la parte administrativa de cualquier ATM; exige
-  alias, Terminal ID y Acquirer ID nuevos. Cada guardado recibe UUID, revisión,
-  ambiente y auditoría propios. La unicidad de Terminal ID por ambiente ya se
-  verifica en SQLite.
-- La clonación no copia clave, perfil ISO ejecutable, datos de tarjeta ni
-  reservas STAN. Los perfiles QA ejecutables se rechazan si dos ATM comparten
-  secuencias aún reservadas.
-- Transacciones permite seleccionar un ATM y filtrar por ATM el historial QA
-  disponible. La ruta de ejecución verifica UUID, revisión, Terminal ID,
-  destino, tarjeta, perfil y seguridad antes de transmitir.
-- Una conexión TCP sin payload a la entrada QA respondió en la estación el
-  2026-10-20. Esto acredita solo apertura de socket, no admisión ni respuesta
-  financiera de ATM20524.
-
-## Datos pendientes para habilitar ATM20524 u otros ATM
-
-- **TODO-DATA MULTI-ATM-EXECUTION-PROFILE:** por cada ATM nuevo, aportar y
-  validar la imagen activa, cabecera, campos fijos ISO, aplicación y parámetros
-  EMV, endpoint autorizado, fecha contable, Acquirer/Terminal ID y fuente de
-  cada valor. Los campos comunes de ATM20521 solo se podrán heredar tras
-  confirmar que aplican al nuevo modelo/enlace. El CRUD permanece disponible.
-- **TODO-DATA MULTI-ATM-PIN-KEY:** vincular por terminal una clave de enlace
-  TEST aprobada, bajo custodia DPAPI, y comprobar su finalidad y formato PIN.
-  Para ATM20524 se implementa el vínculo compartido de ADR-023 por instrucción
-  del usuario; su comprobación local deja solo el perfil ISO pendiente en el
-  diagnóstico. La aceptación por el host se mantiene en MULTI-ATM-QA-RESULT.
-  La maestra CMS de ATM20524 no cumple esta función.
-- **TODO-DATA MULTI-ATM-STAN-ALLOCATION:** confirmar una reserva exclusiva
-  entre estaciones y cajeros físicos, incluido el historial de STAN ya usados.
-  La validación local evita solapamiento entre reservas vigentes en un archivo;
-  no constituye coordinación distribuida ni certificado de unicidad histórica.
-- **TODO-DATA MULTI-ATM-QA-RESULT:** obtener una consulta nueva 0200/0210 por
-  ATM con PIN/EMV frescos y observar su correlación en Switch/Core. Hasta ese
-  resultado, distinguir perfil administrativo, TCP abierto y transacción
-  aprobada.
-- **TODO-DATA MULTI-ATM-CONCURRENCY:** faltan límites de sesiones, pool de
-  tarjetas autorizado y secuencias por estación para ejecutar varios ATM en
-  paralelo. La ejecución interactiva actual serializa las operaciones.
-
-Retiros y reversos tienen contratos separados; no se habilitan para un nuevo
-ATM mediante la clonación administrativa.
+Las exigencias previas MULTI-ATM-EXECUTION-PROFILE, MULTI-ATM-PIN-KEY y reserva
+individual MULTI-ATM-STAN-ALLOCATION quedan sustituidas, dentro de este alcance,
+por la instrucción de reutilizar ATM20521. La historia de clave compartida está
+en [ADR-023](../adr/ADR-023-SHARED-QA-LINK-KEY.md). La fecha histórica de la
+plantilla no se obtuvo de una nueva consulta SQL; el intento anterior falló TLS
+y dejó de ser una dependencia del alta por la instrucción posterior del usuario.

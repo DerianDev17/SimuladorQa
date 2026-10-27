@@ -1,6 +1,10 @@
 // Only fixed public diagnoses may cross IPC or enter the execution journal.
 // Never include the dependency's error text, PIN, card fields or APDU response.
 export const balanceContextErrorLabels: Readonly<Record<string, string>> = {
+  QA_TEMPLATE_UNAVAILABLE:
+    'No está disponible la plantilla ATM20521 para esta entidad y destino QA',
+  QA_TEMPLATE_ATM_INVALID:
+    'Recarga un ATM activo de la entidad 205, con Terminal ID de ocho caracteres y Acquirer ID numérico de hasta once dígitos',
   QA_WITHDRAWAL_POLICY_MISSING:
     'Falta cargar el contrato de retiro de este ATM en qa-withdrawal-policies.json (EMV, montos permitidos y tratamiento de resultados)',
   QA_WITHDRAWAL_POLICY_INVALID:
