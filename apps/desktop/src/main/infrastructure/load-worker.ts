@@ -7,16 +7,29 @@ import {
 } from '../../../../../packages/domain/src/load-test';
 import { loadPacingDelay } from './load-pacing';
 
-const plan = parseLoadTestDraft(workerData);
-if (!parentPort || !plan || plan.concurrency !== 1 || plan.targetTps < LOAD_TEST_LOCAL_MIN_TPS)
+const plan = parseLoadTestDraft(workerData?.draft);
+const startedAt: unknown = workerData?.startedAt;
+if (
+  !parentPort ||
+  !plan ||
+  plan.concurrency !== 1 ||
+  plan.targetTps < LOAD_TEST_LOCAL_MIN_TPS ||
+  typeof startedAt !== 'number' ||
+  !Number.isFinite(startedAt)
+)
   throw Error('INVALID_LOAD_PLAN');
 const port = parentPort;
-const start = performance.now();
+const start = startedAt;
+const elapsed = () => Math.max(0, performance.timeOrigin + performance.now() - start);
 let sent = 0;
-let last = start;
+let last = performance.now();
+let awaitingResult = false;
 let stopped = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
-const deadline = setTimeout(() => finish('DURATION'), plan.durationSeconds * 1000);
+const deadline = setTimeout(
+  () => finish('DURATION'),
+  Math.max(0, plan.durationSeconds * 1000 - elapsed()),
+);
 function finish(reason: string) {
   if (stopped) return;
   stopped = true;
@@ -28,18 +41,36 @@ function finish(reason: string) {
 function schedule() {
   if (stopped) return;
   if (sent >= plan!.maxTransactions) return finish('COUNT');
-  const elapsed = performance.now() - start;
-  const rate = loadTargetTps(plan!, elapsed);
+  if (elapsed() >= plan!.durationSeconds * 1000) return finish('DURATION');
+  const rate = loadTargetTps(plan!, elapsed());
   const wait = loadPacingDelay(sent, last, performance.now(), rate);
   timer = setTimeout(() => {
     if (stopped) return;
+    if (elapsed() >= plan!.durationSeconds * 1000) return finish('DURATION');
     last = performance.now();
     sent++;
+    awaitingResult = true;
     port.postMessage({ type: 'tick' });
   }, wait);
 }
 port.on('message', (message: unknown) => {
-  if (message === 'next') {
+  if (
+    message &&
+    typeof message === 'object' &&
+    'type' in message &&
+    message.type === 'next' &&
+    awaitingResult
+  ) {
+    awaitingResult = false;
+    if (
+      'operationStartedAt' in message &&
+      typeof message.operationStartedAt === 'number' &&
+      Number.isFinite(message.operationStartedAt)
+    ) {
+      // Posting a tick is not the same as Main starting the card operation.
+      // Delayed delivery must not turn the next operation into a catch-up burst.
+      last = Math.max(last, message.operationStartedAt - performance.timeOrigin);
+    }
     // Pace from the previous start. A slow card/host operation already used
     // its interval; adding another interval would reduce throughput further.
     schedule();

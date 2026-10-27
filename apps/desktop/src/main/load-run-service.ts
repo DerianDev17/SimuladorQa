@@ -31,13 +31,14 @@ export interface LoadRunStore {
   write(snapshot: LoadRunSnapshot): Promise<void>;
 }
 export interface LoadSchedule {
-  next(): void;
+  next(operationStartedAt?: number): void;
   stop(): void;
 }
 export type LoadScheduler = (
   request: LoadRunRequest,
   tick: () => void,
   done: (reason: 'COUNT' | 'DURATION' | 'STOP' | 'ERROR') => void,
+  startedAt?: number,
 ) => LoadSchedule;
 
 export class LoadRunService {
@@ -93,7 +94,10 @@ export class LoadRunService {
     if (!this.run) return null;
     return structuredClone({
       ...this.run,
-      elapsedMs: this.busy ? Math.round(performance.now() - this.started) : this.run.elapsedMs,
+      elapsedMs:
+        this.busy && ['RUNNING', 'STOPPING'].includes(this.run.state)
+          ? Math.round(performance.now() - this.started)
+          : this.run.elapsedMs,
     });
   }
   private persist(): Promise<void> {
@@ -137,7 +141,6 @@ export class LoadRunService {
     this.idle = new Promise<void>((resolve) => {
       this.resolveIdle = resolve;
     });
-    this.started = performance.now();
     try {
       const previous = this.run ?? (await this.store.read());
       if (await this.store.hasRequest(request.requestId))
@@ -161,6 +164,9 @@ export class LoadRunService {
       this.abort = new AbortController();
       this.finishReason = undefined;
       this.finishing = false;
+      // Preflight has not started a run. Once accepted, persistence, worker
+      // startup, PIN and execution all share this monotonic time budget.
+      this.started = performance.now();
       this.run = {
         runId: this.identity.uuid(),
         requestId: request.requestId,
@@ -213,12 +219,14 @@ export class LoadRunService {
           }
           if (!this.run!.active) void this.finish();
         },
+        performance.timeOrigin + this.started,
       );
       return { ok: true, value: this.snapshot()! };
     } catch {
       if (this.run?.requestId === request.requestId && this.run.state === 'RUNNING') {
         this.run.state = 'FAILED';
         this.run.finishedAt = this.identity.now();
+        this.run.elapsedMs = Math.round(performance.now() - this.started);
         this.run.message = 'El inicio falló antes de activar el worker. No se inició la carga.';
         try {
           await this.persist();
@@ -243,12 +251,14 @@ export class LoadRunService {
       payload.runId !== this.run?.runId
     )
       return failure('VALIDATION_ERROR', 'Selecciona la corrida activa.');
-    if (this.busy) {
+    if (this.busy && !this.finishing && ['RUNNING', 'STOPPING'].includes(this.run.state)) {
       clearTimeout(this.durationDrainTimer);
       this.durationDrainTimer = undefined;
-      this.finishReason = 'STOPPED';
+      if (this.finishReason !== 'FAILED') {
+        this.finishReason = 'STOPPED';
+        this.run.message = 'Deteniendo envíos y cerrando la operación en curso.';
+      }
       this.run.state = 'STOPPING';
-      this.run.message = 'Deteniendo envíos y cerrando la operación en curso.';
       this.abort?.abort();
       this.releaseSource();
       this.scheduler?.stop();
@@ -261,6 +271,10 @@ export class LoadRunService {
   }
   private async tick(): Promise<void> {
     if (!this.run || !this.busy || this.run.active || this.finishReason) return;
+    // A tick may have been posted on time but reached a busy Main after the
+    // deadline. The worker's duration event will close the run without a send.
+    if (performance.now() - this.started >= this.run.draft.durationSeconds * 1000) return;
+    const operationStartedAt = performance.timeOrigin + performance.now();
     this.run.active = 1;
     try {
       const result = await this.source!.execute(this.abort!.signal, this.run.runId);
@@ -277,6 +291,7 @@ export class LoadRunService {
           responseCode: value.responseCode,
           correlation: value.correlation,
           finishedAt: this.identity.now(),
+          finishedElapsedMs: Math.round(performance.now() - this.started),
           ...(value.loadTimings ? { timings: value.loadTimings } : {}),
         };
         if (balanceDeliveryUncertain(value)) {
@@ -300,6 +315,7 @@ export class LoadRunService {
           responseCode: null,
           correlation: null,
           finishedAt: this.identity.now(),
+          finishedElapsedMs: Math.round(performance.now() - this.started),
         };
         if (this.run.state !== 'STOPPING') {
           this.finishReason = 'FAILED';
@@ -317,7 +333,7 @@ export class LoadRunService {
       if (this.finishReason) {
         this.scheduler?.stop();
         await this.finish();
-      } else this.scheduler?.next();
+      } else this.scheduler?.next(operationStartedAt);
     }
   }
   private async finish(): Promise<void> {

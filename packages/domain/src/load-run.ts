@@ -24,6 +24,8 @@ export interface LoadRunItem {
   responseCode: string | null;
   correlation: BalanceExecution['correlation'];
   finishedAt?: string;
+  // Monotonic offset within the run; UTC remains available for correlation.
+  finishedElapsedMs?: number;
   timings?: LoadRunTimings;
 }
 export interface LoadRunTimings {
@@ -102,8 +104,8 @@ export function loadRunMetrics(run: LoadRunSnapshot) {
 export function loadResponseSeries(run: LoadRunSnapshot) {
   const start = Date.parse(run.startedAt);
   const events = run.items
-    .filter((item) => item.received && item.finishedAt)
-    .map((item) => Date.parse(item.finishedAt!) - start)
+    .filter((item) => item.received && (item.finishedElapsedMs !== undefined || item.finishedAt))
+    .map((item) => item.finishedElapsedMs ?? Date.parse(item.finishedAt!) - start)
     .filter((time) => Number.isFinite(time) && time >= 0 && time <= run.elapsedMs);
   return Array.from({ length: 41 }, (_, index) => {
     const elapsedMs = (run.elapsedMs * index) / 40;

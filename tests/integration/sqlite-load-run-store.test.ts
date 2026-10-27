@@ -43,6 +43,42 @@ function snapshot(): LoadRunSnapshot {
 }
 
 describe('historial de carga SQLite', () => {
+  it('persiste tiempos monotónicos, conserva compatibilidad y rechaza offsets inválidos', async () => {
+    const databasePath = join(directory, 'qa-load-runs.sqlite');
+    const legacyPath = join(directory, 'qa-load-runs.json');
+    const store = new SqliteLoadRunStore(databasePath, legacyPath);
+    const run = snapshot();
+    run.items = [
+      {
+        requestId: randomUUID(),
+        transactionId: randomUUID(),
+        outcome: 'APPROVED',
+        sent: true,
+        received: true,
+        responseCode: '00',
+        elapsedMs: 100,
+        correlation: null,
+        finishedAt: run.finishedAt!,
+        finishedElapsedMs: 800,
+      },
+    ];
+    try {
+      await store.write(run);
+      for (const invalid of [-1, 1.5, Infinity, NaN]) {
+        const broken = structuredClone(run);
+        broken.items[0]!.finishedElapsedMs = invalid;
+        await expect(store.write(broken)).rejects.toThrow('LOAD_RUN_INVALID');
+      }
+    } finally {
+      await store.close();
+    }
+    const reopened = new SqliteLoadRunStore(databasePath, legacyPath);
+    try {
+      expect(await reopened.read()).toEqual(run);
+    } finally {
+      await reopened.close();
+    }
+  });
   it('migra 100 corridas y conserva sus solicitudes al registrar la 101', async () => {
     const legacyPath = join(directory, 'qa-load-runs.json');
     const databasePath = join(directory, 'qa-load-runs.sqlite');

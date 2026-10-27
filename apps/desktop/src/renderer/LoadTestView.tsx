@@ -83,7 +83,11 @@ const ms = (value: number | null | undefined) =>
   value == null ? '—' : Math.round(value).toLocaleString() + ' ms';
 
 function TpsChart({ run }: { run: LoadRunSnapshot }) {
-  if (!run.items.some((item) => item.received && item.finishedAt))
+  if (
+    !run.items.some(
+      (item) => item.received && (item.finishedAt || item.finishedElapsedMs !== undefined),
+    )
+  )
     return (
       <p className="load-empty-chart">
         Aún no hay respuestas con fecha registrada para mostrar la serie.
@@ -99,7 +103,7 @@ function TpsChart({ run }: { run: LoadRunSnapshot }) {
     `${Math.round((time * 500) / horizon)},${Math.round(112 - (Math.min(rate, ceiling) * 112) / ceiling)}`;
   const points = loadResponseSeries(run).map(({ elapsedMs, tps }) => point(elapsedMs, tps));
   const targets = Array.from({ length: 41 }, (_, index) => {
-    const at = (horizon * index) / 40;
+    const at = (Math.min(horizon, run.draft.durationSeconds * 1000) * index) / 40;
     return point(at, loadTargetTps(run.draft, at));
   });
   return (

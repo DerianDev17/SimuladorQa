@@ -35,7 +35,7 @@ export function validLoadRunSnapshot(value: unknown): value is LoadRunSnapshot {
     if (
       !isRecord(item) ||
       Object.keys(item).length < 8 ||
-      Object.keys(item).length > 10 ||
+      Object.keys(item).length > 11 ||
       Object.keys(item).some(
         (key) =>
           ![
@@ -48,6 +48,7 @@ export function validLoadRunSnapshot(value: unknown): value is LoadRunSnapshot {
             'responseCode',
             'correlation',
             'finishedAt',
+            'finishedElapsedMs',
             'timings',
           ].includes(key),
       ) ||
@@ -89,6 +90,11 @@ export function validLoadRunSnapshot(value: unknown): value is LoadRunSnapshot {
       'totalMs',
     ];
     if (item.finishedAt !== undefined && !isUtcTimestamp(item.finishedAt)) return false;
+    if (
+      item.finishedElapsedMs !== undefined &&
+      (!Number.isSafeInteger(item.finishedElapsedMs) || (item.finishedElapsedMs as number) < 0)
+    )
+      return false;
     if (item.timings !== undefined) {
       if (!isRecord(item.timings) || Object.keys(item.timings).length !== phases.length)
         return false;

@@ -1,10 +1,10 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { build } from 'esbuild';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, readFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, readFile, mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { LoadRunService } from '../../apps/desktop/src/main/load-run-service';
+import { LoadRunService, type LoadScheduler } from '../../apps/desktop/src/main/load-run-service';
 import { workerLoadScheduler } from '../../apps/desktop/src/main/infrastructure/load-scheduler';
 import { FileLoadRunStore } from '../../apps/desktop/src/main/infrastructure/load-run-store';
 import { approvedWithdrawalExecution } from '../helpers/withdrawal';
@@ -91,6 +91,230 @@ function setup(
   };
 }
 describe('worker de carga con persistencia real', () => {
+  it('mide el intervalo desde el inicio real en Main y no recupera un tick entregado tarde con una ráfaga', async () => {
+    const starts: number[] = [];
+    let first = true;
+    const realScheduler = workerLoadScheduler(resolve('artifacts/load-test-worker.cjs'));
+    const delayedScheduler: LoadScheduler = (input, tick, done, startedAt) =>
+      realScheduler(
+        input,
+        () => {
+          if (first) {
+            first = false;
+            setTimeout(tick, 300);
+          } else tick();
+        },
+        done,
+        startedAt,
+      );
+    const service = new LoadRunService(
+      runtime,
+      {
+        prepare: async () => ({
+          ok: true,
+          value: {
+            readerName: 'Synthetic',
+            close: () => {},
+            execute: async () => {
+              starts.push(performance.now());
+              return { ok: true, value: result() };
+            },
+          },
+        }),
+      },
+      new FileLoadRunStore(join(directory, 'runs.json')),
+      delayedScheduler,
+    );
+    const input = request();
+    input.draft.maxTransactions = 2;
+    await service.start(input);
+    await finished(service);
+    expect(starts).toHaveLength(2);
+    expect(starts[1]! - starts[0]!).toBeGreaterThanOrEqual(175);
+  });
+  it('ignora confirmaciones duplicadas sin acumular ticks ni superar el ritmo', async () => {
+    const starts: number[] = [];
+    const input = request();
+    await new Promise<void>((resolveDone) => {
+      const scheduler = workerLoadScheduler(resolve('artifacts/load-test-worker.cjs'))(
+        input,
+        () => {
+          starts.push(performance.now());
+          if (starts.length === 1) {
+            scheduler.next();
+            scheduler.next();
+          } else if (starts.length === 2) setTimeout(() => scheduler.stop(), 250);
+        },
+        () => resolveDone(),
+      );
+    });
+    expect(starts).toHaveLength(2);
+    expect(starts[1]! - starts[0]!).toBeGreaterThanOrEqual(175);
+  });
+  it('detener después de un fallo del worker no oculta el fallo ni su diagnóstico', async () => {
+    let tick!: () => void;
+    let done!: Parameters<LoadScheduler>[2];
+    let resolveOperation!: (value: Result<BalanceExecution>) => void;
+    const service = new LoadRunService(
+      runtime,
+      {
+        prepare: async () => ({
+          ok: true,
+          value: {
+            readerName: 'Synthetic',
+            close: () => {},
+            execute: () =>
+              new Promise((resolve) => {
+                resolveOperation = resolve;
+              }),
+          },
+        }),
+      },
+      new FileLoadRunStore(join(directory, 'runs.json')),
+      (_request, onTick, onDone) => {
+        tick = onTick;
+        done = onDone;
+        return { next: () => {}, stop: () => {} };
+      },
+    );
+    const started = await service.start(request());
+    if (!started.ok) throw Error('START');
+    tick();
+    done('ERROR');
+    service.stop({ runId: started.value.runId });
+    resolveOperation({ ok: true, value: result() });
+    expect(await finished(service)).toMatchObject({
+      state: 'FAILED',
+      message: 'El worker de carga dejó de estar disponible.',
+    });
+  });
+  it('la persistencia inicial y el arranque del worker no amplían el tiempo autorizado', async () => {
+    const execute = vi.fn(async () => ({ ok: true as const, value: result() }));
+    const { service, store } = setup(execute);
+    const write = store.write.bind(store);
+    vi.spyOn(store, 'write').mockImplementationOnce(async (snapshot) => {
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+      await write(snapshot);
+    });
+    const input = request();
+    input.draft.durationSeconds = 1;
+    await service.start(input);
+    expect((await finished(service)).state).toBe('COMPLETED');
+    expect(execute).not.toHaveBeenCalled();
+  });
+  it('Main descarta un tick que llega después del plazo aunque el worker lo haya emitido antes', async () => {
+    let tick!: () => void;
+    let done!: Parameters<LoadScheduler>[2];
+    const execute = vi.fn(async () => ({ ok: true as const, value: result() }));
+    const service = new LoadRunService(
+      runtime,
+      {
+        prepare: async () => ({
+          ok: true,
+          value: { readerName: 'Synthetic', close: () => {}, execute },
+        }),
+      },
+      new FileLoadRunStore(join(directory, 'runs.json')),
+      (_request, onTick, onDone) => {
+        tick = onTick;
+        done = onDone;
+        return { next: () => {}, stop: () => {} };
+      },
+    );
+    const input = request();
+    input.draft.durationSeconds = 1;
+    await service.start(input);
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    tick();
+    done('DURATION');
+    expect((await finished(service)).state).toBe('COMPLETED');
+    expect(execute).not.toHaveBeenCalled();
+  });
+  it('una parada durante la escritura final no convierte un resultado terminado en STOPPING', async () => {
+    const execute = vi.fn(async () => ({ ok: true as const, value: result() }));
+    const { service, store } = setup(execute);
+    const write = store.write.bind(store);
+    let release: (() => void) | undefined;
+    vi.spyOn(store, 'write').mockImplementation(async (snapshot) => {
+      if (snapshot.state === 'COMPLETED')
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+      await write(snapshot);
+    });
+    const input = request();
+    input.draft.maxTransactions = 1;
+    const started = await service.start(input);
+    if (!started.ok) throw Error('START');
+    await vi.waitFor(() => expect(release).toBeDefined());
+    try {
+      expect(service.stop({ runId: started.value.runId })).toMatchObject({
+        ok: true,
+        value: { state: 'COMPLETED' },
+      });
+    } finally {
+      release!();
+      await service.whenIdle();
+    }
+    expect(await service.current(undefined)).toMatchObject({
+      ok: true,
+      value: { state: 'COMPLETED' },
+    });
+    expect((await store.read())?.state).toBe('COMPLETED');
+    expect(execute).toHaveBeenCalledOnce();
+  });
+  it('preparar otra corrida conserva estado y tiempos de la anterior ante consultas o paradas tardías', async () => {
+    const { service, driver } = setup(async () => ({ ok: true, value: result() }));
+    await service.start(request());
+    const previous = await finished(service);
+    const source = await driver.prepare();
+    let release: (() => void) | undefined;
+    driver.prepare.mockImplementationOnce(async () => {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return source;
+    });
+    const starting = service.start(request());
+    await vi.waitFor(() => expect(release).toBeDefined());
+    try {
+      expect(await service.current(undefined)).toEqual({ ok: true, value: previous });
+      expect(service.stop({ runId: previous.runId })).toEqual({ ok: true, value: previous });
+    } finally {
+      release!();
+      await starting;
+      await finished(service);
+    }
+  });
+  it('un temporizador retrasado del worker no inicia operaciones después del límite', async () => {
+    const wrapper = join(directory, 'delayed-worker.cjs');
+    await writeFile(
+      wrapper,
+      `
+      const original = global.setTimeout;
+      let delayed = false;
+      global.setTimeout = (callback, delay, ...args) => original(() => {
+        if (!delayed && delay === 0) {
+          delayed = true;
+          const end = performance.now() + 1100;
+          while (performance.now() < end) {}
+        }
+        callback(...args);
+      }, delay);
+      require(${JSON.stringify(resolve('artifacts/load-test-worker.cjs'))});
+    `,
+    );
+    const tick = vi.fn();
+    const input = request();
+    input.draft.durationSeconds = 1;
+    await new Promise<void>((resolveDone) => {
+      workerLoadScheduler(wrapper)(input, tick, (reason) => {
+        expect(reason).toBe('DURATION');
+        resolveDone();
+      });
+    });
+    expect(tick).not.toHaveBeenCalled();
+  });
   it('respeta el ritmo sin solapamiento, termina por cantidad y recupera la corrida sin secretos', async () => {
     const starts: number[] = [];
     let inFlight = 0;
@@ -108,6 +332,7 @@ describe('worker de carga con persistencia real', () => {
     expect(run.state).toBe('COMPLETED');
     expect(run.items).toHaveLength(3);
     expect(starts).toHaveLength(3);
+    expect(starts.slice(1).every((start, index) => start - starts[index]! >= 175)).toBe(true);
     expect(close).toHaveBeenCalledOnce();
     expect((await store.read())?.runId).toBe(run.runId);
     expect(await service.start(input)).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });

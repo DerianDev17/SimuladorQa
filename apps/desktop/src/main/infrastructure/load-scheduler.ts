@@ -1,8 +1,9 @@
 import { Worker } from 'node:worker_threads';
+import { performance } from 'node:perf_hooks';
 import type { LoadScheduler } from '../load-run-service';
 export function workerLoadScheduler(file: string): LoadScheduler {
-  return (request, tick, done) => {
-    const worker = new Worker(file, { workerData: request.draft });
+  return (request, tick, done, startedAt = performance.timeOrigin + performance.now()) => {
+    const worker = new Worker(file, { workerData: { draft: request.draft, startedAt } });
     let ended = false;
     const finish = (reason: 'COUNT' | 'DURATION' | 'STOP' | 'ERROR') => {
       if (ended) return;
@@ -25,8 +26,8 @@ export function workerLoadScheduler(file: string): LoadScheduler {
       if (!ended) finish('ERROR');
     });
     return {
-      next: () => {
-        if (!ended) worker.postMessage('next');
+      next: (operationStartedAt) => {
+        if (!ended) worker.postMessage({ type: 'next', operationStartedAt });
       },
       stop: () => {
         if (!ended) worker.postMessage('stop');

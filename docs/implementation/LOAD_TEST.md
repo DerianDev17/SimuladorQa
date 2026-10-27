@@ -1,5 +1,50 @@
 # Carga y estrés de saldo en QA
 
+## Revisión adicional: cierre y presupuesto de tiempo (2026-10-27)
+
+Se reprodujeron tres defectos con regresiones que fallaban antes del cambio:
+una parada durante la escritura final dejaba el estado en `STOPPING`; consultar
+una corrida terminada durante la preparación de la siguiente alteraba su tiempo
+y admitía una parada tardía; un callback atrasado del worker iniciaba una
+operación después de vencer el plazo. Los tres recorridos quedan corregidos.
+
+- Estado y métricas finales se congelan antes de persistir. Una parada tardía
+  no cambia el resultado anterior, ni oculta un fallo confirmado del worker.
+- La preparación previa verifica dependencias sin iniciar el cronómetro. Al
+  aceptar la corrida, Main y worker comparten un origen monotónico: guardar el
+  inicio, arrancar el worker, ingresar el PIN y ejecutar consumen el mismo
+  presupuesto. Ya no se añade otra duración completa al arrancar el worker.
+- Se comprueba el vencimiento tanto en el callback del worker como al recibir
+  el tick en Main. No empieza otra operación fuera de plazo; se mantiene la
+  espera acotada de la operación que sí empezó a tiempo.
+- Las confirmaciones duplicadas recibidas antes del siguiente tick no acumulan
+  temporizadores. Main devuelve el instante real en que inició la operación:
+  el intervalo siguiente se calcula desde ahí, no desde la emisión del tick.
+  Una regresión con entrega retrasada reprodujo dos inicios separados por
+  unos 64 ms a un objetivo de 5 TPS; ahora respeta el intervalo de 200 ms,
+  incluso si la entrega anterior se retrasó, sin ráfagas de recuperación.
+- Cada resultado nuevo conserva `finishedElapsedMs` además del timestamp UTC.
+  La gráfica usa ese tiempo transcurrido, independiente de ajustes del reloj
+  de Windows. Los registros antiguos siguen usando sus fechas disponibles.
+  El objetivo dibujado termina al vencer el plazo, aunque siga llegando una
+  respuesta durante el cierre.
+
+Regresiones con worker real, retraso intencional del event loop, almacenamiento
+lento, paradas tardías y SQLite reabierto. No se cambian tramas ISO, claves,
+contadores financieros, límites de TPS ni se envía carga al switch.
+
+## Lectura del historial existente
+
+Inspección de solo lectura el 2026-10-27: la última corrida guardada, iniciada
+el 2026-10-20T20:23:20.307Z, pidió 3 TPS/100 consultas/60 s. Completó cinco
+envíos y cinco respuestas aprobadas en 68,194 s: **0,0733 TPS**. El transporte
+y espera de respuesta sumaron 6,224 s, con promedio 1244,8 ms y p95 1395 ms.
+Los 61,970 s restantes no tienen desglose histórico; no pueden atribuirse a
+lector, PIN, cifrado, diario o espera programada a partir de ese registro.
+La duración incluye cierre de operaciones. No acredita estrés del switch a
+3 TPS ni permite inferir su capacidad máxima. Informe local sin datos privados:
+`artifacts/load-history-review-20261027.json`.
+
 ## Correcciones verificables del 2026-10-27
 
 - Retirar la tarjeta o perder el lector detiene la corrida y libera la sesión
@@ -59,7 +104,9 @@ La pantalla explica cuando la cantidad ingresada supera las 100 consultas y
 mantiene deshabilitado el inicio hasta corregirla.
 El selector muestra los ATM disponibles y permite elegir uno por corrida.
 Para probar otra terminal, terminar la corrida, seleccionar su perfil y volver
-a leer la tarjeta. Main valida el perfil y las reservas de cada terminal.
+a leer la tarjeta. Main resuelve la plantilla reutilizable ATM20521 para los
+ATM QA/205 y comprueba las reservas del pool compartido de la estación. Crear
+otro ATM no duplica ni repone las reservas. Ver [plantilla](MULTI_ATM_PROFILES.md).
 Los perfiles QA guardados son referencias de lectura y no credenciales virtuales.
 Las comprobaciones de perfil financiero y secuencias ocurren al iniciar en Main.
 
@@ -110,8 +157,8 @@ con identificadores nuevos; nunca se repite la consulta anterior.
 TODO-DATA LOAD-VIRTUAL-PROVIDER: falta el contrato de un proveedor financiero QA
 para un pool virtual y concurrencia mayor a uno. Las referencias VISA ficticias
 y las tarjetas guardadas no contienen PIN/EMV reutilizable. Ese alcance queda
-separado del piloto ejecutable con tarjeta física. PREPROD, retiros, múltiples
-ATM y carga distribuida no se habilitan aquí.
+separado del piloto ejecutable con tarjeta física. PREPROD, retiros, varios
+ATM simultáneos y carga distribuida no se habilitan aquí.
 
 Validación del cambio: pruebas de dominio, sesión PIN, worker real, persistencia,
 cancelación TCP loopback, reutilización del flujo de saldo y UI Electron con

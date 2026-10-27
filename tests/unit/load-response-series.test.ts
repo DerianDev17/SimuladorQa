@@ -45,6 +45,21 @@ function snapshot(): LoadRunSnapshot {
 }
 
 describe('métricas y serie de carga/estrés', () => {
+  it('usa tiempo transcurrido aunque el reloj UTC avance o retroceda durante la corrida', () => {
+    const run = snapshot();
+    run.items[0] = {
+      ...run.items[0]!,
+      finishedElapsedMs: 1000,
+      finishedAt: '2026-10-27T11:00:00.000Z',
+    };
+    run.items[1] = {
+      ...run.items[1]!,
+      finishedElapsedMs: 2000,
+      finishedAt: '2026-10-27T13:00:00.000Z',
+    };
+    expect(loadResponseSeries(run).at(-1)).toEqual({ elapsedMs: 5000, tps: 0.4 });
+    expect(loadRunMetrics(run).received).toBe(2);
+  });
   it('distingue respuestas, envíos sin respuesta y fallos locales, sin dibujar el futuro', () => {
     const run = snapshot();
     run.items.push(
