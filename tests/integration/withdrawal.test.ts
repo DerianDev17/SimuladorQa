@@ -66,9 +66,15 @@ function request(port: number) {
 }
 
 describe('retiro sintetico por TCP local y diario persistente', () => {
-  it.each([false, true])(
-    'permite otra solicitud tras 91 al reiniciar (registro historico: %s)',
-    async (legacy) => {
+  it.each([
+    { code: '91', legacy: false },
+    { code: '91', legacy: true },
+    { code: '59', legacy: false },
+    { code: '96', legacy: false },
+    { code: 'TIMEOUT', legacy: false },
+  ])(
+    'permite un retiro nuevo tras error al reiniciar, sin repetir el anterior: %j',
+    async ({ code, legacy }) => {
       const received: string[] = [];
       const port = await listen((peer) => {
         const decoder = framing.decoder();
@@ -76,9 +82,10 @@ describe('retiro sintetico por TCP local y diario persistente', () => {
           for (const frame of decoder.push(chunk)) {
             const metadata = new CapturedVisaBalance('WITHDRAWAL').inspect(frame.opaqueBody);
             received.push(metadata.stan);
+            if (received.length === 1 && code === 'TIMEOUT') continue;
             peer.end(
               framing.encode(
-                withdrawalResponse(metadata, received.length === 1 ? '91' : '00'),
+                withdrawalResponse(metadata, received.length === 1 ? code : '00'),
                 Buffer.alloc(2),
               ),
             );
@@ -90,7 +97,7 @@ describe('retiro sintetico por TCP local y diario persistente', () => {
       const path = join(directory, 'withdrawal-executions.json');
       const journal = new FileBalanceJournal(path, 'WITHDRAWAL');
       const first = withdrawalFixture();
-      const next = withdrawalFixture();
+      const next = withdrawalFixture('100.00');
       next.target.draft.atmId = first.target.draft.atmId;
       next.lease.sequence++;
       for (const input of [first, next]) {
@@ -101,11 +108,19 @@ describe('retiro sintetico por TCP local y diario persistente', () => {
       const provider = { inspect: async () => ({ ready: true, blockers: [] }), acquire };
       const transport = new BalanceTcpTransport('WITHDRAWAL');
       const service = new WithdrawalService(journal, transport, runtime, provider);
-      const deadlines = { connect: 1000, response: 1000 };
+      const deadlines = { connect: 1000, response: 200 };
       const old = await service.execute(first.request, first.target, deadlines, async () => true);
       expect(old).toMatchObject({
         ok: true,
-        value: { outcome: 'NOT_APPROVED', responseCode: '91' },
+        value: {
+          outcome:
+            code === 'TIMEOUT'
+              ? 'RESPONSE_TIMEOUT'
+              : code === '91'
+                ? 'NOT_APPROVED'
+                : 'REQUIRES_REVIEW',
+          responseCode: code === 'TIMEOUT' ? null : code,
+        },
       });
       if (!old.ok) throw Error('TEST_SETUP');
       if (legacy) {

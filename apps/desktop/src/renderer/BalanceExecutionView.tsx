@@ -2,6 +2,7 @@ import type { BalanceExecution } from '../../../../packages/domain/src/balance-i
 import {
   balanceDeliveryUncertain,
   canStartAfterUnconfirmedBalance,
+  canStartAfterUnconfirmedWithdrawal,
   hasWithdrawalQaContinuation,
   withdrawalHostNotApproved,
 } from '../../../../packages/domain/src/balance-inquiry';
@@ -201,9 +202,11 @@ export function BalanceExecutionView({
       )}
       {balanceDeliveryUncertain(execution) ? (
         <p>
-          {canStartAfterUnconfirmedBalance(execution)
-            ? 'La consulta terminó sin respuesta confirmada. Conserva la referencia para correlación.'
-            : 'La entrega o el resultado financiero no están confirmados. No repitas el envío; conserva la referencia para correlación.'}
+          {canStartAfterUnconfirmedWithdrawal(execution)
+            ? 'El retiro terminó con resultado por revisar y conserva su referencia. Puedes iniciar una nueva transacción QA con otra lectura de tarjeta y PIN.'
+            : canStartAfterUnconfirmedBalance(execution)
+              ? 'La consulta terminó sin respuesta confirmada. Conserva la referencia para correlación.'
+              : 'La entrega o el resultado financiero no están confirmados. No repitas el envío; conserva la referencia para correlación.'}
         </p>
       ) : !approved ? (
         <p>

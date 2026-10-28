@@ -45,6 +45,7 @@ un borrador no completa esos requisitos.
 - [ ] timeout/reconnect de transporte ATM
 
 ## Epic 5 - Transactions
+- [x] permitir nuevas solicitudes QA tras errores de retiro terminados y guardados, sin reenvío ni pérdida del historial (ADR-025)
 - [x] revision del mockup y manual CMS v3.6 con matriz de los cinco flujos
 - [x] catalogo documental por cuenta: saldo 301000/302000 y retiro 011000/012000
 - [x] fuente/version/pagina y adaptador CMS separado del dominio

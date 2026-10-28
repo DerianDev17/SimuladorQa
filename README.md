@@ -50,6 +50,12 @@ No inventar reglas transaccionales. Toda regla ISO8583, framing TCP, timeout, PI
 
 ## Desarrollo local
 
+Continuar tras un error de retiro (2026-10-28): **Nueva transacción** permite
+preparar otro retiro QA con lectura y PIN nuevos cuando el intento anterior
+terminó y quedó guardado. RC 59 y timeouts conservan su resultado en el historial
+sin reaparecer como bloqueo al abrir el formulario. Ejecuciones activas y fallos
+de persistencia requieren recuperación. Ver [ADR-025](docs/adr/ADR-025-QA-WITHDRAWAL-AFTER-ERROR.md).
+
 Retiro con monto personalizado (2026-10-27): **Monto de prueba** permite escribir
 un valor positivo como `75.25` o `1234.56`. El contrato QA de ATM20521 y sus
 derivados sustituye la lista 20/50 por montos representables en F4, manteniendo

@@ -45,6 +45,14 @@ en Configuracion; no reemplaza los adaptadores de transporte ni autoriza sockets
 
 ## Restricciones
 
+Continuación QA tras error (2026-10-28): el bloqueo por diario de retiro se limita
+a ejecuciones/reversos sin finalizar y fallos de persistencia. Un resultado
+incierto terminado y guardado admite otra solicitud explícita con UUID nuevo;
+la anterior conserva su resultado y nunca se retransmite. Renderer ofrece
+Nueva transacción con lectura nueva y deja los errores históricos en el historial.
+La exclusión en Main, PIN/EMV nuevos y protección de idempotencia permanecen.
+Ver ADR-025.
+
 Plantilla reutilizable (2026-10-27): QaAtmTemplate resuelve el catálogo actual
 y el perfil de ATM20521 en Main por operación. QaTemplateContextProvider
 proyecta identidad/adquirente para nuevos ATM QA/205 y comparte referencia

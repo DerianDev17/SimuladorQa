@@ -3,6 +3,19 @@
 ## Objetivo
 Simular retiro ATM exitoso.
 
+## Continuar después de errores QA — 2026-10-28
+
+Por instrucción explícita del usuario, un retiro terminado y guardado con error
+ya permite iniciar otro retiro. «Nueva transacción» conserva el intento previo
+en el historial, limpia el resultado activo y requiere otra lectura de tarjeta
+y PIN. Los errores históricos terminados, incluido RC 59, no vuelven a ocupar
+el formulario al seleccionar retiro. Se conserva el monto editable.
+
+Timeout, respuesta inválida y resultado por revisar mantienen su incertidumbre;
+no se reclasifican como rechazo definitivo ni aprobación. PENDING, ejecución o
+reverso sin finalizar y fallo de persistencia todavía requieren recuperación.
+El mismo requestId nunca se retransmite. Ver [ADR-025](../adr/ADR-025-QA-WITHDRAWAL-AFTER-ERROR.md).
+
 ## Montos personalizados en QA — 2026-10-27
 
 Por solicitud explicita del usuario, el contrato de la plantilla ATM20521 permite
@@ -315,17 +328,15 @@ Evidencia local sanitizada: artifacts/qa-withdrawal-readiness-20261016.json.
   de CMS en F39 ni se considera un rechazo definitivo. No hay reverso automatico.
 - El diario `withdrawal-executions.sqlite` persiste PENDING antes de transmitir,
   sin bytes privados. Saldo usa otra base SQLite; ambos importan su JSON anterior
-  una sola vez y rechazan operaciones del otro tipo. Un retiro incierto impide
-  enviar otro retiro, incluso con UUID nuevo o tras reiniciar. Un 91 confirmado
-  no activa ese bloqueo; el registro original se conserva sin retransmitirlo.
+  una sola vez y rechazan operaciones del otro tipo. Desde ADR-025, un retiro
+  terminado y guardado permite otro UUID incluso si su resultado es incierto.
+  El registro original se conserva sin retransmitirlo.
 - La UI recupera por el canal de la operacion original aunque se edite el
   formulario. Muestra monto, referencia, resultado e historial de ambos flujos.
 - Un retiro terminado con respuesta aun sin clasificar (por ejemplo, RC 59 del
-  intento ATM20521/STAN 900125) conserva su referencia y bloquea otros retiros.
-  Si el operador elige Consulta de saldo, puede iniciar una nueva consulta con
-  otra lectura de tarjeta y PIN; el retiro original permanece en el diario y
-  puede consultarse en el historial. Esto no clasifica RC 59 ni confirma el
-  resultado financiero del retiro.
+  intento ATM20521/STAN 900125) conserva su referencia y permite otra operación
+  explícita con nueva lectura de tarjeta y PIN. El retiro original permanece
+  en el diario. Esto no clasifica RC 59 ni confirma su resultado financiero.
 
 Pruebas sinteticas de unidad, TCP loopback, archivo e IPC cubren aprobacion,
 entrada invalida, proveedor ausente, timeout, respuesta no correlacionada,
@@ -345,9 +356,9 @@ campos, sin transmitir ni reutilizar seguridad. Reporte sin datos privados:
 perfiles privados ni se ha enviado un retiro real.
 
 TODO-DATA QA-WITHDRAWAL-RESULT-RULES: contrato de rechazos/parciales, criterio
-de debito y conciliacion de resultados inciertos, incluido el cierre validado
-del pendiente antes de permitir otro retiro. No agregar una accion de reenvio
-o borrar el diario para resolver esa falta de informacion.
+de debito y conciliacion de resultados inciertos. ADR-025 permite solicitudes
+nuevas sin resolver esa clasificación. No agregar una accion de reenvio ni
+borrar el diario para resolver esa falta de informacion.
 
 ## Proveedor implementado y contrato cargable
 

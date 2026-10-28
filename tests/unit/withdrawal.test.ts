@@ -10,6 +10,7 @@ import {
 import {
   balanceDeliveryUncertain,
   balanceResponseConfirmed,
+  canStartAfterUnconfirmedWithdrawal,
   hasWithdrawalQaContinuation,
   withdrawalHostNotApproved,
   withdrawalBlocksNewExecution,
@@ -79,6 +80,43 @@ async function nonApprovedWithdrawal() {
 }
 
 describe('resultado de retiro separado de conciliacion', () => {
+  it.each([
+    'REQUIRES_REVIEW',
+    'RESPONSE_TIMEOUT',
+    'CONNECT_TIMEOUT',
+    'PEER_CLOSED',
+    'TRANSPORT_ERROR',
+    'INVALID_RESPONSE',
+  ] as const)(
+    'permite una operación nueva tras %s sin resolver el resultado original',
+    async (outcome) => {
+      const f = await nonApprovedWithdrawal();
+      const record = { ...f.previous, outcome, responseCode: null };
+      expect(canStartAfterUnconfirmedWithdrawal(record)).toBe(true);
+      expect(balanceDeliveryUncertain(record)).toBe(true);
+      expect(canStartAfterUnconfirmedWithdrawal({ ...record, finishedAt: null })).toBe(false);
+      const balanceOnly = { ...record };
+      delete balanceOnly.withdrawal;
+      expect(canStartAfterUnconfirmedWithdrawal(balanceOnly)).toBe(false);
+      expect(canStartAfterUnconfirmedWithdrawal({ ...record, outcome: 'STORAGE_ERROR' })).toBe(
+        false,
+      );
+      const reversal = {
+        transactionId: randomUUID(),
+        delaySeconds: 5,
+        outcome: 'UNCONFIRMED' as const,
+        dueAt: null,
+        finishedAt: record.finishedAt,
+        responseCode: null,
+        transmissionAttempted: true,
+        bytesQueued: 100,
+      };
+      expect(canStartAfterUnconfirmedWithdrawal({ ...record, reversal })).toBe(true);
+      expect(
+        withdrawalBlocksNewExecution({ ...record, reversal: { ...reversal, finishedAt: null } }),
+      ).toBe(true);
+    },
+  );
   it.each(['NOT_APPROVED', 'REQUIRES_REVIEW'] as const)(
     'presenta 91 como no aprobado, incluido registro %s',
     async (outcome) => {
@@ -135,7 +173,10 @@ describe('resultado de retiro separado de conciliacion', () => {
       const record = { ...f.previous, ...patch };
       expect(withdrawalHostNotApproved(record)).toBe(false);
       expect(balanceDeliveryUncertain(record)).toBe(true);
-      expect(withdrawalBlocksNewExecution(record)).toBe(true);
+      const unfinished =
+        record.finishedAt === null || ['PENDING', 'STORAGE_ERROR'].includes(record.outcome);
+      expect(withdrawalBlocksNewExecution(record)).toBe(unfinished);
+      expect(canStartAfterUnconfirmedWithdrawal(record)).toBe(!unfinished);
     },
   );
   it.each([
@@ -366,7 +407,7 @@ describe('motor de retiro y proteccion de duplicados', () => {
     expect(release).toHaveBeenCalledTimes(1);
     expect(f.transport.exchange).not.toHaveBeenCalled();
   });
-  it('conserva monto y referencia de un resultado incierto y bloquea incluso un ID nuevo', async () => {
+  it('conserva resultado incierto, evita repetirlo y admite una solicitud nueva', async () => {
     const { request, target, lease } = withdrawalFixture();
     const f = serviceFixture({
       inspect: async () => ({ ready: true, blockers: [] }),
@@ -391,17 +432,23 @@ describe('motor de retiro y proteccion de duplicados', () => {
       createElement(BalanceExecutionView, { execution: result.value }),
     );
     expect(markup).toContain('Monto solicitado: USD 20.00');
-    expect(markup).toContain('No repitas el envío');
+    expect(markup).toContain('Puedes iniciar una nueva transacción QA');
     expect(markup).not.toContain('Consulta aprobada');
-    expect(
-      await f.service.execute(
-        { ...request, requestId: randomUUID() },
-        target,
-        deadlines,
-        async () => true,
-      ),
-    ).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+    expect(await f.service.execute(request, target, deadlines, async () => true)).toEqual(result);
     expect(f.transport.exchange).toHaveBeenCalledTimes(1);
+    const next = withdrawalFixture('100.00');
+    const restarted = new WithdrawalService(f.journal, f.transport, runtime, {
+      inspect: async () => ({ ready: true, blockers: [] }),
+      acquire: async () => next.lease,
+    });
+    expect(
+      await restarted.execute(next.request, next.target, deadlines, async () => true),
+    ).toMatchObject({
+      ok: true,
+      value: { outcome: 'REQUIRES_REVIEW', withdrawal: { amount: '100.00' } },
+    });
+    expect(f.transport.exchange).toHaveBeenCalledTimes(2);
+    expect(f.records()[0]).toEqual(result.value);
     const file = { version: 1, executions: [result.value] };
     expect(parseBalanceJournal(file)).toEqual([result.value]);
     expect(

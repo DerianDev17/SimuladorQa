@@ -39,9 +39,12 @@ AC ni se fabrica el estado IAD posterior de las capturas de tarjeta retenida.
   el proceso durante la espera/envio, el registro queda pendiente para revision;
   no se recuperan secretos ni se reanuda una operacion financiera automaticamente.
 - Si el retiro no se aprueba por el monto completo, no se envia reverso en esta
-  prueba. Un retiro con resultado incierto conserva su bloqueo existente.
+  prueba. El resultado incierto se conserva; ADR-025 permite otra solicitud
+  cuando la ejecución anterior ya terminó y quedó guardada.
 - Si el reverso no se puede enviar o no recibe confirmacion, la aprobacion del
-  retiro se conserva y se bloquea un nuevo retiro. No se informa un exito global.
+  retiro se conserva. Desde ADR-025, una vez finalizado y guardado todo el flujo,
+  se permite una nueva transaccion QA; no se informa un exito global ni se
+  resuelve el reverso anterior. Mientras siga activo, se bloquea otro retiro.
 - Respuestas tardias/duplicadas no reinician el temporizador. No hay reintentos,
   reconexion, ni respuesta automatica a 0800. Cierre del socket cancela la espera.
 - Error al guardar el progreso impide el siguiente envio; error de guardado

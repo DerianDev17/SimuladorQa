@@ -98,7 +98,7 @@ describe('reintento explícito según entrega financiera', () => {
     'no libera el formulario sin ejecución de saldo terminada y guardada: %s',
     (outcome) => expect(canStartAfterUnconfirmedBalance(result(outcome, true))).toBe(false),
   );
-  it('permite salir de un retiro terminado con RC 59 solo para iniciar saldo', () => {
+  it('permite salir de un retiro terminado con RC 59 sin bloquear operaciones nuevas', () => {
     const withdrawal: BalanceExecution = {
       ...result('REQUIRES_REVIEW', true),
       responseCode: '59',
@@ -110,7 +110,7 @@ describe('reintento explícito según entrega financiera', () => {
         currency: '840',
       },
     };
-    expect(withdrawalBlocksNewExecution(withdrawal)).toBe(true);
+    expect(withdrawalBlocksNewExecution(withdrawal)).toBe(false);
     expect(canStartBalanceAfterUnconfirmedWithdrawal(withdrawal)).toBe(true);
     expect(canStartBalanceAfterUnconfirmedWithdrawal({ ...withdrawal, finishedAt: null })).toBe(
       false,

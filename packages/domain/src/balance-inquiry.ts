@@ -133,7 +133,24 @@ export function hasWithdrawalQaContinuation(execution: BalanceExecution): boolea
 }
 
 export function withdrawalBlocksNewExecution(execution: BalanceExecution): boolean {
-  return !!execution.withdrawal && balanceDeliveryUncertain(execution);
+  return (
+    !!execution.withdrawal &&
+    (execution.finishedAt === null ||
+      execution.outcome === 'PENDING' ||
+      execution.outcome === 'STORAGE_ERROR' ||
+      (!!execution.reversal && execution.reversal.finishedAt === null))
+  );
+}
+
+// QA operators may start a distinct withdrawal after a finished error. This
+// neither resolves the original outcome nor permits replaying its request ID.
+export function canStartAfterUnconfirmedWithdrawal(execution: BalanceExecution): boolean {
+  return (
+    execution.environment === 'QA' &&
+    !!execution.withdrawal &&
+    !withdrawalBlocksNewExecution(execution) &&
+    balanceDeliveryUncertain(execution)
+  );
 }
 
 // A correlated host 91 is a completed non-approval, not a reconciliation task.
@@ -193,7 +210,7 @@ export function balanceResponseConfirmed(execution: BalanceExecution): boolean {
 }
 
 // A finished balance inquiry can leave the active form without resolving its
-// unknown result. A withdrawal or an unfinished/unpersisted execution cannot.
+// unknown result. Withdrawals have their own QA continuation rule.
 export function canStartAfterUnconfirmedBalance(execution: BalanceExecution): boolean {
   return (
     !execution.withdrawal &&
@@ -209,14 +226,14 @@ export function canStartAfterUnconfirmedBalance(execution: BalanceExecution): bo
   );
 }
 
-// A completed but unresolved withdrawal still blocks another withdrawal.
-// Its reference can leave the active form when the new operation is a balance
-// inquiry, which has an independent journal and no financial debit.
+// A balance inquiry has an independent journal. Preserve the existing ability
+// to switch to balance even if withdrawal persistence needs recovery.
 export function canStartBalanceAfterUnconfirmedWithdrawal(execution: BalanceExecution): boolean {
   return (
     execution.environment === 'QA' &&
+    !!execution.withdrawal &&
     execution.finishedAt !== null &&
-    withdrawalBlocksNewExecution(execution)
+    balanceDeliveryUncertain(execution)
   );
 }
 

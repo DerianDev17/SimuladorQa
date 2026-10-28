@@ -257,7 +257,7 @@ export class BalanceInquiryService {
     if (this.operation === 'WITHDRAWAL' && records.some(withdrawalBlocksNewExecution))
       return failure(
         'CONFLICT',
-        'Hay un retiro cuyo resultado no está confirmado. Recupera su referencia antes de enviar otro.',
+        'Hay un retiro sin finalizar o sin guardar. Recupera su referencia antes de enviar otro.',
       );
     const record: BalanceExecution = {
       requestId: request.requestId,

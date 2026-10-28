@@ -1,5 +1,11 @@
 # Checklist de informacion por subir
 
+Continuación tras errores (2026-10-28): el usuario solicita permitir nuevas
+transacciones QA después de un retiro con error. ADR-025 elimina el bloqueo por
+resultados terminados y guardados, incluido RC 59 y timeout. La clasificación
+financiera y conciliación siguen pendientes; solo bloquean las partes que las
+necesitan. Ejecuciones activas y fallos de persistencia requieren recuperación.
+
 Montos personalizados (2026-10-27): por instruccion del usuario se elimina la
 lista 20/50 del contrato de retiro de la plantilla QA ATM20521. Se admiten
 importes positivos con dos decimales dentro de la representacion existente de
@@ -134,8 +140,8 @@ conserva esas respuestas como REQUIRES_REVIEW e impide duplicar retiros.
 TODO-DATA QA-WITHDRAWAL-RC59-900125: ATM20521/STAN 900125 recibio RC 59 en
 una respuesta correlacionada de retiro por USD 50. Falta el contrato aprobado
 que determine si es rechazo definitivo y como conciliarlo con Core. Hasta
-entonces el retiro queda por revisar y bloquea otro retiro; una consulta de
-saldo nueva puede iniciarse con lectura y PIN nuevos sin alterar ese registro.
+entonces el retiro queda por revisar. Desde ADR-025, otra solicitud de retiro
+o saldo puede iniciarse con lectura y PIN nuevos sin alterar ese registro.
 
 PROXY/SRVPIN recibidos 2026-10-16: el adjunto identifica 900108, pasa
 PIN/tarjeta, falla ARQC y registra 57; PROXY transmite `5 `. F55 omite 5F34

@@ -42,8 +42,8 @@ import {
   balanceNotTransmitted,
   balanceResponseConfirmed,
   canStartAfterUnconfirmedBalance,
+  canStartAfterUnconfirmedWithdrawal,
   canStartBalanceAfterUnconfirmedWithdrawal,
-  withdrawalHostNotApproved,
   withdrawalBlocksNewExecution,
   parseBalanceContextRequest,
 } from '../../../../packages/domain/src/balance-inquiry';
@@ -323,9 +323,8 @@ export function TransactionWorkspace({
           setError({ ...result.error, target: 'review' });
           return;
         }
-        const previous =
-          result.value.find(withdrawalBlocksNewExecution) ??
-          result.value.find(withdrawalHostNotApproved);
+        // Completed errors belong to history, not to a newly opened form.
+        const previous = result.value.find(withdrawalBlocksNewExecution);
         if (previous) {
           setBalanceExecution(previous);
           if (withdrawalBlocksNewExecution(previous)) setBalanceRequestId(previous.requestId);
@@ -690,6 +689,7 @@ export function TransactionWorkspace({
     balanceRequestId &&
     balanceExecution &&
     ((requestOperation === 'BALANCE' && canStartAfterUnconfirmedBalance(balanceExecution)) ||
+      (requestOperation === 'WITHDRAWAL' && canStartAfterUnconfirmedWithdrawal(balanceExecution)) ||
       canStartNewBalance)
   );
   function startNewTransaction() {
@@ -706,8 +706,8 @@ export function TransactionWorkspace({
   const sendHint = balanceRequestId
     ? canStartNewTransaction
       ? canStartNewBalance
-        ? 'Selecciona Nueva consulta de saldo para continuar. El retiro pendiente conserva su referencia y sigue bloqueando otros retiros.'
-        : 'Selecciona Nueva transacción para continuar. La consulta anterior queda en el historial sin respuesta confirmada.'
+        ? 'Selecciona Nueva consulta de saldo para continuar. El retiro anterior conserva su referencia en el historial.'
+        : 'Selecciona Nueva transacción para continuar. El intento anterior conserva su resultado en el historial.'
       : 'Consulta el resultado del intento anterior antes de volver a enviar.'
     : loading || sendSetupLoading
       ? 'Cargando configuración…'
@@ -1327,8 +1327,8 @@ export function TransactionWorkspace({
             <div className="recover-result">
               <p>
                 {canStartNewBalance
-                  ? 'El retiro anterior permanece por revisar en el historial. Puedes iniciar una consulta de saldo con una nueva lectura de tarjeta y PIN; otro retiro sigue bloqueado.'
-                  : 'La consulta anterior permanece sin respuesta confirmada en el historial. Puedes iniciar otra operación con una nueva lectura de tarjeta y PIN.'}
+                  ? 'El retiro anterior permanece por revisar en el historial. Puedes iniciar una consulta de saldo con una nueva lectura de tarjeta y PIN.'
+                  : 'El intento anterior conserva su resultado en el historial. Puedes iniciar otra operación con una nueva lectura de tarjeta y PIN.'}
               </p>
               <button
                 className="primary"

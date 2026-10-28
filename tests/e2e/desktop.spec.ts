@@ -864,8 +864,7 @@ test('retiro 91 historico y actual finalizan sin paso de conciliacion y permiten
   await window.getByLabel('Monto de prueba').fill('20.00');
   const result = window.getByRole('region', { name: 'Resultado', exact: true });
   const send = window.getByRole('button', { name: 'Enviar transacción', exact: true });
-  await expect(result).toContainText('Código de respuesta: 91');
-  await expect(result).toContainText('Retiro no aprobado');
+  await expect(result).toContainText('Aún no hay resultado');
   await expect(result).not.toContainText('conciliación');
   await expect(result.getByRole('button', { name: 'Nueva prueba QA', exact: true })).toHaveCount(0);
   await expect(send).toBeDisabled();
@@ -938,11 +937,11 @@ test('retiro 91 historico y actual finalizan sin paso de conciliacion y permiten
   expect(requests).toHaveLength(1);
   expect(requests[0]).toMatchObject({ cardReadId: readId });
   expect(requests[0]).not.toMatchObject({ requestId: previous.requestId });
-  await expect(window.locator('.session-activity tbody tr')).toHaveCount(2);
+  await expect(window.locator('.session-activity tbody tr')).toHaveCount(1);
   await expect(window.locator('.session-activity')).toContainText('Retiro no aprobado');
 });
 
-test('retiro RC 59 conserva su bloqueo financiero y permite una consulta de saldo nueva', async () => {
+test('retiro RC 59 histórico no ocupa el formulario y un error nuevo permite otro retiro', async () => {
   test.setTimeout(60000);
   const window = await prepareBalanceSubmission();
   const previous: BalanceExecution = {
@@ -977,19 +976,21 @@ test('retiro RC 59 conserva su bloqueo financiero y permite una consulta de sald
   await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
   const result = window.getByRole('region', { name: 'Resultado', exact: true });
   const send = window.getByRole('button', { name: 'Enviar transacción', exact: true });
-  await expect(result).toContainText('Código de respuesta: 59');
-  await expect(send).toBeDisabled();
-  await expect(result.getByRole('button', { name: 'Nueva consulta de saldo' })).toHaveCount(0);
-
-  await window.getByLabel('Transacción', { exact: true }).selectOption('BALANCE');
-  await expect(result.getByRole('button', { name: 'Nueva consulta de saldo' })).toBeVisible();
+  await expect(result).toContainText('Aún no hay resultado');
   await expect(send).toBeDisabled();
   await app!.evaluate(({ ipcMain }) => {
-    const state = globalThis as typeof globalThis & { balanceAfter59Calls?: number };
-    state.balanceAfter59Calls = 0;
-    ipcMain.removeHandler('transaction:balance:execute');
-    ipcMain.handle('transaction:balance:execute', (_event, request) => {
-      state.balanceAfter59Calls!++;
+    const state = globalThis as typeof globalThis & {
+      withdrawalsAfter59?: { requestId: string; cardReadId: string; amount: string }[];
+    };
+    state.withdrawalsAfter59 = [];
+    ipcMain.removeHandler('transaction:withdrawal:execute');
+    ipcMain.handle('transaction:withdrawal:execute', (_event, request) => {
+      state.withdrawalsAfter59!.push({
+        requestId: request.requestId,
+        cardReadId: request.cardReadId,
+        amount: request.draft.amount,
+      });
+      const first = state.withdrawalsAfter59!.length === 1;
       return {
         ok: true,
         value: {
@@ -1004,38 +1005,66 @@ test('retiro RC 59 conserva su bloqueo financiero y permite una consulta de sald
           startedAt: '2026-10-19T22:41:00.000Z',
           finishedAt: '2026-10-19T22:41:01.000Z',
           scenario: 'LOCAL',
-          outcome: 'APPROVED',
+          outcome: first ? 'REQUIRES_REVIEW' : 'APPROVED',
           frameGenerated: true,
           transmissionAttempted: true,
           bytesQueued: 451,
           elapsedMs: 1000,
           correlation: { stan: '900126', rrn: '629200' + '900126', terminalId: 'ATM20521' },
-          responseCode: '00',
+          responseCode: first ? '59' : '00',
           balances: [],
           blockers: [],
+          withdrawal: {
+            transaction: request.draft.transaction,
+            amount: request.draft.amount,
+            account: 'SAVINGS',
+            currency: '840',
+          },
         },
       };
     });
   });
-  await result.getByRole('button', { name: 'Nueva consulta de saldo' }).click();
-  await expect(result).toContainText('Aún no hay resultado');
-  await expect(send).toBeDisabled();
-  await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
-  await expect(result).toContainText('Código de respuesta: 59');
-  await expect(send).toBeDisabled();
-  await window.getByLabel('Transacción', { exact: true }).selectOption('BALANCE');
-  await result.getByRole('button', { name: 'Nueva consulta de saldo' }).click();
+  await window.getByLabel('Monto de prueba').fill('50.00');
   await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
   await expect(send).toBeEnabled();
   await send.click();
-  await expect(result).toContainText('Consulta aprobada');
-  expect(
-    await app!.evaluate(
-      () =>
-        (globalThis as typeof globalThis & { balanceAfter59Calls?: number }).balanceAfter59Calls,
-    ),
-  ).toBe(1);
+  await expect(result).toContainText('Código de respuesta: 59');
+  await expect(
+    result.getByRole('button', { name: 'Nueva transacción', exact: true }),
+  ).toBeVisible();
+  await expect(send).toBeDisabled();
+  await result.getByRole('button', { name: 'Nueva transacción', exact: true }).click();
+  await expect(result).toContainText('Aún no hay resultado');
+  await expect(send).toBeDisabled();
+  await window.getByLabel('Transacción', { exact: true }).selectOption('BALANCE');
+  await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
+  await expect(result).toContainText('Aún no hay resultado');
+  await expect(send).toBeDisabled();
+  await window.getByLabel('Monto de prueba').fill('100.00');
+  const nextReadId = randomUUID();
+  await installTransactionReader(false, nextReadId);
+  await window.getByRole('button', { name: 'Buscar lector', exact: true }).click();
+  await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await expect(send).toBeEnabled();
+  await send.click();
+  await expect(result).toContainText('Retiro autorizado por el host');
+  await expect(result).toContainText('Monto solicitado: USD 100.00');
+  const sent = await app!.evaluate(
+    () =>
+      (
+        globalThis as typeof globalThis & {
+          withdrawalsAfter59?: { requestId: string; cardReadId: string; amount: string }[];
+        }
+      ).withdrawalsAfter59!,
+  );
+  expect(sent).toHaveLength(2);
+  expect(sent[1]).toMatchObject({ cardReadId: nextReadId, amount: '100.00' });
+  expect(new Set([previous.requestId, ...sent.map((item) => item.requestId)]).size).toBe(3);
+  expect(sent[0]!.cardReadId).not.toBe(sent[1]!.cardReadId);
+  await expect(window.locator('.session-activity tbody tr')).toHaveCount(2);
   expect(await readWithdrawalJournal()).toEqual([previous]);
+  await mkdir('artifacts', { recursive: true });
+  await window.screenshot({ path: 'artifacts/withdrawal-after-error.png', fullPage: true });
 });
 
 test('retiro QA: monto, bloqueo real y recuperación conservan la operación original', async () => {
@@ -1123,7 +1152,7 @@ test('retiro QA: monto, bloqueo real y recuperación conservan la operación ori
     window
       .getByRole('region', { name: 'Resultado', exact: true })
       .getByRole('button', { name: 'Nueva transacción', exact: true }),
-  ).toHaveCount(0);
+  ).toBeVisible();
   await window.getByLabel('Transacción', { exact: true }).selectOption('BALANCE');
   await window.getByRole('button', { name: 'Consultar resultado de retiro', exact: true }).click();
   await expect(blocked).toContainText('Retiro autorizado por el host');
