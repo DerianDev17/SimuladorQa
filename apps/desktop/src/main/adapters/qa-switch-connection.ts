@@ -6,6 +6,8 @@ import type {
 } from '../../../../../packages/domain/src/switch-connection';
 import type { SwitchConnectionPort } from '../switch-connection-port';
 import type { BalanceTransport } from '../balance-ports';
+import { isUuid } from '../../../../../packages/domain/src/catalogs';
+import { LOAD_RUN_MAX_CONCURRENCY } from '../../../../../packages/domain/src/load-run';
 import { CapturedVisaFraming } from '../infrastructure/captured-visa-framing';
 import { VisaNetworkManagement } from './visa-network-management';
 
@@ -29,7 +31,10 @@ export class QaSwitchConnection implements SwitchConnectionPort {
   private closed: Promise<void> = Promise.resolve();
   private lastRequest: Parameters<SwitchConnectionPort['connect']>[0] | undefined;
   private revision = 0;
-  private transportActive = false;
+  private transportActive = 0;
+  private transportScope: string | undefined;
+  private transportResume: Parameters<SwitchConnectionPort['connect']>[0] | undefined;
+  private transportRevision = 0;
   constructor(private readonly socketFactory: () => Socket = () => new Socket()) {}
 
   snapshot(): SwitchConnectionSnapshot {
@@ -180,40 +185,62 @@ export class QaSwitchConnection implements SwitchConnectionPort {
       // Preserve capabilities when coordinating observation and financial sockets.
       ...(transport.supportsReversal ? { supportsReversal: true as const } : {}),
       exchange: (request) =>
-        this.withTransaction(request.endpoint, () => transport.exchange(request)),
+        this.withTransaction(request.endpoint, () => transport.exchange(request), request.load),
     };
   }
 
   async withTransaction<T>(
     endpoint: { host: string; port: number },
     exchange: () => Promise<T>,
+    load?: { runId: string; concurrency: number },
   ): Promise<T> {
-    if (this.transportActive) throw Error('QA_CONNECTION_BUSY');
-    const resume =
-      this.current.state !== 'DISCONNECTED' &&
-      this.lastRequest?.endpoint.host === endpoint.host &&
-      this.lastRequest.endpoint.port === endpoint.port
-        ? structuredClone(this.lastRequest)
+    const scope =
+      load &&
+      isUuid(load.runId) &&
+      Number.isInteger(load.concurrency) &&
+      load.concurrency >= 1 &&
+      load.concurrency <= LOAD_RUN_MAX_CONCURRENCY
+        ? `${load.runId}:${load.concurrency}:${endpoint.host}:${endpoint.port}`
         : undefined;
-    this.transportActive = true;
-    this.disconnect('TRANSACTION_STARTED');
-    const revision = this.revision;
+    if (
+      this.transportActive &&
+      (!scope || scope !== this.transportScope || this.transportActive >= load!.concurrency)
+    )
+      throw Error('QA_CONNECTION_BUSY');
+    if (!this.transportActive) {
+      this.transportScope = scope;
+      this.transportResume =
+        this.current.state !== 'DISCONNECTED' &&
+        this.lastRequest?.endpoint.host === endpoint.host &&
+        this.lastRequest.endpoint.port === endpoint.port
+          ? structuredClone(this.lastRequest)
+          : undefined;
+      this.disconnect('TRANSACTION_STARTED');
+      this.transportRevision = this.revision;
+    }
+    this.transportActive++;
     try {
       // Release the observation socket before opening the financial connection.
       await this.closed;
       return await exchange();
     } finally {
-      this.transportActive = false;
+      this.transportActive--;
       // Restore only the observation explicitly opened by the operator, once.
       // Never repeat the financial request or override a subsequent disconnect.
-      if (resume && revision === this.revision) {
-        try {
-          this.connect(resume);
-        } catch {
-          this.current.reason = 'SOCKET_ERROR';
+      if (!this.transportActive) {
+        const resume = this.transportResume;
+        const revision = this.transportRevision;
+        this.transportResume = undefined;
+        this.transportScope = undefined;
+        if (resume && revision === this.revision) {
+          try {
+            this.connect(resume);
+          } catch {
+            this.current.reason = 'SOCKET_ERROR';
+          }
+        } else if (revision === this.revision && this.current.reason === 'TRANSACTION_STARTED') {
+          this.current.reason = null;
         }
-      } else if (revision === this.revision && this.current.reason === 'TRANSACTION_STARTED') {
-        this.current.reason = null;
       }
     }
   }

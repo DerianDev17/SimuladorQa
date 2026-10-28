@@ -1,6 +1,16 @@
 # Checklist de informacion por subir
 
-Carga con dos perfiles (2026-10-28): por solicitud del usuario se permite
+Carga simultánea (2026-10-28): el usuario aclara que necesita solicitudes en
+paralelo. ADR-027 habilita 1–5 slots con preparación física exclusiva, sockets
+independientes y límite global de hasta 5 TPS. No exige un proveedor virtual
+para solapar esperas TCP, pero el chip sigue limitando la alimentación del motor.
+TODO-DATA LOAD-3TPS-PHYSICAL: medir preparación real; 3 TPS sostenidos con tarjeta
+física no quedan acreditados por pruebas sintéticas. TODO-DATA LOAD-PERSISTENT-TCP:
+confirmar contrato de sesiones persistentes/multiplexadas, gestión y respuestas
+tardías antes de reutilizar sockets financieros. La aceptación de conexiones
+simultáneas por el host requiere prueba QA del operador. No bloquea el motor local.
+
+Carga con dos perfiles (primera entrega, sustituida por ADR-027): por solicitud del usuario se permite
 seleccionar varios ATM QA en una corrida y alternar consultas secuencialmente
 con una tarjeta física. No depende del pool virtual ni permite concurrencia
 mayor a uno. Mantiene límites totales, PIN por corrida y validación de todos

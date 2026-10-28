@@ -5,6 +5,7 @@ import { isRecord } from '../../../../../packages/domain/src/index';
 import { isUuid, isUtcTimestamp } from '../../../../../packages/domain/src/catalogs';
 import { parseLoadTestDraft } from '../../../../../packages/domain/src/load-test';
 import type { LoadRunSnapshot } from '../../../../../packages/domain/src/load-run';
+import { LOAD_RUN_MAX_CONCURRENCY } from '../../../../../packages/domain/src/load-run';
 import type { LoadRunStore } from '../load-run-service';
 
 export function validLoadRunSnapshot(value: unknown): value is LoadRunSnapshot {
@@ -26,7 +27,9 @@ export function validLoadRunSnapshot(value: unknown): value is LoadRunSnapshot {
     !Number.isFinite(value.elapsedMs) ||
     value.elapsedMs < 0 ||
     typeof value.active !== 'number' ||
-    ![0, 1].includes(value.active) ||
+    !Number.isInteger(value.active) ||
+    value.active < 0 ||
+    value.active > LOAD_RUN_MAX_CONCURRENCY ||
     !Array.isArray(value.items) ||
     value.items.length > 100
   )
@@ -98,11 +101,12 @@ export function validLoadRunSnapshot(value: unknown): value is LoadRunSnapshot {
     )
       return false;
     if (item.timings !== undefined) {
-      if (!isRecord(item.timings) || Object.keys(item.timings).length !== phases.length)
-        return false;
+      if (!isRecord(item.timings)) return false;
       const timings = item.timings;
+      const optional = ['queueWaitMs', 'rateLimitMs'].filter((key) => Object.hasOwn(timings, key));
+      if (Object.keys(timings).length !== phases.length + optional.length) return false;
       if (
-        !phases.every(
+        ![...phases, ...optional].every(
           (phase) =>
             Number.isSafeInteger(timings[phase]) &&
             (timings[phase] as number) >= 0 &&

@@ -101,6 +101,34 @@ function fixture() {
   };
 }
 describe('adaptador de carga con tarjeta física', () => {
+  it('descarta sin leer ni enviar un slot que vence mientras espera el lector', async () => {
+    const f = fixture();
+    f.input.draft.concurrency = 2;
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.mocked(f.application.executeBalance).mockImplementationOnce(async () => {
+      await held;
+      const value = approvedWithdrawalExecution();
+      delete value.withdrawal;
+      return { ok: true, value };
+    });
+    const prepared = await f.driver.prepare(f.input);
+    if (!prepared.ok) throw Error('PREPARE');
+    const deadline = performance.now() + 30;
+    const runId = randomUUID(),
+      signal = new AbortController().signal;
+    const first = prepared.value.execute(signal, runId, { index: 0, deadline });
+    const second = prepared.value.execute(signal, runId, { index: 1, deadline });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    release();
+    await first;
+    expect(await second).toMatchObject({ skipped: 'DURATION' });
+    expect(f.cards.read).not.toHaveBeenCalled();
+    expect(f.application.executeBalance).toHaveBeenCalledOnce();
+    prepared.value.close();
+  });
   it.each(['unavailable', 'revoked', 'sequences'] as const)(
     'no inicia ni pide PIN si el segundo ATM falla la validación: %s',
     async (reason) => {

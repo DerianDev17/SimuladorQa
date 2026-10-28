@@ -10,6 +10,8 @@ import { LoadRunService } from '../../apps/desktop/src/main/load-run-service';
 import { LoadPinSession } from '../../apps/desktop/src/main/adapters/load-pin-session';
 import { BalanceInquiryService } from '../../apps/desktop/src/main/balance-inquiry-service';
 import { BalanceTcpTransport } from '../../apps/desktop/src/main/adapters/balance-tcp-transport';
+import { QaSwitchConnection } from '../../apps/desktop/src/main/adapters/qa-switch-connection';
+import type { BalanceExchangeRequest } from '../../apps/desktop/src/main/balance-ports';
 import { CapturedVisaFraming } from '../../apps/desktop/src/main/infrastructure/captured-visa-framing';
 import { CapturedVisaBalance } from '../../apps/desktop/src/main/adapters/captured-visa-balance';
 import { SqliteBalanceJournal } from '../../apps/desktop/src/main/infrastructure/sqlite-balance-journal';
@@ -30,9 +32,19 @@ import {
 } from '../helpers/balance-inquiry';
 import { removeTestDirectory } from '../helpers/temporary-directory';
 
-it.each(['APPROVED', 'TIMEOUT', 'STOP'] as const)(
+it.each([
+  'APPROVED',
+  'TIMEOUT',
+  'STOP',
+  'CONCURRENT',
+  'CONCURRENT_TIMEOUT',
+  'CONCURRENT_STOP',
+] as const)(
   'una corrida con dos ATM alterna por TCP, persiste y respeta %s sin repetir envíos',
   async (mode) => {
+    const concurrent = mode.startsWith('CONCURRENT');
+    const approved = mode === 'APPROVED' || mode === 'CONCURRENT';
+    const stopping = mode === 'STOP' || mode === 'CONCURRENT_STOP';
     const directory = await mkdtemp(join(tmpdir(), 'coonecta-multi-load-'));
     const worker = join(directory, 'worker.cjs');
     await build({
@@ -46,23 +58,39 @@ it.each(['APPROVED', 'TIMEOUT', 'STOP'] as const)(
     const codec = new CapturedVisaBalance();
     const received: { terminalId: string; stan: string }[] = [];
     const sockets = new Set<Socket>();
+    const timers = new Set<ReturnType<typeof setTimeout>>();
+    const pendingSockets = new Set<Socket>();
+    let peakSockets = 0;
+    const writeTimes: number[] = [];
+    const responseOrder: string[] = [];
     const server = createServer((socket) => {
       sockets.add(socket);
       socket.on('error', () => {});
-      socket.once('close', () => sockets.delete(socket));
+      socket.once('close', () => {
+        sockets.delete(socket);
+        pendingSockets.delete(socket);
+      });
       const decoder = wire.decoder();
       socket.on('data', (chunk) => {
         for (const frame of decoder.push(chunk)) {
           const fields = fixtureFields(Buffer.from(frame.opaqueBody));
           const metadata = codec.inspect(frame.opaqueBody);
           received.push({ terminalId: metadata.terminalId, stan: metadata.stan });
-          if (mode === 'APPROVED' || received.length === 1)
-            socket.end(
-              wire.encode(
-                balanceResponse(metadata, '00', (response) => response.set(41, fields.get(41)!)),
-                Buffer.alloc(2),
-              ),
+          pendingSockets.add(socket);
+          peakSockets = Math.max(peakSockets, pendingSockets.size);
+          if (approved || (!concurrent && received.length === 1)) {
+            const reply = wire.encode(
+              balanceResponse(metadata, '00', (response) => response.set(41, fields.get(41)!)),
+              Buffer.alloc(2),
             );
+            const respond = () => {
+              responseOrder.push(metadata.stan);
+              pendingSockets.delete(socket);
+              socket.end(reply);
+            };
+            if (concurrent) timers.add(setTimeout(respond, received.length === 1 ? 800 : 100));
+            else respond();
+          }
           frame.opaqueBody.fill(0);
           for (const value of fields.values()) value.fill(0);
         }
@@ -94,15 +122,43 @@ it.each(['APPROVED', 'TIMEOUT', 'STOP'] as const)(
       join(directory, 'runs.json'),
     );
     let sequence = 650100;
-    const financial = new BalanceInquiryService(journal, new BalanceTcpTransport(), runtime, {
-      inspect: async () => ({ ready: true, blockers: [], sequencesRemaining: 3 }),
-      acquire: async (target, signal) => {
-        const pin = await pins.request(signal);
-        if (!pin) throw Error('PIN_CANCELLED');
-        pin.fill(0);
-        return { ...balanceLease(target), sequence: ++sequence };
+    let chipActive = 0,
+      peakChip = 0;
+    const tcp = new BalanceTcpTransport();
+    const measuredTransport = {
+      exchange: (input: BalanceExchangeRequest) =>
+        tcp.exchange({
+          ...input,
+          withWrite: async (write) => {
+            const measuredWrite = () => {
+              writeTimes.push(performance.now());
+              write();
+            };
+            if (input.withWrite) await input.withWrite(measuredWrite);
+            else measuredWrite();
+          },
+        }),
+    };
+    const financial = new BalanceInquiryService(
+      journal,
+      new QaSwitchConnection().manageTransport(measuredTransport),
+      runtime,
+      {
+        inspect: async () => ({ ready: true, blockers: [], sequencesRemaining: 3 }),
+        acquire: async (target, signal) => {
+          peakChip = Math.max(peakChip, ++chipActive);
+          try {
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            const pin = await pins.request(signal);
+            if (!pin) throw Error('PIN_CANCELLED');
+            pin.fill(0);
+            return { ...balanceLease(target), sequence: ++sequence };
+          } finally {
+            chipActive--;
+          }
+        },
       },
-    });
+    );
     let active = 0,
       maxActive = 0;
     const reads: string[] = [];
@@ -144,7 +200,10 @@ it.each(['APPROVED', 'TIMEOUT', 'STOP'] as const)(
           return await financial.execute(
             request,
             { ...target, draft: request.draft, cardReadId: request.cardReadId },
-            { connect: 1000, response: mode === 'STOP' ? 5000 : 200 },
+            {
+              connect: 1000,
+              response: stopping ? 5000 : concurrent ? (approved ? 2000 : 500) : 200,
+            },
             async () => true,
             execution,
           );
@@ -168,7 +227,10 @@ it.each(['APPROVED', 'TIMEOUT', 'STOP'] as const)(
     const driver = new PhysicalCardLoadDriver(
       {
         current: async () => original,
-        read: async () => ({ ok: true, value: { ...original, readId: randomUUID() } }),
+        read: async () => {
+          expect(chipActive).toBe(0);
+          return { ok: true, value: { ...original, readId: randomUUID() } };
+        },
       },
       application,
       pins,
@@ -188,7 +250,7 @@ it.each(['APPROVED', 'TIMEOUT', 'STOP'] as const)(
         atmRevision: 1,
         additionalAtms: [{ atmId: second.draft.atmId!, atmRevision: 1 }],
         targetTps: 5,
-        concurrency: 1,
+        concurrency: concurrent ? 2 : 1,
         maxTransactions: 3,
         durationSeconds: 10,
         rampUpSeconds: 0,
@@ -197,27 +259,43 @@ it.each(['APPROVED', 'TIMEOUT', 'STOP'] as const)(
     try {
       const started = await service.start(request);
       if (!started.ok) throw Error(started.error.message);
-      if (mode === 'STOP') {
+      if (stopping) {
         await vi.waitFor(() => expect(received).toHaveLength(2));
         service.stop({ runId: started.value.runId });
       }
       await service.whenIdle();
       const run = await store.read();
       // Stopping after a write preserves delivery uncertainty, as does timeout.
-      expect(run?.state).toBe(mode === 'APPROVED' ? 'COMPLETED' : 'FAILED');
-      const terminals =
-        mode === 'APPROVED' ? ['ATM20521', 'ATM20524', 'ATM20521'] : ['ATM20521', 'ATM20524'];
+      expect(run?.state).toBe(approved ? 'COMPLETED' : 'FAILED');
+      const terminals = approved ? ['ATM20521', 'ATM20524', 'ATM20521'] : ['ATM20521', 'ATM20524'];
       expect(received.map((item) => item.terminalId)).toEqual(terminals);
-      expect(run?.items.map((item) => item.atmId)).toEqual(
-        terminals.map((id) => targets.find((atm) => atm.terminalId === id)!.draft.atmId),
+      expect(run?.items.map((item) => item.atmId).sort()).toEqual(
+        terminals.map((id) => targets.find((atm) => atm.terminalId === id)!.draft.atmId).sort(),
       );
+      expect(
+        run?.items.every(
+          (item) =>
+            targets.find((atm) => atm.draft.atmId === item.atmId)?.terminalId ===
+            item.correlation?.terminalId,
+        ),
+      ).toBe(true);
       expect(new Set(received.map((item) => item.stan)).size).toBe(terminals.length);
       expect(new Set(reads).size).toBe(terminals.length);
-      expect(maxActive).toBe(1);
+      expect(maxActive).toBe(concurrent ? 2 : 1);
+      expect(peakChip).toBe(1);
+      expect(peakSockets).toBe(concurrent ? 2 : 1);
+      // Receive callbacks may be delayed/batched by Windows. Verify the sender's
+      // actual write boundary, rather than mistaking receive cadence for TPS.
+      for (let i = 1; i < writeTimes.length; i++)
+        expect(writeTimes[i]! - writeTimes[i - 1]!).toBeGreaterThanOrEqual(195);
+      if (mode === 'CONCURRENT') expect(responseOrder[0]).toBe(received[1]!.stan);
       expect(ask).toHaveBeenCalledOnce();
       const financialRecords = await journal.read();
       expect(financialRecords.every((item) => item.runId === run!.runId)).toBe(true);
       expect(financialRecords).toHaveLength(terminals.length);
+      expect(
+        financialRecords.every((item) => item.finishedAt !== null && item.outcome !== 'PENDING'),
+      ).toBe(true);
       expect(new Set(financialRecords.map((item) => item.transactionId)).size).toBe(
         terminals.length,
       );
@@ -241,6 +319,7 @@ it.each(['APPROVED', 'TIMEOUT', 'STOP'] as const)(
       pins.end();
       await store.close();
       await journal.close();
+      for (const timer of timers) clearTimeout(timer);
       for (const socket of sockets) socket.destroy();
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await removeTestDirectory(directory, 'coonecta-multi-load-');

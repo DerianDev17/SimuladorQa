@@ -29,6 +29,7 @@ import {
 } from '../../../../packages/domain/src/withdrawal';
 import { balanceContextErrorLabels } from './balance-context-errors';
 import { parseWithdrawalReversal } from '../../../../packages/domain/src/withdrawal-reversal';
+import { LOAD_RUN_MAX_CONCURRENCY } from '../../../../packages/domain/src/load-run';
 
 export const missingBalanceContext: BalanceReadiness = {
   ready: false,
@@ -54,6 +55,20 @@ export interface BalanceExecutionContext {
   runId: string;
   signal: AbortSignal;
   onPhase?: (phase: BalanceLoadPhase, elapsedMs: number) => void;
+  // Main-only load scope. Never accepted from Renderer payloads.
+  concurrency?: number;
+  deadline?: number;
+  withWrite?: (write: () => Promise<void>) => Promise<void>;
+  onPrepared?: () => void;
+}
+export function loadExecutionScope(execution?: BalanceExecutionContext): string | undefined {
+  return execution &&
+    isUuid(execution.runId) &&
+    Number.isInteger(execution.concurrency) &&
+    execution.concurrency! >= 1 &&
+    execution.concurrency! <= LOAD_RUN_MAX_CONCURRENCY
+    ? `${execution.runId}:${execution.concurrency}`
+    : undefined;
 }
 function release(lease: BalanceContextLease): void {
   lease.header.fill(0);
@@ -66,8 +81,11 @@ function release(lease: BalanceContextLease): void {
   }
 }
 export class BalanceInquiryService {
-  private running:
-    { id: string; fingerprint: string; result: Promise<Result<BalanceExecution>> } | undefined;
+  private running = new Map<
+    string,
+    { fingerprint: string; scope: string | undefined; result: Promise<Result<BalanceExecution>> }
+  >();
+  private journalWrites: Promise<void> = Promise.resolve();
   constructor(
     private readonly journal: BalanceJournal,
     private readonly transport: BalanceTransport,
@@ -78,7 +96,20 @@ export class BalanceInquiryService {
   ) {}
 
   isBusy(): boolean {
-    return this.running !== undefined;
+    return this.running.size > 0;
+  }
+
+  private save(record: BalanceExecution): Promise<void> {
+    const snapshot = structuredClone(record);
+    const write = this.journalWrites.then(async () => {
+      const current = await this.journal.read();
+      await this.journal.write([
+        ...current.filter((item) => item.requestId !== snapshot.requestId),
+        snapshot,
+      ]);
+    });
+    this.journalWrites = write.catch(() => undefined);
+    return write;
   }
 
   async inspect(target: BalanceTarget): Promise<BalanceReadiness> {
@@ -165,11 +196,20 @@ export class BalanceInquiryService {
           'El transporte no admite retiro con reverso. No se envió el retiro.',
         ),
       );
-    if (this.running) {
-      if (this.running.id !== request.requestId || this.running.fingerprint !== fingerprint)
+    const scope = this.operation === 'BALANCE' ? loadExecutionScope(execution) : undefined;
+    const duplicate = this.running.get(request.requestId);
+    if (duplicate) {
+      if (duplicate.fingerprint !== fingerprint || duplicate.scope !== scope)
         return Promise.resolve(failure('CONFLICT', 'Ya hay una transacción en curso.'));
-      return this.running.result.then((result) => structuredClone(result));
+      return duplicate.result.then((result) => structuredClone(result));
     }
+    if (
+      this.running.size &&
+      (!scope ||
+        this.running.size >= execution!.concurrency! ||
+        [...this.running.values()].some((item) => item.scope !== scope))
+    )
+      return Promise.resolve(failure('CONFLICT', 'Ya hay una transacción en curso.'));
     const result = this.perform(
       structuredClone(request),
       structuredClone(target),
@@ -177,10 +217,10 @@ export class BalanceInquiryService {
       revalidate,
       execution,
     );
-    this.running = { id: request.requestId, fingerprint, result };
+    this.running.set(request.requestId, { fingerprint, scope, result });
     void result
       .finally(() => {
-        this.running = undefined;
+        this.running.delete(request.requestId);
       })
       .catch(() => undefined);
     return result.then((value) => structuredClone(value));
@@ -411,11 +451,10 @@ export class BalanceInquiryService {
         Date.parse(lease.validUntil) <= Date.parse(this.identity.now())
       )
         throw Error('CONTEXT_CHANGED');
-      records = [...records, structuredClone(record)];
       // Persist before the financial side effect. A PENDING record after restart
       // remains unresolved and is returned, never replayed automatically.
       try {
-        await measure('journal', () => this.journal.write(records));
+        await measure('journal', () => this.save(record));
       } catch {
         return failure(
           'STORAGE_UNAVAILABLE',
@@ -432,8 +471,8 @@ export class BalanceInquiryService {
         throw Error('CONTEXT_CHANGED');
       if (abort.signal.aborted) throw Error('CONTEXT_CHANGED');
       transportStarted = true;
-      const result = await measure('transport', () =>
-        this.transport.exchange({
+      const result = await measure('transport', async () => {
+        const exchange = this.transport.exchange({
           environment: 'QA',
           endpoint: { ...target.endpoint },
           wire: wire!,
@@ -441,6 +480,26 @@ export class BalanceInquiryService {
           connectDeadlineMs: deadlines.connect,
           responseDeadlineMs: deadlines.response,
           signal: abort.signal,
+          ...(execution?.withWrite
+            ? {
+                withWrite: (write: () => void) =>
+                  execution.withWrite!(async () => {
+                    await validateLease();
+                    if (
+                      !(await measure('validation', revalidate)) ||
+                      abort.signal.aborted ||
+                      (execution.deadline !== undefined &&
+                        performance.now() >= execution.deadline) ||
+                      Date.parse(lease!.validUntil) <= Date.parse(this.identity.now())
+                    )
+                      throw Error('CONTEXT_CHANGED');
+                    write();
+                  }),
+              }
+            : {}),
+          ...(loadExecutionScope(execution) && this.operation === 'BALANCE'
+            ? { load: { runId: execution!.runId, concurrency: execution!.concurrency! } }
+            : {}),
           ...(record.reversal
             ? {
                 reversal: {
@@ -460,16 +519,17 @@ export class BalanceInquiryService {
                     record.elapsedMs = original.elapsedMs;
                     record.balances = structuredClone(original.balances);
                     record.reversal = reversal;
-                    await this.journal.write([
-                      ...records.filter((item) => item.requestId !== record.requestId),
-                      structuredClone(record),
-                    ]);
+                    await this.save(record);
                   },
                 },
               }
             : {}),
-        }),
-      );
+        });
+        // Release the chip preparation slot only after all validation and
+        // durable PENDING state, while this independent exchange awaits host.
+        execution?.onPrepared?.();
+        return exchange;
+      });
       if (
         ![
           'APPROVED',
@@ -567,12 +627,7 @@ export class BalanceInquiryService {
       };
     }
     try {
-      await measure('journal', () =>
-        this.journal.write([
-          ...records.filter((item) => item.requestId !== record.requestId),
-          record,
-        ]),
-      );
+      await measure('journal', () => this.save(record));
     } catch {
       // Do not discard a received response or suggest repeating a financial write.
       return {

@@ -15,12 +15,16 @@ import { failure } from '../../../../packages/shared/src/contracts';
 import type { Result } from '../../../../packages/shared/src/contracts';
 import type { RuntimeIdentity } from './ports';
 
+export type LoadExecutionResult = Result<BalanceExecution & { loadTimings?: LoadRunTimings }> & {
+  skipped?: 'DURATION';
+};
 export interface LoadRunSource {
   readerName: string;
   execute(
     signal: AbortSignal,
     runId: string,
-  ): Promise<Result<BalanceExecution & { loadTimings?: LoadRunTimings }>>;
+    slot?: { index: number; deadline: number },
+  ): Promise<LoadExecutionResult>;
   close(): void;
 }
 export interface LoadRunDriver {
@@ -32,12 +36,13 @@ export interface LoadRunStore {
   write(snapshot: LoadRunSnapshot): Promise<void>;
 }
 export interface LoadSchedule {
-  next(operationStartedAt?: number): void;
+  started?(operationStartedAt: number, ticket?: number): void;
+  next(operationStartedAt?: number, ticket?: number): void;
   stop(): void;
 }
 export type LoadScheduler = (
   request: LoadRunRequest,
-  tick: () => void,
+  tick: (ticket?: number) => void,
   done: (reason: 'COUNT' | 'DURATION' | 'STOP' | 'ERROR') => void,
   startedAt?: number,
 ) => LoadSchedule;
@@ -46,6 +51,7 @@ export class LoadRunService {
   private run: LoadRunSnapshot | null = null;
   private busy = false;
   private started = 0;
+  private launched = 0;
   private source: LoadRunSource | undefined;
   private scheduler: LoadSchedule | undefined;
   private abort: AbortController | undefined;
@@ -79,6 +85,18 @@ export class LoadRunService {
     this.busy = false;
     this.resolveIdle?.();
     this.resolveIdle = undefined;
+  }
+  private drainDuration(): void {
+    if (!this.run?.active || this.durationDrainTimer || this.finishReason !== 'COMPLETED') return;
+    this.run.message = 'Tiempo alcanzado. Esperando las operaciones en curso.';
+    this.durationDrainTimer = setTimeout(() => {
+      if (!this.busy || !this.run?.active || this.finishReason !== 'COMPLETED') return;
+      this.finishReason = 'FAILED';
+      this.run.message =
+        'Las operaciones en curso no terminaron durante el cierre. Revisa su correlación.';
+      this.abort?.abort();
+      this.releaseSource();
+    }, this.durationDrainMs);
   }
   observeReaders(readers: readonly { name: string; state: string }[] | null): void {
     if (
@@ -135,7 +153,7 @@ export class LoadRunService {
     if (!request)
       return failure(
         'VALIDATION_ERROR',
-        'Usa QA, saldo, una operación a la vez, hasta 5 TPS, 100 consultas y 300 segundos.',
+        'Usa QA, saldo, de 1 a 5 operaciones simultáneas, hasta 5 TPS, 100 consultas y 300 segundos.',
       );
     if (this.busy) return failure('CONFLICT', 'Ya hay una corrida activa.');
     this.busy = true;
@@ -168,6 +186,7 @@ export class LoadRunService {
       // Preflight has not started a run. Once accepted, persistence, worker
       // startup, PIN and execution all share this monotonic time budget.
       this.started = performance.now();
+      this.launched = 0;
       this.run = {
         runId: this.identity.uuid(),
         requestId: request.requestId,
@@ -194,7 +213,7 @@ export class LoadRunService {
       }
       this.scheduler = this.schedule(
         request,
-        () => void this.tick(),
+        (ticket) => void this.tick(ticket),
         (reason) => {
           if (!this.busy) return;
           this.finishReason ??=
@@ -205,19 +224,7 @@ export class LoadRunService {
             this.abort?.abort();
             this.releaseSource();
           }
-          if (reason === 'DURATION' && this.run!.active) {
-            // Stop scheduling new operations, but let a financial request that
-            // already began receive its response before closing the source.
-            this.run!.message = 'Tiempo alcanzado. Esperando la operación en curso.';
-            this.durationDrainTimer = setTimeout(() => {
-              if (!this.busy || !this.run?.active || this.finishReason !== 'COMPLETED') return;
-              this.finishReason = 'FAILED';
-              this.run.message =
-                'La operación en curso no terminó durante el cierre. Revisa su correlación.';
-              this.abort?.abort();
-              this.releaseSource();
-            }, this.durationDrainMs);
-          }
+          if (reason === 'DURATION') this.drainDuration();
           if (!this.run!.active) void this.finish();
         },
         performance.timeOrigin + this.started,
@@ -270,17 +277,34 @@ export class LoadRunService {
     this.closing = true;
     if (this.run && this.busy && this.scheduler) this.stop({ runId: this.run.runId });
   }
-  private async tick(): Promise<void> {
-    if (!this.run || !this.busy || this.run.active || this.finishReason) return;
+  private async tick(ticket?: number): Promise<void> {
+    if (
+      !this.run ||
+      !this.busy ||
+      this.run.active >= this.run.draft.concurrency ||
+      this.finishReason ||
+      this.launched >= this.run.draft.maxTransactions
+    )
+      return;
     // A tick may have been posted on time but reached a busy Main after the
     // deadline. The worker's duration event will close the run without a send.
     if (performance.now() - this.started >= this.run.draft.durationSeconds * 1000) return;
     const operationStartedAt = performance.timeOrigin + performance.now();
     const atms = loadTestAtms(this.run.draft);
-    const scheduledAtm = atms[this.run.items.length % atms.length]!;
-    this.run.active = 1;
+    const index = this.launched++;
+    const scheduledAtm = atms[index % atms.length]!;
+    this.run.active++;
+    this.scheduler?.started?.(operationStartedAt, ticket);
     try {
-      const result = await this.source!.execute(this.abort!.signal, this.run.runId);
+      const result = await this.source!.execute(this.abort!.signal, this.run.runId, {
+        index,
+        deadline: this.started + this.run.draft.durationSeconds * 1000,
+      });
+      if (result.skipped === 'DURATION') {
+        this.finishReason ??= 'COMPLETED';
+        this.drainDuration();
+        return;
+      }
       let item: LoadRunItem;
       if (result.ok) {
         const value = result.value;
@@ -327,6 +351,10 @@ export class LoadRunService {
           this.run.message = result.error.message;
         }
       }
+      if (this.finishReason === 'FAILED') {
+        this.abort?.abort();
+        this.releaseSource();
+      }
       this.run.items.push(item);
       await this.persist();
     } catch {
@@ -334,11 +362,15 @@ export class LoadRunService {
       this.run.message =
         'No se pudo completar o guardar el resultado. Revisa el historial antes de otra corrida.';
     } finally {
-      this.run.active = 0;
+      this.run.active--;
       if (this.finishReason) {
+        if (this.finishReason === 'FAILED') {
+          this.abort?.abort();
+          this.releaseSource();
+        }
         this.scheduler?.stop();
         await this.finish();
-      } else this.scheduler?.next(operationStartedAt);
+      } else this.scheduler?.next(operationStartedAt, ticket);
     }
   }
   private async finish(): Promise<void> {

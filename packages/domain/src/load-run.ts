@@ -7,6 +7,7 @@ import type { BalanceExecution } from './balance-inquiry';
 // Local pilot limits, not a statement of switch capacity.
 export const LOAD_RUN_MAX_OPERATIONS = 100;
 export const LOAD_RUN_MAX_SECONDS = 300;
+export const LOAD_RUN_MAX_CONCURRENCY = 5;
 export interface LoadRunRequest {
   requestId: string;
   cardReadId: string;
@@ -30,6 +31,8 @@ export interface LoadRunItem {
   timings?: LoadRunTimings;
 }
 export interface LoadRunTimings {
+  queueWaitMs?: number;
+  rateLimitMs?: number;
   cardReadMs: number;
   inspectMs: number;
   contextMs: number;
@@ -63,7 +66,7 @@ export function parseLoadRunRequest(value: unknown): LoadRunRequest | undefined 
   if (
     !draft ||
     draft.targetTps < LOAD_TEST_LOCAL_MIN_TPS ||
-    draft.concurrency !== 1 ||
+    draft.concurrency > LOAD_RUN_MAX_CONCURRENCY ||
     draft.maxTransactions < loadTestAtms(draft).length ||
     draft.maxTransactions > LOAD_RUN_MAX_OPERATIONS ||
     draft.durationSeconds > LOAD_RUN_MAX_SECONDS ||

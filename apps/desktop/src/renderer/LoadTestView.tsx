@@ -10,6 +10,7 @@ import {
 import {
   LOAD_RUN_MAX_OPERATIONS,
   LOAD_RUN_MAX_SECONDS,
+  LOAD_RUN_MAX_CONCURRENCY,
   loadRunMetrics,
   loadResponseSeries,
   parseLoadRunRequest,
@@ -71,6 +72,8 @@ const labels = {
   INTERRUPTED: 'Interrumpida',
 };
 const stages: { key: keyof LoadRunTimings; label: string }[] = [
+  { key: 'queueWaitMs', label: 'Espera del lector' },
+  { key: 'rateLimitMs', label: 'Espera por límite TPS' },
   { key: 'cardReadMs', label: 'Lectura del chip' },
   { key: 'inspectMs', label: 'Validación de perfil' },
   { key: 'contextMs', label: 'PIN, EMV y contexto' },
@@ -138,6 +141,7 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
   const [mode, setMode] = useState<LoadTestMode>('LOAD');
   const [count, setCount] = useState('30');
   const [tps, setTps] = useState('1');
+  const [concurrency, setConcurrency] = useState('2');
   const [duration, setDuration] = useState('30');
   const [ramp, setRamp] = useState('10');
   const [card, setCard] = useState<TransactionCard>();
@@ -169,7 +173,7 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
       : {}),
     maxTransactions: Number(count),
     targetTps: Number(tps),
-    concurrency: 1,
+    concurrency: Number(concurrency),
     rampUpSeconds: mode === 'STRESS' ? Number(ramp) : 0,
     durationSeconds: Number(duration),
   };
@@ -229,6 +233,11 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
       draft,
     });
   const issues = [
+    ...(!Number.isInteger(Number(concurrency)) ||
+    Number(concurrency) < 1 ||
+    Number(concurrency) > LOAD_RUN_MAX_CONCURRENCY
+      ? ['La concurrencia debe estar entre 1 y 5 operaciones.']
+      : []),
     ...(environment !== 'QA' ? ['Selecciona el ambiente QA.'] : []),
     ...(!atmIds.length ? ['Selecciona un ATM QA.'] : []),
     ...(atmIds.some((id) => !available.some((atm) => atm.id === id))
@@ -264,6 +273,7 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
     setMode('LOAD');
     setCount(String(choice.count));
     setTps(String(choice.tps));
+    setConcurrency(String(choice.tps >= 3 ? Math.min(5, choice.tps + 1) : 2));
     setDuration(String(choice.seconds));
   }
   async function start() {
@@ -404,9 +414,9 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
               </div>
             </details>
             <p className="load-inline-note">
-              Puedes seleccionar ambos perfiles. Las consultas alternan entre los ATM en el orden
-              seleccionado, una a la vez con la tarjeta física. TPS, cantidad y duración son totales
-              de la corrida.
+              Selecciona ambos perfiles para enviar consultas concurrentes. Se reparten en el orden
+              seleccionado sin esperar cada respuesta. TPS, cantidad y concurrencia son totales de
+              la corrida.
             </p>
           </div>
           <div className="load-step">
@@ -450,6 +460,25 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
             <p className="load-inline-note">
               Los perfiles guardados ayudan a elegir el AID, pero la prueba requiere el chip físico.
               PIN una vez por corrida y seguridad EMV nueva por consulta.
+            </p>
+            <label>
+              Operaciones simultáneas
+              <select
+                value={concurrency}
+                disabled={locked || disabled}
+                onChange={(event) => setConcurrency(event.target.value)}
+              >
+                {[1, 2, 3, 4, 5].map((value) => (
+                  <option key={value} value={value}>
+                    {value === 1 ? '1 · secuencial' : `${value} · concurrentes`}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p className="load-inline-note">
+              El chip prepara una consulta a la vez; los envíos pueden esperar respuestas
+              simultáneamente. El ritmo real depende de la preparación y del host. El escenario de 3
+              TPS usa 4 operaciones simultáneas.
             </p>
           </div>
           <div className="load-fixed-operation">
@@ -504,10 +533,6 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
                       setPreset('CUSTOM');
                     }}
                   />
-                </label>
-                <label>
-                  Concurrencia
-                  <input value="1 · una tarjeta física" readOnly />
                 </label>
                 <label>
                   Tipo de corrida

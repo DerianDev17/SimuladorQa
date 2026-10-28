@@ -14,11 +14,12 @@ export class BalanceTcpTransport implements BalanceTransport {
   constructor(private readonly operation: 'BALANCE' | 'WITHDRAWAL' = 'BALANCE') {}
   async exchange(request: BalanceExchangeRequest): Promise<BalanceExchangeResult> {
     const started = performance.now();
+    let writeGateMs = 0;
     const empty = (): BalanceExchangeResult => ({
       outcome: 'TRANSPORT_ERROR',
       transmissionAttempted: false,
       bytesQueued: 0,
-      elapsedMs: Math.round(performance.now() - started),
+      elapsedMs: Math.max(0, Math.round(performance.now() - started - writeGateMs)),
       responseCode: null,
       balances: [],
     });
@@ -110,17 +111,30 @@ export class BalanceTcpTransport implements BalanceTransport {
         return;
       }
       socket.once('connect', () => {
-        if (ended) return;
-        clearTimeout(connectTimer);
-        responseTimer = setTimeout(() => finish('RESPONSE_TIMEOUT'), request.responseDeadlineMs);
-        attempted = true;
-        try {
-          socket.write(wire, (error) => {
-            if (error) finish('TRANSPORT_ERROR');
-          });
-        } catch {
-          finish('TRANSPORT_ERROR');
-        }
+        void (async () => {
+          if (ended) return;
+          clearTimeout(connectTimer);
+          const gateStarted = performance.now();
+          const write = () => {
+            writeGateMs = performance.now() - gateStarted;
+            if (ended || request.signal?.aborted) return;
+            responseTimer = setTimeout(
+              () => finish('RESPONSE_TIMEOUT'),
+              request.responseDeadlineMs,
+            );
+            attempted = true;
+            socket.write(wire, (error) => {
+              if (error) finish('TRANSPORT_ERROR');
+            });
+          };
+          try {
+            if (request.withWrite) await request.withWrite(write);
+            else write();
+          } catch {
+            if (!attempted) writeGateMs = performance.now() - gateStarted;
+            finish('TRANSPORT_ERROR');
+          }
+        })();
       });
       socket.on('data', (chunk: Buffer) => {
         if (ended) return;
@@ -146,6 +160,7 @@ export class BalanceTcpTransport implements BalanceTransport {
             }
             const metadata = codec.inspect(body);
             if (
+              !attempted ||
               metadata.mti !== '0210' ||
               metadata.stan !== expected.stan ||
               metadata.rrn !== expected.rrn ||

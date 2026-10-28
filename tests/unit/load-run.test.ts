@@ -20,11 +20,13 @@ export const loadRequest = () => ({
   },
 });
 describe('corrida QA acotada', () => {
-  it('reparte el presupuesto total entre ATM manteniendo concurrencia uno', () => {
+  it('reparte el presupuesto total entre ATM con concurrencia acotada', () => {
     const request = loadRequest();
     const draft = { ...request.draft, additionalAtms: [{ atmId: randomUUID(), atmRevision: 1 }] };
     expect(parseLoadRunRequest({ ...request, draft })).toBeDefined();
-    for (const patch of [{ maxTransactions: 1 }, { concurrency: 2 }, { targetTps: 10 }])
+    for (const concurrency of [1, 2, 4, 5])
+      expect(parseLoadRunRequest({ ...request, draft: { ...draft, concurrency } })).toBeDefined();
+    for (const patch of [{ maxTransactions: 1 }, { concurrency: 6 }, { targetTps: 10 }])
       expect(parseLoadRunRequest({ ...request, draft: { ...draft, ...patch } })).toBeUndefined();
   });
   it('respeta el mínimo de la UI y rechaza tasas que desbordan el temporizador', () => {
@@ -42,7 +44,9 @@ describe('corrida QA acotada', () => {
     expect(parseLoadRunRequest(request)).toEqual(request);
     for (const override of [
       { targetTps: 6 },
-      { concurrency: 2 },
+      { concurrency: 6 },
+      { concurrency: 0 },
+      { concurrency: 1.5 },
       { maxTransactions: 101 },
       { durationSeconds: 301 },
       { environment: 'PREPROD' },

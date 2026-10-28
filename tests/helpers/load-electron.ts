@@ -12,6 +12,7 @@ export function install(
   worker: string,
   sample: BalanceExecution,
   terminals: Record<string, string> = {},
+  responseDelayMs = 300,
 ) {
   const runtime = {
     agentId: randomUUID(),
@@ -38,7 +39,7 @@ export function install(
                 const timer = setTimeout(() => {
                   signal.removeEventListener('abort', cancel);
                   resolve();
-                }, 300);
+                }, responseDelayMs);
                 const cancel = () => {
                   clearTimeout(timer);
                   resolve();

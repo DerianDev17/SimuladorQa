@@ -1,10 +1,13 @@
 # Carga y estrés de saldo en QA
 
-## Varios perfiles en una corrida — 2026-10-28
+## Varios perfiles simultáneos — 2026-10-28 (ADR-027)
 
 En **Selecciona los ATM**, marcar ATM20521 y ATM20524 (o los perfiles QA
-disponibles). Las consultas alternan en el orden seleccionado: A → B → A → B.
-Usan una tarjeta física y una operación en curso. La cantidad, duración y TPS
+disponibles). Las consultas se asignan en el orden A → B → A → B, sin esperar
+la respuesta anterior. **Operaciones simultáneas** permite de 1 a 5; el
+escenario **3 TPS** configura cuatro slots y el modo avanzado permite ajustar
+TPS/cantidad/duración. El chip prepara seguridad exclusiva, mientras los sockets
+ya preparados pueden esperar al host en paralelo. La cantidad, duración y TPS
 son totales de la corrida, no por terminal. Si se completa una cantidad impar,
 el primer perfil recibe una consulta más. La parada por error o duración puede
 terminar antes de recorrer todos los perfiles.
@@ -17,8 +20,10 @@ cantidad total; no se infiere independencia entre pools. El plan debe admitir
 al menos tantas consultas como perfiles seleccionados.
 
 Cada fila identifica el ATM ejecutado, también después de recuperar la corrida.
-El contrato conserva los registros antiguos de un solo ATM. La ejecución
-concurrente y las tarjetas virtuales siguen fuera de esta entrega. ADR-026.
+El contrato conserva los registros antiguos de un solo ATM. Las tarjetas
+virtuales siguen pendientes. La concurrencia local no acredita 3 TPS reales:
+si la preparación del chip tarda más, seguirá limitando el caudal de solicitudes.
+Los paneles separan espera del lector, lectura, PIN/EMV, límite TPS y transporte.
 
 ## Revisión adicional: cierre y presupuesto de tiempo (2026-10-27)
 
@@ -95,16 +100,18 @@ Electron con fuente sintética. No se ejecuta carga contra el switch QA.
 2. Elegir **Prueba rápida**, **1 TPS**, **3 TPS** o **5 TPS**. Los presets
    completan cantidad y duración dentro de los límites locales; son objetivos,
    no tasas garantizadas. **Modo avanzado** permite ajustar esos valores.
+   Elegir **Operaciones simultáneas**: 2 para permitir ambos ATM en vuelo, o
+   4 para el escenario de 3 TPS. Elegir 1 conserva el comportamiento secuencial.
 3. Seleccionar la tarjeta QA en el lector. Un perfil guardado puede preseleccionar
    el AID, pero hay que leer el chip físico antes de iniciar.
 4. Pulsar **Iniciar prueba** e ingresar el PIN en el diálogo nativo.
    El PIN se pide una vez por corrida, según autorización del usuario.
 
 El panel muestra enviados, respuestas, aprobaciones, rechazos, errores, TPS
-reales y percentiles. **Detener prueba** cancela el trabajo y cierra el socket.
+reales y percentiles. **Detener prueba** cancela el trabajo y cierra los sockets.
 
-La interfaz reemplaza el planificador bloqueado por un ejecutor físico
-secuencial. El límite es lo primero que ocurra: cantidad o tiempo. Se detiene
+La interfaz ofrece un motor asíncrono con preparación física exclusiva y
+transportes concurrentes. El límite es lo primero que ocurra: cantidad o tiempo. Se detiene
 ante el primer rechazo/error o retiro de tarjeta. No hay reintentos automáticos.
 No hace falta mantener la página abierta: al volver se recupera la corrida.
 
@@ -116,7 +123,7 @@ ATM, lectura vigente, perfil financiero, cifrado, secuencias suficientes y
 ausencia de operaciones `PENDING` en el diario de saldo.
 Si falla una comprobación se muestra su causa sin arrancar el worker.
 
-El intervalo permitido es 0,1–5 TPS. Los máximos locales son una operación simultánea, 100 consultas y
+El intervalo permitido es 0,1–5 TPS. Los máximos locales son cinco operaciones simultáneas, 100 consultas y
 300 segundos. El lector, las operaciones EMV, el cifrado y la respuesta del host
 pueden impedir alcanzar 5 TPS. El tiempo incluye la entrada inicial del PIN.
 Esta prueba no certifica la capacidad máxima del switch.
@@ -131,15 +138,17 @@ Las comprobaciones de perfil financiero y secuencias ocurren al iniciar en Main.
 
 ## Motor, seguridad y métricas
 
-Un worker agenda cada operación sin ráfagas de recuperación; espera la respuesta
-antes de agendar la siguiente. Main coordina hardware y transporte existentes.
-El intervalo objetivo se mide desde el inicio de la consulta anterior: cuando
-la lectura del chip, la preparación y el host ya consumieron ese intervalo,
-la siguiente consulta empieza sin una espera adicional. La concurrencia física
-sigue siendo uno y el objetivo de TPS no garantiza que se alcance.
-Al alcanzar el límite de duración, no inicia otra consulta y espera hasta 35
-segundos para cerrar la operación que ya estaba en curso y registrar su
-respuesta. Si sigue sin terminar, cancela la dependencia, marca la corrida como
+Un worker agenda cada operación sin ráfagas de recuperación y recibe tickets
+separados de inicio y cierre. No espera la respuesta mientras tenga slots libres.
+Main mantiene como máximo la concurrencia solicitada, incluida la espera por
+lector. El acceso al chip permanece exclusivo y libera su slot de preparación
+cuando el transporte puede esperar la respuesta independientemente.
+Un limitador global se aplica además justo antes del write en cada socket:
+no acumula créditos durante preparación o conexión lenta. El objetivo de TPS
+no garantiza que se alcance. El timeout de respuesta empieza con el write.
+Al alcanzar duración no se inicia ni escribe otra consulta y se esperan hasta 35
+segundos para cerrar las operaciones en curso y registrar sus
+respuestas. Si siguen sin terminar, cancela las dependencias, marca la corrida como
 fallida y deja la correlación disponible para revisión; no reintenta el envío.
 Cada consulta vuelve a leer el chip, genera seguridad y reserva una secuencia
 nueva. La misma tarjeta debe permanecer insertada. El PIN de sesión permanece
@@ -157,6 +166,10 @@ respuestas recibidas y su tiempo de transporte, sin contar como respuesta una
 lectura o preparación local. La UI distingue operaciones en curso de envíos.
 Cada resultado nuevo registra únicamente duraciones numéricas de lectura,
 revisión, preparación de contexto, validación, diario, transporte y resto.
+La espera por lector y la espera impuesta por TPS tienen mediciones separadas.
+Las sumas de etapas de operaciones concurrentes pueden superar el tiempo de
+pared de la corrida. El diario fusiona cada actualización bajo exclusión para
+conservar respuestas fuera de orden; la identidad ATM no depende del orden de fin.
 No se guardan PIN, PAN, tramas ni campos EMV en estas mediciones. Los resultados
 anteriores carecen de desglose: por ejemplo, la corrida local de 5 respuestas
 completadas en 68,2 s consumió 6,2 s en transporte; los ~62 s restantes no
@@ -174,10 +187,11 @@ con identificadores nuevos; nunca se repite la consulta anterior.
 ## Alcance pendiente
 
 TODO-DATA LOAD-VIRTUAL-PROVIDER: falta el contrato de un proveedor financiero QA
-para un pool virtual y concurrencia mayor a uno. Las referencias VISA ficticias
+para un pool virtual que alimente el motor sin esperar el chip. Las referencias VISA ficticias
 y las tarjetas guardadas no contienen PIN/EMV reutilizable. Ese alcance queda
-separado del piloto ejecutable con tarjeta física. PREPROD, retiros, varios
-ATM simultáneos y carga distribuida no se habilitan aquí.
+separado del piloto ejecutable con tarjeta física. PREPROD, retiros y carga
+distribuida no se habilitan aquí. TODO-DATA LOAD-PERSISTENT-TCP conserva pendiente
+el contrato para reutilizar conexiones financieras. No se inventa multiplexación.
 
 Validación del cambio: pruebas de dominio, sesión PIN, worker real, persistencia,
 cancelación TCP loopback, reutilización del flujo de saldo y UI Electron con

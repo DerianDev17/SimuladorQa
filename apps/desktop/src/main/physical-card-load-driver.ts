@@ -11,6 +11,7 @@ import type { RuntimeIdentity } from './ports';
 import type { BalanceJournal } from './balance-ports';
 import { failure } from '../../../../packages/shared/src/contracts';
 import type { Result } from '../../../../packages/shared/src/contracts';
+import { LoadSendLimiter } from './infrastructure/load-send-limiter';
 
 export class PhysicalCardLoadDriver implements LoadRunDriver {
   constructor(
@@ -80,6 +81,8 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
     this.pins.begin();
     let next = 0;
     let closed = false;
+    let preparing: Promise<void> = Promise.resolve();
+    const limiter = new LoadSendLimiter(request.draft);
     return {
       ok: true,
       value: {
@@ -89,71 +92,131 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
           closed = true;
           this.pins.end();
         },
-        execute: async (signal, runId) => {
+        execute: async (signal, runId, slot) => {
           if (closed || signal.aborted) return failure('CONFLICT', 'La corrida fue detenida.');
-          const context = contexts[next % contexts.length]!;
-          const first = next++ === 0;
+          const index = slot?.index ?? next++;
+          const context = contexts[index % contexts.length]!;
+          const first = index === 0;
           const started = performance.now();
-          const phases: Omit<LoadRunTimings, 'cardReadMs' | 'otherMs' | 'totalMs'> = {
-            inspectMs: 0,
-            contextMs: 0,
-            validationMs: 0,
-            journalMs: 0,
-            transportMs: 0,
-          };
-          const readStarted = performance.now();
-          const reading = first
-            ? { ok: true as const, value: original }
-            : await this.cards.read({
-                readerName: original.readerName,
-                applicationId: original.applicationId,
-                terminalCountryCode: '218',
-              });
-          const cardReadMs = Math.round(performance.now() - readStarted);
-          this.publish();
-          if (!reading.ok) return reading;
-          if (closed || signal.aborted) return failure('CONFLICT', 'La corrida fue detenida.');
-          if (
-            reading.value.status !== 'READ' ||
-            reading.value.panMasked !== original.panMasked ||
-            reading.value.applicationId !== original.applicationId
-          )
-            return failure('CONFLICT', 'La tarjeta cambió. Se detuvo la corrida.');
+          const deadline = slot?.deadline ?? started + request.draft.durationSeconds * 1000;
+          const prior = preparing;
+          let release!: () => void;
+          preparing = new Promise<void>((resolve) => {
+            release = resolve;
+          });
+          await prior;
+          const queueWaitMs = Math.round(performance.now() - started);
           try {
-            const result = await this.application.executeBalance(
-              {
-                ...context,
-                cardReadId: reading.value.readId,
-                requestId: this.identity.uuid(),
-              },
-              'BALANCE',
-              {
-                runId,
-                signal,
-                onPhase: (phase, elapsedMs) => {
-                  const key = `${phase}Ms` as keyof typeof phases;
-                  phases[key] += elapsedMs;
-                },
-              },
-            );
-            if (!result.ok) return result;
-            const totalMs = Math.round(performance.now() - started);
-            const measuredMs =
-              cardReadMs + Object.values(phases).reduce((sum, value) => sum + value, 0);
-            return {
-              ok: true,
-              value: {
-                ...result.value,
-                loadTimings: {
-                  cardReadMs,
-                  ...phases,
-                  otherMs: Math.max(0, totalMs - measuredMs),
-                  totalMs,
-                },
-              },
+            if (closed || signal.aborted)
+              return failure('CONFLICT', 'La corrida terminó antes de preparar esta consulta.');
+            if (performance.now() >= deadline)
+              return {
+                ...failure('CONFLICT', 'Duración alcanzada antes de preparar la consulta.'),
+                skipped: 'DURATION' as const,
+              };
+            const phases: Omit<
+              LoadRunTimings,
+              'cardReadMs' | 'otherMs' | 'totalMs' | 'queueWaitMs' | 'rateLimitMs'
+            > = {
+              inspectMs: 0,
+              contextMs: 0,
+              validationMs: 0,
+              journalMs: 0,
+              transportMs: 0,
             };
-          } finally {
+            let rateLimitMs = 0,
+              sendValidationMs = 0;
+            let durationSkipped = false;
+            const readStarted = performance.now();
+            const reading = first
+              ? { ok: true as const, value: original }
+              : await this.cards.read({
+                  readerName: original.readerName,
+                  applicationId: original.applicationId,
+                  terminalCountryCode: '218',
+                });
+            const cardReadMs = Math.round(performance.now() - readStarted);
             this.publish();
+            if (!reading.ok) return reading;
+            if (closed || signal.aborted) return failure('CONFLICT', 'La corrida fue detenida.');
+            if (
+              reading.value.status !== 'READ' ||
+              reading.value.panMasked !== original.panMasked ||
+              reading.value.applicationId !== original.applicationId
+            )
+              return failure('CONFLICT', 'La tarjeta cambió. Se detuvo la corrida.');
+            try {
+              const result = await this.application.executeBalance(
+                {
+                  ...context,
+                  cardReadId: reading.value.readId,
+                  requestId: this.identity.uuid(),
+                },
+                'BALANCE',
+                {
+                  runId,
+                  signal,
+                  concurrency: request.draft.concurrency,
+                  deadline,
+                  withWrite: async (write) => {
+                    const waitStarted = performance.now();
+                    let admitted = false;
+                    try {
+                      await limiter.send(signal, deadline, async () => {
+                        admitted = true;
+                        rateLimitMs += Math.round(performance.now() - waitStarted);
+                        const previousValidation = phases.validationMs;
+                        try {
+                          await write();
+                        } finally {
+                          sendValidationMs += phases.validationMs - previousValidation;
+                        }
+                      });
+                    } catch (error) {
+                      if (!signal.aborted && performance.now() >= deadline) durationSkipped = true;
+                      throw error;
+                    } finally {
+                      if (!admitted) rateLimitMs += Math.round(performance.now() - waitStarted);
+                    }
+                  },
+                  onPrepared: release,
+                  onPhase: (phase, elapsedMs) => {
+                    const key = `${phase}Ms` as keyof typeof phases;
+                    phases[key] +=
+                      phase === 'transport'
+                        ? Math.max(0, elapsedMs - rateLimitMs - sendValidationMs)
+                        : elapsedMs;
+                  },
+                },
+              );
+              if (!result.ok) return result;
+              if (durationSkipped && !result.value.transmissionAttempted)
+                return { ...result, skipped: 'DURATION' as const };
+              const totalMs = Math.round(performance.now() - started);
+              const measuredMs =
+                queueWaitMs +
+                rateLimitMs +
+                cardReadMs +
+                Object.values(phases).reduce((sum, value) => sum + value, 0);
+              return {
+                ok: true,
+                value: {
+                  ...result.value,
+                  loadTimings: {
+                    cardReadMs,
+                    queueWaitMs,
+                    rateLimitMs,
+                    ...phases,
+                    otherMs: Math.max(0, totalMs - measuredMs),
+                    totalMs,
+                  },
+                },
+              };
+            } finally {
+              this.publish();
+            }
+          } finally {
+            release();
           }
         },
       },

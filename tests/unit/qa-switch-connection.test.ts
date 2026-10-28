@@ -1,4 +1,5 @@
 import { Socket } from 'node:net';
+import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { QaSwitchConnection } from '../../apps/desktop/src/main/adapters/qa-switch-connection';
 import type { SwitchConnectionPort } from '../../apps/desktop/src/main/switch-connection-port';
@@ -26,6 +27,39 @@ describe('estado de conexión QA', () => {
     sockets[0]!.emit('connect');
     return { connection, factory, sockets };
   }
+  it.each([false, true])(
+    'solapa sockets del mismo run y restaura solo al cerrar todos; desconexión=%s',
+    async (disconnect) => {
+      const { connection, factory } = observing();
+      const load = { runId: randomUUID(), concurrency: 2 };
+      const releases: (() => void)[] = [];
+      const exchange = () => new Promise<void>((resolve) => releases.push(resolve));
+      const first = connection.withTransaction(request.endpoint, exchange, load);
+      const second = connection.withTransaction(request.endpoint, exchange, load);
+      await vi.waitFor(() => expect(releases).toHaveLength(2));
+      await expect(connection.withTransaction(request.endpoint, exchange, load)).rejects.toThrow(
+        'QA_CONNECTION_BUSY',
+      );
+      await expect(
+        connection.withTransaction(request.endpoint, exchange, { ...load, runId: randomUUID() }),
+      ).rejects.toThrow('QA_CONNECTION_BUSY');
+      await expect(
+        connection.withTransaction({ ...request.endpoint, port: 16101 }, exchange, load),
+      ).rejects.toThrow('QA_CONNECTION_BUSY');
+      await expect(connection.withTransaction(request.endpoint, exchange)).rejects.toThrow(
+        'QA_CONNECTION_BUSY',
+      );
+      if (disconnect) connection.disconnect('USER_DISCONNECTED');
+      releases[1]!();
+      await second;
+      expect(factory).toHaveBeenCalledOnce();
+      expect(() => connection.connect(request)).toThrow('QA_CONNECTION_BUSY');
+      releases[0]!();
+      await first;
+      expect(factory).toHaveBeenCalledTimes(disconnect ? 1 : 2);
+      connection.disconnect('APP_CLOSED');
+    },
+  );
   it.each(['APPROVED', 'RESPONSE_TIMEOUT', 'PEER_CLOSED'])(
     'restaura solo observación después de %s, sin repetir el envío',
     async (outcome) => {

@@ -91,6 +91,53 @@ function setup(
   };
 }
 describe('worker de carga con persistencia real', () => {
+  it('al vencer duración descarta slots sin envío y espera las respuestas activas sin marcar error', async () => {
+    let calls = 0;
+    const { service } = setup(async () => {
+      const index = calls++;
+      await new Promise((resolve) => setTimeout(resolve, index === 0 ? 1200 : 1000));
+      return index === 0
+        ? { ok: true, value: result() }
+        : { ok: true, value: result(), skipped: 'DURATION' as const };
+    });
+    const input = request();
+    input.draft.concurrency = 2;
+    input.draft.durationSeconds = 1;
+    await service.start(input);
+    await service.whenIdle();
+    expect(calls).toBe(2);
+    const current = await service.current(undefined);
+    expect(current).toMatchObject({ ok: true, value: { state: 'COMPLETED', active: 0 } });
+    if (!current.ok) throw Error('NO_RUN');
+    expect(current.value?.items).toHaveLength(1);
+  });
+  it('mantiene 3 inicios por segundo con cuatro slots mientras el host tarda más de un segundo', async () => {
+    const starts: number[] = [];
+    let active = 0,
+      peak = 0;
+    const { service } = setup(async () => {
+      starts.push(performance.now());
+      peak = Math.max(peak, ++active);
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+      active--;
+      return { ok: true, value: result() };
+    });
+    const input = request();
+    input.draft.targetTps = 3;
+    input.draft.concurrency = 4;
+    input.draft.maxTransactions = 12;
+    expect(await service.start(input)).toMatchObject({ ok: true });
+    await service.whenIdle();
+    expect(starts).toHaveLength(12);
+    expect(peak).toBe(4);
+    for (let i = 1; i < starts.length; i++)
+      expect(starts[i]! - starts[i - 1]!).toBeGreaterThanOrEqual(300);
+    expect(((starts.length - 1) * 1000) / (starts.at(-1)! - starts[0]!)).toBeGreaterThan(2.7);
+    expect(await service.current(undefined)).toMatchObject({
+      ok: true,
+      value: { state: 'COMPLETED', active: 0 },
+    });
+  }, 15000);
   it('mide el intervalo desde el inicio real en Main y no recupera un tick entregado tarde con una ráfaga', async () => {
     const starts: number[] = [];
     let first = true;

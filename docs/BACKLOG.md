@@ -104,12 +104,13 @@ historico y prioriza el primer saldo nuevo CB 205/QA/ahorros. Ver
 - [ ] evidence view con resultados reales
 
 ## Epic 7 - Load
-- [x] worker secuencial para piloto fisico de saldo QA/LOCAL, una operacion en curso
+- [x] piloto fisico de saldo QA/LOCAL; modo secuencial conservado como concurrencia 1
 - [x] ritmo objetivo con rampa opcional y limite local de 5 TPS; tasa real no garantizada
 - [x] una tarjeta fisica y uno o varios ATM alternados por corrida, con parada y recuperacion del estado (ADR-026)
 - [x] metricas de envios, respuestas, resultados, TPS, latencias y tiempos por etapa
-- [ ] pool financiero virtual y concurrencia mayor a uno (TODO-DATA LOAD-VIRTUAL-PROVIDER)
-- [ ] multiples tarjetas/ATM simultaneos y pruebas en PREPROD u otros flujos
+- [x] slots asíncronos configurables (1–5), varios ATM en vuelo, límite TPS global y diario concurrente (ADR-027)
+- [ ] pool financiero virtual para sostener TPS sin el límite físico del chip (TODO-DATA LOAD-VIRTUAL-PROVIDER)
+- [ ] multiples tarjetas y pruebas en PREPROD u otros flujos
 
 El piloto se verifica con pruebas unitarias, de integracion y Electron con fuente
 sintetica; no acredita capacidad del Switch ni una corrida de carga real.

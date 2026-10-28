@@ -6,13 +6,14 @@ import {
   parseLoadTestDraft,
 } from '../../../../../packages/domain/src/load-test';
 import { loadPacingDelay } from './load-pacing';
+import { LOAD_RUN_MAX_CONCURRENCY } from '../../../../../packages/domain/src/load-run';
 
 const plan = parseLoadTestDraft(workerData?.draft);
 const startedAt: unknown = workerData?.startedAt;
 if (
   !parentPort ||
   !plan ||
-  plan.concurrency !== 1 ||
+  plan.concurrency > LOAD_RUN_MAX_CONCURRENCY ||
   plan.targetTps < LOAD_TEST_LOCAL_MIN_TPS ||
   typeof startedAt !== 'number' ||
   !Number.isFinite(startedAt)
@@ -23,7 +24,7 @@ const start = startedAt;
 const elapsed = () => Math.max(0, performance.timeOrigin + performance.now() - start);
 let sent = 0;
 let last = performance.now();
-let awaitingResult = false;
+const active = new Map<number, boolean>();
 let stopped = false;
 let timer: ReturnType<typeof setTimeout> | undefined;
 const deadline = setTimeout(
@@ -39,18 +40,23 @@ function finish(reason: string) {
   port.close();
 }
 function schedule() {
-  if (stopped) return;
-  if (sent >= plan!.maxTransactions) return finish('COUNT');
+  if (stopped || timer || [...active.values()].some((accepted) => !accepted)) return;
+  if (sent >= plan!.maxTransactions) {
+    if (!active.size) finish('COUNT');
+    return;
+  }
   if (elapsed() >= plan!.durationSeconds * 1000) return finish('DURATION');
+  if (active.size >= plan!.concurrency) return;
   const rate = loadTargetTps(plan!, elapsed());
   const wait = loadPacingDelay(sent, last, performance.now(), rate);
   timer = setTimeout(() => {
+    timer = undefined;
     if (stopped) return;
     if (elapsed() >= plan!.durationSeconds * 1000) return finish('DURATION');
     last = performance.now();
     sent++;
-    awaitingResult = true;
-    port.postMessage({ type: 'tick' });
+    active.set(sent, false);
+    port.postMessage({ type: 'tick', ticket: sent });
   }, wait);
 }
 port.on('message', (message: unknown) => {
@@ -58,11 +64,13 @@ port.on('message', (message: unknown) => {
     message &&
     typeof message === 'object' &&
     'type' in message &&
-    message.type === 'next' &&
-    awaitingResult
+    (message.type === 'next' || message.type === 'started') &&
+    'ticket' in message &&
+    typeof message.ticket === 'number' &&
+    active.has(message.ticket)
   ) {
-    awaitingResult = false;
     if (
+      !active.get(message.ticket) &&
       'operationStartedAt' in message &&
       typeof message.operationStartedAt === 'number' &&
       Number.isFinite(message.operationStartedAt)
@@ -71,8 +79,10 @@ port.on('message', (message: unknown) => {
       // Delayed delivery must not turn the next operation into a catch-up burst.
       last = Math.max(last, message.operationStartedAt - performance.timeOrigin);
     }
-    // Pace from the previous start. A slow card/host operation already used
-    // its interval; adding another interval would reduce throughput further.
+    if (message.type === 'started') active.set(message.ticket, true);
+    else active.delete(message.ticket);
+    // Start acknowledgements allow overlap; completion frees exactly one slot.
+    // A delayed tick cannot accumulate rate credit or trigger catch-up bursts.
     schedule();
   } else if (message === 'stop') finish('STOP');
 });

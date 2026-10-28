@@ -31,6 +31,8 @@ export interface BalanceContextProvider {
   acquire(target: BalanceTarget, signal: AbortSignal): Promise<BalanceContextLease>;
 }
 export interface BalanceExchangeRequest {
+  load?: { runId: string; concurrency: number };
+  withWrite?: (write: () => void) => Promise<void>;
   signal?: AbortSignal;
   environment: 'QA';
   endpoint: { host: string; port: number };

@@ -47,7 +47,7 @@ import type {
   BalanceExecution,
 } from '../../../../packages/domain/src/balance-inquiry';
 import type { BalanceTarget } from './balance-ports';
-import { missingBalanceContext } from './balance-inquiry-service';
+import { missingBalanceContext, loadExecutionScope } from './balance-inquiry-service';
 import type { BalanceInquiryService } from './balance-inquiry-service';
 import type { SwitchConnectionPort } from './switch-connection-port';
 import type { SwitchConnectionSnapshot } from '../../../../packages/domain/src/switch-connection';
@@ -63,6 +63,8 @@ export class DesktopApplication {
   private environmentRevision = 0;
   private observationBusy = false;
   private balanceBusy: string | undefined;
+  private balanceCount = 0;
+  private balanceScope: string | undefined;
   private financialIdle: Promise<void> = Promise.resolve();
   private resolveFinancialIdle: (() => void) | undefined;
   isFinancialBusy(): boolean {
@@ -603,15 +605,23 @@ export class DesktopApplication {
         'VALIDATION_ERROR',
         'Revisa el contexto de ejecución; este canal no acepta tramas ni secretos.',
       );
-    if (this.balanceBusy)
+    const scope = operation === 'BALANCE' ? loadExecutionScope(execution) : undefined;
+    if (
+      this.balanceBusy &&
+      (!scope || scope !== this.balanceScope || this.balanceCount >= execution!.concurrency!)
+    )
       return failure(
         'CONFLICT',
         'Ya hay una transacción en curso. Consulta su referencia sin repetir el envío.',
       );
-    this.balanceBusy = request.requestId;
-    this.financialIdle = new Promise<void>((resolve) => {
-      this.resolveFinancialIdle = resolve;
-    });
+    if (!this.balanceCount) {
+      this.balanceBusy = request.requestId;
+      this.balanceScope = scope;
+      this.financialIdle = new Promise<void>((resolve) => {
+        this.resolveFinancialIdle = resolve;
+      });
+    }
+    this.balanceCount++;
     try {
       const context = await this.balanceTarget({
         draft: request.draft,
@@ -647,9 +657,12 @@ export class DesktopApplication {
         execution,
       );
     } finally {
-      this.balanceBusy = undefined;
-      this.resolveFinancialIdle?.();
-      this.resolveFinancialIdle = undefined;
+      if (--this.balanceCount === 0) {
+        this.balanceBusy = undefined;
+        this.balanceScope = undefined;
+        this.resolveFinancialIdle?.();
+        this.resolveFinancialIdle = undefined;
+      }
     }
   }
   getBalanceExecution(

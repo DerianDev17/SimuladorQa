@@ -168,6 +168,57 @@ describe('Main, proveedor y diario de saldo real en archivo', () => {
       },
     };
   }
+  it('Main admite slots del mismo run y mantiene la exclusión manual hasta el último resultado', async () => {
+    const f = await fixture();
+    const execution = { runId: randomUUID(), signal: new AbortController().signal, concurrency: 2 };
+    const releases: (() => void)[] = [];
+    vi.mocked(f.transport.exchange).mockImplementation(
+      () =>
+        new Promise((resolve) =>
+          releases.push(() =>
+            resolve({
+              outcome: 'APPROVED',
+              transmissionAttempted: true,
+              bytesQueued: 451,
+              elapsedMs: 20,
+              responseCode: '00',
+              balances: [],
+            }),
+          ),
+        ),
+    );
+    const first = f.app.executeBalance(f.request, 'BALANCE', execution);
+    const second = f.app.executeBalance(
+      { ...f.request, requestId: randomUUID() },
+      'BALANCE',
+      execution,
+    );
+    await vi.waitFor(() => expect(releases).toHaveLength(2));
+    const extra = { ...f.request, requestId: randomUUID() };
+    expect(await f.app.executeBalance(extra, 'BALANCE', execution)).toMatchObject({ ok: false });
+    let idle = false;
+    void f.app.whenFinancialIdle().then(() => {
+      idle = true;
+    });
+    releases[1]!();
+    await second;
+    expect(idle).toBe(false);
+    expect(f.app.isFinancialBusy()).toBe(true);
+    expect(await f.app.executeBalance(extra)).toMatchObject({ ok: false });
+    expect(
+      await f.app.executeBalance(extra, 'BALANCE', { ...execution, runId: randomUUID() }),
+    ).toMatchObject({ ok: false });
+    expect(await f.app.catalog('saveAtm', {})).toMatchObject({
+      ok: false,
+      error: { code: 'CONFLICT' },
+    });
+    releases[0]!();
+    await first;
+    await f.app.whenFinancialIdle();
+    expect(f.app.isFinancialBusy()).toBe(false);
+    expect(idle).toBe(true);
+    expect((await f.journal.read()).filter((item) => item.outcome === 'APPROVED')).toHaveLength(2);
+  });
   it('revalida contexto, devuelve saldo y conserva correlación tras reiniciar sin nuevo envío', async () => {
     const f = await fixture();
     expect(

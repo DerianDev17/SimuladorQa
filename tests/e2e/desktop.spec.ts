@@ -107,7 +107,7 @@ test('carga de saldo: iniciar, medir, recuperar y detener con motor real y fuent
   );
 });
 
-test('carga: selecciona ambos ATM en una corrida y conserva su identidad al recuperar resultados', async () => {
+test('carga: selecciona ambos ATM concurrentes y conserva su identidad al recuperar resultados', async () => {
   test.setTimeout(60000);
   const window = await prepareBalanceSubmission();
   await createTestAtm(window, 'Segundo ATM de saldo');
@@ -138,6 +138,8 @@ test('carga: selecciona ambos ATM en una corrida y conserva su identidad al recu
   await expect(start).toBeDisabled();
   await expect(window.locator('.load-validation')).toContainText('al menos una consulta por ATM');
   await window.getByLabel('Máximo de operaciones').fill('4');
+  await window.getByLabel('TPS objetivo', { exact: true }).fill('3');
+  await window.getByLabel('Operaciones simultáneas').selectOption('2');
   await window.getByLabel('Duración máxima (segundos)').fill('10');
   await mkdir('artifacts', { recursive: true });
   await build({
@@ -161,6 +163,7 @@ test('carga: selecciona ambos ATM en una corrida y conserva su identidad al recu
         options.worker,
         options.sample,
         options.terminals,
+        1000,
       );
     },
     {
@@ -174,11 +177,19 @@ test('carga: selecciona ambos ATM en una corrida y conserva su identidad al recu
   await start.click();
   await expect(first).toBeDisabled();
   await expect(second).toBeDisabled();
+  await expect(window.getByLabel('Operaciones simultáneas')).toBeDisabled();
+  await expect
+    .poll(async () => {
+      const status = await window.evaluate(() => globalThis.window.desktop!.getLoadRun());
+      return status.ok ? status.value?.active : 0;
+    })
+    .toBe(2);
   const result = window.getByRole('region', { name: 'Resultado de carga', exact: true });
   await expect(result).toContainText('Completada', { timeout: 15000 });
   const snapshot = await window.evaluate(() => globalThis.window.desktop!.getLoadRun());
   if (!snapshot.ok || !snapshot.value) throw Error('NO_RUN');
   expect(snapshot.value.draft.additionalAtms).toHaveLength(1);
+  expect(snapshot.value.draft.concurrency).toBe(2);
   expect(snapshot.value.items.map((item) => item.correlation?.terminalId)).toEqual([
     'ATM20521',
     'ATM20524',
@@ -192,6 +203,7 @@ test('carga: selecciona ambos ATM en una corrida y conserva su identidad al recu
   await expect(window.locator('.load-run-table tbody tr')).toHaveCount(4);
   await expect(window.locator('.load-run-table tbody')).toContainText('ATM20521');
   await expect(window.locator('.load-run-table tbody')).toContainText('ATM20524');
+  await window.evaluate(() => globalThis.window.scrollTo(0, 0));
   await window.screenshot({ path: 'artifacts/load-two-atms.png', fullPage: true });
 });
 

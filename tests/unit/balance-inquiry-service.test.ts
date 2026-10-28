@@ -46,6 +46,56 @@ const provider = (): BalanceContextProvider => ({
   acquire: async (target) => balanceLease(target),
 });
 describe('orquestación de saldo sin inferir seguridad ni resultados', () => {
+  it('limita concurrencia al mismo run, deduplica y conserva respuestas fuera de orden', async () => {
+    const f = fixture(provider());
+    const target = balanceTarget();
+    const requests = Array.from({ length: 3 }, () => balanceRequest(target));
+    const execution = { runId: randomUUID(), signal: new AbortController().signal, concurrency: 2 };
+    const releases: ((value: BalanceExchangeResult) => void)[] = [];
+    vi.mocked(f.transport.exchange).mockImplementation(
+      () => new Promise((resolve) => releases.push(resolve)),
+    );
+    const invoke = (index: number, context = execution) =>
+      f.service.execute(
+        requests[index]!,
+        target,
+        { connect: 100, response: 100 },
+        async () => true,
+        context,
+      );
+    const first = invoke(0);
+    const duplicate = invoke(0);
+    const second = invoke(1);
+    await vi.waitFor(() => expect(releases).toHaveLength(2));
+    expect(f.records().filter((item) => item.outcome === 'PENDING')).toHaveLength(2);
+    expect(await invoke(2)).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+    const approved: BalanceExchangeResult = {
+      outcome: 'APPROVED',
+      transmissionAttempted: true,
+      bytesQueued: 451,
+      elapsedMs: 15,
+      responseCode: '00',
+      balances: [],
+    };
+    releases[1]!(approved);
+    await second;
+    expect(f.service.isBusy()).toBe(true);
+    expect(await invoke(2, { ...execution, runId: randomUUID() })).toMatchObject({ ok: false });
+    expect(
+      await f.service.execute(
+        requests[2]!,
+        target,
+        { connect: 100, response: 100 },
+        async () => true,
+      ),
+    ).toMatchObject({ ok: false });
+    releases[0]!(approved);
+    expect(await duplicate).toEqual(await first);
+    expect(f.service.isBusy()).toBe(false);
+    expect(f.records()).toHaveLength(2);
+    expect(f.records().every((item) => item.outcome === 'APPROVED')).toBe(true);
+    expect(f.transport.exchange).toHaveBeenCalledTimes(2);
+  });
   it('conserva el runId de carga y propaga cancelación sin enviar una consulta nueva', async () => {
     const f = fixture(provider());
     const target = balanceTarget();

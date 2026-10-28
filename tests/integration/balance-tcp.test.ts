@@ -47,6 +47,65 @@ function request(port: number): BalanceExchangeRequest {
 }
 const framing = new CapturedVisaFraming();
 describe('consulta financiera TCP en loopback con datos sinteticos', () => {
+  it('excluye del tiempo de transporte la espera TPS y empieza el timeout al escribir', async () => {
+    let gateWaitMs = 0;
+    const port = await listen((peer) =>
+      peer.once('data', () => {
+        peer.end(framing.encode(balanceResponse(input.expected), Buffer.alloc(2)));
+      }),
+    );
+    const input: BalanceExchangeRequest = {
+      ...request(port),
+      responseDeadlineMs: 200,
+      withWrite: async (write) => {
+        const gateStarted = performance.now();
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        gateWaitMs = performance.now() - gateStarted;
+        write();
+      },
+    };
+    const started = performance.now();
+    const result = await new BalanceTcpTransport().exchange(input);
+    expect(result.outcome).toBe('APPROVED');
+    expect(performance.now() - started).toBeGreaterThanOrEqual(290);
+    expect(performance.now() - started - result.elapsedMs).toBeGreaterThanOrEqual(gateWaitMs - 20);
+  });
+  it.each(['CANCEL', 'EXPIRED'] as const)(
+    'no escribe si el permiso de carga termina por %s',
+    async (reason) => {
+      let bytes = 0;
+      const port = await listen((peer) =>
+        peer.on('data', (chunk) => {
+          bytes += chunk.length;
+        }),
+      );
+      const abort = new AbortController();
+      let release!: () => void;
+      let entered!: () => void;
+      const ready = new Promise<void>((resolve) => {
+        entered = resolve;
+      });
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const pending = new BalanceTcpTransport().exchange({
+        ...request(port),
+        signal: abort.signal,
+        withWrite: async (write) => {
+          entered();
+          await gate;
+          if (reason === 'EXPIRED') throw Error('CONTEXT_CHANGED');
+          write();
+        },
+      });
+      await ready;
+      if (reason === 'CANCEL') abort.abort();
+      release();
+      expect(await pending).toMatchObject({ transmissionAttempted: false, bytesQueued: 0 });
+      await vi.waitFor(() => expect(peers.size).toBe(0));
+      expect(bytes).toBe(0);
+    },
+  );
   it('detener carga cierra el socket y conserva evidencia de un envío sin respuesta', async () => {
     const abort = new AbortController();
     const port = await listen((peer) => peer.once('data', () => abort.abort()));

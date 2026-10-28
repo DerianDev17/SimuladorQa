@@ -45,7 +45,19 @@ en Configuracion; no reemplaza los adaptadores de transporte ni autoriza sockets
 
 ## Restricciones
 
-Carga con varios perfiles (2026-10-28): LoadTestDraft conserva el ATM principal
+Carga concurrente (2026-10-28, ADR-027): sustituye la restricción secuencial de
+ADR-026 por 1–5 slots asíncronos. El worker confirma inicio y cierre por ticket;
+Main limita capacidad y cantidad. PhysicalCardLoadDriver serializa lectura,
+PIN/EMV y validación hasta registrar PENDING y abrir el transporte, liberando
+el lector mientras espera el host. Cada socket pasa por un limitador global
+antes del write, sin créditos acumulados ni envíos después del plazo. El
+servicio financiero y la conexión admiten concurrencia solo del mismo runId
+y límite interno; operaciones manuales y retiros conservan exclusión. Las
+escrituras del diario hacen read-modify-write serializado para evitar pérdidas
+y regresiones de estado con respuestas fuera de orden. La observación se
+restaura al cerrar el último socket del grupo. No se reutilizan tramas ni AC.
+
+Carga con varios perfiles (primera entrega, sustituida por ADR-027): LoadTestDraft conserva el ATM principal
 y acepta additionalAtms con UUID/revisión. PhysicalCardLoadDriver valida todos
 antes de iniciar, alterna sus contextos en orden y reutiliza la revalidación de
 DesktopApplication antes de cada operación. Un worker y una tarjeta física
