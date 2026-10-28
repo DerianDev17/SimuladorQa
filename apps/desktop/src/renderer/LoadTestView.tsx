@@ -12,6 +12,7 @@ import {
   LOAD_RUN_MAX_SECONDS,
   LOAD_RUN_MAX_CONCURRENCY,
   loadRunMetrics,
+  loadRunBelowTarget,
   loadResponseSeries,
   parseLoadRunRequest,
 } from '../../../../packages/domain/src/load-run';
@@ -273,7 +274,7 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
     setMode('LOAD');
     setCount(String(choice.count));
     setTps(String(choice.tps));
-    setConcurrency(String(choice.tps >= 3 ? Math.min(5, choice.tps + 1) : 2));
+    setConcurrency(String(choice.tps >= 3 ? LOAD_RUN_MAX_CONCURRENCY : 2));
     setDuration(String(choice.seconds));
   }
   async function start() {
@@ -478,7 +479,7 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
             <p className="load-inline-note">
               El chip prepara una consulta a la vez; los envíos pueden esperar respuestas
               simultáneamente. El ritmo real depende de la preparación y del host. El escenario de 3
-              TPS usa 4 operaciones simultáneas.
+              TPS usa {LOAD_RUN_MAX_CONCURRENCY} operaciones simultáneas.
             </p>
           </div>
           <div className="load-fixed-operation">
@@ -603,8 +604,13 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
           <div className="panel load-status-panel">
             <div className="panel-heading">
               <h2>Estado de la prueba</h2>
-              <span className={'pill ' + (active ? 'amber' : 'neutral')}>
+              <span
+                className={
+                  'pill ' + (active || (run && loadRunBelowTarget(run)) ? 'amber' : 'neutral')
+                }
+              >
                 {run ? labels[run.state] : 'Sin iniciar'}
+                {run && loadRunBelowTarget(run) ? ' · TPS no alcanzados' : ''}
               </span>
             </div>
             {run && metrics ? (
@@ -642,6 +648,19 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
                   ))}
                 </div>
                 <div className="load-data-card">
+                  {loadRunBelowTarget(run) && (
+                    <p role="status">
+                      Objetivo TPS no alcanzado: {metrics.tps.toFixed(2)} de{' '}
+                      {run.draft.targetTps.toFixed(2)} TPS de promedio. Finalizar por cantidad o
+                      duración no acredita el ritmo solicitado.
+                    </p>
+                  )}
+                  <small className="load-test-hint">
+                    TPS real: envíos / tiempo total, incluida preparación y espera de las últimas
+                    respuestas. Revisa la gráfica para evaluar el ritmo sostenido.
+                  </small>
+                </div>
+                <div className="load-data-card">
                   <div className="load-data-heading">
                     <h3>Ritmo de respuestas</h3>
                     <small>
@@ -675,7 +694,8 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
                     <>
                       <p className="load-test-hint">
                         Suma de {timed.length} operaciones con desglose. Las barras comparan etapas
-                        medidas.
+                        medidas. Las esperas simultáneas se superponen; su suma puede superar la
+                        duración de la corrida.
                       </p>
                       <div className="load-timing-bars">
                         {totals.map((item) => (

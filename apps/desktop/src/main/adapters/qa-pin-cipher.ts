@@ -3,10 +3,22 @@ import { access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isUuid } from '../../../../../packages/domain/src/catalogs';
 import type { QaPinCipher } from './legacy-qa-pin';
+import { QaCipherSession } from './qa-cipher-session';
 
 // Explicit TDEA TEST binding. No algorithm/key is inferred from a vendor name,
 // captured F52 or .reg. Each key is a DPAPI-protected SecureString file.
 export class WindowsQaPinCipher implements QaPinCipher {
+  private scoped = false;
+  private sessions = new Map<string, QaCipherSession>();
+  begin(): void {
+    if (this.scoped) throw Error('QA_PIN_UNAVAILABLE');
+    this.scoped = true;
+  }
+  end(): void {
+    this.scoped = false;
+    for (const session of this.sessions.values()) session.close();
+    this.sessions.clear();
+  }
   constructor(
     private readonly script: string,
     private readonly keyDirectory: string,
@@ -29,6 +41,15 @@ export class WindowsQaPinCipher implements QaPinCipher {
   encrypt(block: Uint8Array, reference: string, signal: AbortSignal): Promise<Uint8Array> {
     if (block.length !== 8 || !isUuid(reference) || signal.aborted)
       return Promise.reject(Error('QA_PIN_UNAVAILABLE'));
+    if (this.scoped) {
+      let session = this.sessions.get(reference);
+      if (!session) {
+        if (this.sessions.size >= 5) return Promise.reject(Error('QA_PIN_UNAVAILABLE'));
+        session = new QaCipherSession(this.script, this.keyDirectory, reference);
+        this.sessions.set(reference, session);
+      }
+      return session.encrypt(block, signal);
+    }
     return new Promise((resolve, reject) => {
       const child = spawn(
         join(

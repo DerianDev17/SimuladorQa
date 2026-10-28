@@ -1,7 +1,7 @@
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WindowsCardSession } from '../../apps/desktop/src/main/adapters/windows-card-session';
 import { CardIdentityService } from '../../apps/desktop/src/main/card-identity-service';
 import type { CardReaderAdapter } from '../../packages/domain/src/card-reader';
@@ -85,6 +85,42 @@ while ($null -ne ($line = [Console]::ReadLine())) {
       });
       expect(await service.current()).toMatchObject({ cardholderName: 'QA TESTER' });
     } finally {
+      service.close();
+    }
+  });
+  it('ejecuta lecturas nuevas entre operaciones sin reiniciar el helper de PC/SC', async () => {
+    const replies = identityResponses().map((row) =>
+      Buffer.from(row).toString('hex').toUpperCase(),
+    );
+    await writeFile(
+      script,
+      `
+$rows = '${JSON.stringify(replies)}' | ConvertFrom-Json
+$index = 0
+while ($null -ne ($line = [Console]::ReadLine())) {
+  $request = $line | ConvertFrom-Json
+  if ($request.op -eq 'close') { break }
+  if ($request.op -eq 'transmit') { @{ok=$true;response=$rows[$index % 6]} | ConvertTo-Json -Compress; $index++ }
+  elseif ($request.op -eq 'status') { @{ok=$true;valid=$true} | ConvertTo-Json -Compress }
+  else { @{ok=$true} | ConvertTo-Json -Compress }
+}`,
+    );
+    const open = vi.fn(connect);
+    const service = new CardIdentityService(reader, open);
+    try {
+      const first = await service.read({ readerName: 'CI Reader' });
+      if (!first.ok) throw Error(first.error.code);
+      service.beginLoadSession();
+      const signal = new AbortController().signal;
+      await service.withTransaction(first.value.readId, signal, async () => {});
+      const next = await service.read({ readerName: 'CI Reader' });
+      if (!next.ok) throw Error(next.error.code);
+      expect(next.value.readId).not.toBe(first.value.readId);
+      await service.withTransaction(next.value.readId, signal, async () => {});
+      expect(open).toHaveBeenCalledOnce();
+      expect(await service.current()).toBeNull();
+    } finally {
+      service.endLoadSession();
       service.close();
     }
   });

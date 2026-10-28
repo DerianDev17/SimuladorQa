@@ -104,6 +104,16 @@ export function loadRunMetrics(run: LoadRunSnapshot) {
   };
 }
 
+// Completion is a scheduling outcome, not proof of the requested throughput.
+// A stress ramp has variable targets and cannot be judged against its peak.
+export function loadRunBelowTarget(run: LoadRunSnapshot): boolean {
+  return (
+    run.state === 'COMPLETED' &&
+    run.draft.mode === 'LOAD' &&
+    loadRunMetrics(run).tps < run.draft.targetTps
+  );
+}
+
 // A completed send without a response must never appear in the response curve.
 // Omit the future part of a live run instead of plotting invented zeroes.
 export function loadResponseSeries(run: LoadRunSnapshot) {

@@ -27,7 +27,9 @@ de saldo QA con una tarjeta física, PIN una vez por corrida y seguridad nueva p
 operación. Permite seleccionar varios perfiles ATM y de 1 a 5 operaciones
 simultáneas por corrida. La preparación del chip es exclusiva; los sockets
 esperan respuestas en paralelo con un límite TPS global antes de cada write.
-Muestra TPS reales, tiempos por etapa y permite detener. El pool virtual sigue
+La corrida reutiliza los procesos del lector y cifrado, manteniendo lectura,
+validación DPAPI y seguridad nuevas por operación (ADR-028). Muestra TPS reales,
+tiempos por etapa, aviso si el promedio no alcanza el objetivo y permite detener. El pool virtual sigue
 pendiente de proveedor validado; la tarjeta física puede limitar el ritmo.
 Ver [guía de ejecución](docs/implementation/LOAD_TEST.md).
 

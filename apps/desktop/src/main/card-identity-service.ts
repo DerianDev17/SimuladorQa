@@ -17,6 +17,18 @@ export class CardIdentityService {
   private generation = 0;
   private privateFields = new Map<string, Uint8Array>();
   private leasing = false;
+  private loadSession = false;
+  private retainedReader: string | undefined;
+  beginLoadSession(): void {
+    if (this.closed || this.busy || this.leasing || this.loadSession)
+      throw Error('CARD_UNAVAILABLE');
+    this.loadSession = true;
+    this.retainedReader = this.reading?.readerName;
+  }
+  endLoadSession(): void {
+    this.loadSession = false;
+    this.discard();
+  }
   private checking:
     | { session: CardApduSession; generation: number; promise: Promise<CardIdentityReading | null> }
     | undefined;
@@ -30,9 +42,11 @@ export class CardIdentityService {
   }
   observePresence(snapshot: CardReaderSnapshot | null): void {
     if (
-      this.reading &&
+      (this.reading || this.retainedReader) &&
       !snapshot?.readers.some(
-        (device) => device.name === this.reading?.readerName && device.state === 'CARD_PRESENT',
+        (device) =>
+          device.name === (this.reading?.readerName ?? this.retainedReader) &&
+          device.state === 'CARD_PRESENT',
       )
     )
       this.discard();
@@ -63,26 +77,39 @@ export class CardIdentityService {
     if (this.closed) return failure('SERVICE_UNAVAILABLE', 'El servicio del lector está cerrado.');
     if (this.busy || this.leasing) return failure('IN_USE', 'La tarjeta está en uso.');
     this.busy = true;
+    const reused =
+      this.loadSession && this.retainedReader === request.readerName ? this.session : undefined;
+    if (reused) this.session = undefined;
     this.discard();
+    if (reused) {
+      this.session = reused;
+      this.retainedReader = request.readerName;
+    }
     const generation = this.generation;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let expired = false;
     try {
       const operation = async () => {
-        const snapshot = await this.reader.inspect();
+        const snapshot = reused ? undefined : await this.reader.inspect();
         if (expired || this.closed) throw Error('CARD_UNAVAILABLE');
         if (
+          snapshot &&
           !snapshot.readers.some(
             (device) => device.name === request.readerName && device.state === 'CARD_PRESENT',
           )
         )
           throw Error('CARD_REMOVED');
-        const session = await this.connect(request.readerName as string);
+        const session = reused ?? (await this.connect(request.readerName as string));
+        if (reused) {
+          if (!(await reused.isValid()) || !reused.beginTransaction) throw Error('CARD_REMOVED');
+          await reused.beginTransaction();
+        }
         if (expired || this.closed || this.generation !== generation) {
           session.close();
           throw Error('CARD_UNAVAILABLE');
         }
         this.session = session;
+        if (this.loadSession) this.retainedReader = request.readerName as string;
         const reading = await readEmvIdentity(
           session,
           {
@@ -180,6 +207,7 @@ export class CardIdentityService {
     this.generation++;
     this.session?.close();
     this.session = undefined;
+    this.retainedReader = undefined;
     this.reading = undefined;
     for (const value of this.privateFields.values()) value.fill(0);
     this.privateFields.clear();
@@ -203,6 +231,7 @@ export class CardIdentityService {
     )
       throw Error('CARD_UNAVAILABLE');
     this.leasing = true;
+    let retained = false;
     const cancel = () => this.discard();
     signal.addEventListener('abort', cancel, { once: true });
     try {
@@ -242,11 +271,27 @@ export class CardIdentityService {
       }
       const value = await use(session, this.privateFields);
       if (signal.aborted) throw Error('CARD_UNAVAILABLE');
+      if (this.loadSession) {
+        try {
+          await session.releaseTransaction();
+        } catch {
+          throw Error('CARD_UNAVAILABLE');
+        }
+        if (signal.aborted || this.session !== session || !this.loadSession)
+          throw Error('CARD_UNAVAILABLE');
+        // Keep only the handle. Every next operation still performs fresh
+        // SELECT/GPO/READ and GENERATE AC; consumed reading IDs stay invalid.
+        this.generation++;
+        this.reading = undefined;
+        for (const field of this.privateFields.values()) field.fill(0);
+        this.privateFields.clear();
+        retained = true;
+      }
       return value;
     } finally {
       signal.removeEventListener('abort', cancel);
+      if (!retained) this.discard();
       this.leasing = false;
-      this.discard();
     }
   }
   close(): void {

@@ -15,7 +15,8 @@ import { LoadSendLimiter } from './infrastructure/load-send-limiter';
 
 export class PhysicalCardLoadDriver implements LoadRunDriver {
   constructor(
-    private readonly cards: Pick<CardIdentityService, 'current' | 'read'>,
+    private readonly cards: Pick<CardIdentityService, 'current' | 'read'> &
+      Partial<Pick<CardIdentityService, 'beginLoadSession' | 'endLoadSession'>>,
     private readonly application: Pick<
       DesktopApplication,
       'getSendConfiguration' | 'getBalanceReadiness' | 'executeBalance'
@@ -24,6 +25,7 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
     private readonly journal: BalanceJournal,
     private readonly identity: RuntimeIdentity,
     private readonly publish: () => void,
+    private readonly cipherSession?: { begin(): void; end(): void },
   ) {}
   async prepare(request: LoadRunRequest): Promise<Result<LoadRunSource>> {
     const original = await this.cards.current();
@@ -78,7 +80,16 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
         'CONFLICT',
         'El diario contiene una operación pendiente. Revisa su correlación antes de otra corrida.',
       );
-    this.pins.begin();
+    try {
+      this.pins.begin();
+      this.cards.beginLoadSession?.();
+      this.cipherSession?.begin();
+    } catch (error) {
+      this.pins.end();
+      this.cards.endLoadSession?.();
+      this.cipherSession?.end();
+      throw error;
+    }
     let next = 0;
     let closed = false;
     let preparing: Promise<void> = Promise.resolve();
@@ -91,6 +102,8 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
           if (closed) return;
           closed = true;
           this.pins.end();
+          this.cards.endLoadSession?.();
+          this.cipherSession?.end();
         },
         execute: async (signal, runId, slot) => {
           if (closed || signal.aborted) return failure('CONFLICT', 'La corrida fue detenida.');

@@ -39,6 +39,8 @@ function fixture() {
     },
   };
   const cards = {
+    beginLoadSession: vi.fn(),
+    endLoadSession: vi.fn(),
     current: vi.fn(async () => original),
     read: vi.fn(async () => ({ ok: true as const, value: { ...original, readId: randomUUID() } })),
   };
@@ -91,8 +93,18 @@ function fixture() {
     uuid: randomUUID,
     now: () => new Date().toISOString(),
   };
+  const cipher = { begin: vi.fn(), end: vi.fn() };
   return {
-    driver: new PhysicalCardLoadDriver(cards, application, pins, journal, runtime, () => {}),
+    driver: new PhysicalCardLoadDriver(
+      cards,
+      application,
+      pins,
+      journal,
+      runtime,
+      () => {},
+      cipher,
+    ),
+    cipher,
     cards,
     application,
     ask,
@@ -101,6 +113,23 @@ function fixture() {
   };
 }
 describe('adaptador de carga con tarjeta física', () => {
+  it('acota los helpers a la corrida y limpia un arranque fallido', async () => {
+    const f = fixture();
+    const prepared = await f.driver.prepare(f.input);
+    if (!prepared.ok) throw Error('PREPARE');
+    expect(f.cards.beginLoadSession).toHaveBeenCalledOnce();
+    expect(f.cipher.begin).toHaveBeenCalledOnce();
+    prepared.value.close();
+    prepared.value.close();
+    expect(f.cards.endLoadSession).toHaveBeenCalledOnce();
+    expect(f.cipher.end).toHaveBeenCalledOnce();
+    f.cipher.begin.mockImplementationOnce(() => {
+      throw Error('UNAVAILABLE');
+    });
+    await expect(f.driver.prepare(f.input)).rejects.toThrow('UNAVAILABLE');
+    expect(f.cards.endLoadSession).toHaveBeenCalledTimes(2);
+    expect(f.cipher.end).toHaveBeenCalledTimes(2);
+  });
   it('descarta sin leer ni enviar un slot que vence mientras espera el lector', async () => {
     const f = fixture();
     f.input.draft.concurrency = 2;

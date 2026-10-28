@@ -1,5 +1,12 @@
 # Enviar una consulta nueva con PIN en QA
 
+Carga (2026-10-28, ADR-028): durante una corrida el cifrado conserva un proceso
+privado por referencia (máximo cinco), con comandos serializados y plazo de
+cinco segundos. Cada comando reimporta y valida la credencial DPAPI, cifra y
+borra sus buffers; una revocación afecta la siguiente llamada. No se cachean
+claves descifradas, comprobaciones ni bloques. Error/cancelación/cierre termina
+el helper sin reintento. Fuera de carga se conserva el proceso de un solo uso.
+
 Plantilla reutilizable (2026-10-27): Main deriva automáticamente los ATM QA/205
 del perfil funcional ATM20521, con la misma referencia de enlace, configuración
 ISO/EMV y pool persistente. No se requieren perfiles ni fechas contables por

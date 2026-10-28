@@ -1,11 +1,29 @@
 # Carga y estrés de saldo en QA
 
+## Preparación reutilizable y resultado bajo objetivo — 2026-10-28 (ADR-028)
+
+La evidencia del usuario (8 consultas en 91 s, 0,09 TPS frente a 3 TPS) confirma
+que la preparación limitaba el envío pese a la concurrencia. La corrida ahora
+reutiliza el proceso PC/SC y los helpers de cifrado: evita arranques repetidos
+de PowerShell. Cada consulta sigue releyendo el chip, validando la credencial
+DPAPI y generando seguridad nueva. Los procesos se cierran al terminar, detener
+o fallar la corrida; no se reutiliza un readId consumido.
+
+El resultado muestra **TPS no alcanzados** si completa una carga sostenida
+con promedio inferior al objetivo. El promedio incluye preparación y últimas
+respuestas; la gráfica permite evaluar la estabilidad. Las sumas de espera
+concurrente pueden superar el tiempo de pared. Reiniciar la aplicación para
+cargar el nuevo Main antes de repetir la prueba con ambos ATM.
+
+La validación sintética acredita reutilización, revocación y concurrencia local;
+no acredita todavía 3 TPS con hardware/host. Véase [ADR-028](../adr/ADR-028-LOAD-PREPARATION-REUSE.md).
+
 ## Varios perfiles simultáneos — 2026-10-28 (ADR-027)
 
 En **Selecciona los ATM**, marcar ATM20521 y ATM20524 (o los perfiles QA
 disponibles). Las consultas se asignan en el orden A → B → A → B, sin esperar
 la respuesta anterior. **Operaciones simultáneas** permite de 1 a 5; el
-escenario **3 TPS** configura cuatro slots y el modo avanzado permite ajustar
+escenario **3 TPS** configura cinco slots (ADR-028) y el modo avanzado permite ajustar
 TPS/cantidad/duración. El chip prepara seguridad exclusiva, mientras los sockets
 ya preparados pueden esperar al host en paralelo. La cantidad, duración y TPS
 son totales de la corrida, no por terminal. Si se completa una cantidad impar,
@@ -101,7 +119,7 @@ Electron con fuente sintética. No se ejecuta carga contra el switch QA.
    completan cantidad y duración dentro de los límites locales; son objetivos,
    no tasas garantizadas. **Modo avanzado** permite ajustar esos valores.
    Elegir **Operaciones simultáneas**: 2 para permitir ambos ATM en vuelo, o
-   4 para el escenario de 3 TPS. Elegir 1 conserva el comportamiento secuencial.
+   5 para el escenario de 3 TPS. Elegir 1 conserva el comportamiento secuencial.
 3. Seleccionar la tarjeta QA en el lector. Un perfil guardado puede preseleccionar
    el AID, pero hay que leer el chip físico antes de iniciar.
 4. Pulsar **Iniciar prueba** e ingresar el PIN en el diálogo nativo.

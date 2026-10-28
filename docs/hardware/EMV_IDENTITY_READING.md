@@ -2,6 +2,13 @@
 
 ## Uso
 
+Carga (2026-10-28, ADR-028): una corrida autorizada puede conservar el proceso
+PC/SC después de consumir una lectura. Libera la transacción exclusiva y borra
+sus campos privados; la siguiente consulta valida el handle y vuelve a leer
+SELECT/GPO/READ. La preparación financiera conserva la relectura bajo exclusión
+y AC nueva. Cierre, fallo, cancelación, timeout o retiro invalidan el handle.
+La lectura manual y el polling conservan su alcance anterior.
+
 Actualizacion 2026-10-13: la accion de lectura conserva su alcance de identidad.
 Main puede retener campos privados para una unica operacion posterior por
 QaBalanceExecutionProvider. Solo esa ruta aprobada vuelve a adquirir la sesion

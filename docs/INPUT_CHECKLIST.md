@@ -1,5 +1,12 @@
 # Checklist de informacion por subir
 
+Evidencia LOAD-3TPS-PHYSICAL (2026-10-28): captura del usuario con ambos ATM,
+8/8 consultas aprobadas en 91 s, 0,09 TPS frente a 3 TPS. Se implementa ADR-028
+para evitar arranques de PowerShell repetidos por consulta. La evidencia actual
+demuestra incumplimiento; no acredita capacidad del host. Pendiente repetir la
+medición con esta versión y conservar serie/desglose. Los tests DPAPI sintéticos
+solo acreditan mejora local del cifrado; no cierran este TODO-DATA.
+
 Carga simultánea (2026-10-28): el usuario aclara que necesita solicitudes en
 paralelo. ADR-027 habilita 1–5 slots con preparación física exclusiva, sockets
 independientes y límite global de hasta 5 TPS. No exige un proveedor virtual

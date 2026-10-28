@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { parseLoadRunRequest, loadRunMetrics } from '../../packages/domain/src/load-run';
+import {
+  parseLoadRunRequest,
+  loadRunMetrics,
+  loadRunBelowTarget,
+} from '../../packages/domain/src/load-run';
 import { LoadPinSession } from '../../apps/desktop/src/main/adapters/load-pin-session';
 
 export const loadRequest = () => ({
@@ -20,6 +24,37 @@ export const loadRequest = () => ({
   },
 });
 describe('corrida QA acotada', () => {
+  it('no confunde completar 8 envíos en 91 segundos con alcanzar 3 TPS', () => {
+    const run = {
+      runId: randomUUID(),
+      requestId: randomUUID(),
+      draft: { ...loadRequest().draft, targetTps: 3 },
+      startedAt: new Date().toISOString(),
+      finishedAt: new Date().toISOString(),
+      state: 'COMPLETED' as const,
+      message: '',
+      active: 0,
+      elapsedMs: 91000,
+      items: Array.from({ length: 8 }, () => ({
+        requestId: randomUUID(),
+        transactionId: randomUUID(),
+        outcome: 'APPROVED' as const,
+        sent: true,
+        received: true,
+        elapsedMs: 1357,
+        responseCode: '00',
+        correlation: null,
+      })),
+    };
+    expect(loadRunBelowTarget(run)).toBe(true);
+    expect(loadRunBelowTarget({ ...run, elapsedMs: 2000 })).toBe(false);
+    expect(loadRunBelowTarget({ ...run, items: [], elapsedMs: 0 })).toBe(true);
+    expect(loadRunBelowTarget({ ...run, state: 'FAILED' })).toBe(false);
+    expect(loadRunBelowTarget({ ...run, state: 'RUNNING' })).toBe(false);
+    expect(
+      loadRunBelowTarget({ ...run, draft: { ...run.draft, mode: 'STRESS', rampUpSeconds: 5 } }),
+    ).toBe(false);
+  });
   it('reparte el presupuesto total entre ATM con concurrencia acotada', () => {
     const request = loadRequest();
     const draft = { ...request.draft, additionalAtms: [{ atmId: randomUUID(), atmRevision: 1 }] };

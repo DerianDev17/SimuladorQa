@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createCipheriv, randomUUID } from 'node:crypto';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -171,11 +171,57 @@ $testSecure.Dispose()
     const block = Buffer.from([4, 1, 2, 3, 4, 5, 6, 7]);
     const expected = createCipheriv('des-ede', key, null);
     expected.setAutoPadding(false);
+    const coldStart = performance.now();
     const encrypted = await cipher.encrypt(block, reference, new AbortController().signal);
+    const coldMs = performance.now() - coldStart;
     expect(encrypted).toEqual(Buffer.concat([expected.update(block), expected.final()]));
     encrypted.fill(0);
-    key.fill(0);
-    block.fill(0);
+    cipher.begin();
+    try {
+      expect(await cipher.available(reference)).toBe(true);
+      const warmStart = performance.now();
+      // Distinct input vectors, same protected credential, one long-lived helper.
+      const blocks = Array.from({ length: 12 }, (_, index) => Buffer.alloc(8, index));
+      const outputs = await Promise.all(
+        blocks.map((input) => cipher.encrypt(input, reference, new AbortController().signal)),
+      );
+      const warmTotalMs = performance.now() - warmStart;
+      outputs.forEach((output, index) => {
+        const testCipher = createCipheriv('des-ede', key, null);
+        testCipher.setAutoPadding(false);
+        expect(output).toEqual(
+          Buffer.concat([testCipher.update(blocks[index]!), testCipher.final()]),
+        );
+        output.fill(0);
+        blocks[index]!.fill(0);
+      });
+      await mkdir(resolve('artifacts'), { recursive: true });
+      await writeFile(
+        resolve('artifacts/load-cipher-benchmark.json'),
+        JSON.stringify(
+          {
+            scope: 'Synthetic Windows DPAPI cipher only; excludes physical chip and host',
+            measuredAt: new Date().toISOString(),
+            coldMs,
+            warmCount: outputs.length,
+            warmTotalMs,
+            warmAverageMs: warmTotalMs / outputs.length,
+          },
+          null,
+          2,
+        ),
+      );
+      // Revocation is observed by the existing helper, not just by a restart.
+      await writeFile(join(directory, reference + '.credential.xml'), 'revoked');
+      await expect(cipher.encrypt(block, reference, new AbortController().signal)).rejects.toThrow(
+        'QA_PIN_UNAVAILABLE',
+      );
+      expect(await cipher.available(reference)).toBe(false);
+    } finally {
+      cipher.end();
+      key.fill(0);
+      block.fill(0);
+    }
   });
   it('detecta una referencia ausente o un archivo que no contiene una clave DPAPI', async () => {
     const reference = randomUUID();

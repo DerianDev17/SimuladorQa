@@ -134,6 +134,8 @@ test('carga: selecciona ambos ATM concurrentes y conserva su identidad al recupe
   await expect(start).toBeEnabled();
   await second.check();
   await window.getByRole('button', { name: 'Modo avanzado', exact: false }).click();
+  await window.getByRole('button', { name: '3 TPS', exact: false }).click();
+  await expect(window.getByLabel('Operaciones simultáneas')).toHaveValue('5');
   await window.getByLabel('Máximo de operaciones').fill('1');
   await expect(start).toBeDisabled();
   await expect(window.locator('.load-validation')).toContainText('al menos una consulta por ATM');
@@ -190,6 +192,7 @@ test('carga: selecciona ambos ATM concurrentes y conserva su identidad al recupe
   if (!snapshot.ok || !snapshot.value) throw Error('NO_RUN');
   expect(snapshot.value.draft.additionalAtms).toHaveLength(1);
   expect(snapshot.value.draft.concurrency).toBe(2);
+  await expect(result).toContainText('Objetivo TPS no alcanzado');
   expect(snapshot.value.items.map((item) => item.correlation?.terminalId)).toEqual([
     'ATM20521',
     'ATM20524',
@@ -203,6 +206,7 @@ test('carga: selecciona ambos ATM concurrentes y conserva su identidad al recupe
   await expect(window.locator('.load-run-table tbody tr')).toHaveCount(4);
   await expect(window.locator('.load-run-table tbody')).toContainText('ATM20521');
   await expect(window.locator('.load-run-table tbody')).toContainText('ATM20524');
+  await expect(result).toContainText('Objetivo TPS no alcanzado');
   await window.evaluate(() => globalThis.window.scrollTo(0, 0));
   await window.screenshot({ path: 'artifacts/load-two-atms.png', fullPage: true });
 });

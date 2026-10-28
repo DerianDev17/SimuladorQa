@@ -45,6 +45,14 @@ en Configuracion; no reemplaza los adaptadores de transporte ni autoriza sockets
 
 ## Restricciones
 
+Preparación de carga (2026-10-28, ADR-028): Main conserva los procesos PC/SC y
+cifrado durante la corrida. PC/SC libera exclusión entre operaciones; el
+readId se consume y sus campos privados se borran. Lectura, relectura exclusiva
+y AC siguen siendo nuevas por operación. Cada comando de cifrado reabre la
+credencial DPAPI y borra sus buffers. El driver cierra ambos recursos al terminar.
+No se cachean tramas, claves descifradas ni resultados de disponibilidad.
+La UI distingue completar el plan de alcanzar el promedio de TPS solicitado.
+
 Carga concurrente (2026-10-28, ADR-027): sustituye la restricción secuencial de
 ADR-026 por 1–5 slots asíncronos. El worker confirma inicio y cierre por ticket;
 Main limita capacidad y cantidad. PhysicalCardLoadDriver serializa lectura,
