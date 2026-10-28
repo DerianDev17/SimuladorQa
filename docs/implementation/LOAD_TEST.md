@@ -1,5 +1,25 @@
 # Carga y estrés de saldo en QA
 
+## Varios perfiles en una corrida — 2026-10-28
+
+En **Selecciona los ATM**, marcar ATM20521 y ATM20524 (o los perfiles QA
+disponibles). Las consultas alternan en el orden seleccionado: A → B → A → B.
+Usan una tarjeta física y una operación en curso. La cantidad, duración y TPS
+son totales de la corrida, no por terminal. Si se completa una cantidad impar,
+el primer perfil recibe una consulta más. La parada por error o duración puede
+terminar antes de recorrer todos los perfiles.
+
+Se validan todos los perfiles antes de pedir PIN o iniciar el worker. Cada
+operación vuelve a comprobar el contexto del ATM mediante la ruta de saldo
+existente. El pool de la plantilla es compartido: no se suma ni se duplica su
+disponibilidad. Conservadoramente, cada perfil debe informar reservas para la
+cantidad total; no se infiere independencia entre pools. El plan debe admitir
+al menos tantas consultas como perfiles seleccionados.
+
+Cada fila identifica el ATM ejecutado, también después de recuperar la corrida.
+El contrato conserva los registros antiguos de un solo ATM. La ejecución
+concurrente y las tarjetas virtuales siguen fuera de esta entrega. ADR-026.
+
 ## Revisión adicional: cierre y presupuesto de tiempo (2026-10-27)
 
 Se reprodujeron tres defectos con regresiones que fallaban antes del cambio:
@@ -62,16 +82,16 @@ La duración incluye cierre de operaciones. No acredita estrés del switch a
 - La gráfica usa respuestas recibidas, omite el tramo futuro y representa el
   objetivo gradual con la misma función del worker. Se muestran operaciones
   en curso, p90 y latencia máxima además de las métricas existentes.
-- El selector elige un ATM por corrida; cambiar de terminal reemplaza la
-  selección. La validación presenta todas las dependencias pendientes del
-  perfil elegido. Se elimina la etiqueta ambigua «702» del flujo de saldo.
+- La selección única de esta revisión queda sustituida por la selección múltiple
+  secuencial del 2026-10-28. Se conservan validación de dependencias y eliminación
+  de la etiqueta ambigua «702» del flujo de saldo.
 
 Las regresiones usan worker real, almacenamiento temporal, TCP loopback y
 Electron con fuente sintética. No se ejecuta carga contra el switch QA.
 
 ## Ejecutar el piloto con tarjeta física
 
-1. Abrir **Carga y estrés** en QA y seleccionar el ATM configurado para saldo.
+1. Abrir **Carga y estrés** en QA y marcar uno o varios ATM configurados para saldo.
 2. Elegir **Prueba rápida**, **1 TPS**, **3 TPS** o **5 TPS**. Los presets
    completan cantidad y duración dentro de los límites locales; son objetivos,
    no tasas garantizadas. **Modo avanzado** permite ajustar esos valores.
@@ -102,9 +122,8 @@ pueden impedir alcanzar 5 TPS. El tiempo incluye la entrada inicial del PIN.
 Esta prueba no certifica la capacidad máxima del switch.
 La pantalla explica cuando la cantidad ingresada supera las 100 consultas y
 mantiene deshabilitado el inicio hasta corregirla.
-El selector muestra los ATM disponibles y permite elegir uno por corrida.
-Para probar otra terminal, terminar la corrida, seleccionar su perfil y volver
-a leer la tarjeta. Main resuelve la plantilla reutilizable ATM20521 para los
+El selector muestra los ATM disponibles y permite elegir varios por corrida.
+Las consultas alternan entre los seleccionados. Main resuelve la plantilla reutilizable ATM20521 para los
 ATM QA/205 y comprueba las reservas del pool compartido de la estación. Crear
 otro ATM no duplica ni repone las reservas. Ver [plantilla](MULTI_ATM_PROFILES.md).
 Los perfiles QA guardados son referencias de lectura y no credenciales virtuales.

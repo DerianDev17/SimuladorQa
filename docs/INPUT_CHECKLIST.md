@@ -1,5 +1,11 @@
 # Checklist de informacion por subir
 
+Carga con dos perfiles (2026-10-28): por solicitud del usuario se permite
+seleccionar varios ATM QA en una corrida y alternar consultas secuencialmente
+con una tarjeta física. No depende del pool virtual ni permite concurrencia
+mayor a uno. Mantiene límites totales, PIN por corrida y validación de todos
+los perfiles; aceptación remota de cada Terminal ID sigue pendiente. ADR-026.
+
 Continuación tras errores (2026-10-28): el usuario solicita permitir nuevas
 transacciones QA después de un retiro con error. ADR-025 elimina el bloqueo por
 resultados terminados y guardados, incluido RC 59 y timeout. La clasificación

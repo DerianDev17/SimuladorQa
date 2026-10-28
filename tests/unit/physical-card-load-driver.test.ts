@@ -5,6 +5,7 @@ import { LoadPinSession } from '../../apps/desktop/src/main/adapters/load-pin-se
 import type { CardIdentityReading } from '../../packages/domain/src/card-reader';
 import type { LoadRunRequest } from '../../packages/domain/src/load-run';
 import type { BalanceExecution } from '../../packages/domain/src/balance-inquiry';
+import { parseBalanceExecutionRequest } from '../../packages/domain/src/balance-inquiry';
 import { approvedWithdrawalExecution } from '../helpers/withdrawal';
 import type { DesktopApplication } from '../../apps/desktop/src/main/application';
 
@@ -100,6 +101,87 @@ function fixture() {
   };
 }
 describe('adaptador de carga con tarjeta física', () => {
+  it.each(['unavailable', 'revoked', 'sequences'] as const)(
+    'no inicia ni pide PIN si el segundo ATM falla la validación: %s',
+    async (reason) => {
+      const f = fixture();
+      const request = {
+        ...f.input,
+        draft: { ...f.input.draft, additionalAtms: [{ atmId: randomUUID(), atmRevision: 1 }] },
+      };
+      vi.mocked(f.application.getBalanceReadiness)
+        .mockResolvedValueOnce({
+          ok: true,
+          value: { ready: true, blockers: [], sequencesRemaining: 2 },
+        })
+        .mockResolvedValueOnce(
+          reason === 'unavailable'
+            ? {
+                ok: false,
+                error: { code: 'SERVICE_UNAVAILABLE', message: 'Perfil no disponible.' },
+              }
+            : {
+                ok: true,
+                value: {
+                  ready: reason === 'sequences',
+                  blockers:
+                    reason === 'revoked' ? [{ id: 'ATM-CHANGED', label: 'ATM cambiado.' }] : [],
+                  sequencesRemaining: 1,
+                },
+              },
+        );
+      expect(await f.driver.prepare(request)).toMatchObject({ ok: false });
+      expect(f.application.executeBalance).not.toHaveBeenCalled();
+      expect(f.ask).not.toHaveBeenCalled();
+    },
+  );
+  it('no suma dos veces las reservas compartidas al validar dos perfiles', async () => {
+    const f = fixture();
+    const request = {
+      ...f.input,
+      draft: {
+        ...f.input.draft,
+        maxTransactions: 3,
+        additionalAtms: [{ atmId: randomUUID(), atmRevision: 1 }],
+      },
+    };
+    vi.mocked(f.application.getBalanceReadiness).mockResolvedValue({
+      ok: true,
+      value: { ready: true, blockers: [], sequencesRemaining: 2 },
+    });
+    expect(await f.driver.prepare(request)).toMatchObject({ ok: false });
+    expect(f.ask).not.toHaveBeenCalled();
+  });
+  it('valida ambos ATM y alterna A/B/A con PIN único e identificadores nuevos', async () => {
+    const f = fixture();
+    const second = { atmId: randomUUID(), atmRevision: 2 };
+    const request = {
+      ...f.input,
+      draft: { ...f.input.draft, maxTransactions: 3, additionalAtms: [second] },
+    };
+    const prepared = await f.driver.prepare(request);
+    expect(f.application.getBalanceReadiness).toHaveBeenCalledTimes(2);
+    if (!prepared.ok) throw Error('READY');
+    try {
+      const signal = new AbortController().signal;
+      const runId = randomUUID();
+      for (let index = 0; index < 3; index++) await prepared.value.execute(signal, runId);
+      const calls = vi.mocked(f.application.executeBalance).mock.calls;
+      const requests = calls.map(([value]) => parseBalanceExecutionRequest(value)!);
+      expect(requests.map((value) => value.draft.atmId)).toEqual([
+        request.draft.atmId,
+        second.atmId,
+        request.draft.atmId,
+      ]);
+      expect(requests.map((value) => value.draft.atmRevision)).toEqual([1, 2, 1]);
+      expect(new Set(requests.map((value) => value.requestId)).size).toBe(3);
+      expect(new Set(requests.map((value) => value.cardReadId)).size).toBe(3);
+      expect(calls.every(([, , execution]) => execution?.runId === runId)).toBe(true);
+      expect(f.ask).toHaveBeenCalledOnce();
+    } finally {
+      prepared.value.close();
+    }
+  });
   it('relee el chip, pide PIN una vez y entrega IDs nuevos bajo el mismo runId', async () => {
     const f = fixture();
     const source = await f.driver.prepare(f.input);

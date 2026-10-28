@@ -1,6 +1,6 @@
 import { isUuid } from './catalogs';
 import { isRecord } from './index';
-import { LOAD_TEST_LOCAL_MIN_TPS, parseLoadTestDraft } from './load-test';
+import { LOAD_TEST_LOCAL_MIN_TPS, parseLoadTestDraft, loadTestAtms } from './load-test';
 import type { LoadTestDraft } from './load-test';
 import type { BalanceExecution } from './balance-inquiry';
 
@@ -16,6 +16,7 @@ export type LoadRunState =
   'RUNNING' | 'STOPPING' | 'COMPLETED' | 'STOPPED' | 'FAILED' | 'INTERRUPTED';
 export interface LoadRunItem {
   requestId: string;
+  atmId?: string;
   transactionId: string | null;
   outcome: BalanceExecution['outcome'];
   sent: boolean;
@@ -63,6 +64,7 @@ export function parseLoadRunRequest(value: unknown): LoadRunRequest | undefined 
     !draft ||
     draft.targetTps < LOAD_TEST_LOCAL_MIN_TPS ||
     draft.concurrency !== 1 ||
+    draft.maxTransactions < loadTestAtms(draft).length ||
     draft.maxTransactions > LOAD_RUN_MAX_OPERATIONS ||
     draft.durationSeconds > LOAD_RUN_MAX_SECONDS ||
     draft.rampUpSeconds >= draft.durationSeconds

@@ -1,4 +1,5 @@
 import { isUuid } from './catalogs';
+import { isRecord } from './index';
 
 export type LoadTestOperation = 'BALANCE';
 export type LoadTestMode = 'LOAD' | 'STRESS';
@@ -14,11 +15,25 @@ export interface LoadTestDraft {
   operation: LoadTestOperation;
   atmId: string;
   atmRevision: number;
+  // The original fields remain readable for existing single-ATM runs.
+  additionalAtms?: readonly LoadTestAtm[];
   maxTransactions: number;
   targetTps: number;
   concurrency: number;
   rampUpSeconds: number;
   durationSeconds: number;
+}
+
+export interface LoadTestAtm {
+  atmId: string;
+  atmRevision: number;
+}
+
+export function loadTestAtms(draft: LoadTestDraft): LoadTestAtm[] {
+  return [
+    { atmId: draft.atmId, atmRevision: draft.atmRevision },
+    ...(draft.additionalAtms ?? []).map((atm) => ({ ...atm })),
+  ];
 }
 
 export function loadTargetTps(plan: LoadTestDraft, elapsedMs: number): number {
@@ -75,6 +90,7 @@ export function parseLoadTestDraft(value: unknown): LoadTestDraft | undefined {
     'concurrency',
     'rampUpSeconds',
     'durationSeconds',
+    ...(Object.hasOwn(request, 'additionalAtms') ? ['additionalAtms'] : []),
   ];
   if (
     Object.keys(request).length !== keys.length ||
@@ -93,6 +109,23 @@ export function parseLoadTestDraft(value: unknown): LoadTestDraft | undefined {
   )
     return;
   if (request.mode === 'STRESS' && request.rampUpSeconds === 0) return;
+  if (Object.hasOwn(request, 'additionalAtms')) {
+    if (
+      !Array.isArray(request.additionalAtms) ||
+      request.additionalAtms.length < 1 ||
+      request.additionalAtms.length >= 100 ||
+      request.additionalAtms.some(
+        (atm: unknown) =>
+          !isRecord(atm) ||
+          Object.keys(atm).length !== 2 ||
+          !isUuid(atm.atmId) ||
+          !positiveInteger(atm.atmRevision),
+      )
+    )
+      return;
+    const ids = [request.atmId, ...request.additionalAtms.map((atm: LoadTestAtm) => atm.atmId)];
+    if (new Set(ids).size !== ids.length) return;
+  }
 
   return request as unknown as LoadTestDraft;
 }

@@ -16,8 +16,9 @@ clave, asignar una fecha contable o repartir reservas por cada alta.
 
 El cajero debe existir y estar habilitado en el switch para que este lo acepte.
 La plantilla conserva el alcance de ATM20521: QA/205/LOCAL/ahorros, consulta y
-retiro con sus montos/políticas existentes. Carga continúa usando un ATM y una
-tarjeta física por corrida. La admisión remota se distingue de la preparación
+retiro con sus montos/políticas existentes. Desde ADR-026, Carga permite varios
+ATM alternados y una tarjeta física por corrida, con una operación en curso.
+La admisión remota se distingue de la preparación
 local; no se promete una aprobación financiera al crear el registro.
 
 ## Comportamiento

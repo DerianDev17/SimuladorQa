@@ -1,6 +1,7 @@
 import type { LoadRunDriver, LoadRunSource } from './load-run-service';
 import type { LoadRunRequest } from '../../../../packages/domain/src/load-run';
 import type { LoadRunTimings } from '../../../../packages/domain/src/load-run';
+import { loadTestAtms } from '../../../../packages/domain/src/load-test';
 import { performance } from 'node:perf_hooks';
 import type { BalanceContextRequest } from '../../../../packages/domain/src/balance-inquiry';
 import type { CardIdentityService } from './card-identity-service';
@@ -38,35 +39,38 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
     const configuration = setup.value.configuration;
     if (!configuration)
       return failure('CONFLICT', 'Configura el destino y los plazos del Switch QA.');
-    const context: BalanceContextRequest = {
+    const contexts: BalanceContextRequest[] = loadTestAtms(request.draft).map((atm) => ({
       draft: {
         environment: 'QA',
         transaction: 'BALANCE',
         scenario: 'LOCAL',
         account: 'SAVINGS',
         amount: null,
-        atmId: request.draft.atmId,
-        atmRevision: request.draft.atmRevision,
+        atmId: atm.atmId,
+        atmRevision: atm.atmRevision,
       },
       configurationRevision: configuration.revision,
       cardReadId: original.readId,
-    };
-    const ready = await this.application.getBalanceReadiness(context);
-    if (!ready.ok) return ready;
-    if (!ready.value.ready)
-      return failure(
-        'CONFLICT',
-        ready.value.blockers.map((blocker) => blocker.label).join('. ') ||
-          'El perfil de saldo no está listo.',
-      );
-    if (
-      ready.value.sequencesRemaining === undefined ||
-      ready.value.sequencesRemaining < request.draft.maxTransactions
-    )
-      return failure(
-        'CONFLICT',
-        'No hay suficientes secuencias QA disponibles para la cantidad solicitada.',
-      );
+    }));
+    for (const context of contexts) {
+      const ready = await this.application.getBalanceReadiness(context);
+      if (!ready.ok) return ready;
+      if (!ready.value.ready)
+        return failure(
+          'CONFLICT',
+          ready.value.blockers.map((blocker) => blocker.label).join('. ') ||
+            'Uno de los perfiles de saldo no está listo.',
+        );
+      // Template ATMs share one pool: never sum availability across profiles.
+      if (
+        ready.value.sequencesRemaining === undefined ||
+        ready.value.sequencesRemaining < request.draft.maxTransactions
+      )
+        return failure(
+          'CONFLICT',
+          'No hay suficientes secuencias QA disponibles para la cantidad solicitada.',
+        );
+    }
     const history = await this.journal.read();
     if (history.some((execution) => execution.outcome === 'PENDING'))
       return failure(
@@ -74,7 +78,7 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
         'El diario contiene una operación pendiente. Revisa su correlación antes de otra corrida.',
       );
     this.pins.begin();
-    let first = true;
+    let next = 0;
     let closed = false;
     return {
       ok: true,
@@ -87,6 +91,8 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
         },
         execute: async (signal, runId) => {
           if (closed || signal.aborted) return failure('CONFLICT', 'La corrida fue detenida.');
+          const context = contexts[next % contexts.length]!;
+          const first = next++ === 0;
           const started = performance.now();
           const phases: Omit<LoadRunTimings, 'cardReadMs' | 'otherMs' | 'totalMs'> = {
             inspectMs: 0,
@@ -104,7 +110,6 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
                 terminalCountryCode: '218',
               });
           const cardReadMs = Math.round(performance.now() - readStarted);
-          first = false;
           this.publish();
           if (!reading.ok) return reading;
           if (closed || signal.aborted) return failure('CONFLICT', 'La corrida fue detenida.');

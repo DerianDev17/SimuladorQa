@@ -35,11 +35,12 @@ export function validLoadRunSnapshot(value: unknown): value is LoadRunSnapshot {
     if (
       !isRecord(item) ||
       Object.keys(item).length < 8 ||
-      Object.keys(item).length > 11 ||
+      Object.keys(item).length > 12 ||
       Object.keys(item).some(
         (key) =>
           ![
             'requestId',
+            'atmId',
             'transactionId',
             'outcome',
             'sent',
@@ -53,6 +54,7 @@ export function validLoadRunSnapshot(value: unknown): value is LoadRunSnapshot {
           ].includes(key),
       ) ||
       !isUuid(item.requestId) ||
+      (Object.hasOwn(item, 'atmId') && !isUuid(item.atmId)) ||
       !(item.transactionId === null || isUuid(item.transactionId)) ||
       ![
         'PENDING',

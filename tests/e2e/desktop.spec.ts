@@ -107,7 +107,8 @@ test('carga de saldo: iniciar, medir, recuperar y detener con motor real y fuent
   );
 });
 
-test('carga: cambia de terminal sin seleccionar dos ATM ni perder los límites de cada corrida', async () => {
+test('carga: selecciona ambos ATM en una corrida y conserva su identidad al recuperar resultados', async () => {
+  test.setTimeout(60000);
   const window = await prepareBalanceSubmission();
   await createTestAtm(window, 'Segundo ATM de saldo');
   await window.getByRole('button', { name: 'Editar Segundo ATM de saldo', exact: true }).click();
@@ -116,8 +117,8 @@ test('carga: cambia de terminal sin seleccionar dos ATM ni perder los límites d
   await window.getByRole('button', { name: 'Carga y estrés', exact: true }).click();
   await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
   await window.locator('.load-atm-picker summary').click();
-  const first = window.getByRole('radio', { name: 'ATM de saldo · ATM20521', exact: true });
-  const second = window.getByRole('radio', {
+  const first = window.getByRole('checkbox', { name: 'ATM de saldo · ATM20521', exact: true });
+  const second = window.getByRole('checkbox', {
     name: 'Segundo ATM de saldo · ATM20524',
     exact: true,
   });
@@ -125,12 +126,73 @@ test('carga: cambia de terminal sin seleccionar dos ATM ni perder los límites d
   await first.check();
   await expect(start).toBeEnabled();
   await second.check();
-  await expect(first).not.toBeChecked();
+  await expect(first).toBeChecked();
   await expect(second).toBeChecked();
   await expect(start).toBeEnabled();
-  await first.check();
+  await second.uncheck();
   await expect(second).not.toBeChecked();
   await expect(start).toBeEnabled();
+  await second.check();
+  await window.getByRole('button', { name: 'Modo avanzado', exact: false }).click();
+  await window.getByLabel('Máximo de operaciones').fill('1');
+  await expect(start).toBeDisabled();
+  await expect(window.locator('.load-validation')).toContainText('al menos una consulta por ATM');
+  await window.getByLabel('Máximo de operaciones').fill('4');
+  await window.getByLabel('Duración máxima (segundos)').fill('10');
+  await mkdir('artifacts', { recursive: true });
+  await build({
+    entryPoints: ['tests/helpers/load-electron.ts'],
+    outfile: 'artifacts/load-electron.cjs',
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    external: ['electron'],
+  });
+  const catalog = await window.evaluate(() => globalThis.window.desktop!.getCatalog('QA'));
+  if (!catalog.ok) throw Error('CATALOG');
+  const sample = approvedWithdrawalExecution();
+  delete sample.withdrawal;
+  await app!.evaluate(
+    ({ ipcMain }, options) => {
+      const require = process.getBuiltinModule('module').createRequire(options.fixture);
+      require(options.fixture).install(
+        ipcMain,
+        options.file,
+        options.worker,
+        options.sample,
+        options.terminals,
+      );
+    },
+    {
+      fixture: resolve('artifacts/load-electron.cjs'),
+      file: join(directory, 'load-two-atms.sqlite'),
+      worker: resolve('dist/load-worker.cjs'),
+      sample,
+      terminals: Object.fromEntries(catalog.value.atms.map((atm) => [atm.id, atm.terminalId])),
+    },
+  );
+  await start.click();
+  await expect(first).toBeDisabled();
+  await expect(second).toBeDisabled();
+  const result = window.getByRole('region', { name: 'Resultado de carga', exact: true });
+  await expect(result).toContainText('Completada', { timeout: 15000 });
+  const snapshot = await window.evaluate(() => globalThis.window.desktop!.getLoadRun());
+  if (!snapshot.ok || !snapshot.value) throw Error('NO_RUN');
+  expect(snapshot.value.draft.additionalAtms).toHaveLength(1);
+  expect(snapshot.value.items.map((item) => item.correlation?.terminalId)).toEqual([
+    'ATM20521',
+    'ATM20524',
+    'ATM20521',
+    'ATM20524',
+  ]);
+  await expect(window.locator('.load-run-table tbody tr')).toHaveCount(4);
+  await expect(window.locator('.load-run-table tbody')).toContainText('ATM20524');
+  await window.reload();
+  await window.getByRole('button', { name: 'Carga y estrés', exact: true }).click();
+  await expect(window.locator('.load-run-table tbody tr')).toHaveCount(4);
+  await expect(window.locator('.load-run-table tbody')).toContainText('ATM20521');
+  await expect(window.locator('.load-run-table tbody')).toContainText('ATM20524');
+  await window.screenshot({ path: 'artifacts/load-two-atms.png', fullPage: true });
 });
 
 for (const recovery of ['POLL', 'LATE_REJECTION'] as const) {

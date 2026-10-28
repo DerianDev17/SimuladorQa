@@ -2,6 +2,7 @@ import { performance } from 'node:perf_hooks';
 import { isUuid } from '../../../../packages/domain/src/catalogs';
 import { isRecord } from '../../../../packages/domain/src/index';
 import { parseLoadRunRequest } from '../../../../packages/domain/src/load-run';
+import { loadTestAtms } from '../../../../packages/domain/src/load-test';
 import type {
   LoadRunRequest,
   LoadRunSnapshot,
@@ -275,6 +276,8 @@ export class LoadRunService {
     // deadline. The worker's duration event will close the run without a send.
     if (performance.now() - this.started >= this.run.draft.durationSeconds * 1000) return;
     const operationStartedAt = performance.timeOrigin + performance.now();
+    const atms = loadTestAtms(this.run.draft);
+    const scheduledAtm = atms[this.run.items.length % atms.length]!;
     this.run.active = 1;
     try {
       const result = await this.source!.execute(this.abort!.signal, this.run.runId);
@@ -283,6 +286,7 @@ export class LoadRunService {
         const value = result.value;
         item = {
           requestId: value.requestId,
+          atmId: value.atmId,
           transactionId: value.transactionId,
           outcome: value.outcome,
           sent: value.bytesQueued > 0,
@@ -307,6 +311,7 @@ export class LoadRunService {
       } else {
         item = {
           requestId: this.identity.uuid(),
+          atmId: scheduledAtm.atmId,
           transactionId: null,
           outcome: 'CONTEXT_ERROR',
           sent: false,

@@ -20,6 +20,13 @@ export const loadRequest = () => ({
   },
 });
 describe('corrida QA acotada', () => {
+  it('reparte el presupuesto total entre ATM manteniendo concurrencia uno', () => {
+    const request = loadRequest();
+    const draft = { ...request.draft, additionalAtms: [{ atmId: randomUUID(), atmRevision: 1 }] };
+    expect(parseLoadRunRequest({ ...request, draft })).toBeDefined();
+    for (const patch of [{ maxTransactions: 1 }, { concurrency: 2 }, { targetTps: 10 }])
+      expect(parseLoadRunRequest({ ...request, draft: { ...draft, ...patch } })).toBeUndefined();
+  });
   it('respeta el mínimo de la UI y rechaza tasas que desbordan el temporizador', () => {
     const request = loadRequest();
     expect(

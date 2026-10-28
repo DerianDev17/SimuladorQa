@@ -24,8 +24,9 @@ ni certifica el resultado en Visa, Switch o Core. Ver
 
 La pantalla **Carga y estrés** ofrece escenarios rápida/1/3/5 TPS y ejecuta consultas
 de saldo QA con una tarjeta física, PIN una vez por corrida y seguridad nueva por
-operación. Muestra TPS reales, tiempos por etapa y permite detener. El pool virtual,
-múltiples ATM y operaciones simultáneas siguen pendientes de proveedor validado.
+operación. Permite seleccionar varios perfiles ATM y alternarlos secuencialmente
+en una corrida. Muestra TPS reales, tiempos por etapa y permite detener. El pool
+virtual y las operaciones simultáneas siguen pendientes de proveedor validado.
 Ver [guía de ejecución](docs/implementation/LOAD_TEST.md).
 
 ## Alcance inicial
@@ -36,8 +37,9 @@ Ver [guía de ejecución](docs/implementation/LOAD_TEST.md).
 - Hardware: HID OMNIKEY 5422 mediante PC/SC.
 - Tarjetas: lectura fisica + perfiles de prueba configurables.
 - MVP 1: consulta de saldo, retiro aprobado, retiro rechazado, reverso y reverso por timeout.
-- Carga: piloto QA/LOCAL de saldo con una tarjeta fisica y un ATM por corrida,
-  TPS objetivo configurable. Multiples ATM/tarjetas y concurrencia pendientes.
+- Carga: piloto QA/LOCAL de saldo con una tarjeta fisica y uno o varios ATM por
+  corrida, alternados secuencialmente y con TPS objetivo total configurable.
+  Multiples tarjetas y concurrencia mayor a uno pendientes.
 - Monitoreo: dashboard realtime de todas las instancias de la app.
 - Correlacion: Switch Coonecta + Core mediante adaptadores.
 

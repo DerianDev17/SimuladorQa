@@ -45,6 +45,15 @@ en Configuracion; no reemplaza los adaptadores de transporte ni autoriza sockets
 
 ## Restricciones
 
+Carga con varios perfiles (2026-10-28): LoadTestDraft conserva el ATM principal
+y acepta additionalAtms con UUID/revisión. PhysicalCardLoadDriver valida todos
+antes de iniciar, alterna sus contextos en orden y reutiliza la revalidación de
+DesktopApplication antes de cada operación. Un worker y una tarjeta física
+mantienen concurrencia uno, PIN por corrida y seguridad nueva por consulta.
+Los límites son totales; las reservas compartidas nunca se suman por perfil.
+Cada resultado conserva atmId y correlación; SQLite admite corridas anteriores.
+Ver ADR-026.
+
 Continuación QA tras error (2026-10-28): el bloqueo por diario de retiro se limita
 a ejecuciones/reversos sin finalizar y fallos de persistencia. Un resultado
 incierto terminado y guardado admite otra solicitud explícita con UUID nuevo;

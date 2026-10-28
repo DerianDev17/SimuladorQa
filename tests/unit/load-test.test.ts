@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { LOAD_TEST_LOCAL_MAX_TPS, parseLoadTestDraft } from '../../packages/domain/src/load-test';
+import {
+  LOAD_TEST_LOCAL_MAX_TPS,
+  parseLoadTestDraft,
+  loadTestAtms,
+} from '../../packages/domain/src/load-test';
 
 const validDraft = () => ({
   environment: 'QA',
@@ -16,6 +20,27 @@ const validDraft = () => ({
 });
 
 describe('validación del borrador de carga de saldo', () => {
+  it('conserva el formato histórico y valida listas ordenadas de ATM sin duplicados ni secretos', () => {
+    const first = validDraft();
+    const second = { atmId: randomUUID(), atmRevision: 2 };
+    const plan = parseLoadTestDraft({ ...first, additionalAtms: [second] });
+    expect(plan).toBeDefined();
+    expect(loadTestAtms(plan!)).toEqual([{ atmId: first.atmId, atmRevision: 1 }, second]);
+    for (const additionalAtms of [
+      [],
+      undefined,
+      null,
+      'invalid',
+      [second, second],
+      [{ atmId: first.atmId, atmRevision: 2 }],
+      [{ ...second, atmRevision: 0 }],
+      [{ ...second, atmId: 'invalid' }],
+      [{ ...second, pin: 'PRIVATE' }],
+      Array.from({ length: 100 }, () => ({ atmId: randomUUID(), atmRevision: 1 })),
+    ])
+      expect(parseLoadTestDraft({ ...first, additionalAtms })).toBeUndefined();
+    expect(parseLoadTestDraft(first)).toEqual(first);
+  });
   it('acepta 5 TPS como techo local y no permite superar el límite', () => {
     const draft = validDraft();
     expect(parseLoadTestDraft(draft)).toEqual(draft);

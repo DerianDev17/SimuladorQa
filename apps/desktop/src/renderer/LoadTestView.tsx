@@ -157,8 +157,16 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
     environment: 'QA',
     operation: 'BALANCE',
     mode,
-    atmId: atmIds.length === 1 ? atmIds[0]! : '',
-    atmRevision: atmIds.length === 1 ? (selected?.revision ?? 0) : 0,
+    atmId: selected?.id ?? '',
+    atmRevision: selected?.revision ?? 0,
+    ...(atmIds.length > 1
+      ? {
+          additionalAtms: atmIds.slice(1).map((atmId) => ({
+            atmId,
+            atmRevision: available.find((atm) => atm.id === atmId)?.revision ?? 0,
+          })),
+        }
+      : {}),
     maxTransactions: Number(count),
     targetTps: Number(tps),
     concurrency: 1,
@@ -166,8 +174,15 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
     durationSeconds: Number(duration),
   };
   useEffect(() => {
-    if (!atmIds.length && available.length === 1) setAtmIds([available[0]!.id]);
-  }, [atms, atmIds.length]);
+    if (locked) return;
+    setAtmIds((ids) => {
+      const next = ids.filter((id) => available.some((atm) => atm.id === id));
+      if (!next.length && available.length === 1) next.push(available[0]!.id);
+      return next.length === ids.length && next.every((id, index) => id === ids[index])
+        ? ids
+        : next;
+    });
+  }, [atms, locked]);
   useEffect(() => {
     onBusyChange(locked);
     return () => onBusyChange(false);
@@ -207,7 +222,7 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
   const valid =
     !!card &&
     !!selected &&
-    atmIds.length === 1 &&
+    atmIds.every((id) => available.some((atm) => atm.id === id)) &&
     !!parseLoadRunRequest({
       requestId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
       cardReadId: card.readId,
@@ -216,10 +231,11 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
   const issues = [
     ...(environment !== 'QA' ? ['Selecciona el ambiente QA.'] : []),
     ...(!atmIds.length ? ['Selecciona un ATM QA.'] : []),
-    ...(atmIds.length > 1
-      ? [
-          'La ejecución simultánea de varios ATM requiere un proveedor financiero QA independiente por terminal. Selecciona un ATM para esta corrida.',
-        ]
+    ...(atmIds.some((id) => !available.some((atm) => atm.id === id))
+      ? ['Uno de los ATM seleccionados ya no está disponible. Vuelve a seleccionar los perfiles.']
+      : []),
+    ...(Number(count) < atmIds.length
+      ? ['La cantidad debe permitir al menos una consulta por ATM seleccionado.']
       : []),
     ...(!card ? ['Lee y selecciona la tarjeta física QA.'] : []),
     ...(Number(count) < 1 ||
@@ -355,7 +371,7 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
           </div>
           <div className="load-step">
             <div className="load-step-title">
-              <h2>1. Selecciona el ATM</h2>
+              <h2>1. Selecciona los ATM</h2>
               <span>QA</span>
             </div>
             <details className="load-atm-picker">
@@ -370,11 +386,17 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
                 {available.map((atm) => (
                   <label key={atm.id}>
                     <input
-                      type="radio"
+                      type="checkbox"
                       name="load-atm"
                       checked={atmIds.includes(atm.id)}
                       disabled={locked || disabled}
-                      onChange={() => setAtmIds([atm.id])}
+                      onChange={() =>
+                        setAtmIds((ids) =>
+                          ids.includes(atm.id)
+                            ? ids.filter((id) => id !== atm.id)
+                            : [...ids, atm.id],
+                        )
+                      }
                     />
                     {atm.alias} · {atm.terminalId}
                   </label>
@@ -382,8 +404,9 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
               </div>
             </details>
             <p className="load-inline-note">
-              Un ATM por corrida. Puedes elegir otra terminal para la siguiente prueba; cada una
-              requiere su perfil de envío configurado.
+              Puedes seleccionar ambos perfiles. Las consultas alternan entre los ATM en el orden
+              seleccionado, una a la vez con la tarjeta física. TPS, cantidad y duración son totales
+              de la corrida.
             </p>
           </div>
           <div className="load-step">
@@ -684,7 +707,9 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
                             {item.finishedAt ? new Date(item.finishedAt).toLocaleTimeString() : '—'}
                           </td>
                           <td>
-                            {available.find((atm) => atm.id === run.draft.atmId)?.terminalId ??
+                            {item.correlation?.terminalId ??
+                              available.find((atm) => atm.id === (item.atmId ?? run.draft.atmId))
+                                ?.terminalId ??
                               'ATM QA'}
                           </td>
                           <td>{item.correlation?.stan ?? 'Sin envío'}</td>
