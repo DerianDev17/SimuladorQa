@@ -1,5 +1,6 @@
 import { isRecord } from './index';
 import { isUtcTimestamp, isUuid } from './catalogs';
+import { parseReversalMessages, type TransactionMessages } from './iso-message';
 
 export function isReversalDelay(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 30;
@@ -20,12 +21,14 @@ export interface WithdrawalReversal {
   responseCode: string | null;
   transmissionAttempted: boolean;
   bytesQueued: number;
+  messages?: TransactionMessages;
 }
 export type ReversalProgress = Omit<WithdrawalReversal, 'transactionId' | 'delaySeconds'>;
 export function parseWithdrawalReversal(value: unknown): WithdrawalReversal | undefined {
   if (
     !isRecord(value) ||
-    Object.keys(value).length !== 8 ||
+    Object.keys(value).length !== (Object.hasOwn(value, 'messages') ? 9 : 8) ||
+    (Object.hasOwn(value, 'messages') && !parseReversalMessages(value.messages)) ||
     !isUuid(value.transactionId) ||
     !isReversalDelay(value.delaySeconds) ||
     ![

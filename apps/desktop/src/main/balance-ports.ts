@@ -8,6 +8,7 @@ import type {
 import type { NewBalanceInput } from './adapters/new-visa-balance';
 import type { CapturedBalanceMetadata } from './adapters/captured-visa-balance';
 import type { ReversalProgress } from '../../../../packages/domain/src/withdrawal-reversal';
+import type { IsoMessage } from '../../../../packages/domain/src/iso-message';
 
 export interface BalanceTarget extends BalanceContextRequest {
   terminalId: string;
@@ -31,7 +32,9 @@ export interface BalanceContextProvider {
   acquire(target: BalanceTarget, signal: AbortSignal): Promise<BalanceContextLease>;
 }
 export interface BalanceExchangeRequest {
-  load?: { runId: string; concurrency: number };
+  load?: { runId: string; concurrency: number; deadline?: number };
+  onConnectionWait?: (elapsedMs: number) => void;
+  onInterrupted?: (reason: 'CANCELLED' | 'DURATION') => void;
   withWrite?: (write: () => void) => Promise<void>;
   signal?: AbortSignal;
   environment: 'QA';
@@ -46,6 +49,7 @@ export interface BalanceExchangeRequest {
   };
 }
 export interface BalanceExchangeResult {
+  responseMessage?: IsoMessage;
   outcome:
     | 'APPROVED'
     | 'NOT_APPROVED'

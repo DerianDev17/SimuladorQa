@@ -106,7 +106,8 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
           this.cipherSession?.end();
         },
         execute: async (signal, runId, slot) => {
-          if (closed || signal.aborted) return failure('CONFLICT', 'La corrida fue detenida.');
+          if (closed || signal.aborted)
+            return { ...failure('CONFLICT', 'La corrida fue detenida.'), cancelled: true as const };
           const index = slot?.index ?? next++;
           const context = contexts[index % contexts.length]!;
           const first = index === 0;
@@ -121,16 +122,22 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
           const queueWaitMs = Math.round(performance.now() - started);
           try {
             if (closed || signal.aborted)
-              return failure('CONFLICT', 'La corrida terminó antes de preparar esta consulta.');
+              return {
+                ...failure('CONFLICT', 'La corrida terminó antes de preparar esta consulta.'),
+                cancelled: true as const,
+              };
             if (performance.now() >= deadline)
               return {
                 ...failure('CONFLICT', 'Duración alcanzada antes de preparar la consulta.'),
                 skipped: 'DURATION' as const,
               };
-            const phases: Omit<
-              LoadRunTimings,
-              'cardReadMs' | 'otherMs' | 'totalMs' | 'queueWaitMs' | 'rateLimitMs'
+            const phases: Required<
+              Omit<
+                LoadRunTimings,
+                'cardReadMs' | 'otherMs' | 'totalMs' | 'queueWaitMs' | 'rateLimitMs'
+              >
             > = {
+              connectionWaitMs: 0,
               inspectMs: 0,
               contextMs: 0,
               validationMs: 0,
@@ -140,6 +147,7 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
             let rateLimitMs = 0,
               sendValidationMs = 0;
             let durationSkipped = false;
+            let cancelled = false;
             const readStarted = performance.now();
             const reading = first
               ? { ok: true as const, value: original }
@@ -150,8 +158,13 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
                 });
             const cardReadMs = Math.round(performance.now() - readStarted);
             this.publish();
-            if (!reading.ok) return reading;
-            if (closed || signal.aborted) return failure('CONFLICT', 'La corrida fue detenida.');
+            if (!reading.ok)
+              return { ...reading, ...(signal.aborted ? { cancelled: true as const } : {}) };
+            if (closed || signal.aborted)
+              return {
+                ...failure('CONFLICT', 'La corrida fue detenida.'),
+                cancelled: true as const,
+              };
             if (
               reading.value.status !== 'READ' ||
               reading.value.panMasked !== original.panMasked ||
@@ -193,16 +206,24 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
                     }
                   },
                   onPrepared: release,
+                  onInterrupted: (reason) => {
+                    if (reason === 'DURATION') durationSkipped = true;
+                    else cancelled = true;
+                  },
                   onPhase: (phase, elapsedMs) => {
                     const key = `${phase}Ms` as keyof typeof phases;
                     phases[key] +=
                       phase === 'transport'
-                        ? Math.max(0, elapsedMs - rateLimitMs - sendValidationMs)
+                        ? Math.max(
+                            0,
+                            elapsedMs - rateLimitMs - sendValidationMs - phases.connectionWaitMs,
+                          )
                         : elapsedMs;
                   },
                 },
               );
-              if (!result.ok) return result;
+              if (!result.ok)
+                return { ...result, ...(signal.aborted ? { cancelled: true as const } : {}) };
               if (durationSkipped && !result.value.transmissionAttempted)
                 return { ...result, skipped: 'DURATION' as const };
               const totalMs = Math.round(performance.now() - started);
@@ -213,6 +234,7 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
                 Object.values(phases).reduce((sum, value) => sum + value, 0);
               return {
                 ok: true,
+                ...(cancelled ? { cancelled: true as const } : {}),
                 value: {
                   ...result.value,
                   loadTimings: {

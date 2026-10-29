@@ -1,5 +1,38 @@
 # UX Specification
 
+## Datos de la transacción — panel compacto
+
+Cajero con entidad, modos Lector físico/Tarjeta configurada, resumen protegido de
+tarjeta, tipo de transacción, cuenta y acción Ejecutar Transacción con engranaje.
+Los selectores tienen icono y subtítulo cuando existe información documentada.
+La tarjeta muestra aplicación y expiración reales, o su ausencia. Las opciones
+avanzadas se despliegan desde el engranaje; conservan escenario y administración.
+La tarjeta configurada selecciona un perfil QA y continúa requiriendo lectura física.
+Ver criterios en docs/implementation/TRANSACTION_PREPARATION.md.
+
+## Mensajería de transacciones — 2026-10-29
+
+Después del envío, Resultado tiene al lado un panel Mensaje ISO8583 con pestañas
+Solicitud (0200)/Respuesta (0210), tabla Campo/Descripción/Valor y STAN/RRN de
+esa ejecución. Se selecciona inicialmente la respuesta si está disponible.
+Todos los campos presentes se listan; PAN enmascarado y contenidos sensibles,
+privados o sin proyección aprobada protegidos con una máscara fija. No hay RAW
+ni HEX financiero. Timeout no inventa respuesta; registros antiguos explican
+la ausencia de mensajería. El formulario puede cambiar sin alterar esos datos.
+En escritorio hay tres columnas; en ventanas intermedias formulario arriba y
+resultado/mensajería juntos debajo; en ventanas estrechas se apilan. El inspector
+documental anterior queda oculto mientras se muestra una ejecución real.
+
+El selector ofrece Retiro aprobado + reverso. Su mensajería incluye las cuatro
+pestañas 0200/0210/0420/0430 y el resultado conserva RC retiro/RC reverso por
+separado. La pestaña inicial sigue el mensaje más reciente hasta la selección
+manual. F42/F43/F44 muestran texto sanitizado y F55 ofrece tags públicos; los
+contenidos sensibles mantienen máscara. La tabla puede expandirse para ver
+todos sus campos. El contenido se centra en el ancho disponible y el resultado
+no tiene padding interior duplicado. El foco de resultado conserva visible el
+inicio de los paneles.
+Detalles y criterios: docs/implementation/TRANSACTION_PREPARATION.md.
+
 ## Retiro y comprobante local — 2026-10-19
 
 - Monto con prefijo USD, opciones accesibles Sin impresion/Con impresion y ayuda
@@ -67,12 +100,18 @@ local no aparece para ejecuciones previas ni se asocia a un formulario modificad
   perfil QA asociado a esa lectura e **Iniciar prueba**. Main valida perfil,
   seguridad, secuencias y diario al iniciar; los límites locales se explican
   junto a los controles.
-- El modo avanzado muestra cantidad, objetivo TPS, duración y rampa. La
-  concurrencia física queda en uno. Seleccionar varios ATM muestra el bloqueo
-  correspondiente hasta disponer del proveedor financiero independiente.
+- El modo avanzado muestra cantidad, objetivo TPS, duración y rampa. Se pueden
+  seleccionar varios ATM y de 1 a 5 operaciones en preparación y envío. El chip
+  prepara una consulta a la vez, solapada con la espera host. El enlace QA usa
+  una sola conexión financiera activa (ADR-029); no se prometen envíos paralelos.
 - El panel derecho distingue objetivo de TPS real, muestra latencias de host,
   desglose numérico por etapa cuando existe y las últimas 20 transacciones.
   Las corridas históricas sin tiempos por etapa no presentan cifras inventadas.
+- Se separan espera del lector, espera del enlace y tiempo host. Errores excluye
+  cancelaciones explícitas nuevas; Canceladas y Enviadas sin respuesta muestran
+  por separado sus efectos. La tabla conserva estados financieros y distingue
+  cancelación sin envío de cancelación posterior al envío. El primer fallo y su
+  STAN permanecen visibles; los registros históricos no se reclasifican.
 
 ## Realtime
 El dashboard debe permanecer util incluso con miles de transacciones; mostrar agregados y solo una ventana de eventos recientes.

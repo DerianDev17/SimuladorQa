@@ -17,6 +17,7 @@ import type { RuntimeIdentity } from './ports';
 
 export type LoadExecutionResult = Result<BalanceExecution & { loadTimings?: LoadRunTimings }> & {
   skipped?: 'DURATION';
+  cancelled?: true;
 };
 export interface LoadRunSource {
   readerName: string;
@@ -56,6 +57,7 @@ export class LoadRunService {
   private scheduler: LoadSchedule | undefined;
   private abort: AbortController | undefined;
   private finishReason: 'COMPLETED' | 'STOPPED' | 'FAILED' | undefined;
+  private failureRecorded = false;
   private writes: Promise<void> = Promise.resolve();
   private finishing = false;
   private closing = false;
@@ -182,6 +184,7 @@ export class LoadRunService {
       this.source = prepared.value;
       this.abort = new AbortController();
       this.finishReason = undefined;
+      this.failureRecorded = false;
       this.finishing = false;
       // Preflight has not started a run. Once accepted, persistence, worker
       // startup, PIN and execution all share this monotonic time budget.
@@ -322,12 +325,18 @@ export class LoadRunService {
           finishedElapsedMs: Math.round(performance.now() - this.started),
           ...(value.loadTimings ? { timings: value.loadTimings } : {}),
         };
-        if (balanceDeliveryUncertain(value)) {
+        if (balanceDeliveryUncertain(value) && !this.failureRecorded && !result.cancelled) {
           this.finishReason = 'FAILED';
-          this.run.message =
-            'Hay un envío sin resultado confirmado. Revisa su correlación en el historial; no se reintentará.';
-        } else if (value.outcome !== 'APPROVED' && this.run.state !== 'STOPPING') {
+          this.failureRecorded = true;
+          this.run.message = `Primer error: ${value.outcome}${value.correlation ? ` · STAN ${value.correlation.stan}` : ''}. Envío sin respuesta confirmada; revisa su correlación. No se reintentará.`;
+        } else if (
+          value.outcome !== 'APPROVED' &&
+          this.run.state !== 'STOPPING' &&
+          !this.failureRecorded &&
+          !result.cancelled
+        ) {
           this.finishReason = 'FAILED';
+          this.failureRecorded = true;
           this.run.message =
             value.blockers[0]?.label ??
             `Corrida detenida por resultado ${value.outcome}. No se reintenta.`;
@@ -346,9 +355,19 @@ export class LoadRunService {
           finishedAt: this.identity.now(),
           finishedElapsedMs: Math.round(performance.now() - this.started),
         };
-        if (this.run.state !== 'STOPPING') {
+        if (this.run.state !== 'STOPPING' && !this.failureRecorded && !result.cancelled) {
           this.finishReason = 'FAILED';
+          this.failureRecorded = true;
           this.run.message = result.error.message;
+        }
+      }
+      if (result.cancelled) {
+        item.cancelled = true;
+        this.finishReason ??= 'FAILED';
+        if (item.sent && !item.received && !this.failureRecorded && this.run.state === 'STOPPING') {
+          this.finishReason = 'FAILED';
+          this.run.message =
+            'Parada solicitada con un envío sin respuesta confirmada. Revisa su correlación; no se reintentará.';
         }
       }
       if (this.finishReason === 'FAILED') {

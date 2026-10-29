@@ -4,6 +4,7 @@ import { QaVisaReversal } from '../../apps/desktop/src/main/adapters/qa-visa-rev
 import { NewVisaWithdrawal } from '../../apps/desktop/src/main/adapters/new-visa-withdrawal';
 import { parseWithdrawalExecutionRequest } from '../../packages/domain/src/withdrawal';
 import { parseWithdrawalReversal } from '../../packages/domain/src/withdrawal-reversal';
+import { parseReversalMessages, protectedIsoValue } from '../../packages/domain/src/iso-message';
 import {
   parseBalanceExecutionRequest,
   balanceDeliveryUncertain,
@@ -48,6 +49,22 @@ describe('reverso total QA con datos del retiro actual', () => {
     expect(fields.get(48)!.includes(testEbcdic('*NL'))).toBe(false);
     expect(codec.response(reversalResponse(wire.subarray(4)))).toBe('00');
     expect(codec.response(reversalResponse(wire.subarray(4), '91'))).toBe('91');
+    const requestMessage = codec.requestMessage(wire);
+    const responseMessage = codec.responseMessage(reversalResponse(wire.subarray(4)));
+    expect(requestMessage.fields.map((f) => f.number)).toEqual([...fields.keys()]);
+    expect(requestMessage.fields.find((f) => f.number === 90)?.value).toBe(
+      fields.get(90)!.toString('hex'),
+    );
+    expect(requestMessage.fields.find((f) => f.number === 95)?.value).toBe('0'.repeat(42));
+    expect(requestMessage.fields.find((f) => f.number === 55)?.tags).toEqual([
+      { tag: '9F10', value: protectedIsoValue },
+      { tag: '95', value: '8000040000' },
+    ]);
+    expect(parseReversalMessages({ request: requestMessage, response: responseMessage })).toEqual({
+      request: requestMessage,
+      response: responseMessage,
+    });
+    expect(parseReversalMessages({ request: { ...requestMessage, mti: '0200' } })).toBeUndefined();
     codec.dispose();
     expect(() => codec.build(withdrawalResponse(built.metadata))).toThrow();
   });

@@ -113,6 +113,40 @@ function fixture() {
   };
 }
 describe('adaptador de carga con tarjeta física', () => {
+  it.each(['DURATION', 'CANCELLED'] as const)(
+    'conserva %s al abandonar la cola del enlace sin envío',
+    async (reason) => {
+      const f = fixture();
+      vi.mocked(f.application.executeBalance).mockImplementationOnce(
+        async (_payload, _operation, execution) => {
+          execution?.onPhase?.('connectionWait', 25);
+          execution?.onPhase?.('transport', 30);
+          execution?.onInterrupted?.(reason);
+          const value = approvedWithdrawalExecution();
+          delete value.withdrawal;
+          return {
+            ok: true,
+            value: {
+              ...value,
+              outcome: 'TRANSPORT_ERROR',
+              transmissionAttempted: false,
+              bytesQueued: 0,
+              responseCode: null,
+            },
+          };
+        },
+      );
+      const prepared = await f.driver.prepare(f.input);
+      if (!prepared.ok) throw Error('PREPARE');
+      const result = await prepared.value.execute(new AbortController().signal, randomUUID());
+      expect(result).toMatchObject(
+        reason === 'DURATION'
+          ? { skipped: 'DURATION' }
+          : { cancelled: true, value: { loadTimings: { connectionWaitMs: 25, transportMs: 5 } } },
+      );
+      prepared.value.close();
+    },
+  );
   it('acota los helpers a la corrida y limpia un arranque fallido', async () => {
     const f = fixture();
     const prepared = await f.driver.prepare(f.input);

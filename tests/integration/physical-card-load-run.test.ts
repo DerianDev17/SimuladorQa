@@ -37,13 +37,15 @@ it.each([
   'TIMEOUT',
   'STOP',
   'CONCURRENT',
+  'CONCURRENT_FIVE',
   'CONCURRENT_TIMEOUT',
   'CONCURRENT_STOP',
 ] as const)(
   'una corrida con dos ATM alterna por TCP, persiste y respeta %s sin repetir envíos',
   async (mode) => {
     const concurrent = mode.startsWith('CONCURRENT');
-    const approved = mode === 'APPROVED' || mode === 'CONCURRENT';
+    const approved = mode === 'APPROVED' || mode === 'CONCURRENT' || mode === 'CONCURRENT_FIVE';
+    const operationCount = mode === 'CONCURRENT_FIVE' ? 7 : 3;
     const stopping = mode === 'STOP' || mode === 'CONCURRENT_STOP';
     const directory = await mkdtemp(join(tmpdir(), 'coonecta-multi-load-'));
     const worker = join(directory, 'worker.cjs');
@@ -63,7 +65,18 @@ it.each([
     let peakSockets = 0;
     const writeTimes: number[] = [];
     const responseOrder: string[] = [];
+    let activePeer: Socket | undefined;
+    let replacements = 0;
     const server = createServer((socket) => {
+      // Reproduce TCPComms PID 80131: a new connection replaces the old one.
+      if (activePeer && !activePeer.destroyed) {
+        replacements++;
+        activePeer.destroy();
+      }
+      activePeer = socket;
+      socket.once('end', () => {
+        if (activePeer === socket) activePeer = undefined;
+      });
       sockets.add(socket);
       socket.on('error', () => {});
       socket.once('close', () => {
@@ -88,7 +101,13 @@ it.each([
               pendingSockets.delete(socket);
               socket.end(reply);
             };
-            if (concurrent) timers.add(setTimeout(respond, received.length === 1 ? 800 : 100));
+            if (concurrent)
+              timers.add(
+                setTimeout(
+                  respond,
+                  received.length === 1 ? (mode === 'CONCURRENT_FIVE' ? 1500 : 800) : 100,
+                ),
+              );
             else respond();
           }
           frame.opaqueBody.fill(0);
@@ -144,7 +163,7 @@ it.each([
       new QaSwitchConnection().manageTransport(measuredTransport),
       runtime,
       {
-        inspect: async () => ({ ready: true, blockers: [], sequencesRemaining: 3 }),
+        inspect: async () => ({ ready: true, blockers: [], sequencesRemaining: operationCount }),
         acquire: async (target, signal) => {
           peakChip = Math.max(peakChip, ++chipActive);
           try {
@@ -250,8 +269,8 @@ it.each([
         atmRevision: 1,
         additionalAtms: [{ atmId: second.draft.atmId!, atmRevision: 1 }],
         targetTps: 5,
-        concurrency: concurrent ? 2 : 1,
-        maxTransactions: 3,
+        concurrency: mode === 'CONCURRENT_FIVE' ? 5 : concurrent ? 2 : 1,
+        maxTransactions: operationCount,
         durationSeconds: 10,
         rampUpSeconds: 0,
       },
@@ -260,15 +279,19 @@ it.each([
       const started = await service.start(request);
       if (!started.ok) throw Error(started.error.message);
       if (stopping) {
-        await vi.waitFor(() => expect(received).toHaveLength(2));
+        await vi.waitFor(() => expect(received).toHaveLength(concurrent ? 1 : 2));
+        if (concurrent) await vi.waitFor(async () => expect(await journal.read()).toHaveLength(2));
         service.stop({ runId: started.value.runId });
       }
       await service.whenIdle();
       const run = await store.read();
       // Stopping after a write preserves delivery uncertainty, as does timeout.
       expect(run?.state).toBe(approved ? 'COMPLETED' : 'FAILED');
-      const terminals = approved ? ['ATM20521', 'ATM20524', 'ATM20521'] : ['ATM20521', 'ATM20524'];
-      expect(received.map((item) => item.terminalId)).toEqual(terminals);
+      const terminals = Array.from({ length: approved ? operationCount : 2 }, (_, index) =>
+        index % 2 ? 'ATM20524' : 'ATM20521',
+      );
+      const sentTerminals = concurrent && !approved ? terminals.slice(0, 1) : terminals;
+      expect(received.map((item) => item.terminalId)).toEqual(sentTerminals);
       expect(run?.items.map((item) => item.atmId).sort()).toEqual(
         terminals.map((id) => targets.find((atm) => atm.terminalId === id)!.draft.atmId).sort(),
       );
@@ -279,16 +302,20 @@ it.each([
             item.correlation?.terminalId,
         ),
       ).toBe(true);
-      expect(new Set(received.map((item) => item.stan)).size).toBe(terminals.length);
+      expect(new Set(received.map((item) => item.stan)).size).toBe(sentTerminals.length);
       expect(new Set(reads).size).toBe(terminals.length);
-      expect(maxActive).toBe(concurrent ? 2 : 1);
+      expect(maxActive).toBe(request.draft.concurrency);
       expect(peakChip).toBe(1);
-      expect(peakSockets).toBe(concurrent ? 2 : 1);
+      expect(peakSockets).toBe(1);
+      expect(replacements).toBe(0);
       // Receive callbacks may be delayed/batched by Windows. Verify the sender's
       // actual write boundary, rather than mistaking receive cadence for TPS.
       for (let i = 1; i < writeTimes.length; i++)
         expect(writeTimes[i]! - writeTimes[i - 1]!).toBeGreaterThanOrEqual(195);
-      if (mode === 'CONCURRENT') expect(responseOrder[0]).toBe(received[1]!.stan);
+      if (concurrent && approved) {
+        expect(responseOrder).toEqual(received.map((item) => item.stan));
+        expect(run?.items.some((item) => (item.timings?.connectionWaitMs ?? 0) > 100)).toBe(true);
+      }
       expect(ask).toHaveBeenCalledOnce();
       const financialRecords = await journal.read();
       expect(financialRecords.every((item) => item.runId === run!.runId)).toBe(true);

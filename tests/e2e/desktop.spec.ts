@@ -25,9 +25,208 @@ import { approvedWithdrawalExecution } from '../helpers/withdrawal';
 import { build } from 'esbuild';
 import { SqliteBalanceJournal } from '../../apps/desktop/src/main/infrastructure/sqlite-balance-journal';
 import { qaExecutionFixture } from '../helpers/qa-execution';
+import { CapturedVisaBalance } from '../../apps/desktop/src/main/adapters/captured-visa-balance';
+import { capturedBalanceRequest } from '../helpers/captured-visa-balance';
+import { balanceResponse } from '../helpers/balance-inquiry';
+import { NewVisaWithdrawal } from '../../apps/desktop/src/main/adapters/new-visa-withdrawal';
+import { QaVisaReversal } from '../../apps/desktop/src/main/adapters/qa-visa-reversal';
+import { reversalFixture, reversalResponse } from '../helpers/withdrawal-reversal';
+import { withdrawalResponse } from '../helpers/withdrawal';
 
 let directory: string;
 let app: ElectronApplication | undefined;
+
+test('formulario compacto: tarjeta física, perfil configurado y opciones', async () => {
+  test.setTimeout(60000);
+  const window = await prepareBalanceSubmission();
+  await app!.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0]?.setContentSize(1366, 960),
+  );
+  const picker = window.getByLabel('Elegir tarjeta', { exact: true });
+  const send = window.getByRole('button', { name: 'Ejecutar Transacción', exact: true });
+  await expect(send).toBeDisabled();
+  await expect(picker.getByRole('button', { name: 'Lector físico', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(picker.getByLabel('Perfil QA guardado para la transacción')).toHaveCount(0);
+  await picker.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await expect(send).toBeEnabled();
+  await expect(picker.getByRole('status')).toContainText(transactionIdentity.panMasked!);
+  await expect(picker.getByRole('status')).toContainText('No informada');
+  const order = await window.evaluate(() => {
+    const selectors = [
+      '.transaction-context-selectors',
+      '.transaction-card-section',
+      'select[aria-label="Transacción"]',
+      'select[aria-label="Cuenta"]',
+      '.composer-footer',
+    ];
+    const positions = selectors.map(
+      (selector) => document.querySelector(selector)!.getBoundingClientRect().top,
+    );
+    return positions.every((top, index) => index === 0 || top > positions[index - 1]!);
+  });
+  expect(order).toBe(true);
+  await mkdir('artifacts', { recursive: true });
+  await window
+    .locator('.transaction-composer')
+    .screenshot({ path: 'artifacts/transaction-composer.png' });
+  await picker.getByRole('button', { name: 'Tarjeta configurada', exact: true }).click();
+  await expect(send).toBeDisabled();
+  await expect(picker).toContainText('Guarda primero una lectura');
+  await window.getByRole('button', { name: 'Opciones y detalles técnicos', exact: true }).click();
+  await expect(window.getByLabel('Escenario', { exact: true })).toBeVisible();
+  await expect(
+    window.getByRole('button', { name: 'Administrar perfiles', exact: true }),
+  ).toBeVisible();
+  await window.getByRole('button', { name: 'Opciones y detalles técnicos', exact: true }).click();
+  await expect(window.getByLabel('Escenario', { exact: true })).not.toBeVisible();
+  await window.getByRole('button', { name: 'Inicio', exact: true }).click();
+  const card = { ...transactionIdentity, applicationId: 'A0000000031010', expiry: '09/29' };
+  await installTransactionReader(false, transactionIdentity.readId, card);
+  await app!.evaluate(({ ipcMain }, identity) => {
+    ipcMain.removeHandler('reader:profiles:list');
+    ipcMain.handle('reader:profiles:list', () => ({
+      ok: true,
+      value: [
+        {
+          id: '351536a3-5a14-4371-99ba-65068a968962',
+          alias: 'Tarjeta de prueba',
+          lastFour: '4444',
+          applicationId: identity.applicationId,
+          applicationLabel: identity.applicationLabel,
+          transactionDataRequirements: null,
+          defaultAccount: 'SAVINGS',
+          savedAt: identity.readAt,
+          scope: 'QA_REFERENCE_ONLY',
+        },
+      ],
+    }));
+  }, card);
+  await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
+  await picker.getByRole('button', { name: 'Tarjeta configurada', exact: true }).click();
+  await picker
+    .getByLabel('Perfil QA guardado para la transacción')
+    .selectOption('351536a3-5a14-4371-99ba-65068a968962');
+  await expect(picker).toContainText('Requiere la tarjeta física');
+  await picker.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await expect(send).toBeEnabled();
+  await expect(picker.getByRole('status')).toContainText('09/29');
+  await picker.getByRole('button', { name: 'Cambiar tarjeta', exact: true }).click();
+  await installTransactionReader(true);
+  await picker.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await expect(picker.getByRole('alert')).toContainText('agotó el tiempo');
+  await expect(send).toBeDisabled();
+  await app!.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0]?.setContentSize(700, 900),
+  );
+  expect(await window.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+    true,
+  );
+});
+
+test('mensajería ISO junto al resultado: campos reales, pestañas y pantalla estrecha', async () => {
+  test.setTimeout(60000);
+  const window = await prepareBalanceSubmission();
+  const codec = new CapturedVisaBalance();
+  const body = capturedBalanceRequest();
+  const metadata = codec.inspect(body);
+  const sample = approvedWithdrawalExecution();
+  delete sample.withdrawal;
+  sample.correlation = { stan: metadata.stan, rrn: metadata.rrn, terminalId: metadata.terminalId };
+  sample.messages = {
+    request: codec.message(body),
+    response: codec.message(balanceResponse(metadata)),
+  };
+  await app!.evaluate(({ ipcMain, BrowserWindow }, execution) => {
+    BrowserWindow.getAllWindows()[0]?.setContentSize(1536, 1024);
+    ipcMain.removeHandler('transaction:balance:execute');
+    ipcMain.handle('transaction:balance:execute', (_event, request) => ({
+      ok: true,
+      value: {
+        ...execution,
+        requestId: request.requestId,
+        atmId: request.draft.atmId,
+        cardReadId: request.cardReadId,
+      },
+    }));
+  }, sample);
+  await window
+    .getByLabel('Elegir tarjeta', { exact: true })
+    .getByRole('button', { name: 'Leer tarjeta', exact: true })
+    .click();
+  await window.getByRole('button', { name: 'Ejecutar Transacción', exact: true }).click();
+  await expect(window.getByLabel('Resultado de consulta de saldo', { exact: true })).toContainText(
+    'Consulta aprobada',
+  );
+  const inspector = window.getByRole('region', {
+    name: 'Mensajería de la transacción',
+    exact: true,
+  });
+  await expect(inspector).toBeVisible();
+  await expect(inspector.getByRole('tab', { name: 'Respuesta (0210)' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(inspector.getByRole('row').filter({ hasText: 'Código de respuesta' })).toContainText(
+    '00',
+  );
+  await inspector.getByRole('tab', { name: 'Solicitud (0200)' }).click();
+  await expect(inspector.locator('tbody tr')).toHaveCount(
+    sample.messages.request.fields.length + 1,
+  );
+  await expect(inspector.getByRole('row').filter({ hasText: 'PIN Block' })).toContainText(
+    '••••••••',
+  );
+  await expect(inspector).toContainText('411111XXXXXX0000');
+  await expect(inspector).not.toContainText('411111' + '11110000');
+  await inspector.getByRole('tab', { name: 'Solicitud (0200)' }).press('ArrowRight');
+  await expect(inspector.getByRole('tab', { name: 'Respuesta (0210)' })).toBeFocused();
+  const alignment = await window.evaluate(() => {
+    const result = document.querySelector('.transaction-result-panel')!.getBoundingClientRect();
+    const message = document.querySelector('.live-message-inspector')!.getBoundingClientRect();
+    return {
+      sideBySide: result.right <= message.left,
+      aligned: result.top === message.top,
+      overflow: document.documentElement.scrollWidth > innerWidth,
+    };
+  });
+  expect(alignment).toEqual({ sideBySide: true, aligned: true, overflow: false });
+  await mkdir('artifacts', { recursive: true });
+  await window.screenshot({ path: 'artifacts/transaction-messages-desktop.png', fullPage: true });
+  await inspector
+    .getByRole('button', { name: 'Ver todos los campos sin desplazamiento interno' })
+    .click();
+  await expect(inspector.getByRole('button', { name: 'Compactar tabla' })).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
+  await inspector.getByRole('button', { name: 'Compactar tabla' }).click();
+  await app!.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0]?.setContentSize(1366, 768),
+  );
+  await window.evaluate(() => globalThis.window.scrollTo(0, 0));
+  expect(
+    await window.evaluate(() => {
+      const result = document.querySelector('.transaction-result-panel')!.getBoundingClientRect();
+      const message = document.querySelector('.live-message-inspector')!.getBoundingClientRect();
+      return (
+        result.width >= 280 &&
+        message.width >= 380 &&
+        document.documentElement.scrollWidth <= innerWidth
+      );
+    }),
+  ).toBe(true);
+  await window.screenshot({ path: 'artifacts/transaction-messages-1366.png', fullPage: true });
+  await app!.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0]?.setContentSize(1024, 768),
+  );
+  expect(await window.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+    true,
+  );
+  await window.screenshot({ path: 'artifacts/transaction-messages-narrow.png', fullPage: true });
+});
 
 test('carga de saldo: iniciar, medir, recuperar y detener con motor real y fuente sintética', async () => {
   test.setTimeout(60000);
@@ -107,7 +306,7 @@ test('carga de saldo: iniciar, medir, recuperar y detener con motor real y fuent
   );
 });
 
-test('carga: selecciona ambos ATM concurrentes y conserva su identidad al recuperar resultados', async () => {
+test('carga: selecciona ambos ATM y conserva su identidad al recuperar resultados', async () => {
   test.setTimeout(60000);
   const window = await prepareBalanceSubmission();
   await createTestAtm(window, 'Segundo ATM de saldo');
@@ -135,13 +334,13 @@ test('carga: selecciona ambos ATM concurrentes y conserva su identidad al recupe
   await second.check();
   await window.getByRole('button', { name: 'Modo avanzado', exact: false }).click();
   await window.getByRole('button', { name: '3 TPS', exact: false }).click();
-  await expect(window.getByLabel('Operaciones simultáneas')).toHaveValue('5');
+  await expect(window.getByLabel('Operaciones en preparación y envío')).toHaveValue('5');
   await window.getByLabel('Máximo de operaciones').fill('1');
   await expect(start).toBeDisabled();
   await expect(window.locator('.load-validation')).toContainText('al menos una consulta por ATM');
   await window.getByLabel('Máximo de operaciones').fill('4');
   await window.getByLabel('TPS objetivo', { exact: true }).fill('3');
-  await window.getByLabel('Operaciones simultáneas').selectOption('2');
+  await window.getByLabel('Operaciones en preparación y envío').selectOption('2');
   await window.getByLabel('Duración máxima (segundos)').fill('10');
   await mkdir('artifacts', { recursive: true });
   await build({
@@ -179,7 +378,7 @@ test('carga: selecciona ambos ATM concurrentes y conserva su identidad al recupe
   await start.click();
   await expect(first).toBeDisabled();
   await expect(second).toBeDisabled();
-  await expect(window.getByLabel('Operaciones simultáneas')).toBeDisabled();
+  await expect(window.getByLabel('Operaciones en preparación y envío')).toBeDisabled();
   await expect
     .poll(async () => {
       const status = await window.evaluate(() => globalThis.window.desktop!.getLoadRun());
@@ -209,6 +408,29 @@ test('carga: selecciona ambos ATM concurrentes y conserva su identidad al recupe
   await expect(result).toContainText('Objetivo TPS no alcanzado');
   await window.evaluate(() => globalThis.window.scrollTo(0, 0));
   await window.screenshot({ path: 'artifacts/load-two-atms.png', fullPage: true });
+  // Render explicit cancellation metadata without changing old financial outcomes.
+  const failure = structuredClone(snapshot.value);
+  failure.state = 'FAILED';
+  failure.message = 'Primer error: PEER_CLOSED. Envío sin respuesta confirmada.';
+  failure.items = failure.items.slice(0, 3).map((item, index) => ({
+    ...item,
+    outcome: index === 0 ? 'PEER_CLOSED' : index === 1 ? 'CONTEXT_ERROR' : 'TRANSPORT_ERROR',
+    received: false,
+    responseCode: null,
+    sent: index !== 1,
+    ...(index ? { cancelled: true as const } : {}),
+  }));
+  await app!.evaluate(({ ipcMain }, run) => {
+    ipcMain.removeHandler('load:run:status');
+    ipcMain.handle('load:run:status', () => ({ ok: true, value: run }));
+  }, failure);
+  await expect(result).toContainText('Primer error: PEER_CLOSED');
+  await expect(result.locator('.load-metrics')).toContainText('Errores1');
+  await expect(result.locator('.load-metrics')).toContainText('Canceladas2');
+  await expect(result.locator('.load-metrics')).toContainText('Enviadas sin respuesta2');
+  await expect(window.locator('.load-run-table')).toContainText('Cancelada · sin envío');
+  await expect(window.locator('.load-run-table')).toContainText('Cancelada · sin respuesta');
+  await window.screenshot({ path: 'artifacts/load-cancellation-diagnostics.png', fullPage: true });
 });
 
 for (const recovery of ['POLL', 'LATE_REJECTION'] as const) {
@@ -438,58 +660,98 @@ test('impide una segunda instancia sobre el mismo diario financiero', async () =
 test('retiro con reverso: cuenta regresiva, resultado separado y comprobante', async () => {
   test.setTimeout(60000);
   const window = await prepareBalanceSubmission();
-  await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
+  await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_REVERSAL');
   await window.getByLabel('Monto de prueba').fill('20.00');
   await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
-  await window.getByRole('radio', { name: 'Retiro + reverso', exact: true }).check();
+  await expect(window.getByRole('radio', { name: 'Retiro + reverso', exact: true })).toBeChecked();
   await expect(window.getByLabel('Espera para el reverso')).toHaveValue('5');
   await window.getByLabel('Espera para el reverso').selectOption('3');
-  await app!.evaluate(({ ipcMain }, seed) => {
-    let saved: typeof seed | null = null;
-    ipcMain.removeHandler('transaction:withdrawal:execute');
-    ipcMain.removeHandler('transaction:withdrawal:result');
-    ipcMain.handle('transaction:withdrawal:result', () => ({ ok: true, value: saved }));
-    ipcMain.handle('transaction:withdrawal:execute', async (_event, request) => {
-      if (request.reversalDelaySeconds !== 3) throw Error('TEST_PLAN_MISSING');
-      saved = {
-        ...seed,
-        requestId: request.requestId,
-        cardReadId: request.cardReadId,
-        atmId: request.draft.atmId,
-        finishedAt: null,
-        reversal: {
-          transactionId: seed.cardReadId,
-          delaySeconds: 3,
-          outcome: 'WAITING',
-          dueAt: new Date(Date.now() + 3000).toISOString(),
+  const built = new NewVisaWithdrawal().build(reversalFixture().lease);
+  const withdrawalBody = withdrawalResponse(built.metadata);
+  const reversalCodec = new QaVisaReversal(built.wire);
+  const reversalWire = reversalCodec.build(withdrawalBody);
+  const seed = approvedWithdrawalExecution();
+  seed.correlation = {
+    stan: built.metadata.stan,
+    rrn: built.metadata.rrn,
+    terminalId: built.metadata.terminalId,
+  };
+  seed.messages = {
+    request: built.message,
+    response: new CapturedVisaBalance('WITHDRAWAL').message(withdrawalBody),
+  };
+  const reversalMessages = {
+    request: reversalCodec.requestMessage(reversalWire),
+    response: reversalCodec.responseMessage(reversalResponse(reversalWire.subarray(4)))!,
+  };
+  reversalCodec.dispose();
+  await app!.evaluate(
+    ({ ipcMain }, { seed, reversalMessages }) => {
+      let saved: typeof seed | null = null;
+      ipcMain.removeHandler('transaction:withdrawal:execute');
+      ipcMain.removeHandler('transaction:withdrawal:result');
+      ipcMain.handle('transaction:withdrawal:result', () => ({ ok: true, value: saved }));
+      ipcMain.handle('transaction:withdrawal:execute', async (_event, request) => {
+        if (request.reversalDelaySeconds !== 3) throw Error('TEST_PLAN_MISSING');
+        saved = {
+          ...seed,
+          requestId: request.requestId,
+          cardReadId: request.cardReadId,
+          atmId: request.draft.atmId,
           finishedAt: null,
-          responseCode: null,
-          transmissionAttempted: false,
-          bytesQueued: 0,
-        },
-      };
-      await new Promise((done) => setTimeout(done, 3000));
-      saved = {
-        ...saved,
-        finishedAt: new Date().toISOString(),
-        reversal: {
-          ...saved.reversal!,
-          outcome: 'APPROVED',
+          reversal: {
+            transactionId: seed.cardReadId,
+            delaySeconds: 3,
+            outcome: 'WAITING',
+            dueAt: new Date(Date.now() + 3000).toISOString(),
+            finishedAt: null,
+            responseCode: null,
+            transmissionAttempted: false,
+            bytesQueued: 0,
+          },
+        };
+        await new Promise((done) => setTimeout(done, 3000));
+        saved = {
+          ...saved,
           finishedAt: new Date().toISOString(),
-          responseCode: '00',
-          transmissionAttempted: true,
-          bytesQueued: 400,
-        },
-      };
-      return { ok: true, value: saved };
-    });
-  }, approvedWithdrawalExecution());
-  const send = window.getByRole('button', { name: 'Enviar transacción', exact: true });
+          reversal: {
+            ...saved.reversal!,
+            outcome: 'APPROVED',
+            finishedAt: new Date().toISOString(),
+            responseCode: '00',
+            transmissionAttempted: true,
+            bytesQueued: 400,
+            messages: reversalMessages,
+          },
+        };
+        return { ok: true, value: saved };
+      });
+    },
+    { seed, reversalMessages },
+  );
+  const send = window.getByRole('button', { name: 'Ejecutar Transacción', exact: true });
   await send.click();
   const flow = window.getByRole('region', { name: 'Flujo de retiro y reverso' });
   await expect(flow).toContainText('s para enviar el reverso');
   await expect(send).toBeDisabled();
   await expect(flow).toContainText('Reverso aceptado por el host');
+  const inspector = window.getByRole('region', { name: 'Mensajería de la transacción' });
+  await expect(inspector.getByRole('tab', { name: 'Respuesta reverso (0430)' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(
+    inspector.getByRole('table', { name: 'Campos del mensaje', exact: true }),
+  ).toContainText('0430');
+  await inspector.getByRole('tab', { name: 'Reverso (0420)' }).click();
+  await expect(inspector).toContainText('Datos de la transacción original');
+  await expect(
+    inspector.getByRole('table', { name: 'Tags EMV del mensaje', exact: true }),
+  ).toContainText('8000040000');
+  await expect(
+    inspector.getByRole('table', { name: 'Tags EMV del mensaje', exact: true }),
+  ).toContainText('••••••••');
+  await inspector.getByRole('tab', { name: 'Respuesta reverso (0430)' }).click();
   await expect(window.getByRole('region', { name: 'Resultado', exact: true })).toContainText(
     'Flujo completo',
   );
@@ -699,9 +961,11 @@ test('interfaz minimalista: acción principal, requisitos y detalles accesibles'
     BrowserWindow.getAllWindows()[0]?.setContentSize(1536, 1024),
   );
   await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
+  await window.getByRole('button', { name: 'Opciones y detalles técnicos', exact: true }).click();
   await expect(
     window.getByRole('button', { name: 'Recargar perfiles', exact: true }),
   ).toBeEnabled();
+  await window.getByRole('button', { name: 'Opciones y detalles técnicos', exact: true }).click();
   await expect(window.getByRole('region', { name: 'Resultado' })).toBeVisible();
   await expect(window.getByLabel('Referencia documental')).not.toBeVisible();
   await expect(window.getByRole('heading', { name: 'Mensaje ISO8583' })).not.toBeVisible();
@@ -854,7 +1118,7 @@ test('consulta terminada sin respuesta permite retiro de monto personalizado con
       });
     }
   });
-  const send = window.getByRole('button', { name: 'Enviar transacción', exact: true });
+  const send = window.getByRole('button', { name: 'Ejecutar Transacción', exact: true });
   const result = window.getByRole('region', { name: 'Resultado', exact: true });
   await send.click();
   await expect(result).toContainText('El destino cerró la conexión');
@@ -941,7 +1205,7 @@ test('retiro 91 historico y actual finalizan sin paso de conciliacion y permiten
   await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
   await window.getByLabel('Monto de prueba').fill('20.00');
   const result = window.getByRole('region', { name: 'Resultado', exact: true });
-  const send = window.getByRole('button', { name: 'Enviar transacción', exact: true });
+  const send = window.getByRole('button', { name: 'Ejecutar Transacción', exact: true });
   await expect(result).toContainText('Aún no hay resultado');
   await expect(result).not.toContainText('conciliación');
   await expect(result.getByRole('button', { name: 'Nueva prueba QA', exact: true })).toHaveCount(0);
@@ -1053,7 +1317,7 @@ test('retiro RC 59 histórico no ocupa el formulario y un error nuevo permite ot
   await seedWithdrawalJournal(previous);
   await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
   const result = window.getByRole('region', { name: 'Resultado', exact: true });
-  const send = window.getByRole('button', { name: 'Enviar transacción', exact: true });
+  const send = window.getByRole('button', { name: 'Ejecutar Transacción', exact: true });
   await expect(result).toContainText('Aún no hay resultado');
   await expect(send).toBeDisabled();
   await app!.evaluate(({ ipcMain }) => {
@@ -1148,7 +1412,7 @@ test('retiro RC 59 histórico no ocupa el formulario y un error nuevo permite ot
 test('retiro QA: monto, bloqueo real y recuperación conservan la operación original', async () => {
   test.setTimeout(60000);
   const window = await prepareBalanceSubmission();
-  const send = window.getByRole('button', { name: 'Enviar transacción', exact: true });
+  const send = window.getByRole('button', { name: 'Ejecutar Transacción', exact: true });
   await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
   await window.getByLabel('Monto de prueba').fill('0.00');
   await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
@@ -1296,7 +1560,7 @@ for (const withPrint of [false, true]) {
     await expect(window.getByRole('radio', { name: /^Sin impresión/ })).toBeChecked();
     if (withPrint) await window.getByRole('radio', { name: /^Con impresión/ }).check();
     await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
-    await window.getByRole('button', { name: 'Enviar transacción', exact: true }).click();
+    await window.getByRole('button', { name: 'Ejecutar Transacción', exact: true }).click();
     const dialog = window.getByRole('dialog', { name: 'Vista previa del comprobante' });
     if (withPrint) await expect(dialog).toBeVisible();
     else await expect(dialog).toHaveCount(0);
@@ -1371,7 +1635,7 @@ for (const withPrint of [false, true]) {
 test('consulta de saldo: envío directo, dependencia ausente y resultado mediante IPC sintético', async () => {
   test.setTimeout(60000);
   const window = await prepareBalanceSubmission();
-  const send = window.getByRole('button', { name: 'Enviar transacción', exact: true });
+  const send = window.getByRole('button', { name: 'Ejecutar Transacción', exact: true });
   await expect(send).toBeDisabled();
   const picker = window.getByLabel('Elegir tarjeta', { exact: true });
   await picker.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
@@ -1382,9 +1646,9 @@ test('consulta de saldo: envío directo, dependencia ausente y resultado mediant
   await window.evaluate(() => globalThis.window.scrollTo(0, 0));
   await window.screenshot({ path: 'artifacts/redesign-prepared-desktop.png', scale: 'css' });
   await expect(window.getByRole('region', { name: 'Actividad de esta sesión' })).toBeInViewport();
-  await window.getByRole('radio', { name: 'Corriente', exact: true }).check();
+  await window.getByRole('combobox', { name: 'Cuenta', exact: true }).selectOption('CURRENT');
   await expect(send).toBeDisabled();
-  await window.getByRole('radio', { name: 'Ahorros', exact: true }).check();
+  await window.getByRole('combobox', { name: 'Cuenta', exact: true }).selectOption('SAVINGS');
   await expect(send).toBeEnabled();
   await expect(window.locator('.composer-options')).not.toHaveAttribute('open');
   await expect(
@@ -1396,7 +1660,7 @@ test('consulta de saldo: envío directo, dependencia ausente y resultado mediant
   const blocked = window.getByLabel('Resultado de consulta de saldo', { exact: true });
   await expect(blocked).toContainText('Consulta bloqueada');
   await expect(blocked).toContainText('No se transmitió la consulta.');
-  await expect(blocked).toContainText('perfil de ejecución QA aprobado');
+  await expect(blocked).toContainText('No está disponible la plantilla ATM20521');
   await expect(window.locator('.session-activity tbody tr')).toHaveCount(1);
   await expect(window.locator('.session-activity')).toContainText('Consulta bloqueada');
   // Main's completion event reports its empty simulated hardware, independently
@@ -1562,14 +1826,14 @@ for (const outcome of [
         };
       });
     }, outcome);
-    const send = window.getByRole('button', { name: 'Enviar transacción', exact: true });
+    const send = window.getByRole('button', { name: 'Ejecutar Transacción', exact: true });
     await expect(send).toBeEnabled();
     await send.click();
     await expect(send).toBeVisible();
     if (outcome === 'IPC_REJECTED' || outcome === 'RESPONSE_TIMEOUT') {
       await expect(send).toBeDisabled();
-      await window.getByRole('radio', { name: 'Corriente', exact: true }).check();
-      await window.getByRole('radio', { name: 'Ahorros', exact: true }).check();
+      await window.getByRole('combobox', { name: 'Cuenta', exact: true }).selectOption('CURRENT');
+      await window.getByRole('combobox', { name: 'Cuenta', exact: true }).selectOption('SAVINGS');
       await expect(send).toBeDisabled();
       await expect(
         window.getByRole('button', { name: 'Consultar resultado de saldo', exact: true }),
@@ -1606,7 +1870,7 @@ test('consulta directa conserva la referencia tras timeout y no reenvía al edit
     });
   });
   await window.clock.install();
-  await window.getByRole('button', { name: 'Enviar transacción', exact: true }).click();
+  await window.getByRole('button', { name: 'Ejecutar Transacción', exact: true }).click();
   await expect(
     window.getByRole('button', { name: 'Consultando saldo…', exact: true }),
   ).toBeDisabled();
@@ -1617,10 +1881,10 @@ test('consulta directa conserva la referencia tras timeout y no reenvía al edit
       .getByRole('region', { name: 'Resultado', exact: true })
       .getByRole('button', { name: 'Nueva transacción', exact: true }),
   ).toHaveCount(0);
-  const send = window.getByRole('button', { name: 'Enviar transacción', exact: true });
+  const send = window.getByRole('button', { name: 'Ejecutar Transacción', exact: true });
   await expect(send).toBeDisabled();
-  await window.getByRole('radio', { name: 'Corriente', exact: true }).check();
-  await window.getByRole('radio', { name: 'Ahorros', exact: true }).check();
+  await window.getByRole('combobox', { name: 'Cuenta', exact: true }).selectOption('CURRENT');
+  await window.getByRole('combobox', { name: 'Cuenta', exact: true }).selectOption('SAVINGS');
   await expect(send).toBeDisabled();
   await expect(
     window.getByRole('button', { name: 'Consultar resultado de saldo', exact: true }),
@@ -1633,7 +1897,11 @@ test('consulta directa conserva la referencia tras timeout y no reenvía al edit
     ),
   ).toBe(1);
 });
-async function installTransactionReader(failRead = false, readId = transactionIdentity.readId) {
+async function installTransactionReader(
+  failRead = false,
+  readId = transactionIdentity.readId,
+  card = transactionIdentity,
+) {
   await app!.evaluate(
     ({ ipcMain }, args) => {
       let identity: typeof args.identity | null = null;
@@ -1666,7 +1934,7 @@ async function installTransactionReader(failRead = false, readId = transactionId
         return { ok: true, value: identity };
       });
     },
-    { identity: { ...transactionIdentity, readId }, failRead },
+    { identity: { ...card, readId }, failRead },
   );
 }
 
@@ -1681,7 +1949,7 @@ test('formulario directo: lectura selecciona la tarjeta, revisión opcional e in
     .getByLabel('Perfil ATM', { exact: true })
     .selectOption({ label: 'ATM de preparación guiada' });
   await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
-  await window.getByRole('radio', { name: 'Corriente', exact: true }).check();
+  await window.getByRole('combobox', { name: 'Cuenta', exact: true }).selectOption('CURRENT');
   await window.getByLabel('Monto de prueba').fill('100.50');
   await expect(window.getByRole('heading', { name: 'Tarjeta', exact: true })).toBeVisible();
   const picker = window.getByLabel('Elegir tarjeta', { exact: true });
@@ -1698,7 +1966,7 @@ test('formulario directo: lectura selecciona la tarjeta, revisión opcional e in
   await reviewDraft(window);
   await expect(window.getByLabel('Contexto revisado', { exact: true })).toBeVisible();
   await expect(
-    window.getByRole('button', { name: 'Enviar transacción', exact: true }),
+    window.getByRole('button', { name: 'Ejecutar Transacción', exact: true }),
   ).toBeDisabled();
   await expect(window.locator('.transaction-steps')).toHaveCount(0);
   await window.getByRole('button', { name: 'Historial', exact: true }).click();
@@ -1728,7 +1996,7 @@ test('formulario directo: lectura selecciona la tarjeta, revisión opcional e in
   await expect(preview).toContainText('Pendiente de seleccionar');
   await expect(window.getByLabel('Contexto revisado', { exact: true })).toHaveCount(0);
   await expect(
-    window.getByRole('button', { name: 'Enviar transacción', exact: true }),
+    window.getByRole('button', { name: 'Ejecutar Transacción', exact: true }),
   ).toBeDisabled();
   await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
   await expect(window.getByLabel('Perfil ATM', { exact: true })).toHaveValue('');
@@ -1741,7 +2009,7 @@ test('formulario directo valida entradas y recupera un timeout de lectura', asyn
   await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
   await expect(window.locator('#send-blocked-note')).toContainText('Selecciona un perfil ATM');
   await expect(
-    window.getByRole('button', { name: 'Enviar transacción', exact: true }),
+    window.getByRole('button', { name: 'Ejecutar Transacción', exact: true }),
   ).toBeDisabled();
   await expect(window.getByRole('button', { name: 'Crear entidad', exact: true })).toBeVisible();
   await createTestEntity(window);
@@ -1789,7 +2057,7 @@ test('revisión documental opcional con lector no disponible', async () => {
   );
   await expect(window.getByLabel('Contexto revisado', { exact: true })).toBeVisible();
   await expect(
-    window.getByRole('button', { name: 'Enviar transacción', exact: true }),
+    window.getByRole('button', { name: 'Ejecutar Transacción', exact: true }),
   ).toBeDisabled();
 });
 
@@ -1808,11 +2076,11 @@ test('muestra evidencia de capturas sin habilitar envío ni RAW', async () => {
   ).toBeVisible();
   await window.getByText('Flujo e inspector', { exact: false }).click();
   await expect(window.getByRole('tab', { name: 'RAW', exact: true })).toBeDisabled();
-  await expect(window.getByRole('button', { name: 'Enviar transacción' })).toBeDisabled();
+  await expect(window.getByRole('button', { name: 'Ejecutar Transacción' })).toBeDisabled();
   await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
   await window.getByText('Documentación y capturas', { exact: true }).click();
   await expect(evidence.getByRole('heading', { name: '10 archivos · 218 mensajes' })).toBeVisible();
-  await expect(window.getByRole('button', { name: 'Enviar transacción' })).toBeDisabled();
+  await expect(window.getByRole('button', { name: 'Ejecutar Transacción' })).toBeDisabled();
   await mkdir('artifacts', { recursive: true });
   await window.screenshot({ path: 'artifacts/capture-evidence.png', fullPage: true });
 });
@@ -1844,7 +2112,7 @@ test('Configuración muestra evidencia documental QA sin conectar ni heredarla e
   await window.getByLabel('Ambiente', { exact: true }).selectOption('QA');
   await expect(evidence.getByText('10.0.0.11:16100', { exact: true })).toBeVisible();
   await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
-  await expect(window.getByRole('button', { name: 'Enviar transacción' })).toBeDisabled();
+  await expect(window.getByRole('button', { name: 'Ejecutar Transacción' })).toBeDisabled();
 });
 
 test('evidencia de red corrupta muestra error seguro sin impedir usar el shell', async () => {
@@ -1974,7 +2242,7 @@ test('dashboard real, aislamiento, navegación y gate transaccional', async () =
   await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
   await reviewDraft(window);
   await expect(window.getByText('Revisión documental · QA')).toBeVisible();
-  await expect(window.getByRole('button', { name: 'Enviar transacción' })).toBeDisabled();
+  await expect(window.getByRole('button', { name: 'Ejecutar Transacción' })).toBeDisabled();
   await window
     .getByRole('combobox', { name: 'Transacción', exact: true })
     .selectOption('TIMEOUT_REVERSAL');
@@ -2014,11 +2282,11 @@ async function openComposerOptions(window: Page) {
     await options.locator('summary').first().click();
 }
 async function reviewDraft(window: Page) {
+  await openComposerOptions(window);
   await expect(window.getByLabel('Ambiente', { exact: true })).toBeEnabled();
   await expect(
     window.getByRole('button', { name: 'Recargar perfiles', exact: true }),
   ).toBeEnabled();
-  await openComposerOptions(window);
   await window.getByRole('button', { name: 'Revisar transacción', exact: true }).click();
 }
 async function openPreparationDetails(window: Page) {
@@ -2156,12 +2424,13 @@ test('casos locales: validación, reinicio, carga, separación de ambientes y el
   await createTestAtm(window, 'ATM de casos');
   await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
   await window.getByLabel('Perfil ATM', { exact: true }).selectOption({ label: 'ATM de casos' });
+  await openComposerOptions(window);
   await window.getByLabel('Escenario', { exact: true }).selectOption('BANRED');
   await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
   await expect(
     window.getByRole('button', { name: 'Guardar como caso', exact: true }),
   ).toBeDisabled();
-  await window.getByRole('radio', { name: 'Corriente', exact: true }).check();
+  await window.getByRole('combobox', { name: 'Cuenta', exact: true }).selectOption('CURRENT');
   await window.getByLabel('Monto de prueba').fill('100.50');
   await window.getByRole('button', { name: 'Guardar como caso', exact: true }).click();
   let dialog = window.getByRole('dialog');
@@ -2193,11 +2462,13 @@ test('casos locales: validación, reinicio, carga, separación de ambientes y el
   await expect(window.getByLabel('Transacción', { exact: true })).toHaveValue(
     'WITHDRAWAL_APPROVED',
   );
-  await expect(window.getByRole('radio', { name: 'Corriente', exact: true })).toBeChecked();
+  await expect(window.getByRole('combobox', { name: 'Cuenta', exact: true })).toHaveValue(
+    'CURRENT',
+  );
   await expect(window.getByLabel('Escenario', { exact: true })).toHaveValue('BANRED');
   await expect(window.getByLabel('Monto de prueba')).toHaveValue('100.50');
   await expect(window.getByLabel('Perfil ATM', { exact: true })).not.toHaveValue('');
-  await expect(window.getByRole('button', { name: 'Enviar transacción' })).toBeDisabled();
+  await expect(window.getByRole('button', { name: 'Ejecutar Transacción' })).toBeDisabled();
   await expect(window.getByLabel('Contexto revisado', { exact: true })).toHaveCount(0);
   await reviewDraft(window);
   await expect(window.getByText('Revisión documental · QA')).toBeVisible();
@@ -2270,7 +2541,7 @@ test('un caso con ATM editado conserva cuenta/monto y exige seleccionar el perfi
     .selectOption({ label: 'ATM de caso actualizado' });
   await reviewDraft(window);
   await expect(window.getByLabel('Contexto revisado', { exact: true })).toContainText('versión 2');
-  await expect(window.getByRole('button', { name: 'Enviar transacción' })).toBeDisabled();
+  await expect(window.getByRole('button', { name: 'Ejecutar Transacción' })).toBeDisabled();
 });
 
 test('fallo al guardar un caso exige recargar antes de reintentar', async () => {
@@ -2410,7 +2681,7 @@ test('pantalla del mockup: contexto ATM, catálogo CMS, monto y cambio de ambien
   const reference = window.locator('.documented-operation');
   await expect(reference.getByText('301000', { exact: true })).toBeVisible();
   await expect(reference).toContainText('Extreme Mediator CMS v3.6 · p. 20');
-  await window.getByRole('radio', { name: 'Corriente', exact: true }).check();
+  await window.getByRole('combobox', { name: 'Cuenta', exact: true }).selectOption('CURRENT');
   await expect(reference.getByText('302000', { exact: true })).toBeVisible();
   await window
     .getByLabel('Perfil ATM', { exact: true })
@@ -2418,7 +2689,7 @@ test('pantalla del mockup: contexto ATM, catálogo CMS, monto y cambio de ambien
   await expect(window.getByLabel('Perfil ATM', { exact: true })).not.toHaveValue('');
   await reviewDraft(window);
   await expect(window.getByText('Revisión documental · QA')).toBeVisible();
-  await expect(window.getByRole('button', { name: 'Enviar transacción' })).toBeDisabled();
+  await expect(window.getByRole('button', { name: 'Ejecutar Transacción' })).toBeDisabled();
   await expect(window.getByRole('tab', { name: 'RAW', exact: true })).toBeDisabled();
   await expect(window.getByRole('tab', { name: 'HEX', exact: true })).toBeDisabled();
   await expect(window.getByText('Sin mensaje recibido', { exact: true })).toBeVisible();
@@ -2433,7 +2704,7 @@ test('pantalla del mockup: contexto ATM, catálogo CMS, monto y cambio de ambien
   await expect(window.getByText('Revisión documental · QA')).toBeVisible();
   await openPreparationDetails(window);
   await expect(window.getByText('Reglas financieras del monto', { exact: true })).toBeVisible();
-  await window.getByRole('radio', { name: 'Ahorros', exact: true }).check();
+  await window.getByRole('combobox', { name: 'Cuenta', exact: true }).selectOption('SAVINGS');
   await expect(reference.getByText('011000', { exact: true })).toBeVisible();
   await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_DECLINED');
   await expect(reference.getByText('011000', { exact: true })).toBeVisible();
@@ -2459,7 +2730,7 @@ test('pantalla del mockup: contexto ATM, catálogo CMS, monto y cambio de ambien
   await expect(window.locator('.session-empty')).toContainText('No se han enviado transacciones');
   await window.getByLabel('Ambiente', { exact: true }).selectOption('QA');
   await window.getByLabel('Transacción', { exact: true }).selectOption('TIMEOUT_REVERSAL');
-  await expect(window.getByRole('radio', { name: 'Ahorros', exact: true })).toBeDisabled();
+  await expect(window.getByRole('combobox', { name: 'Cuenta', exact: true })).toBeDisabled();
   await expect(reference.getByText('TrnCode CMS', { exact: true })).toHaveCount(0);
   await reviewDraft(window);
   await openPreparationDetails(window);
@@ -2516,13 +2787,16 @@ test('plantillas documentales, resumen revisado y borrador conservado al navegar
   await window
     .getByLabel('Perfil ATM', { exact: true })
     .selectOption({ label: 'ATM de plantillas' });
+  await openComposerOptions(window);
   await window.getByLabel('Escenario', { exact: true }).selectOption('RTC');
   await openComposerOptions(window);
   await window.getByLabel('Plantilla documental').selectOption('WITHDRAWAL_APPROVED:CURRENT');
   await expect(window.getByLabel('Transacción', { exact: true })).toHaveValue(
     'WITHDRAWAL_APPROVED',
   );
-  await expect(window.getByRole('radio', { name: 'Corriente', exact: true })).toBeChecked();
+  await expect(window.getByRole('combobox', { name: 'Cuenta', exact: true })).toHaveValue(
+    'CURRENT',
+  );
   await expect(window.getByLabel('Escenario', { exact: true })).toHaveValue('RTC');
   await expect(window.getByLabel('Perfil ATM', { exact: true })).not.toHaveValue('');
   await openPreparationDetails(window);
@@ -2554,6 +2828,7 @@ test('plantillas documentales, resumen revisado y borrador conservado al navegar
   await summary.scrollIntoViewIfNeeded();
   await mkdir('artifacts', { recursive: true });
   await window.screenshot({ path: 'artifacts/transaction-review-summary.png' });
+  await openComposerOptions(window);
   await window.getByRole('button', { name: 'Limpiar borrador' }).click();
   await window.getByRole('dialog').getByRole('button', { name: 'Confirmar limpieza' }).click();
   await expect(window.getByLabel('Transacción', { exact: true })).toHaveValue('BALANCE');
@@ -2582,7 +2857,7 @@ test('compatibilidad Mediator PREPROD desde evidencia del esquema, sin conexión
   await expect(compatibility).toContainText('Terminal ID · Incompatible');
   await expect(compatibility).toContainText('13 bytes ASCII; Mediator admite 10. No se trunca.');
   await expect(compatibility).toContainText('Entidad, canal y terminal · Pendiente');
-  await expect(window.getByRole('button', { name: 'Enviar transacción' })).toBeDisabled();
+  await expect(window.getByRole('button', { name: 'Ejecutar Transacción' })).toBeDisabled();
   await compatibility.scrollIntoViewIfNeeded();
   await mkdir('artifacts', { recursive: true });
   await window.screenshot({ path: 'artifacts/mediator-compatibility.png' });
@@ -2831,8 +3106,9 @@ test('mejoras UI: configuración rápida conserva datos y selecciona el ATM crea
   const window = await launch();
   await window.getByRole('button', { name: 'Nueva transacción', exact: true }).click();
   await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
+  await openComposerOptions(window);
   await window.getByLabel('Escenario', { exact: true }).selectOption('BANRED');
-  await window.getByRole('radio', { name: 'Corriente', exact: true }).check();
+  await window.getByRole('combobox', { name: 'Cuenta', exact: true }).selectOption('CURRENT');
   await window.getByLabel('Monto de prueba').fill('100.50');
   await window.getByRole('button', { name: 'Crear entidad', exact: true }).click();
   await expect(window.getByLabel('Código de entidad')).toBeVisible();
@@ -2880,11 +3156,13 @@ test('mejoras UI: configuración rápida conserva datos y selecciona el ATM crea
     'WITHDRAWAL_APPROVED',
   );
   await expect(window.getByLabel('Escenario', { exact: true })).toHaveValue('BANRED');
-  await expect(window.getByRole('radio', { name: 'Corriente', exact: true })).toBeChecked();
+  await expect(window.getByRole('combobox', { name: 'Cuenta', exact: true })).toHaveValue(
+    'CURRENT',
+  );
   await expect(window.getByLabel('Monto de prueba')).toHaveValue('100.50');
   await expect(window.getByRole('heading', { name: 'Tarjeta', exact: true })).toBeVisible();
   await expect(
-    window.getByRole('button', { name: 'Enviar transacción', exact: true }),
+    window.getByRole('button', { name: 'Ejecutar Transacción', exact: true }),
   ).toBeDisabled();
 });
 
@@ -2918,7 +3196,7 @@ test('mejoras UI: fallo del catálogo no pierde el borrador ni selecciona un ATM
   await expect(window.getByLabel('Monto de prueba')).toHaveValue('50.00');
   await expect(window.getByLabel('Perfil ATM', { exact: true })).toHaveValue('');
   await expect(
-    window.getByRole('button', { name: 'Enviar transacción', exact: true }),
+    window.getByRole('button', { name: 'Ejecutar Transacción', exact: true }),
   ).toBeDisabled();
 });
 
@@ -2942,6 +3220,7 @@ test('mejoras UI: limpiar requiere confirmación y conserva los casos guardados'
   await reviewDraft(window);
   const summary = window.getByLabel('Contexto revisado', { exact: true });
   await expect(summary).toBeVisible();
+  await openComposerOptions(window);
   await window.getByRole('button', { name: 'Limpiar borrador', exact: true }).click();
   await expect(
     dialog.getByRole('heading', { name: '¿Limpiar este borrador?', exact: true }),
@@ -2958,10 +3237,12 @@ test('mejoras UI: limpiar requiere confirmación y conserva los casos guardados'
   await expect(window.getByLabel('Resumen de la transacción')).toContainText(
     transactionIdentity.panMasked!,
   );
+  await openComposerOptions(window);
   await window.getByRole('button', { name: 'Limpiar borrador', exact: true }).click();
   await window.keyboard.press('Escape');
   await expect(window.getByLabel('Monto de prueba')).toHaveValue('25.00');
   await expect(window.getByLabel('Ambiente', { exact: true })).toBeEnabled();
+  await openComposerOptions(window);
   await window.getByRole('button', { name: 'Limpiar borrador', exact: true }).click();
   await dialog.getByRole('button', { name: 'Confirmar limpieza', exact: true }).click();
   await expect(dialog).not.toBeVisible();
@@ -2994,7 +3275,7 @@ test('mejoras UI: buscar y filtrar casos conserva controles de vigencia y errore
   };
   await saveCase('Consulta sintética central');
   await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
-  await window.getByRole('radio', { name: 'Corriente', exact: true }).check();
+  await window.getByRole('combobox', { name: 'Cuenta', exact: true }).selectOption('CURRENT');
   await window.getByLabel('Monto de prueba').fill('100.50');
   await saveCase('Retiro sintético corriente');
   await window.getByRole('button', { name: 'Casos guardados (2)', exact: true }).click();
@@ -3126,7 +3407,7 @@ test('mejoras UI: revisión ocupada mantiene el ambiente bloqueado al salir del 
   await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
   await expect(window.getByRole('alert')).toContainText('Dependencia de revisión no disponible.');
   await expect(
-    window.getByRole('button', { name: 'Enviar transacción', exact: true }),
+    window.getByRole('button', { name: 'Ejecutar Transacción', exact: true }),
   ).toBeDisabled();
 });
 
@@ -3257,6 +3538,7 @@ test('pulido UI: las aplicaciones pertenecen al lector seleccionado y la carga t
   });
   await choice.click();
   await expect(picker.getByRole('button', { name: 'Cambiar tarjeta', exact: true })).toBeEnabled();
+  await picker.getByRole('button', { name: 'Cambiar tarjeta', exact: true }).click();
   await picker.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
   await expect(choice).toBeVisible();
   await picker.getByLabel('Lector para la transacción').selectOption(otherReader);
@@ -3566,7 +3848,7 @@ test('configuración de envío offline guarda ajustes y prepara sin tramas ni tr
   await expect(plan).toContainText('Después de revisar');
   await expect(plan).toContainText('Plan documental · sin transmisión.');
   await expect(
-    window.getByRole('button', { name: 'Enviar transacción', exact: true }),
+    window.getByRole('button', { name: 'Ejecutar Transacción', exact: true }),
   ).toBeDisabled();
   const api = await window.evaluate(() => ({
     senderExposed: 'sendTransaction' in globalThis.window.desktop!,
@@ -3688,7 +3970,7 @@ test('bugs tarjeta: rechaza una identidad de otro lector y actualiza el retiro d
 test('selección directa: cambiar tarjeta no la vuelve a seleccionar al actualizar', async () => {
   const window = await prepareBalanceSubmission();
   const picker = window.getByLabel('Elegir tarjeta', { exact: true });
-  const send = window.getByRole('button', { name: 'Enviar transacción', exact: true });
+  const send = window.getByRole('button', { name: 'Ejecutar Transacción', exact: true });
   await picker.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
   await expect(send).toBeEnabled();
   await picker.getByRole('button', { name: 'Cambiar tarjeta', exact: true }).click();
@@ -3699,12 +3981,16 @@ test('selección directa: cambiar tarjeta no la vuelve a seleccionar al actualiz
   await expect(send).toBeDisabled();
   await picker.getByRole('button', { name: 'Seleccionar tarjeta leída', exact: true }).click();
   await expect(send).toBeEnabled();
-  await window.getByRole('radio', { name: 'Ahorros', exact: true }).focus();
-  await window.keyboard.press('ArrowRight');
-  await expect(window.getByRole('radio', { name: 'Corriente', exact: true })).toBeChecked();
+  await window.getByRole('combobox', { name: 'Cuenta', exact: true }).focus();
+  await window.keyboard.press('ArrowDown');
+  await expect(window.getByRole('combobox', { name: 'Cuenta', exact: true })).toHaveValue(
+    'CURRENT',
+  );
   await expect(send).toBeDisabled();
-  await window.keyboard.press('ArrowLeft');
-  await expect(window.getByRole('radio', { name: 'Ahorros', exact: true })).toBeChecked();
+  await window.keyboard.press('ArrowUp');
+  await expect(window.getByRole('combobox', { name: 'Cuenta', exact: true })).toHaveValue(
+    'SAVINGS',
+  );
   await expect(send).toBeEnabled();
   await expect(window.getByRole('heading', { name: 'Aún no hay resultado' })).toBeVisible();
 });

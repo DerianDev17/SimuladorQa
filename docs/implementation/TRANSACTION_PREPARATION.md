@@ -1,5 +1,62 @@
 # Preparacion documental de transacciones
 
+## Panel compacto de datos — 2026-10-29
+
+El formulario sigue la referencia visual del operador: Cajero (ATM), Tarjeta,
+Tipo de Transacción, Cuenta y Ejecutar Transacción. El ATM muestra su entidad
+del catálogo. Cuenta usa un selector nativo accesible; importe, comprobante y
+espera de reverso siguen disponibles cuando corresponden. El engranaje abre
+las opciones existentes, incluido escenario, administración de ATM y limpieza.
+
+Lector físico y Tarjeta configurada separan la lectura normal de la selección de
+un perfil QA guardado. Cambiar modo o perfil invalida la tarjeta seleccionada.
+El perfil sigue requiriendo tarjeta física y seguridad nueva del chip; no habilita
+una tarjeta virtual. Tras leer se compactan los controles del lector, recuperables
+con Cambiar. El resumen presenta PAN enmascarado, aplicación y expiración de la
+lectura actual; los datos ausentes se identifican sin inventar emisor o producto.
+El subtítulo de operación identifica explícitamente el código documental CMS;
+la mensajería del resultado conserva el campo ISO realmente transmitido.
+
+Validación Electron: orden y ancho del formulario, selección física y configurada,
+perfil vacío, cambio de modo y cuenta, opciones por teclado, error por timeout,
+vista estrecha y regresión del resultado ISO/reverso. Datos sintéticos, sin host QA.
+
+## Mensajería junto al resultado — 2026-10-29
+
+Después de enviar, Transacciones muestra Resultado y Mensaje ISO8583 uno al lado
+del otro en escritorio, con pestañas Solicitud (0200) y Respuesta (0210). Se abre
+la respuesta cuando está disponible. Cada fila corresponde a un campo presente
+en la trama real del intento, con número, descripción y valor público; no se
+rellena con la captura de ejemplo ni con los datos actuales del formulario.
+El panel identifica STAN/RRN y se adapta a ventanas pequeñas.
+
+Main proyecta la solicitud construida y únicamente la respuesta correlacionada
+antes de borrar sus buffers. El diario guarda esa proyección opcional, compatible
+con registros anteriores. PAN se enmascara; vencimiento, Track 2, PIN Block,
+control de seguridad y contenidos privados/no aprobados se representan
+con una máscara fija. F42/F43/F44 muestran texto sanitizado; F55 ofrece el
+desglose de tags públicos de ADR-030 y protege los demás valores. No se guardan
+ni exponen RAW/HEX o bytes originales.
+Los campos públicos siguen el codec existente ISOBASEI/CB; no cambian envíos,
+reglas financieras, codificación, correlación ni resultados.
+
+Sin envío se distingue una solicitud preparada de una transmitida. Timeout o
+respuesta no correlacionada conservan la solicitud sin inventar una respuesta.
+Los registros antiguos indican que no tienen mensajería guardada. En retiro con
+reverso, se muestran los cuatro mensajes 0200/0210/0420/0430 con resultados
+independientes. La selección inicial sigue el mensaje disponible más reciente
+hasta que el operador elige una pestaña. Cambiar de pestaña reinicia el scroll.
+Ver todos los campos permite expandir la tabla sin desplazamiento interno.
+
+TODO-DATA ISO-PRIVATE-FIELD-DISPLAY: queda pendiente ampliar la proyección de
+F48/F53/F60/F62/F63 y tags EMV fuera de la lista pública. F42/F43/F44 y los tags
+de ADR-030 se muestran según las fuentes existentes y la solicitud del usuario.
+
+Criterios de aceptación: respuesta aprobada y rechazada, solicitud visible tras
+timeout, exclusión de respuestas ajenas, validación estricta del diario,
+recuperación tras reapertura y navegación por teclado. Pruebas con TCP local,
+SQLite y datos sintéticos; no requieren operaciones financieras QA nuevas.
+
 ## Rediseño aprobado e implementado — 2026-10-14
 
 Se sustituye el recorrido de tres pasos por un formulario único, panel de resultado y

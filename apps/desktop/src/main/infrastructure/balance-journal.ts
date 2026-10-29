@@ -11,6 +11,7 @@ import {
 import type { BalanceJournal } from '../balance-ports';
 import { parseWithdrawalDetails } from '../../../../../packages/domain/src/withdrawal';
 import { parseWithdrawalReversal } from '../../../../../packages/domain/src/withdrawal-reversal';
+import { parseTransactionMessages } from '../../../../../packages/domain/src/iso-message';
 
 const outcomes = [
   'PENDING',
@@ -68,12 +69,14 @@ export function parseBalanceJournal(value: unknown): BalanceExecution[] | undefi
     if (
       !exact(item, [
         ...keys,
+        ...(isRecord(item) && Object.hasOwn(item, 'messages') ? ['messages'] : []),
         ...(isRecord(item) && Object.hasOwn(item, 'diagnostics') ? ['diagnostics'] : []),
         ...(isRecord(item) && Object.hasOwn(item, 'withdrawal') ? ['withdrawal'] : []),
         ...(isRecord(item) && Object.hasOwn(item, 'reversal') ? ['reversal'] : []),
         ...(isRecord(item) && Object.hasOwn(item, 'qaContinuation') ? ['qaContinuation'] : []),
       ]) ||
       (item.diagnostics !== undefined && !parseBalanceDiagnostics(item.diagnostics)) ||
+      (Object.hasOwn(item, 'messages') && !parseTransactionMessages(item.messages)) ||
       (Object.hasOwn(item, 'withdrawal') && !parseWithdrawalDetails(item.withdrawal)) ||
       (Object.hasOwn(item, 'reversal') &&
         (!item.withdrawal || !parseWithdrawalReversal(item.reversal))) ||

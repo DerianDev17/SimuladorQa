@@ -29,10 +29,13 @@ export interface LoadRunItem {
   // Monotonic offset within the run; UTC remains available for correlation.
   finishedElapsedMs?: number;
   timings?: LoadRunTimings;
+  // Explicit local cancellation; historical outcomes are not reclassified.
+  cancelled?: true;
 }
 export interface LoadRunTimings {
   queueWaitMs?: number;
   rateLimitMs?: number;
+  connectionWaitMs?: number;
   cardReadMs: number;
   inspectMs: number;
   contextMs: number;
@@ -92,7 +95,11 @@ export function loadRunMetrics(run: LoadRunSnapshot) {
     timeouts: run.items.filter((item) =>
       ['CONNECT_TIMEOUT', 'RESPONSE_TIMEOUT'].includes(item.outcome),
     ).length,
-    errors: run.items.filter((item) => !['APPROVED', 'NOT_APPROVED'].includes(item.outcome)).length,
+    errors: run.items.filter(
+      (item) => !item.cancelled && !['APPROVED', 'NOT_APPROVED'].includes(item.outcome),
+    ).length,
+    cancelled: run.items.filter((item) => item.cancelled).length,
+    unconfirmed: run.items.filter((item) => item.sent && !item.received).length,
     tps: run.elapsedMs > 0 ? (sent * 1000) / run.elapsedMs : 0,
     min: latencies[0] ?? null,
     max: latencies.at(-1) ?? null,

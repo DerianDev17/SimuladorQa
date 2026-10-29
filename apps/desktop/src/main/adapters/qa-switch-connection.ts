@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { performance } from 'node:perf_hooks';
 import { isIPv4, Socket } from 'node:net';
 import type {
   SwitchConnectionSnapshot,
@@ -35,6 +36,8 @@ export class QaSwitchConnection implements SwitchConnectionPort {
   private transportScope: string | undefined;
   private transportResume: Parameters<SwitchConnectionPort['connect']>[0] | undefined;
   private transportRevision = 0;
+  private transportTail: Promise<void> = Promise.resolve();
+  private transportFailed = false;
   constructor(private readonly socketFactory: () => Socket = () => new Socket()) {}
 
   snapshot(): SwitchConnectionSnapshot {
@@ -184,8 +187,49 @@ export class QaSwitchConnection implements SwitchConnectionPort {
     return {
       // Preserve capabilities when coordinating observation and financial sockets.
       ...(transport.supportsReversal ? { supportsReversal: true as const } : {}),
-      exchange: (request) =>
-        this.withTransaction(request.endpoint, () => transport.exchange(request), request.load),
+      exchange: async (request) => {
+        try {
+          return await this.withTransaction(
+            request.endpoint,
+            async () => {
+              let result;
+              try {
+                result = await transport.exchange(request);
+              } catch (error) {
+                if (request.load) this.transportFailed = true;
+                throw error;
+              }
+              // Stop queued connections before publishing a failed result. The
+              // run service will abort preparation once it receives this result.
+              if (request.load && result.outcome !== 'APPROVED') this.transportFailed = true;
+              return result;
+            },
+            request.load,
+            request,
+          );
+        } catch (error) {
+          if (
+            !(error instanceof Error) ||
+            ![
+              'QA_CONNECTION_CANCELLED',
+              'QA_CONNECTION_EXPIRED',
+              'QA_CONNECTION_RUN_FAILED',
+            ].includes(error.message)
+          )
+            throw error;
+          request.onInterrupted?.(
+            error.message === 'QA_CONNECTION_EXPIRED' ? 'DURATION' : 'CANCELLED',
+          );
+          return {
+            outcome: 'TRANSPORT_ERROR',
+            transmissionAttempted: false,
+            bytesQueued: 0,
+            elapsedMs: 0,
+            responseCode: null,
+            balances: [],
+          };
+        }
+      },
     };
   }
 
@@ -193,6 +237,11 @@ export class QaSwitchConnection implements SwitchConnectionPort {
     endpoint: { host: string; port: number },
     exchange: () => Promise<T>,
     load?: { runId: string; concurrency: number },
+    options?: {
+      signal?: AbortSignal;
+      load?: { deadline?: number };
+      onConnectionWait?: (elapsedMs: number) => void;
+    },
   ): Promise<T> {
     const scope =
       load &&
@@ -208,6 +257,7 @@ export class QaSwitchConnection implements SwitchConnectionPort {
     )
       throw Error('QA_CONNECTION_BUSY');
     if (!this.transportActive) {
+      this.transportFailed = false;
       this.transportScope = scope;
       this.transportResume =
         this.current.state !== 'DISCONNECTED' &&
@@ -219,11 +269,54 @@ export class QaSwitchConnection implements SwitchConnectionPort {
       this.transportRevision = this.revision;
     }
     this.transportActive++;
+    const previous = this.transportTail;
+    let release!: () => void;
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    // A cancelled waiter must not let its successor overtake the active socket.
+    this.transportTail = previous.then(() => released);
+    const waiting = performance.now();
+    let waitReported = false;
+    const reportWait = () => {
+      if (waitReported) return;
+      waitReported = true;
+      try {
+        options?.onConnectionWait?.(Math.round(performance.now() - waiting));
+      } catch {
+        /* Telemetry cannot change an exchange. */
+      }
+    };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let cancel: (() => void) | undefined;
     try {
-      // Release the observation socket before opening the financial connection.
-      await this.closed;
+      await new Promise<void>((resolve, reject) => {
+        cancel = () => reject(Error('QA_CONNECTION_CANCELLED'));
+        options?.signal?.addEventListener('abort', cancel, { once: true });
+        if (options?.signal?.aborted) return cancel();
+        const deadline = options?.load?.deadline;
+        if (deadline !== undefined) {
+          if (performance.now() >= deadline) return reject(Error('QA_CONNECTION_EXPIRED'));
+          timer = setTimeout(
+            () => reject(Error('QA_CONNECTION_EXPIRED')),
+            deadline - performance.now(),
+          );
+        }
+        void Promise.all([previous, this.closed]).then(() => resolve(), reject);
+      });
+      if (options?.signal?.aborted) throw Error('QA_CONNECTION_CANCELLED');
+      if (options?.load?.deadline !== undefined && performance.now() >= options.load.deadline)
+        throw Error('QA_CONNECTION_EXPIRED');
+      if (this.transportFailed) throw Error('QA_CONNECTION_RUN_FAILED');
+      clearTimeout(timer);
+      if (cancel) options?.signal?.removeEventListener('abort', cancel);
+      reportWait();
       return await exchange();
     } finally {
+      reportWait();
+      clearTimeout(timer);
+      if (cancel) options?.signal?.removeEventListener('abort', cancel);
+      release();
       this.transportActive--;
       // Restore only the observation explicitly opened by the operator, once.
       // Never repeat the financial request or override a subsequent disconnect.

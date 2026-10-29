@@ -48,6 +48,7 @@ import {
   parseBalanceContextRequest,
 } from '../../../../packages/domain/src/balance-inquiry';
 import { BalanceExecutionView, executionOutcomeLabel } from './BalanceExecutionView';
+import { TransactionMessageView } from './TransactionMessageView';
 import {
   createWithdrawalReceipt,
   type ReceiptPreference,
@@ -90,6 +91,7 @@ export function TransactionWorkspace({
   onAtmSelectionApplied,
 }: Props) {
   const [transaction, setTransaction] = useState<TransactionType>('BALANCE');
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const [scenario, setScenario] = useState<Scenario>('LOCAL');
   const [account, setAccount] = useState<AccountType>('SAVINGS');
   const [amount, setAmount] = useState('');
@@ -420,8 +422,8 @@ export function TransactionWorkspace({
   const onCardReading = useCallback((reading: boolean) => setCardReading(reading), []);
   function focusStep(index: number) {
     const heading = [dataHeading, cardHeading, reviewHeading][index]?.current;
-    heading?.focus();
-    heading?.scrollIntoView({
+    heading?.focus({ preventScroll: true });
+    (index === 2 ? heading?.closest('.transaction-columns') : heading)?.scrollIntoView({
       behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
       block: 'start',
     });
@@ -773,7 +775,9 @@ export function TransactionWorkspace({
               : 'El formulario cambió; esta ejecución no se asociará al caso.'}
         </div>
       )}
-      <div className="transaction-columns direct-transaction-columns">
+      <div
+        className={`transaction-columns direct-transaction-columns${balanceExecution ? ' with-message-inspector' : ''}`}
+      >
         <section
           className="panel transaction-context transaction-composer"
           aria-labelledby="transaction-context-title"
@@ -782,76 +786,41 @@ export function TransactionWorkspace({
             <h2 id="transaction-context-title" ref={dataHeading} tabIndex={-1}>
               Datos de la transacción
             </h2>
-            <div className="profile-tools">
-              <button
-                className="text-button"
-                disabled={fieldsDisabled}
-                onClick={() => onNavigate('atms')}
-              >
-                Administrar perfiles
-              </button>
-              <button
-                className="text-button"
-                aria-label="Recargar perfiles"
-                title="Recargar perfiles"
-                disabled={loading || fieldsDisabled || !snapshot}
-                onClick={() => {
-                  invalidate();
-                  void onRefresh();
-                }}
-              >
-                <Icon name="history" size={16} />
-              </button>
-            </div>
           </div>
           <div className="transaction-fields">
             <div className="transaction-context-selectors">
               <label>
-                Perfil ATM
-                <select
-                  ref={atmInput}
-                  aria-label="Perfil ATM"
-                  value={selectedAtm?.id ?? ''}
-                  disabled={fieldsDisabled || loading || !atms.length}
-                  onChange={(event) => {
-                    invalidate();
-                    setAtmId(event.target.value);
-                  }}
-                >
-                  <option value="">
-                    {loading
-                      ? 'Cargando perfiles…'
-                      : atms.length
-                        ? 'Selecciona un ATM'
-                        : 'Sin ATM activos en este ambiente'}
-                  </option>
-                  {atms.map((atm) => (
-                    <option key={atm.id} value={atm.id}>
-                      {atm.alias}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Escenario
-                <select
-                  aria-label="Escenario"
-                  value={scenario}
-                  disabled={fieldsDisabled}
-                  onChange={(event) => {
-                    const selected = scenarios.find((item) => item.id === event.target.value);
-                    if (selected) {
+                Cajero (ATM)
+                <span className="composer-select with-caption">
+                  <Icon name="atm" size={21} />
+                  <select
+                    ref={atmInput}
+                    aria-label="Perfil ATM"
+                    value={selectedAtm?.id ?? ''}
+                    disabled={fieldsDisabled || loading || !atms.length}
+                    onChange={(event) => {
                       invalidate();
-                      setScenario(selected.id);
-                    }
-                  }}
-                >
-                  {scenarios.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.label}
+                      setAtmId(event.target.value);
+                    }}
+                  >
+                    <option value="">
+                      {loading
+                        ? 'Cargando perfiles…'
+                        : atms.length
+                          ? 'Selecciona un ATM'
+                          : 'Sin ATM activos en este ambiente'}
                     </option>
-                  ))}
-                </select>
+                    {atms.map((atm) => (
+                      <option key={atm.id} value={atm.id}>
+                        {atm.alias}
+                      </option>
+                    ))}
+                  </select>
+                  <small>
+                    {catalog?.entities.find((entity) => entity.id === selectedAtm?.entityId)
+                      ?.name ?? 'Selecciona un cajero'}
+                  </small>
+                </span>
               </label>
             </div>
             {!atms.length && !loading && (
@@ -877,52 +846,96 @@ export function TransactionWorkspace({
                 <small>{catalogError.code}</small>
               </div>
             )}
-            <label>
-              Operación
-              <select
-                aria-label="Transacción"
-                value={transaction}
-                disabled={fieldsDisabled}
-                onChange={(event) => {
-                  const selected = transactions.find((item) => item.id === event.target.value);
-                  if (selected) {
-                    invalidate();
-                    setTransaction(selected.id);
-                    setWithReversal(false);
-                    setAmount('');
-                  }
-                }}
-              >
-                {transactions.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <fieldset className="account-options" disabled={fieldsDisabled || original}>
-              <legend>Cuenta</legend>
-              <div className="account-segments">
-                {accountTypes.map((item) => (
-                  <label key={item.id}>
-                    <input
-                      type="radio"
-                      name="transaction-account"
-                      value={item.id}
-                      checked={!original && account === item.id}
-                      onChange={() => {
-                        invalidate();
-                        setAccount(item.id);
-                      }}
-                    />
-                    <span>{item.label}</span>
-                  </label>
-                ))}
+            <section className="transaction-card-section" aria-labelledby="transaction-card-title">
+              <div className="panel-heading">
+                <h2 id="transaction-card-title" ref={cardHeading} tabIndex={-1}>
+                  Tarjeta
+                </h2>
               </div>
+              {visible && (
+                <CardReaderView
+                  transaction
+                  {...(snapshot ? { environment: snapshot.environment } : {})}
+                  disabled={fieldsDisabled}
+                  selectedReadId={selectedCard?.readId}
+                  onUseCard={chooseCard}
+                  onSavedProfileAccount={applySavedCardAccount}
+                  onClearCard={clearCard}
+                  onAvailableCardChange={onCardAvailable}
+                  onReadingChange={onCardReading}
+                />
+              )}
+            </section>
+            <label>
+              Tipo de Transacción
+              <span className="composer-select with-caption">
+                <Icon name="transaction" size={21} />
+                <select
+                  aria-label="Transacción"
+                  value={
+                    transaction === 'WITHDRAWAL_APPROVED' && withReversal
+                      ? 'WITHDRAWAL_REVERSAL'
+                      : transaction
+                  }
+                  disabled={fieldsDisabled}
+                  onChange={(event) => {
+                    if (event.target.value === 'WITHDRAWAL_REVERSAL') {
+                      invalidate();
+                      setTransaction('WITHDRAWAL_APPROVED');
+                      setWithReversal(true);
+                      setAmount('');
+                      return;
+                    }
+                    const selected = transactions.find((item) => item.id === event.target.value);
+                    if (selected) {
+                      invalidate();
+                      setTransaction(selected.id);
+                      setWithReversal(false);
+                      setAmount('');
+                    }
+                  }}
+                >
+                  {transactions.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                  <option value="WITHDRAWAL_REVERSAL">Retiro aprobado + reverso</option>
+                </select>
+                <small>
+                  {operation
+                    ? `Código CMS: ${operation.code}`
+                    : 'Sin referencia documental disponible'}
+                </small>
+              </span>
+            </label>
+            <label>
+              Cuenta
+              <span className="composer-select">
+                <Icon name="entity" size={21} />
+                <select
+                  aria-label="Cuenta"
+                  value={account}
+                  disabled={fieldsDisabled || original}
+                  onChange={(event) => {
+                    const selected = accountTypes.find((item) => item.id === event.target.value);
+                    if (selected) {
+                      invalidate();
+                      setAccount(selected.id);
+                    }
+                  }}
+                >
+                  {accountTypes.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </span>
               {original && (
                 <small className="field-feedback">Pendiente de transacción original</small>
               )}
-            </fieldset>
+            </label>
             {monetary && (
               <label className="withdrawal-amount-input">
                 Monto de prueba
@@ -1053,30 +1066,97 @@ export function TransactionWorkspace({
           </div>
 
           {error?.target !== 'review' && errorFeedback}
-          <section className="transaction-card-section" aria-labelledby="transaction-card-title">
-            <div className="panel-heading">
-              <h2 id="transaction-card-title" ref={cardHeading} tabIndex={-1}>
-                Tarjeta
-              </h2>
-              <span className="form-note">Lectura por contacto</span>
+          <div className="composer-footer">
+            <div className="transaction-send-actions">
+              <button
+                className="primary"
+                disabled={fieldsDisabled || !balanceContext || !!balanceRequestId}
+                onClick={() => void executeBalance()}
+                aria-describedby="send-blocked-note"
+              >
+                <Icon name="play" size={17} />
+                {executingBalance
+                  ? requestOperation === 'WITHDRAWAL'
+                    ? 'Procesando retiro…'
+                    : 'Consultando saldo…'
+                  : 'Ejecutar Transacción'}
+              </button>
             </div>
-            {visible && (
-              <CardReaderView
-                transaction
-                {...(snapshot ? { environment: snapshot.environment } : {})}
-                disabled={fieldsDisabled}
-                selectedReadId={selectedCard?.readId}
-                onUseCard={chooseCard}
-                onSavedProfileAccount={applySavedCardAccount}
-                onClearCard={clearCard}
-                onAvailableCardChange={onCardAvailable}
-                onReadingChange={onCardReading}
-              />
-            )}
-          </section>
-          <details className="composer-options" aria-label="Opciones y detalles técnicos">
+            <button
+              className="composer-settings"
+              aria-label="Opciones y detalles técnicos"
+              aria-controls="transaction-options"
+              aria-expanded={optionsOpen}
+              onClick={() => setOptionsOpen((open) => !open)}
+              title="Opciones y detalles técnicos"
+            >
+              <Icon name="settings" size={19} />
+            </button>
+          </div>
+          <p id="send-blocked-note" className="send-status-note" aria-live="polite">
+            {sendHint}
+          </p>
+          <details
+            className="composer-options"
+            id="transaction-options"
+            open={optionsOpen}
+            onToggle={(event) => setOptionsOpen(event.currentTarget.open)}
+            aria-label="Opciones y detalles técnicos"
+          >
             <summary>Opciones y detalles técnicos</summary>
             <div className="composer-options-content">
+              <button
+                className="text-button"
+                aria-label="Limpiar borrador"
+                disabled={fieldsDisabled}
+                onClick={requestReset}
+              >
+                <Icon name="trash" size={16} />
+                Limpiar
+              </button>
+
+              <label>
+                Escenario
+                <select
+                  aria-label="Escenario"
+                  value={scenario}
+                  disabled={fieldsDisabled}
+                  onChange={(event) => {
+                    const selected = scenarios.find((item) => item.id === event.target.value);
+                    if (selected) {
+                      invalidate();
+                      setScenario(selected.id);
+                    }
+                  }}
+                >
+                  {scenarios.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="profile-tools">
+                <button
+                  className="text-button"
+                  disabled={fieldsDisabled}
+                  onClick={() => onNavigate('atms')}
+                >
+                  Administrar perfiles
+                </button>
+                <button
+                  className="text-button"
+                  aria-label="Recargar perfiles"
+                  title="Recargar perfiles"
+                  disabled={loading || fieldsDisabled || !snapshot}
+                  onClick={() => {
+                    invalidate();
+                    void onRefresh();
+                  }}
+                >
+                  <Icon name="history" size={16} />
+                </button>
+              </div>
               {balanceReadiness?.sequencesRemaining !== undefined && (
                 <p className="form-note">
                   Secuencias QA reservadas disponibles: {balanceReadiness.sequencesRemaining}.
@@ -1264,41 +1344,6 @@ export function TransactionWorkspace({
                 Se necesita un nuevo pool aprobado para continuar cuando se agote.
               </p>
             )}
-          <div className="composer-footer">
-            <button
-              className="text-button"
-              aria-label="Limpiar borrador"
-              disabled={fieldsDisabled}
-              onClick={requestReset}
-            >
-              <Icon name="trash" size={16} />
-              Limpiar
-            </button>
-            <div className="transaction-send-actions">
-              <span className="composer-summary">
-                {transactions.find((item) => item.id === transaction)?.label} ·{' '}
-                {original
-                  ? 'Original pendiente'
-                  : accountTypes.find((item) => item.id === account)?.label}
-              </span>
-              <button
-                className="primary"
-                disabled={fieldsDisabled || !balanceContext || !!balanceRequestId}
-                onClick={() => void executeBalance()}
-                aria-describedby="send-blocked-note"
-              >
-                {executingBalance
-                  ? requestOperation === 'WITHDRAWAL'
-                    ? 'Procesando retiro…'
-                    : 'Consultando saldo…'
-                  : 'Enviar transacción'}{' '}
-                <Icon name="arrow" size={17} />
-              </button>
-            </div>
-          </div>
-          <p id="send-blocked-note" className="send-status-note" aria-live="polite">
-            {sendHint}
-          </p>
         </section>
         <section className="panel transaction-result-panel" aria-label="Resultado">
           <div className="panel-heading">
@@ -1415,6 +1460,9 @@ export function TransactionWorkspace({
             </details>
           )}
         </section>
+        {balanceExecution && (
+          <TransactionMessageView key={balanceExecution.requestId} execution={balanceExecution} />
+        )}
       </div>
       <section className="panel session-activity" aria-label="Actividad de esta sesión">
         <div className="panel-heading">
@@ -1512,7 +1560,10 @@ export function TransactionWorkspace({
           onClose={() => setReceipt(undefined)}
         />
       )}
-      <details className="section-details transaction-execution-details">
+      <details
+        className="section-details transaction-execution-details"
+        hidden={!!balanceExecution}
+      >
         <summary>
           Flujo e inspector <span>Vista documental</span>
         </summary>

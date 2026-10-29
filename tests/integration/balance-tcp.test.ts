@@ -7,6 +7,7 @@ import { CapturedVisaFraming } from '../../apps/desktop/src/main/infrastructure/
 import type { BalanceExchangeRequest } from '../../apps/desktop/src/main/balance-ports';
 import { balanceTarget, balanceLease, balanceResponse } from '../helpers/balance-inquiry';
 import { networkManagementRequest } from '../helpers/visa-network-management';
+import { randomUUID } from 'node:crypto';
 
 let server: Server | undefined;
 const peers = new Set<Socket>();
@@ -47,6 +48,45 @@ function request(port: number): BalanceExchangeRequest {
 }
 const framing = new CapturedVisaFraming();
 describe('consulta financiera TCP en loopback con datos sinteticos', () => {
+  it('espera el cierre ordenado de carga antes de liberar la conexión', async () => {
+    let clientEnded = false;
+    const port = await listen((peer) => {
+      peer.once('end', () => {
+        clientEnded = true;
+      });
+      peer.once('data', () =>
+        peer.write(framing.encode(balanceResponse(input.expected), Buffer.alloc(2))),
+      );
+    });
+    const input = { ...request(port), load: { runId: randomUUID(), concurrency: 2 } };
+    expect(await new BalanceTcpTransport().exchange(input)).toMatchObject({
+      outcome: 'APPROVED',
+      responseCode: '00',
+    });
+    expect(clientEnded).toBe(true);
+  });
+  it('acota el cierre de un peer que no envía FIN sin perder la respuesta recibida', async () => {
+    let peerEnded = false;
+    const port = await listen((peer) => {
+      peer.allowHalfOpen = true;
+      peer.once('end', () => {
+        peerEnded = true;
+      });
+      peer.once('data', () =>
+        peer.write(framing.encode(balanceResponse(input.expected), Buffer.alloc(2))),
+      );
+    });
+    const input = {
+      ...request(port),
+      connectDeadlineMs: 100,
+      load: { runId: randomUUID(), concurrency: 2 },
+    };
+    expect(await new BalanceTcpTransport().exchange(input)).toMatchObject({
+      outcome: 'APPROVED',
+      responseCode: '00',
+    });
+    expect(peerEnded).toBe(true);
+  });
   it('excluye del tiempo de transporte la espera TPS y empieza el timeout al escribir', async () => {
     let gateWaitMs = 0;
     const port = await listen((peer) =>

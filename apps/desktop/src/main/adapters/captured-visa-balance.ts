@@ -1,6 +1,8 @@
 import { Buffer } from 'node:buffer';
 import { parseBalanceValues } from './coonecta-balance-rules';
 import type { BalanceValue } from '../../../../../packages/domain/src/balance-inquiry';
+import type { IsoMessage } from '../../../../../packages/domain/src/iso-message';
+import { projectIsoMessage } from './iso-message-projection';
 
 // ISOBASEI + QA frames 218/224 (balance), 248/254 (withdrawal).
 // Operation selection is explicit; this is not a general ISO codec.
@@ -86,6 +88,22 @@ export class CapturedVisaBalance {
   constructor(private readonly operation: 'BALANCE' | 'WITHDRAWAL' = 'BALANCE') {}
   inspect(source: Uint8Array): CapturedBalanceMetadata {
     return this.parse(source).metadata;
+  }
+
+  // Project every present field before the caller wipes the body. Private and
+  // undocumented contents remain represented by a fixed mask, never by hex.
+  message(source: Buffer): IsoMessage {
+    const parsed = this.parse(source);
+    return projectIsoMessage(
+      parsed.metadata.mti,
+      new Map(
+        parsed.metadata.fields.map((number, index) => {
+          const [start, end] = parsed.spans[index]!;
+          return [number, source.subarray(start, end)];
+        }),
+      ),
+      capturedVisaFieldProfile,
+    );
   }
 
   // Main-only views. The caller owns and wipes source; never persist these bytes.

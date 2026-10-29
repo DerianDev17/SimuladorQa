@@ -396,6 +396,7 @@ export function CardReaderView({
   const [savedProfilesLoading, setSavedProfilesLoading] = useState(false);
   const [selectedSavedProfileId, setSelectedSavedProfileId] = useState('');
   const [profileMismatch, setProfileMismatch] = useState(false);
+  const [cardMode, setCardMode] = useState<'physical' | 'configured'>('physical');
   // Ecuador was explicitly selected by the user for this QA station.
   const [countryCode, setCountryCode] = useState('218');
   const mounted = useRef(false);
@@ -640,7 +641,32 @@ export function CardReaderView({
   if (transaction)
     return (
       <div className="transaction-card-picker" aria-label="Elegir tarjeta">
-        <div className="reader-input-row">
+        <div className="transaction-card-modes" role="group" aria-label="Origen de la tarjeta">
+          {(['physical', 'configured'] as const).map((mode) => (
+            <button
+              key={mode}
+              aria-pressed={cardMode === mode}
+              disabled={
+                disabled || reading || refreshing || (mode === 'configured' && environment !== 'QA')
+              }
+              onClick={() => {
+                if (cardMode === mode) return;
+                setCardMode(mode);
+                setSelectedSavedProfileId('');
+                setProfileMismatch(false);
+                setManualSelection(undefined);
+                onClearCard?.();
+              }}
+            >
+              <Icon name={mode === 'physical' ? 'reader' : 'card'} size={18} />
+              {mode === 'physical' ? 'Lector físico' : 'Tarjeta configurada'}
+            </button>
+          ))}
+        </div>
+        <div
+          className="reader-input-row"
+          hidden={!!selectedReadId && selectedReadId === availableCard?.readId}
+        >
           <label>
             Lector
             <select
@@ -669,7 +695,7 @@ export function CardReaderView({
             {reading ? 'Leyendo tarjeta…' : 'Leer tarjeta'}
           </button>
         </div>
-        {environment === 'QA' && (
+        {environment === 'QA' && cardMode === 'configured' && (
           <label className="saved-profile-picker">
             Perfil QA guardado
             <select
@@ -715,7 +741,30 @@ export function CardReaderView({
               )}
           </label>
         )}
-        <div className="transaction-card-status" role="status">
+        <div className={`transaction-card-status${availableCard ? ' has-card' : ''}`} role="status">
+          <div className="transaction-card-status-heading">
+            <span>
+              <Icon name={availableCard ? 'check' : 'card'} size={15} />
+              {availableCard
+                ? 'Tarjeta leída'
+                : reader?.state === 'CARD_PRESENT'
+                  ? 'Tarjeta detectada'
+                  : 'Estado de la tarjeta'}
+            </span>
+            {!refreshing &&
+              !reading &&
+              selectedReadId &&
+              selectedReadId === availableCard?.readId && (
+                <button
+                  className="text-button"
+                  aria-label="Cambiar tarjeta"
+                  disabled={disabled}
+                  onClick={onClearCard}
+                >
+                  Cambiar
+                </button>
+              )}
+          </div>
           <Icon name="card" size={24} />
           <div>
             <strong>
@@ -736,25 +785,36 @@ export function CardReaderView({
                               ? 'Tarjeta detectada · falta leerla'
                               : 'Inserta una tarjeta por contacto'))}
             </strong>
-            <span>
-              {refreshing
-                ? 'Consultando estado del lector'
-                : (availableCard?.applicationLabel ??
-                  (reader
+            {!availableCard && (
+              <span>
+                {refreshing
+                  ? 'Consultando estado del lector'
+                  : reader
                     ? reader.state === 'EMPTY'
                       ? 'Detección automática activa'
                       : stateLabels[reader.state]
-                    : 'Conecta un lector; se detectará automáticamente'))}
-            </span>
-          </div>
-          {!refreshing &&
-            !reading &&
-            selectedReadId &&
-            selectedReadId === availableCard?.readId && (
-              <button className="text-button" disabled={disabled || reading} onClick={onClearCard}>
-                Cambiar tarjeta
-              </button>
+                    : 'Conecta un lector; se detectará automáticamente'}
+              </span>
             )}
+            {availableCard && identity?.status === 'READ' && (
+              <dl className="transaction-card-facts">
+                <div>
+                  <dt>Aplicación</dt>
+                  <dd>{identity.applicationLabel ?? 'No informada'}</dd>
+                </div>
+                <div>
+                  <dt>Expiración</dt>
+                  <dd>{identity.expiry ?? 'No informada'}</dd>
+                </div>
+                {selectedSavedProfile && (
+                  <div>
+                    <dt>Perfil QA</dt>
+                    <dd>{selectedSavedProfile.alias}</dd>
+                  </div>
+                )}
+              </dl>
+            )}
+          </div>
         </div>
         {error && (
           <p className="inline-error" role="alert">

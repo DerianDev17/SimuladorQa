@@ -1,5 +1,15 @@
 # Coonecta ATM Transaction Simulator
 
+Transacciones muestra, después de cada nuevo envío, el resultado junto a los
+campos ISO8583 de la solicitud y respuesta correlacionada. Conserva la mensajería
+protegida en el diario; los registros antiguos sin campos se identifican como
+tales. Ver [mensajería de transacciones](docs/implementation/TRANSACTION_PREPARATION.md).
+
+**Retiro aprobado + reverso** está disponible en Operación: aprobación completa,
+espera de 1–30 segundos y reverso único. El inspector muestra también 0420/0430,
+datos del comercio y tags EMV públicos. Ver [reversos](docs/transactions/REVERSAL.md)
+y [proyección y protección](docs/adr/ADR-030-ISO-DISPLAY-AND-REVERSAL-MESSAGES.md).
+
 Aplicacion desktop para QA orientada a simular transacciones ATM de la Red Coonecta, ejecutar pruebas funcionales, carga y estres, y correlacionar cada transaccion con SmartVista/SVFE y el Core correspondiente.
 
 ATM20521 es la plantilla de envío para los ATM QA de la entidad 205. Crear o
@@ -25,8 +35,11 @@ ni certifica el resultado en Visa, Switch o Core. Ver
 La pantalla **Carga y estrés** ofrece escenarios rápida/1/3/5 TPS y ejecuta consultas
 de saldo QA con una tarjeta física, PIN una vez por corrida y seguridad nueva por
 operación. Permite seleccionar varios perfiles ATM y de 1 a 5 operaciones
-simultáneas por corrida. La preparación del chip es exclusiva; los sockets
-esperan respuestas en paralelo con un límite TPS global antes de cada write.
+en preparación y envío por corrida. La preparación del chip es exclusiva y
+puede avanzar mientras responde el host. El enlace QA usa una sola conexión
+financiera activa: el log TCPComms confirma que una conexión nueva desplaza la
+anterior (ADR-029). Se aplica el límite TPS antes de cada write y se muestran
+por separado espera del enlace, errores, cancelaciones y envíos sin respuesta.
 La corrida reutiliza los procesos del lector y cifrado, manteniendo lectura,
 validación DPAPI y seguridad nuevas por operación (ADR-028). Muestra TPS reales,
 tiempos por etapa, aviso si el promedio no alcanza el objetivo y permite detener. El pool virtual sigue

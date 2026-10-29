@@ -30,6 +30,7 @@ import {
 import { balanceContextErrorLabels } from './balance-context-errors';
 import { parseWithdrawalReversal } from '../../../../packages/domain/src/withdrawal-reversal';
 import { LOAD_RUN_MAX_CONCURRENCY } from '../../../../packages/domain/src/load-run';
+import { parseIsoMessage } from '../../../../packages/domain/src/iso-message';
 
 export const missingBalanceContext: BalanceReadiness = {
   ready: false,
@@ -50,7 +51,8 @@ export const missingBalanceContext: BalanceReadiness = {
     },
   ],
 };
-export type BalanceLoadPhase = 'inspect' | 'context' | 'validation' | 'journal' | 'transport';
+export type BalanceLoadPhase =
+  'inspect' | 'context' | 'validation' | 'journal' | 'transport' | 'connectionWait';
 export interface BalanceExecutionContext {
   runId: string;
   signal: AbortSignal;
@@ -60,6 +62,7 @@ export interface BalanceExecutionContext {
   deadline?: number;
   withWrite?: (write: () => Promise<void>) => Promise<void>;
   onPrepared?: () => void;
+  onInterrupted?: (reason: 'CANCELLED' | 'DURATION') => void;
 }
 export function loadExecutionScope(execution?: BalanceExecutionContext): string | undefined {
   return execution &&
@@ -440,6 +443,7 @@ export class BalanceInquiryService {
           : new NewVisaBalance().build(lease);
       wire = built.wire;
       record.frameGenerated = true;
+      record.messages = { request: built.message };
       record.correlation = {
         stan: built.metadata.stan,
         rrn: built.metadata.rrn,
@@ -480,6 +484,8 @@ export class BalanceInquiryService {
           connectDeadlineMs: deadlines.connect,
           responseDeadlineMs: deadlines.response,
           signal: abort.signal,
+          onInterrupted: (reason) => execution?.onInterrupted?.(reason),
+          onConnectionWait: (elapsedMs) => execution?.onPhase?.('connectionWait', elapsedMs),
           ...(execution?.withWrite
             ? {
                 withWrite: (write: () => void) =>
@@ -498,7 +504,13 @@ export class BalanceInquiryService {
               }
             : {}),
           ...(loadExecutionScope(execution) && this.operation === 'BALANCE'
-            ? { load: { runId: execution!.runId, concurrency: execution!.concurrency! } }
+            ? {
+                load: {
+                  runId: execution!.runId,
+                  concurrency: execution!.concurrency!,
+                  ...(execution!.deadline !== undefined ? { deadline: execution!.deadline } : {}),
+                },
+              }
             : {}),
           ...(record.reversal
             ? {
@@ -518,6 +530,9 @@ export class BalanceInquiryService {
                     record.bytesQueued = original.bytesQueued;
                     record.elapsedMs = original.elapsedMs;
                     record.balances = structuredClone(original.balances);
+                    const response = parseIsoMessage(original.responseMessage);
+                    if (response?.mti === '0210' && record.messages)
+                      record.messages.response = response;
                     record.reversal = reversal;
                     await this.save(record);
                   },
@@ -572,6 +587,8 @@ export class BalanceInquiryService {
       )
         throw Error('TRANSPORT_RESULT_INVALID');
       record.outcome = result.outcome;
+      const response = parseIsoMessage(result.responseMessage);
+      if (response?.mti === '0210' && record.messages) record.messages.response = response;
       record.transmissionAttempted = result.transmissionAttempted;
       record.bytesQueued = result.bytesQueued;
       record.elapsedMs = result.elapsedMs;
@@ -590,6 +607,7 @@ export class BalanceInquiryService {
       }
     } catch (error) {
       const code = error instanceof Error ? error.message : '';
+      if (!transportStarted && execution?.signal.aborted) execution.onInterrupted?.('CANCELLED');
       if (!(record.reversal && record.outcome === 'APPROVED'))
         record.outcome = transportStarted ? 'TRANSPORT_ERROR' : 'CONTEXT_ERROR';
       record.transmissionAttempted = transportStarted;

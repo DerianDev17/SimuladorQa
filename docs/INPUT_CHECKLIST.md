@@ -1,5 +1,25 @@
 # Checklist de informacion por subir
 
+TODO-DATA CARD-ISSUER-PRODUCT-DISPLAY (2026-10-29): la referencia visual del
+formulario incluye entidad emisora y producto. La identidad pública del lector
+no proporciona esos campos ni existe aquí una correspondencia aprobada.
+Pendiente fuente validada si se deben mostrar. El formulario presenta aplicación
+y expiración del chip sin inferir entidad o producto desde PAN/AID; no bloquea envío.
+
+TODO-DATA ISO-PRIVATE-FIELD-DISPLAY (2026-10-29): F42/F43/F44 y tags EMV públicos
+se muestran sanitizados conforme a ADR-030. Sigue pendiente ampliar la proyección
+por subcampo de F48/F53/F60/F62/F63 y de otros tags EMV. Todas las posiciones
+presentes son visibles; los contenidos pendientes permanecen protegidos.
+Ver docs/implementation/TRANSACTION_PREPARATION.md.
+
+Evidencia LOAD-TCP-PEER-CLOSE (2026-10-29): `tcpcomms01.out` confirma que el
+PID 80131 cierra la conexión anterior al aceptar otra de la estación. Resuelve
+la causa del PEER_CLOSED de la corrida 982fba95-0f9a-4414-b512-ed257410e6d7.
+ADR-029 serializa las conexiones de ese enlace sin impedir preparar operaciones.
+TODO-DATA LOAD-PERSISTENT-TCP continúa pendiente: este log no valida múltiples
+solicitudes financieras en un socket ni dispositivos independientes para carga.
+La corrección local no depende de esos contratos; 3 TPS reales siguen sin acreditarse.
+
 Evidencia LOAD-3TPS-PHYSICAL (2026-10-28): captura del usuario con ambos ATM,
 8/8 consultas aprobadas en 91 s, 0,09 TPS frente a 3 TPS. Se implementa ADR-028
 para evitar arranques de PowerShell repetidos por consulta. La evidencia actual

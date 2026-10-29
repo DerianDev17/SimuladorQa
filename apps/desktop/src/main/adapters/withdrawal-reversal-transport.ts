@@ -40,6 +40,7 @@ export class WithdrawalReversalTransport implements BalanceTransport {
       reversal: { ...progress, outcome: 'NOT_SENT' as const, finishedAt: new Date().toISOString() },
     });
     if (
+      request.signal?.aborted ||
       request.environment !== 'QA' ||
       !isReversalDelay(request.reversal.delaySeconds) ||
       typeof request.reversal.persist !== 'function' ||
@@ -90,11 +91,14 @@ export class WithdrawalReversalTransport implements BalanceTransport {
     return new Promise((resolve) => {
       const socket = new Socket();
       let ended = false,
+        socketClosed = false,
         attempted = false,
+        reversalAttempted = false,
         received = 0,
         framesSeen = 0;
       let phase: 'WITHDRAWAL' | 'WAITING' | 'REVERSAL' = 'WITHDRAWAL';
       let original: BalanceExchangeResult | undefined;
+      let responseMessage: BalanceExchangeResult['responseMessage'];
       let approvedBody: Buffer | undefined, reversalWire: Buffer | undefined;
       let timer: ReturnType<typeof setTimeout> | undefined;
       let persistence: Promise<void> = Promise.resolve();
@@ -106,20 +110,27 @@ export class WithdrawalReversalTransport implements BalanceTransport {
         if (ended) return;
         ended = true;
         clearTimeout(timer);
+        request.signal?.removeEventListener('abort', cancel);
         const withdrawal = original ?? {
           ...empty(),
           outcome,
           responseCode: code,
           balances: structuredClone(balances),
+          ...(responseMessage ? { responseMessage } : {}),
           transmissionAttempted: attempted,
           bytesQueued: attempted ? Math.min(socket.bytesWritten, wire.length) : 0,
         };
+        progress.transmissionAttempted = reversalAttempted;
         if (!['APPROVED', 'NOT_APPROVED'].includes(progress.outcome)) {
           progress.outcome = progress.transmissionAttempted ? 'UNCONFIRMED' : 'NOT_SENT';
           progress.finishedAt = new Date().toISOString();
         }
         if (progress.transmissionAttempted)
           progress.bytesQueued = Math.max(0, socket.bytesWritten - wire.length);
+        // Keep the exclusive financial connection until TCP actually closes.
+        const closed = socketClosed
+          ? Promise.resolve()
+          : new Promise<void>((done) => socket.once('close', () => done()));
         socket.destroy();
         wire.fill(0);
         approvedBody?.fill(0);
@@ -130,26 +141,30 @@ export class WithdrawalReversalTransport implements BalanceTransport {
         } catch {
           /* No incomplete bytes escape Main. */
         }
-        const result = { ...withdrawal, reversal: { ...progress } };
-        void persistence.catch(() => undefined).then(() => resolve(result));
+        const result = { ...withdrawal, reversal: structuredClone(progress) };
+        void Promise.all([persistence.catch(() => undefined), closed]).then(() => resolve(result));
       };
+      const cancel = () => finish('TRANSPORT_ERROR');
       const sendReversal = async () => {
         if (ended || phase !== 'WAITING') return;
         try {
           reversalWire = reversal.build(approvedBody!);
+          progress.messages = { request: reversal.requestMessage(reversalWire) };
           approvedBody!.fill(0);
           approvedBody = undefined;
           progress.outcome = 'SENDING';
           progress.transmissionAttempted = true; // durable intent before write
-          persistence = plan.persist({ ...progress }, original!);
+          persistence = plan.persist(structuredClone(progress), original!);
           await persistence;
           if (ended) return;
           phase = 'REVERSAL';
+          reversalAttempted = true;
           timer = setTimeout(() => finish('RESPONSE_TIMEOUT'), request.responseDeadlineMs);
           socket.write(reversalWire, (error) => {
             if (error) finish('TRANSPORT_ERROR');
           });
         } catch {
+          if (ended) return;
           if (phase !== 'REVERSAL') progress.transmissionAttempted = false;
           finish('TRANSPORT_ERROR');
         }
@@ -158,7 +173,7 @@ export class WithdrawalReversalTransport implements BalanceTransport {
         try {
           progress.outcome = 'WAITING';
           progress.dueAt = new Date(Date.now() + plan.delaySeconds * 1000).toISOString();
-          persistence = plan.persist({ ...progress }, original!);
+          persistence = plan.persist(structuredClone(progress), original!);
           await persistence;
           if (ended) return;
           timer = setTimeout(
@@ -172,6 +187,11 @@ export class WithdrawalReversalTransport implements BalanceTransport {
         }
       };
       timer = setTimeout(() => finish('CONNECT_TIMEOUT'), request.connectDeadlineMs);
+      request.signal?.addEventListener('abort', cancel, { once: true });
+      if (request.signal?.aborted) {
+        cancel();
+        return;
+      }
       socket.once('connect', () => {
         if (ended) return;
         clearTimeout(timer);
@@ -205,6 +225,8 @@ export class WithdrawalReversalTransport implements BalanceTransport {
             if (phase === 'REVERSAL' && mti === 0x0430) {
               const code = reversal.response(body);
               if (code === undefined) continue;
+              const message = reversal.responseMessage(body);
+              if (message && progress.messages) progress.messages.response = message;
               progress.responseCode = code;
               progress.outcome = code === '00' ? 'APPROVED' : 'NOT_APPROVED';
               progress.finishedAt = new Date().toISOString();
@@ -221,6 +243,7 @@ export class WithdrawalReversalTransport implements BalanceTransport {
               )
             )
               continue;
+            responseMessage = codec.message(body);
             const response = codec.response(body);
             if (metadata.responseCode !== '00' || metadata.amount !== expected.amount) {
               finish(
@@ -237,6 +260,7 @@ export class WithdrawalReversalTransport implements BalanceTransport {
               bytesQueued: wire.length,
               responseCode: '00',
               balances: structuredClone(response.balances),
+              responseMessage,
             };
             approvedBody = Buffer.from(body);
             phase = 'WAITING';
@@ -255,7 +279,10 @@ export class WithdrawalReversalTransport implements BalanceTransport {
         }
       });
       socket.once('error', () => finish('TRANSPORT_ERROR'));
-      socket.once('close', () => finish('PEER_CLOSED'));
+      socket.once('close', () => {
+        socketClosed = true;
+        finish('PEER_CLOSED');
+      });
       try {
         socket.connect({ ...request.endpoint, family: 4 });
       } catch {

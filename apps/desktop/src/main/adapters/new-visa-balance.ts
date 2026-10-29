@@ -5,6 +5,7 @@ import { CapturedVisaBalance } from './captured-visa-balance';
 import type { CapturedBalanceMetadata } from './captured-visa-balance';
 import { CapturedVisaFraming } from '../infrastructure/captured-visa-framing';
 import { isWithdrawalAmount } from '../../../../../packages/domain/src/withdrawal';
+import type { IsoMessage } from '../../../../../packages/domain/src/iso-message';
 
 const fields = [
   2, 3, 4, 7, 11, 12, 13, 14, 15, 18, 19, 22, 23, 25, 28, 32, 35, 37, 41, 42, 43, 48, 49, 52, 53,
@@ -32,7 +33,11 @@ export interface NewBalanceInput extends BalanceDynamicInput {
 }
 export class NewVisaBalance {
   constructor(private readonly operation: 'BALANCE' | 'WITHDRAWAL' = 'BALANCE') {}
-  build(input: NewBalanceInput): { wire: Buffer; metadata: CapturedBalanceMetadata } {
+  build(input: NewBalanceInput): {
+    wire: Buffer;
+    metadata: CapturedBalanceMetadata;
+    message: IsoMessage;
+  } {
     if (
       input.account !== 'SAVINGS' ||
       input.header.length !== 22 ||
@@ -78,7 +83,11 @@ export class NewVisaBalance {
       prefix.fill(0);
       body.writeUInt16BE(body.length, 3);
       const metadata = new CapturedVisaBalance(this.operation).inspect(body);
-      return { wire: new CapturedVisaFraming().encode(body, input.extension), metadata };
+      return {
+        wire: new CapturedVisaFraming().encode(body, input.extension),
+        metadata,
+        message: new CapturedVisaBalance(this.operation).message(body),
+      };
     } finally {
       body?.fill(0);
       for (const value of encoded.values()) value.fill(0);

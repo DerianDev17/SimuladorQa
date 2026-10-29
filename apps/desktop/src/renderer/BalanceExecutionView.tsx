@@ -71,8 +71,15 @@ export function BalanceExecutionView({
           <strong>{executionOutcomeLabel(execution)}</strong>
           <span>{execution.withdrawal ? 'Retiro · Ahorros' : 'Consulta de saldo'} · QA</span>
         </div>
-        {execution.responseCode && (
-          <span className="execution-response-code">RC {execution.responseCode}</span>
+        {(execution.reversal?.responseCode ?? execution.responseCode) && (
+          <span className="execution-response-code">
+            {execution.reversal?.responseCode
+              ? 'RC reverso'
+              : execution.reversal
+                ? 'RC retiro'
+                : 'RC'}{' '}
+            {execution.reversal?.responseCode ?? execution.responseCode}
+          </span>
         )}
       </div>
       {execution.reversal && (

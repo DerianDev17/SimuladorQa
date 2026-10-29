@@ -72,10 +72,12 @@ export class BalanceTcpTransport implements BalanceTransport {
     return new Promise((resolve) => {
       const socket = new Socket();
       let ended = false,
+        socketClosed = false,
         attempted = false,
         received = 0,
         framesSeen = 0;
       let responseTimer: ReturnType<typeof setTimeout> | undefined;
+      let responseMessage: BalanceExchangeResult['responseMessage'];
       const finish = (
         outcome: BalanceExchangeResult['outcome'],
         responseCode: string | null = null,
@@ -92,18 +94,33 @@ export class BalanceTcpTransport implements BalanceTransport {
           bytesQueued: socket.bytesWritten,
           responseCode,
           balances: structuredClone(balances),
+          ...(responseMessage ? { responseMessage } : {}),
         };
         request.signal?.removeEventListener('abort', cancel);
-        socket.destroy();
+        // The QA listener has one active socket per device. Complete the TCP
+        // close before allowing another transaction to take its place.
+        if (socketClosed) resolve(result);
+        else {
+          const closeTimer = setTimeout(() => socket.destroy(), request.connectDeadlineMs);
+          socket.once('close', () => {
+            clearTimeout(closeTimer);
+            resolve(result);
+          });
+          if (request.load && ['APPROVED', 'NOT_APPROVED', 'REQUIRES_REVIEW'].includes(outcome))
+            socket.end();
+          else socket.destroy();
+        }
         wire.fill(0);
         try {
           decoder.finish();
         } catch {
           /* Incomplete data is never exposed. */
         }
-        resolve(result);
       };
-      const cancel = () => finish('TRANSPORT_ERROR');
+      const cancel = () => {
+        request.onInterrupted?.('CANCELLED');
+        finish('TRANSPORT_ERROR');
+      };
       const connectTimer = setTimeout(() => finish('CONNECT_TIMEOUT'), request.connectDeadlineMs);
       request.signal?.addEventListener('abort', cancel, { once: true });
       if (request.signal?.aborted) {
@@ -169,6 +186,7 @@ export class BalanceTcpTransport implements BalanceTransport {
               metadata.currency !== expected.currency
             )
               continue;
+            responseMessage = codec.message(body);
             const response = codec.response(body);
             if (this.operation === 'WITHDRAWAL') {
               // 91 is a completed host non-approval (MDT_StandardRetCode).
@@ -204,7 +222,10 @@ export class BalanceTcpTransport implements BalanceTransport {
         }
       });
       socket.once('error', () => finish('TRANSPORT_ERROR'));
-      socket.once('close', () => finish('PEER_CLOSED'));
+      socket.once('close', () => {
+        socketClosed = true;
+        finish('PEER_CLOSED');
+      });
       try {
         socket.connect({ ...request.endpoint, family: 4 });
       } catch {

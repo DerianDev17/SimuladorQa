@@ -38,7 +38,7 @@ export function validLoadRunSnapshot(value: unknown): value is LoadRunSnapshot {
     if (
       !isRecord(item) ||
       Object.keys(item).length < 8 ||
-      Object.keys(item).length > 12 ||
+      Object.keys(item).length > 13 ||
       Object.keys(item).some(
         (key) =>
           ![
@@ -54,9 +54,14 @@ export function validLoadRunSnapshot(value: unknown): value is LoadRunSnapshot {
             'finishedAt',
             'finishedElapsedMs',
             'timings',
+            'cancelled',
           ].includes(key),
       ) ||
       !isUuid(item.requestId) ||
+      (Object.hasOwn(item, 'cancelled') &&
+        (item.cancelled !== true ||
+          !['CONTEXT_ERROR', 'TRANSPORT_ERROR'].includes(String(item.outcome)) ||
+          item.received !== false)) ||
       (Object.hasOwn(item, 'atmId') && !isUuid(item.atmId)) ||
       !(item.transactionId === null || isUuid(item.transactionId)) ||
       ![
@@ -103,7 +108,9 @@ export function validLoadRunSnapshot(value: unknown): value is LoadRunSnapshot {
     if (item.timings !== undefined) {
       if (!isRecord(item.timings)) return false;
       const timings = item.timings;
-      const optional = ['queueWaitMs', 'rateLimitMs'].filter((key) => Object.hasOwn(timings, key));
+      const optional = ['queueWaitMs', 'rateLimitMs', 'connectionWaitMs'].filter((key) =>
+        Object.hasOwn(timings, key),
+      );
       if (Object.keys(timings).length !== phases.length + optional.length) return false;
       if (
         ![...phases, ...optional].every(

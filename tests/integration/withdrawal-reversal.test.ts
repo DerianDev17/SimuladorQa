@@ -126,6 +126,9 @@ describe('retiro, espera y reverso en TCP loopback', () => {
     });
     expect(result.reversal!.bytesQueued).toBeGreaterThan(0);
     expect(result.bytesQueued).toBe(r.wire.length);
+    expect(result.reversal?.messages?.request.mti).toBe('0420');
+    expect(result.reversal?.messages?.response?.mti).toBe('0430');
+    expect(r.progress[1]?.messages?.response).toBeUndefined();
   });
   it.each(['decline', 'withdrawal-timeout', 'close-wait', 'reversal-timeout', 'reversal-decline'])(
     'conserva ambos resultados sin reintentar: %s',
@@ -172,6 +175,10 @@ describe('retiro, espera y reverso en TCP loopback', () => {
             ? 'RESPONSE_TIMEOUT'
             : 'APPROVED',
       );
+      expect(result.reversal?.messages?.request.mti).toBe(sent ? '0420' : undefined);
+      expect(result.reversal?.messages?.response?.mti).toBe(
+        mode === 'reversal-decline' ? '0430' : undefined,
+      );
     },
   );
   it.each(['WAITING', 'SENDING'])('no envía reverso si falla persistencia en %s', async (phase) => {
@@ -191,6 +198,48 @@ describe('retiro, espera y reverso en TCP loopback', () => {
       outcome: 'APPROVED',
       reversal: { outcome: 'NOT_SENT', transmissionAttempted: false },
     });
+  });
+  it.each(['WAITING', 'SENDING'])(
+    'cancelar durante %s no permite escribir un reverso después',
+    async (phase) => {
+      const received: number[] = [];
+      const abort = new AbortController();
+      const port = await listen((peer, body) => {
+        received.push(body.readUInt16BE(22));
+        peer.write(
+          framing.encode(
+            withdrawalResponse(new CapturedVisaBalance('WITHDRAWAL').inspect(body)),
+            Buffer.alloc(2),
+          ),
+        );
+      });
+      const r = { ...request(port), signal: abort.signal };
+      r.reversal.persist = async (progress) => {
+        if (progress.outcome === phase) abort.abort();
+      };
+      const result = await new WithdrawalReversalTransport().exchange(r);
+      expect(result).toMatchObject({
+        outcome: 'APPROVED',
+        reversal: { outcome: 'NOT_SENT', transmissionAttempted: false, bytesQueued: 0 },
+      });
+      expect(received).toEqual([0x0200]);
+    },
+  );
+  it('una solicitud ya cancelada no abre el enlace ni envía retiro', async () => {
+    const abort = new AbortController();
+    abort.abort();
+    const port = await listen(() => {
+      throw Error('UNEXPECTED_WRITE');
+    });
+    const result = await new WithdrawalReversalTransport().exchange({
+      ...request(port),
+      signal: abort.signal,
+    });
+    expect(result).toMatchObject({
+      transmissionAttempted: false,
+      reversal: { outcome: 'NOT_SENT' },
+    });
+    expect(peers.size).toBe(0);
   });
   it('no abre conexión cuando falta un campo para generar el reverso', async () => {
     let connections = 0;
@@ -304,7 +353,16 @@ describe('retiro, espera y reverso en TCP loopback', () => {
     expect(messages).toEqual([0x0200, 0x0420]);
     expect(financialPeers.size).toBe(1);
     const saved = await readFile(path, 'utf8');
-    expect(saved).not.toMatch(/privateFields|opaqueBody|9F10|pinBlock|411111/);
+    expect(saved).not.toMatch(/privateFields|opaqueBody|pinBlock|411111\d{10}/);
+    expect(
+      result.value.reversal?.messages?.request.fields
+        .find((f) => f.number === 55)
+        ?.tags?.find((t) => t.tag === '9F10')?.value,
+    ).toBe('••••••••');
+    expect(saved).toContain('411111XXXXXX0000');
+    expect(result.value.reversal?.messages?.response?.mti).toBe('0430');
+    expect((await journal.read())[0]?.reversal?.messages).toEqual(result.value.reversal?.messages);
+    expect(result.ok && result.value.messages?.response?.mti).toBe('0210');
     const conflict = await restarted.execute(
       { ...f.request, reversalDelaySeconds: 5 },
       f.target,

@@ -6,6 +6,8 @@ import {
   loadRunBelowTarget,
 } from '../../packages/domain/src/load-run';
 import { LoadPinSession } from '../../apps/desktop/src/main/adapters/load-pin-session';
+import { validLoadRunSnapshot } from '../../apps/desktop/src/main/infrastructure/load-run-store';
+import type { LoadRunSnapshot } from '../../packages/domain/src/load-run';
 
 export const loadRequest = () => ({
   requestId: randomUUID(),
@@ -24,6 +26,52 @@ export const loadRequest = () => ({
   },
 });
 describe('corrida QA acotada', () => {
+  it('separa cancelaciones locales, conserva incertidumbre y valida registros nuevos y anteriores', () => {
+    const run: LoadRunSnapshot = {
+      runId: randomUUID(),
+      requestId: randomUUID(),
+      draft: loadRequest().draft,
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+      state: 'FAILED',
+      message: '',
+      active: 0,
+      elapsedMs: 1000,
+      items: ['PEER_CLOSED', 'CONTEXT_ERROR', 'TRANSPORT_ERROR'].map((outcome, index) => ({
+        requestId: randomUUID(),
+        transactionId: null,
+        outcome: outcome as 'PEER_CLOSED' | 'CONTEXT_ERROR' | 'TRANSPORT_ERROR',
+        sent: index !== 1,
+        received: false,
+        elapsedMs: 0,
+        responseCode: null,
+        correlation: null,
+        ...(index ? { cancelled: true as const } : {}),
+      })),
+    };
+    expect(validLoadRunSnapshot(run)).toBe(true);
+    expect(loadRunMetrics(run)).toMatchObject({
+      sent: 2,
+      received: 0,
+      errors: 1,
+      cancelled: 2,
+      unconfirmed: 2,
+    });
+    const old = structuredClone(run);
+    for (const item of old.items) delete item.cancelled;
+    expect(validLoadRunSnapshot(old)).toBe(true);
+    expect(loadRunMetrics(old)).toMatchObject({ errors: 3, cancelled: 0 });
+    for (const patch of [
+      { cancelled: false },
+      { cancelled: 'true' },
+      { outcome: 'APPROVED' },
+      { received: true },
+    ]) {
+      const invalid = structuredClone(run);
+      Object.assign(invalid.items[1]!, patch);
+      expect(validLoadRunSnapshot(invalid)).toBe(false);
+    }
+  });
   it('no confunde completar 8 envíos en 91 segundos con alcanzar 3 TPS', () => {
     const run = {
       runId: randomUUID(),

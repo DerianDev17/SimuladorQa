@@ -5,6 +5,7 @@ import { parseDraftRequest } from './transaction-draft';
 import type { DraftRequest } from './transaction-draft';
 import type { WithdrawalDetails } from './withdrawal';
 import type { WithdrawalReversal } from './withdrawal-reversal';
+import type { TransactionMessages } from './iso-message';
 
 export interface BalanceContextRequest {
   draft: DraftRequest;
@@ -98,6 +99,7 @@ export interface BalanceExecution {
   balances: readonly BalanceValue[];
   blockers: readonly { id: string; label: string }[];
   diagnostics?: BalanceDiagnostics;
+  messages?: TransactionMessages;
   // Absent in historical balance records. Never infer this from the selected UI operation.
   withdrawal?: WithdrawalDetails;
   reversal?: WithdrawalReversal;

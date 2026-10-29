@@ -45,6 +45,15 @@ en Configuracion; no reemplaza los adaptadores de transporte ni autoriza sockets
 
 ## Restricciones
 
+Conexión financiera exclusiva (2026-10-29, ADR-029): TCPComms del enlace QA
+reemplaza la conexión del PID 80131 al aceptar otra de la estación. Se sustituye
+el solapamiento de sockets de ADR-027 por una cola en QaSwitchConnection, con
+cancelación y vencimiento antes de conectar. La preparación puede avanzar en
+paralelo con la espera host, pero una sola conexión financiera ocupa el enlace.
+El transporte termina el cierre antes de liberar el turno; un fallo detiene la
+admisión de pendientes. Las métricas separan espera del enlace y cancelaciones;
+se conserva la primera causa sin alterar resultados financieros ni registros previos.
+
 Preparación de carga (2026-10-28, ADR-028): Main conserva los procesos PC/SC y
 cifrado durante la corrida. PC/SC libera exclusión entre operaciones; el
 readId se consume y sus campos privados se borran. Lectura, relectura exclusiva
@@ -53,7 +62,7 @@ credencial DPAPI y borra sus buffers. El driver cierra ambos recursos al termina
 No se cachean tramas, claves descifradas ni resultados de disponibilidad.
 La UI distingue completar el plan de alcanzar el promedio de TPS solicitado.
 
-Carga concurrente (2026-10-28, ADR-027): sustituye la restricción secuencial de
+Carga concurrente (2026-10-28, ADR-027; sockets sustituidos por ADR-029): sustituye la restricción secuencial de
 ADR-026 por 1–5 slots asíncronos. El worker confirma inicio y cierre por ticket;
 Main limita capacidad y cantidad. PhysicalCardLoadDriver serializa lectura,
 PIN/EMV y validación hasta registrar PENDING y abrir el transporte, liberando

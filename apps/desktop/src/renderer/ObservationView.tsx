@@ -56,6 +56,7 @@ export function ObservationView({
     setError(undefined);
   }
   async function search() {
+    console.log('DBG search', JSON.stringify({ busy, disabled, environment, filters }));
     if (busy || disabled || environment !== 'PREPROD') return;
     const request: ObservationRequest = {
       ...filters,
@@ -69,6 +70,7 @@ export function ObservationView({
       !filters.channelId.trim() ||
       !parseObservationRequest(request)
     ) {
+      console.log('DBG local invalid');
       setError(
         'Revisa los filtros. Usa fechas YYYY-MM-DD HH:mm:ss.SSS, hasta 24 horas y de 1 a 100 resultados.',
       );
@@ -80,6 +82,7 @@ export function ObservationView({
     setSelected(undefined);
     setError(undefined);
     const response = await observerClient.call((api) => api.searchObservations(request));
+    console.log('DBG response', JSON.stringify(response));
     if (current !== generation.current) return;
     setBusy(false);
     if (response.ok) setResult(response.value);

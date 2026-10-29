@@ -115,6 +115,7 @@
 }
 main {
   max-width: 1720px;
+  margin-inline: auto;
   padding: 26px 28px;
 }
 .panel {
@@ -154,13 +155,126 @@ main {
   order: -1;
 }
 .direct-transaction-columns {
-  grid-template-columns: minmax(0, 1.48fr) minmax(300px, 1fr);
+  grid-template-columns: minmax(300px, 400px) minmax(300px, 1fr);
   align-items: start;
   gap: 18px;
+  scroll-margin-top: 24px;
 }
 .direct-transaction-columns > .panel {
   min-height: 0;
   padding: 22px;
+}
+.direct-transaction-columns.with-message-inspector {
+  grid-template-columns: minmax(300px, 1fr) minmax(280px, 0.95fr) minmax(380px, 1.4fr);
+  gap: 16px;
+}
+.with-message-inspector > .panel {
+  padding: 20px;
+}
+.with-message-inspector .panel-heading {
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 32px;
+}
+.with-message-inspector .panel-heading h2 {
+  font-size: 17px;
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+.with-message-inspector .transaction-composer > .panel-heading {
+  align-items: flex-start;
+}
+.with-message-inspector .profile-tools {
+  margin-left: auto;
+}
+.with-message-inspector > .live-message-inspector {
+  grid-column: auto;
+  min-width: 0;
+  padding: 18px;
+}
+.live-message-inspector .inspector-tabs button[aria-selected='true'] {
+  color: white;
+  background: var(--accent);
+}
+.live-message-inspector .inspector-tabs button {
+  flex: 1;
+}
+.live-message-inspector .inspector-tabs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.message-fields-scroll {
+  max-height: min(65vh, 720px);
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+.message-fields-scroll.is-expanded {
+  max-height: none;
+}
+.message-expand {
+  font-size: 12px;
+  margin-top: 8px;
+  text-align: left;
+}
+.iso-emv-details h3 {
+  font-size: 14px;
+  margin: 18px 0 8px;
+}
+.live-message-inspector .inspector-table {
+  width: 100%;
+  table-layout: fixed;
+}
+.live-message-inspector th:first-child {
+  width: 60px;
+}
+.live-message-inspector th:nth-child(2) {
+  width: 40%;
+}
+.live-message-inspector td {
+  overflow-wrap: anywhere;
+  padding: 7px 9px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.live-message-inspector th {
+  padding: 10px 9px;
+  position: sticky;
+  top: 0;
+  background: #edf2fa;
+}
+.iso-field-value {
+  font-family: ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.message-state,
+.message-correlation,
+.message-empty {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.message-correlation {
+  margin-bottom: 0;
+}
+.message-empty {
+  padding: 24px 0;
+}
+@media (max-width: 1300px) {
+  .direct-transaction-columns.with-message-inspector {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  }
+  .with-message-inspector > .transaction-composer {
+    grid-column: 1 / -1;
+  }
+}
+@media (min-width: 1301px) and (max-width: 1600px) {
+  .with-message-inspector .transaction-composer .transaction-fields {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 800px) {
+  .direct-transaction-columns.with-message-inspector {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .direct-transaction-columns .panel-heading {
   margin-bottom: 22px;
@@ -622,7 +736,23 @@ main {
 }
 .transaction-result-panel .balance-execution {
   margin: 0;
-  padding: 18px;
+  padding: 0;
+}
+.transaction-result-panel .execution-status {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  padding: 14px;
+}
+.transaction-result-panel .execution-status strong {
+  font-size: 15px;
+}
+.transaction-result-panel .execution-response-code {
+  grid-column: 2;
+  justify-self: start;
+  margin-left: 0;
+}
+.transaction-result-panel .host-balances dt {
+  min-width: 0;
 }
 .transaction-result-panel .balance-execution p,
 .transaction-result-panel .balance-execution li {
@@ -849,5 +979,182 @@ main {
   }
   .composer-footer .transaction-send-actions button {
     padding: 9px 12px;
+  }
+}
+
+/* Compact transaction composer: ATM, card, operation, account, execution. */
+.transaction-composer .transaction-fields,
+.transaction-composer .transaction-context-selectors,
+.with-message-inspector .transaction-composer .transaction-fields {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+.transaction-composer .transaction-fields > label,
+.transaction-composer .transaction-context-selectors > label {
+  font-size: 12px;
+  font-weight: 600;
+  gap: 6px;
+}
+.transaction-composer .composer-select {
+  position: relative;
+  display: block;
+  min-width: 0;
+  font-weight: 400;
+}
+.transaction-composer .composer-select > svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: #39527e;
+}
+.transaction-composer .composer-select select {
+  width: 100%;
+  padding-left: 42px;
+  min-height: 42px;
+  text-overflow: ellipsis;
+}
+.transaction-composer .composer-select.with-caption select {
+  min-height: 58px;
+  padding-top: 7px;
+  padding-bottom: 26px;
+}
+.transaction-composer .composer-select small {
+  position: absolute;
+  left: 43px;
+  right: 28px;
+  bottom: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  font-size: 11px;
+  color: var(--muted);
+}
+.transaction-composer .transaction-card-section {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.transaction-composer .transaction-card-section .panel-heading {
+  margin: 0 0 6px;
+  min-height: 0;
+}
+.transaction-composer .transaction-card-section h2 {
+  font-size: 12px;
+  font-weight: 600;
+}
+.transaction-card-modes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.transaction-card-modes button {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 6px;
+  font-size: 11px;
+  border-color: #dce5f3;
+  color: #4d6286;
+}
+.transaction-card-modes button[aria-pressed='true'] {
+  border-color: #8bb4ff;
+  background: #edf4ff;
+  color: #0060ec;
+}
+.transaction-card-picker .reader-input-row[hidden] {
+  display: none;
+}
+.transaction-card-picker .transaction-card-status {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #edf1f7;
+  background: linear-gradient(120deg, #f7fbff, #fafcff);
+}
+.transaction-card-status > .transaction-card-status-heading {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.transaction-card-status .transaction-card-status-heading > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 11px;
+}
+.transaction-card-status.has-card .transaction-card-status-heading > span {
+  color: #008752;
+}
+.transaction-card-status-heading button {
+  padding: 0;
+  font-size: 11px;
+  min-height: 24px;
+}
+.transaction-card-facts {
+  display: grid;
+  gap: 5px;
+  margin: 8px 0 0;
+  font-size: 11px;
+}
+.transaction-card-facts > div {
+  display: grid;
+  grid-template-columns: 65px minmax(0, 1fr);
+  gap: 8px;
+}
+.transaction-card-facts dt {
+  color: var(--muted);
+}
+.transaction-card-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.transaction-composer .composer-footer {
+  display: flex;
+  margin: 14px 0 0;
+  padding: 0;
+  border: 0;
+  gap: 8px;
+}
+.transaction-composer .composer-footer .transaction-send-actions {
+  flex: 1;
+  min-width: 0;
+}
+.transaction-composer .composer-footer .transaction-send-actions button {
+  width: 100%;
+  justify-content: center;
+  padding: 10px;
+}
+.transaction-composer .composer-settings {
+  min-height: 42px;
+  width: 42px;
+  padding: 8px;
+  flex-shrink: 0;
+}
+.transaction-composer .send-status-note {
+  text-align: left;
+}
+.transaction-composer .composer-options {
+  margin-top: 14px;
+  padding-top: 12px;
+}
+@media (min-width: 801px) and (max-width: 1300px) {
+  .with-message-inspector > .transaction-composer {
+    width: min(100%, 460px);
+    justify-self: center;
+  }
+}
+@media (max-width: 800px) {
+  .direct-transaction-columns {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

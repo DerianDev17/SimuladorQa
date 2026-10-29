@@ -28,7 +28,7 @@ describe('estado de conexión QA', () => {
     return { connection, factory, sockets };
   }
   it.each([false, true])(
-    'solapa sockets del mismo run y restaura solo al cerrar todos; desconexión=%s',
+    'serializa sockets del mismo run y restaura solo al cerrar todos; desconexión=%s',
     async (disconnect) => {
       const { connection, factory } = observing();
       const load = { runId: randomUUID(), concurrency: 2 };
@@ -36,7 +36,7 @@ describe('estado de conexión QA', () => {
       const exchange = () => new Promise<void>((resolve) => releases.push(resolve));
       const first = connection.withTransaction(request.endpoint, exchange, load);
       const second = connection.withTransaction(request.endpoint, exchange, load);
-      await vi.waitFor(() => expect(releases).toHaveLength(2));
+      await vi.waitFor(() => expect(releases).toHaveLength(1));
       await expect(connection.withTransaction(request.endpoint, exchange, load)).rejects.toThrow(
         'QA_CONNECTION_BUSY',
       );
@@ -50,14 +50,77 @@ describe('estado de conexión QA', () => {
         'QA_CONNECTION_BUSY',
       );
       if (disconnect) connection.disconnect('USER_DISCONNECTED');
-      releases[1]!();
-      await second;
-      expect(factory).toHaveBeenCalledOnce();
-      expect(() => connection.connect(request)).toThrow('QA_CONNECTION_BUSY');
       releases[0]!();
       await first;
+      await vi.waitFor(() => expect(releases).toHaveLength(2));
+      expect(factory).toHaveBeenCalledOnce();
+      expect(() => connection.connect(request)).toThrow('QA_CONNECTION_BUSY');
+      releases[1]!();
+      await second;
       expect(factory).toHaveBeenCalledTimes(disconnect ? 1 : 2);
       connection.disconnect('APP_CLOSED');
+    },
+  );
+  it.each(['CANCEL', 'EXPIRED'] as const)(
+    'retira espera por %s sin adelantar el siguiente socket',
+    async (reason) => {
+      const connection = new QaSwitchConnection();
+      const load = { runId: randomUUID(), concurrency: 3 };
+      let release!: () => void;
+      const first = connection.withTransaction(
+        request.endpoint,
+        () =>
+          new Promise<void>((resolve) => {
+            release = resolve;
+          }),
+        load,
+      );
+      await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+      const abort = new AbortController();
+      const exchange = vi.fn(async () => 'unexpected');
+      const second = connection.withTransaction(request.endpoint, exchange, load, {
+        signal: abort.signal,
+        ...(reason === 'EXPIRED' ? { load: { deadline: performance.now() + 30 } } : {}),
+      });
+      const rejection = expect(second).rejects.toThrow(
+        reason === 'CANCEL' ? 'QA_CONNECTION_CANCELLED' : 'QA_CONNECTION_EXPIRED',
+      );
+      if (reason === 'CANCEL') abort.abort();
+      await rejection;
+      const thirdExchange = vi.fn(async () => 'third');
+      const third = connection.withTransaction(request.endpoint, thirdExchange, load);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(exchange).not.toHaveBeenCalled();
+      expect(thirdExchange).not.toHaveBeenCalled();
+      release();
+      await first;
+      expect(await third).toBe('third');
+    },
+  );
+  it.each(['ABORTED', 'EXPIRED'] as const)(
+    'no abre transporte para una solicitud ya %s',
+    async (reason) => {
+      const connection = new QaSwitchConnection();
+      const abort = new AbortController();
+      if (reason === 'ABORTED') abort.abort();
+      const exchange = vi.fn(async () => undefined);
+      await expect(
+        connection.withTransaction(
+          request.endpoint,
+          exchange,
+          { runId: randomUUID(), concurrency: 1 },
+          {
+            signal: abort.signal,
+            load: {
+              deadline: reason === 'EXPIRED' ? performance.now() - 1 : performance.now() + 1000,
+            },
+          },
+        ),
+      ).rejects.toThrow(reason === 'ABORTED' ? 'QA_CONNECTION_CANCELLED' : 'QA_CONNECTION_EXPIRED');
+      expect(exchange).not.toHaveBeenCalled();
+      expect(await connection.withTransaction(request.endpoint, async () => 'released')).toBe(
+        'released',
+      );
     },
   );
   it.each(['APPROVED', 'RESPONSE_TIMEOUT', 'PEER_CLOSED'])(

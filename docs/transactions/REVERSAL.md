@@ -2,6 +2,13 @@
 
 ## Prueba temporizada QA
 
+Actualización 2026-10-29: se puede elegir directamente **Retiro aprobado +
+reverso** en Operación. El inspector muestra Solicitud 0200, Respuesta 0210,
+Reverso 0420 y Respuesta reverso 0430, incluidos F90/F95 y el desglose público
+EMV. El diario conserva las proyecciones protegidas, no los bytes privados.
+El resultado distingue RC retiro/RC reverso. Cancelar antes del write impide
+el envío pendiente; el enlace se libera solo al cerrar TCP. Ver ADR-030.
+
 En **Retiro aprobado**, elegir **Retiro + reverso** y una espera de 1, 3, 5,
 10, 20 o 30 segundos (valor inicial 5). Solo aplica a ahorros, USD, ATM Local,
 QA y al perfil de retiro ya autorizado. Solo retiro conserva su comportamiento.
@@ -23,7 +30,8 @@ STAN/RRN/terminal del original. Se conservan como padre/hijo en el diario de
 retiros. No se reservan otra secuencia ni otra tarjeta para el reverso. F90
 vincula el original; F38 procede de su autorizacion. El transporte conserva
 solo datos necesarios en memoria Main y los borra al terminar. Nunca guarda
-tramas, PAN, Track2, PIN ni EMV en el diario o Renderer.
+tramas privadas, PAN completo, Track2, PIN ni criptogramas en el diario o Renderer.
+Desde ADR-030 se conserva únicamente la proyección pública y sanitizada.
 
 El perfil implementa reverso total, cero efectivo y surcharge cero. El armado
 de F28/F48/F55/F60/F90/F95 procede del builder general de la DLL y del PCAP;

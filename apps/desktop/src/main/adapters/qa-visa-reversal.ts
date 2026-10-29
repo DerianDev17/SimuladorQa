@@ -1,6 +1,15 @@
 import { CapturedVisaBalance, capturedVisaFieldProfile } from './captured-visa-balance';
 import { CapturedVisaFraming } from '../infrastructure/captured-visa-framing';
 import { parseCardTlv } from './emv-card-identity';
+import { projectIsoMessage } from './iso-message-projection';
+import type { DisplayFieldProfile } from './iso-message-projection';
+import type { IsoMessage } from '../../../../../packages/domain/src/iso-message';
+
+const reversalFieldProfile: Readonly<Record<number, DisplayFieldProfile>> = {
+  ...capturedVisaFieldProfile,
+  90: { encoding: 'BINARY', length: 21 },
+  95: { encoding: 'EBCDIC', length: 42 },
+};
 
 const retained = [2, 3, 4, 11, 12, 13, 14, 15, 18, 19, 22, 25, 32, 35, 37, 41, 42, 43, 49];
 function fail(): never {
@@ -207,41 +216,12 @@ export class QaVisaReversal {
   }
 
   response(body: Buffer): string | undefined {
-    if (
-      this.disposed ||
-      body.length < 40 ||
-      body[0] !== 22 ||
-      body.readUInt16BE(3) !== body.length ||
-      body.readUInt16BE(22) !== 0x0430 ||
-      !(body[24]! & 0x80) ||
-      body[32]! & 0x80
-    )
-      fail();
-    const allowed = [2, 3, 7, 11, 15, 19, 25, 32, 37, 39, 41, 42, 48, 63, 90];
-    const fields = new Map<number, Buffer>();
-    let cursor = 40;
-    for (let field = 2; field <= 128; field++) {
-      if (!(body[24 + Math.floor((field - 1) / 8)]! & (0x80 >> ((field - 1) % 8)))) continue;
-      if (!allowed.includes(field)) fail();
-      const spec =
-        field === 90
-          ? { encoding: 'BINARY', length: 21, variable: false }
-          : capturedVisaFieldProfile[field]!;
-      const start = cursor;
-      const length = spec.variable ? body[cursor++] : spec.length;
-      if (length === undefined || length === 0 || length > spec.length) fail();
-      cursor += spec.encoding === 'BCD' ? Math.ceil(length / 2) : length;
-      if (cursor > body.length) fail();
-      fields.set(field, body.subarray(start, cursor));
-    }
-    if (cursor !== body.length || [2, 3, 11, 37, 39, 41, 90].some((f) => !fields.has(f))) fail();
+    const fields = this.readFields(body, 0x0430);
     if ([2, 3, 11, 37, 41].some((f) => !fields.get(f)!.equals(this.fields.get(f)!)))
       return undefined;
     const originalData = this.fields.get(90)!,
       returnedData = fields.get(90)!;
-    // Both real 0430s normalize F90's transmission hour (+5). Correlate the
-    // original MTI/STAN and institutions, plus PAN/RRN/terminal above; do not
-    // invent a general timezone conversion from two captures.
+    // The two QA 0430s normalize the hour. Preserve existing correlation rules.
     if (!/^\d{42}$/.test(returnedData.toString('hex'))) fail();
     if (
       !returnedData.subarray(0, 5).equals(originalData.subarray(0, 5)) ||
@@ -251,6 +231,65 @@ export class QaVisaReversal {
     const rc = fields.get(39)!;
     if (rc.length !== 2 || [...rc].some((b) => b < 0xf0 || b > 0xf9)) fail();
     return [...rc].map((b) => b - 0xf0).join('');
+  }
+
+  requestMessage(wire: Buffer): IsoMessage {
+    // build() uses the existing four-byte VISA envelope. Decode it using that
+    // framing adapter, never assuming that an arbitrary received body is valid.
+    const decoder = new CapturedVisaFraming().decoder();
+    const frames = decoder.push(wire);
+    try {
+      decoder.finish();
+      if (frames.length !== 1) fail();
+      return projectIsoMessage(
+        '0420',
+        this.readFields(frames[0]!.opaqueBody, 0x0420),
+        reversalFieldProfile,
+      );
+    } finally {
+      for (const frame of frames) {
+        frame.opaqueBody.fill(0);
+        frame.extension.fill(0);
+      }
+    }
+  }
+
+  responseMessage(body: Buffer): IsoMessage | undefined {
+    if (this.response(body) === undefined) return undefined;
+    return projectIsoMessage('0430', this.readFields(body, 0x0430), reversalFieldProfile);
+  }
+
+  private readFields(body: Buffer, mti: 0x0420 | 0x0430): Map<number, Buffer> {
+    if (
+      this.disposed ||
+      body.length < 40 ||
+      body[0] !== 22 ||
+      body.readUInt16BE(3) !== body.length ||
+      body.readUInt16BE(22) !== mti ||
+      !(body[24]! & 0x80) ||
+      body[32]! & 0x80
+    )
+      fail();
+    const allowed =
+      mti === 0x0430
+        ? [2, 3, 7, 11, 15, 19, 25, 32, 37, 39, 41, 42, 48, 63, 90]
+        : [...this.fields.keys()];
+    const fields = new Map<number, Buffer>();
+    let cursor = 40;
+    for (let field = 2; field <= 128; field++) {
+      if (!(body[24 + Math.floor((field - 1) / 8)]! & (0x80 >> ((field - 1) % 8)))) continue;
+      if (!allowed.includes(field)) fail();
+      const spec = reversalFieldProfile[field]!;
+      const start = cursor;
+      const length = spec.variable ? body[cursor++] : spec.length;
+      if (length === undefined || length === 0 || length > spec.length) fail();
+      cursor += spec.encoding === 'BCD' ? Math.ceil(length / 2) : length;
+      if (cursor > body.length) fail();
+      fields.set(field, body.subarray(start, cursor));
+    }
+    const required = mti === 0x0430 ? [2, 3, 11, 37, 39, 41, 90] : allowed;
+    if (cursor !== body.length || required.some((f) => !fields.has(f))) fail();
+    return fields;
   }
 
   dispose(): void {

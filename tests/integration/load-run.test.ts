@@ -10,6 +10,8 @@ import { FileLoadRunStore } from '../../apps/desktop/src/main/infrastructure/loa
 import { approvedWithdrawalExecution } from '../helpers/withdrawal';
 import { removeTestDirectory } from '../helpers/temporary-directory';
 import type { LoadRunSnapshot } from '../../packages/domain/src/load-run';
+import { loadRunMetrics } from '../../packages/domain/src/load-run';
+import type { LoadExecutionResult } from '../../apps/desktop/src/main/load-run-service';
 import type { BalanceExecution } from '../../packages/domain/src/balance-inquiry';
 import type { Result } from '../../packages/shared/src/contracts';
 
@@ -66,7 +68,7 @@ async function finished(service: LoadRunService): Promise<LoadRunSnapshot> {
   return snapshot.value;
 }
 function setup(
-  execute: (signal: AbortSignal, runId: string) => Promise<Result<BalanceExecution>>,
+  execute: (signal: AbortSignal, runId: string) => Promise<LoadExecutionResult>,
   durationDrainMs?: number,
 ) {
   const close = vi.fn();
@@ -91,6 +93,38 @@ function setup(
   };
 }
 describe('worker de carga con persistencia real', () => {
+  it('conserva el primer cierre como causa y no suma las cancelaciones posteriores como errores', async () => {
+    let calls = 0;
+    const failed = { ...result(), outcome: 'PEER_CLOSED' as const, responseCode: null };
+    const { service, store } = setup(async (signal) => {
+      if (++calls === 1) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        return { ok: true, value: failed };
+      }
+      return new Promise((resolve) =>
+        signal.addEventListener(
+          'abort',
+          () =>
+            resolve({
+              ok: false,
+              cancelled: true,
+              error: {
+                code: 'CONFLICT',
+                message: 'Esta cancelación no debe reemplazar el cierre inicial.',
+              },
+            }),
+          { once: true },
+        ),
+      );
+    });
+    const input = request();
+    input.draft.concurrency = 2;
+    await service.start(input);
+    const run = await finished(service);
+    expect(run.message).toContain(`Primer error: PEER_CLOSED · STAN ${failed.correlation!.stan}`);
+    expect(loadRunMetrics(run)).toMatchObject({ errors: 1, cancelled: 1, unconfirmed: 1 });
+    expect(await store.read()).toEqual(run);
+  });
   it('al vencer duración descarta slots sin envío y espera las respuestas activas sin marcar error', async () => {
     let calls = 0;
     const { service } = setup(async () => {

@@ -215,10 +215,6 @@ export function DashboardView({
             </button>
           </div>
         </div>
-        <p className="dashboard-feed-scope">
-          Mediator · entidad 205 · canal 1 · últimas 50 filas del Journal/Message en QA y PREPROD.
-          Hora SQL sin zona confirmada; NOLOCK puede mostrar datos sin confirmar.
-        </p>
         {feedError && (
           <p className="dashboard-feed-error" role="alert">
             {feedError} Se volverá a intentar automáticamente.

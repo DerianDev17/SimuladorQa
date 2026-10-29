@@ -74,6 +74,7 @@ const labels = {
 };
 const stages: { key: keyof LoadRunTimings; label: string }[] = [
   { key: 'queueWaitMs', label: 'Espera del lector' },
+  { key: 'connectionWaitMs', label: 'Espera del enlace' },
   { key: 'rateLimitMs', label: 'Espera por límite TPS' },
   { key: 'cardReadMs', label: 'Lectura del chip' },
   { key: 'inspectMs', label: 'Validación de perfil' },
@@ -415,9 +416,9 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
               </div>
             </details>
             <p className="load-inline-note">
-              Selecciona ambos perfiles para enviar consultas concurrentes. Se reparten en el orden
-              seleccionado sin esperar cada respuesta. TPS, cantidad y concurrencia son totales de
-              la corrida.
+              Las consultas se reparten entre los ATM seleccionados. El enlace QA atiende un envío a
+              la vez para conservar cada respuesta. TPS, cantidad y operaciones en preparación son
+              totales de la corrida.
             </p>
           </div>
           <div className="load-step">
@@ -463,7 +464,7 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
               PIN una vez por corrida y seguridad EMV nueva por consulta.
             </p>
             <label>
-              Operaciones simultáneas
+              Operaciones en preparación y envío
               <select
                 value={concurrency}
                 disabled={locked || disabled}
@@ -471,15 +472,15 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
               >
                 {[1, 2, 3, 4, 5].map((value) => (
                   <option key={value} value={value}>
-                    {value === 1 ? '1 · secuencial' : `${value} · concurrentes`}
+                    {value === 1 ? '1 · secuencial' : `${value} · en curso`}
                   </option>
                 ))}
               </select>
             </label>
             <p className="load-inline-note">
-              El chip prepara una consulta a la vez; los envíos pueden esperar respuestas
-              simultáneamente. El ritmo real depende de la preparación y del host. El escenario de 3
-              TPS usa {LOAD_RUN_MAX_CONCURRENCY} operaciones simultáneas.
+              El chip prepara una consulta a la vez y puede avanzar mientras el host responde a la
+              anterior. El enlace permite una sola conexión financiera; las demás consultas esperan
+              su turno. Más operaciones en curso no garantizan alcanzar los TPS objetivo.
             </p>
           </div>
           <div className="load-fixed-operation">
@@ -640,6 +641,8 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
                     ['Rechazadas', metrics.declined],
                     ['Timeouts', metrics.timeouts],
                     ['Errores', metrics.errors],
+                    ['Canceladas', metrics.cancelled],
+                    ['Enviadas sin respuesta', metrics.unconfirmed],
                   ].map(([label, value]) => (
                     <div key={label}>
                       <span>{label}</span>
@@ -758,7 +761,13 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
                               'ATM QA'}
                           </td>
                           <td>{item.correlation?.stan ?? 'Sin envío'}</td>
-                          <td>{item.outcome}</td>
+                          <td>
+                            {item.cancelled
+                              ? item.sent
+                                ? 'Cancelada · sin respuesta'
+                                : 'Cancelada · sin envío'
+                              : item.outcome}
+                          </td>
                           <td>{item.responseCode ?? '—'}</td>
                           <td>{ms(item.elapsedMs)}</td>
                           <td>{ms(item.timings?.totalMs)}</td>

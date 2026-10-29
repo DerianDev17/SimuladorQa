@@ -1,5 +1,25 @@
 # Carga y estrés de saldo en QA
 
+## Corrección del cierre de conexión — 2026-10-29 (ADR-029)
+
+El log del operador confirma que TCPComms sustituye la conexión existente del
+dispositivo 80131 cuando llega otra desde la misma estación. Esto produjo
+PEER_CLOSED en 900228 y cancelación local de 900229 y de tres consultas sin envío.
+Los estados locales no son códigos de rechazo del switch.
+
+El envío por este enlace ahora es exclusivo: una conexión financiera a la vez.
+Se conservan de 1 a 5 operaciones en preparación y envío; el chip puede preparar
+la siguiente mientras espera el host, pero su conexión espera turno. La UI
+muestra **Espera del enlace**, **Canceladas** y **Enviadas sin respuesta**, y
+conserva el primer error con STAN. Los datos históricos permanecen intactos.
+Un slot cancelado/vencido no abre conexión, y una respuesta recibida se conserva
+al cerrar el socket. El primer rechazo/error sigue deteniendo la corrida.
+
+Esta decisión sustituye las referencias a sockets simultáneos de las revisiones
+históricas siguientes. No garantiza 3 TPS: el chip y la respuesta del host siguen
+limitando el ritmo. Reiniciar la aplicación si todavía ejecuta el Main anterior.
+Véase [evidencia y decisión](../adr/ADR-029-QA-SINGLE-FINANCIAL-CONNECTION.md).
+
 ## Preparación reutilizable y resultado bajo objetivo — 2026-10-28 (ADR-028)
 
 La evidencia del usuario (8 consultas en 91 s, 0,09 TPS frente a 3 TPS) confirma
@@ -118,8 +138,9 @@ Electron con fuente sintética. No se ejecuta carga contra el switch QA.
 2. Elegir **Prueba rápida**, **1 TPS**, **3 TPS** o **5 TPS**. Los presets
    completan cantidad y duración dentro de los límites locales; son objetivos,
    no tasas garantizadas. **Modo avanzado** permite ajustar esos valores.
-   Elegir **Operaciones simultáneas**: 2 para permitir ambos ATM en vuelo, o
-   5 para el escenario de 3 TPS. Elegir 1 conserva el comportamiento secuencial.
+   Elegir **Operaciones en preparación y envío**: 2 permite preparar la siguiente
+   consulta mientras se espera una respuesta; 5 es el preset de 3 TPS. Todos
+   comparten una sola conexión financiera activa. Elegir 1 serializa todo el flujo.
 3. Seleccionar la tarjeta QA en el lector. Un perfil guardado puede preseleccionar
    el AID, pero hay que leer el chip físico antes de iniciar.
 4. Pulsar **Iniciar prueba** e ingresar el PIN en el diálogo nativo.
@@ -129,7 +150,7 @@ El panel muestra enviados, respuestas, aprobaciones, rechazos, errores, TPS
 reales y percentiles. **Detener prueba** cancela el trabajo y cierra los sockets.
 
 La interfaz ofrece un motor asíncrono con preparación física exclusiva y
-transportes concurrentes. El límite es lo primero que ocurra: cantidad o tiempo. Se detiene
+transporte exclusivo por enlace QA. El límite es lo primero que ocurra: cantidad o tiempo. Se detiene
 ante el primer rechazo/error o retiro de tarjeta. No hay reintentos automáticos.
 No hace falta mantener la página abierta: al volver se recupera la corrida.
 
@@ -160,7 +181,9 @@ Un worker agenda cada operación sin ráfagas de recuperación y recibe tickets
 separados de inicio y cierre. No espera la respuesta mientras tenga slots libres.
 Main mantiene como máximo la concurrencia solicitada, incluida la espera por
 lector. El acceso al chip permanece exclusivo y libera su slot de preparación
-cuando el transporte puede esperar la respuesta independientemente.
+cuando el transporte entra en la cola del enlace. Solo una conexión financiera
+puede estar activa; los plazos de conexión/respuesta empiezan al obtener turno,
+y la espera de cola respeta el plazo total de la corrida.
 Un limitador global se aplica además justo antes del write en cada socket:
 no acumula créditos durante preparación o conexión lenta. El objetivo de TPS
 no garantiza que se alcance. El timeout de respuesta empieza con el write.
