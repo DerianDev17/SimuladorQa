@@ -20,7 +20,8 @@ InclusiveBe16Framing (infraestructura) y CapturedBanredEnvelope (adaptador del
 perfil observado) no acceden a Electron, sockets ni BD. La herramienta local
 inspect-pcaps valida el pipeline y conserva payload solo en memoria.
 El dominio cataloga escenarios/transacciones, valida contexto y sus requisitos
-pendientes; no implementa el motor transaccional descrito mas abajo.
+pendientes. La ejecución financiera está limitada a las rutas QA aprobadas de
+saldo, retiro y reverso; no habilita producción ni generaliza reglas ISO.
 
 ```mermaid
 flowchart LR
@@ -40,9 +41,27 @@ flowchart LR
   Offline -. metadatos revisados .-> Captures
 ```
 
-El resto de componentes sigue planificado. Ver `../implementation/BOOTSTRAP.md`
-y `../adr/ADR-003-DESKTOP-BOOTSTRAP.md`.
-Para preparacion documental: `../implementation/TRANSACTION_PREPARATION.md` y
+Estado por componente:
+
+| Componente        | Estado                                                                                          |
+| ----------------- | ----------------------------------------------------------------------------------------------- |
+| Desktop UI        | Implementado; IPC tipado y sin acceso directo a sockets, BD remotas ni secretos.                |
+| CardReaderAdapter | Implementado para PC/SC y eventos de inserción/retiro; identidad EMV acotada.                   |
+| Profile Manager   | Implementado: entidades, ATM y tarjetas por ambiente en SQLite.                                 |
+| Transaction Engine| Implementado para saldo, retiro y reverso QA; no habilita producción.                           |
+| ISO8583 Engine    | Parcial: codecs capturados, proyección ISO visible y mensajería del reverso (ADR-030).          |
+| TCP Engine        | Implementado para el enlace QA con una conexión activa (ADR-029); framing y cierre ordenado.    |
+| Load Engine       | Implementado con 1-5 operaciones, un solo transporte financiero y límites globales.             |
+| Switch Observer   | Implementado como observador Mediator PREPROD de solo lectura y feed en vivo.                   |
+| Core Adapter      | Parcial: adaptadores QA concretos; no hay adaptador Core genérico ni de producción.             |
+| Realtime Agent    | No implementado; el Control Plane sigue propuesto en ADR-002.                                   |
+
+Componentes aún planificados: Control Plane y agentes remotos, motor ISO genérico
+para todos los perfiles, integración HSM y conexión a producción. Cualquier avance
+en esos puntos requiere fuente aprobada y un ADR; ver `../TODO_DATA.md`.
+
+Ver también `../implementation/BOOTSTRAP.md`, `../adr/ADR-003-DESKTOP-BOOTSTRAP.md`,
+`../implementation/TRANSACTION_PREPARATION.md` y
 `../adr/ADR-005-TRANSACTION-PREPARATION.md`.
 
 ## Desktop UI
