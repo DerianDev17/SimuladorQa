@@ -2282,8 +2282,8 @@ async function openComposerOptions(window: Page) {
     await options.locator('summary').first().click();
 }
 async function reviewDraft(window: Page) {
-  await openComposerOptions(window);
   await expect(window.getByLabel('Ambiente', { exact: true })).toBeEnabled();
+  await openComposerOptions(window);
   await expect(
     window.getByRole('button', { name: 'Recargar perfiles', exact: true }),
   ).toBeEnabled();
@@ -2803,7 +2803,9 @@ test('plantillas documentales, resumen revisado y borrador conservado al navegar
   await expect(window.getByText('Reglas financieras del monto', { exact: true })).toBeVisible();
   await window.getByLabel('Monto de prueba').fill('100,50');
   await expect(window.getByLabel('Monto de prueba')).toHaveAttribute('aria-invalid', 'true');
-  await expect(window.getByText('Usa punto y dos decimales, por ejemplo 100.50.')).toBeVisible();
+  await expect(
+    window.getByText('Usa un monto positivo, punto y dos decimales; hasta 10 dígitos enteros.'),
+  ).toBeVisible();
   await reviewDraft(window);
   await expect(window.getByLabel('Monto de prueba')).toBeFocused();
   await window.getByLabel('Monto de prueba').fill('100.50');
