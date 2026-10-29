@@ -61,7 +61,8 @@ import type { WithdrawalService } from './withdrawal-service';
 export class DesktopApplication {
   private queue: Promise<unknown> = Promise.resolve();
   private environmentRevision = 0;
-  private observationBusy = false;
+  private observationSearchBusy = false;
+  private observationLiveBusy = false;
   private balanceBusy: string | undefined;
   private balanceCount = 0;
   private balanceScope: string | undefined;
@@ -195,9 +196,9 @@ export class DesktopApplication {
       );
     if (request.environment !== 'PREPROD')
       return failure('FORBIDDEN', 'La consulta de Mediator está disponible únicamente en PREPROD.');
-    if (this.observationBusy)
+    if (this.observationSearchBusy)
       return failure('CONFLICT', 'Ya hay una consulta de Mediator en curso.');
-    this.observationBusy = true;
+    this.observationSearchBusy = true;
     try {
       const initial = await this.serialize(async () => ({
         preferences: await this.store.read(),
@@ -233,16 +234,16 @@ export class DesktopApplication {
     } catch {
       return failure('SERVICE_UNAVAILABLE', 'No se pudo completar la consulta de Mediator.');
     } finally {
-      this.observationBusy = false;
+      this.observationSearchBusy = false;
     }
   }
 
   async getMediatorLive(payload: unknown): Promise<Result<MediatorLiveSnapshot>> {
     const request = parseMediatorLiveRequest(payload);
     if (!request) return failure('VALIDATION_ERROR', 'Consulta en vivo de Mediator inválida.');
-    if (this.observationBusy)
+    if (this.observationLiveBusy)
       return failure('CONFLICT', 'Ya hay una consulta de Mediator en curso.');
-    this.observationBusy = true;
+    this.observationLiveBusy = true;
     try {
       const initial = await this.serialize(async () => ({
         preferences: await this.store.read(),
@@ -271,7 +272,7 @@ export class DesktopApplication {
         'No se pudo completar la consulta en vivo de Mediator.',
       );
     } finally {
-      this.observationBusy = false;
+      this.observationLiveBusy = false;
     }
   }
 

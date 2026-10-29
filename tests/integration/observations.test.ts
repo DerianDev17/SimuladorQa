@@ -109,6 +109,30 @@ describe('observador y ambiente persistido', () => {
     expect(await query).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
     expect(await app.searchObservations(observationRequest)).toMatchObject({ ok: true });
   });
+  it('no bloquea una consulta manual mientras el feed en vivo está en curso', async () => {
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const app = application({
+      search: async () => ({ ok: true, value: observationBatch() }),
+      live: async () => {
+        entered();
+        await pending;
+        return { ok: true, value: { rows: [], hasMore: false } };
+      },
+    });
+    await app.setEnvironment({ environment: 'PREPROD' });
+    const live = app.getMediatorLive(liveRequest);
+    await started;
+    expect(await app.searchObservations(observationRequest)).toMatchObject({ ok: true });
+    release();
+    expect(await live).toMatchObject({ ok: true });
+  });
   it('controla proveedor ausente, fallos y timeout', async () => {
     for (const observer of [
       undefined,
