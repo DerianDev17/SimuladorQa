@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Estación desktop de QA para simulación ATM Coonecta",
+  "description": "EstaciÃ³n desktop de QA para simulaciÃ³n ATM Coonecta",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -22,6 +22,7 @@
     "test": "npm run test:unit && npm run test:integration",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
+    "test:coverage": "vitest run --coverage",
     "prepare:electron": "node tooling/prepare-electron.mjs",
     "test:e2e": "npm run prepare:electron && npm run build && playwright test",
     "check:security": "node tooling/check-security.mjs",
@@ -38,7 +39,8 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.1.2",
-    "electron": "44.6.0",
+    "@vitest/coverage-v8": "5.0.3",
+    "electron": "44.10.0",
     "esbuild": "0.28.2",
     "eslint": "10.12.0",
     "prettier": "3.9.9",

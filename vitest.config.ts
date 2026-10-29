@@ -8,5 +8,15 @@ export default defineConfig({
       ? { maxWorkers: 1, testTimeout: 15000, hookTimeout: 15000 }
       : {}),
     include: ['tests/unit/**/*.test.ts', 'tests/integration/**/*.test.ts'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text-summary'],
+      thresholds: {
+        statements: 84,
+        branches: 79,
+        functions: 87,
+        lines: 88,
+      },
+    },
   },
 });

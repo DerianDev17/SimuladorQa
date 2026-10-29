@@ -2,15 +2,27 @@ name: Validación
 on: [push, pull_request]
 jobs:
   desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22.20.0', '24.x']
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22.20.0'
+          node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
       - run: npm run check
-      - run: npm run test:e2e
-      - run: npm audit
-        continue-on-error: true
+      - run: npm audit --audit-level=high
+      - if: matrix.node == '22.20.0'
+        run: npm run test:coverage
+      - if: matrix.node == '22.20.0'
+        run: npm run test:e2e
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results-node-${{ matrix.node }}
+          path: test-results/
+          if-no-files-found: ignore
