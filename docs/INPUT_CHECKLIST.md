@@ -1,5 +1,7 @@
 # Checklist de informacion por subir
 
+El índice consolidado de pendientes está en [`TODO_DATA.md`](TODO_DATA.md).
+
 TODO-DATA CARD-ISSUER-PRODUCT-DISPLAY (2026-10-29): la referencia visual del
 formulario incluye entidad emisora y producto. La identidad pública del lector
 no proporciona esos campos ni existe aquí una correspondencia aprobada.
