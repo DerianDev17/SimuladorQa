@@ -43,7 +43,6 @@ import { SimulatedCardReader } from './adapters/simulated-card-reader';
 import { QaSwitchConnection } from './adapters/qa-switch-connection';
 import { WindowsCardSession } from './adapters/windows-card-session';
 import { CardIdentityService } from './card-identity-service';
-import { LoadTestService } from './load-test-service';
 import { VirtualCardGeneratorService } from './virtual-card-generator-service';
 import { SavedCardProfileService } from './saved-card-profile-service';
 import { FileSavedCardProfileStore } from './infrastructure/saved-card-profile-store';
@@ -64,7 +63,6 @@ let balanceService: BalanceInquiryService | undefined;
 let withdrawalService: WithdrawalService | undefined;
 let withdrawalReceipts: WithdrawalReceiptService | undefined;
 let loadRun: LoadRunService | undefined;
-let loadTestService: LoadTestService | undefined;
 let loadRunStore: SqliteLoadRunStore | undefined;
 let virtualCardGenerator: VirtualCardGeneratorService | undefined;
 let savedCardProfiles: SavedCardProfileService | undefined;
@@ -228,7 +226,6 @@ void startupReady
       now: () => new Date().toISOString(),
     };
     const preferences = new FilePreferencesStore(join(app.getPath('userData'), 'preferences.json'));
-    loadTestService = new LoadTestService(runtime, preferences);
     virtualCardGenerator = new VirtualCardGeneratorService(runtime, preferences);
     savedCardProfiles = new SavedCardProfileService(
       cardIdentity,
@@ -495,11 +492,6 @@ void startupReady
             return application.searchObservations(payload);
           case channels.mediatorLive:
             return application.getMediatorLive(payload);
-          case channels.prepareLoadTest:
-            return (
-              loadTestService?.prepare(payload) ??
-              failure('SERVICE_UNAVAILABLE', 'El preparador de carga no está disponible.')
-            );
           case channels.catalog:
             return application.catalog('list', payload);
           case channels.saveEntity:

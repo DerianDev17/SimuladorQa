@@ -48,19 +48,6 @@ export function loadTargetTps(plan: LoadTestDraft, elapsedMs: number): number {
     : plan.targetTps;
 }
 
-export interface LoadTestPlan {
-  planId: string;
-  createdAt: string;
-  draft: LoadTestDraft;
-  status: 'BLOCKED_EXECUTION';
-  blockers: readonly {
-    id: 'LOAD_LIMITS_NOT_APPROVED' | 'QA_CARD_SOURCE_NOT_READY' | 'LOAD_EXECUTOR_NOT_IMPLEMENTED';
-    label: string;
-  }[];
-  frameGenerated: false;
-  transmissionAttempted: false;
-}
-
 function positiveNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0;
 }

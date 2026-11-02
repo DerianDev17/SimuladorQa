@@ -54,6 +54,5 @@ const api: DesktopApi = Object.freeze<DesktopApi>({
   startLoadRun: (request) => ipcRenderer.invoke(channels.startLoadRun, request),
   getLoadRun: () => ipcRenderer.invoke(channels.loadRun),
   stopLoadRun: (request) => ipcRenderer.invoke(channels.stopLoadRun, request),
-  prepareLoadTest: (request) => ipcRenderer.invoke(channels.prepareLoadTest, request),
 });
 contextBridge.exposeInMainWorld('desktop', api);

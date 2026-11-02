@@ -1,5 +1,11 @@
 # Changelog
 
+Limpieza (2026-11-02): eliminado el preparador virtual legado sin consumidores
+en Renderer, su canal `load:plan:prepare`, contrato y pruebas exclusivas. La carga
+vigente usa inicio/estado/parada de LoadRunService. Eliminado NewWithdrawalInput,
+tipo sin referencias tras la extracción del contrato financiero. Reiniciar la
+aplicación completa para cargar Main y preload de la misma versión.
+
 Arquitectura (2026-11-02): motor financiero compartido con builder inyectado,
 fachadas independientes de saldo/retiro y contratos propios para ejecución y
 carga. El driver de carga depende de interfaces de lector y ciclo de vida de
