@@ -4,14 +4,15 @@ import { randomUUID } from 'node:crypto';
 import { mkdtemp, readFile, mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { LoadRunService, type LoadScheduler } from '../../apps/desktop/src/main/load-run-service';
+import { LoadRunService } from '../../apps/desktop/src/main/load-run-service';
+import type { LoadScheduler } from '../../apps/desktop/src/main/load-ports';
 import { workerLoadScheduler } from '../../apps/desktop/src/main/infrastructure/load-scheduler';
 import { FileLoadRunStore } from '../../apps/desktop/src/main/infrastructure/load-run-store';
 import { approvedWithdrawalExecution } from '../helpers/withdrawal';
 import { removeTestDirectory } from '../helpers/temporary-directory';
 import type { LoadRunSnapshot } from '../../packages/domain/src/load-run';
 import { loadRunMetrics } from '../../packages/domain/src/load-run';
-import type { LoadExecutionResult } from '../../apps/desktop/src/main/load-run-service';
+import type { LoadExecutionResult } from '../../apps/desktop/src/main/load-ports';
 import type { BalanceExecution } from '../../packages/domain/src/balance-inquiry';
 import type { Result } from '../../packages/shared/src/contracts';
 

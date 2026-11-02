@@ -5,8 +5,8 @@ import type {
   BalanceValue,
   BalanceDiagnostics,
 } from '../../../../packages/domain/src/balance-inquiry';
-import type { NewBalanceInput } from './adapters/new-visa-balance';
-import type { CapturedBalanceMetadata } from './adapters/captured-visa-balance';
+import type { NewBalanceInput } from './financial-message-contract';
+import type { CapturedBalanceMetadata } from './financial-message-contract';
 import type { ReversalProgress } from '../../../../packages/domain/src/withdrawal-reversal';
 import type { IsoMessage } from '../../../../packages/domain/src/iso-message';
 

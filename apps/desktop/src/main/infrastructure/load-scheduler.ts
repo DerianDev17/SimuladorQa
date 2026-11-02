@@ -1,6 +1,6 @@
 import { Worker } from 'node:worker_threads';
 import { performance } from 'node:perf_hooks';
-import type { LoadScheduler } from '../load-run-service';
+import type { LoadScheduler } from '../load-ports';
 export function workerLoadScheduler(file: string): LoadScheduler {
   return (request, tick, done, startedAt = performance.timeOrigin + performance.now()) => {
     const worker = new Worker(file, { workerData: { draft: request.draft, startedAt } });

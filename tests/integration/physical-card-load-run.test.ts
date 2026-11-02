@@ -23,7 +23,7 @@ import { CapturedVisaBalance } from '../../apps/desktop/src/main/adapters/captur
 import { SqliteBalanceJournal } from '../../apps/desktop/src/main/infrastructure/sqlite-balance-journal';
 import { SqliteLoadRunStore } from '../../apps/desktop/src/main/infrastructure/sqlite-load-run-store';
 import { workerLoadScheduler } from '../../apps/desktop/src/main/infrastructure/load-scheduler';
-import type { DesktopApplication } from '../../apps/desktop/src/main/application';
+import type { LoadFinancialOperations } from '../../apps/desktop/src/main/load-ports';
 import {
   parseBalanceContextRequest,
   parseBalanceExecutionRequest,
@@ -215,10 +215,7 @@ it.each([
     let active = 0,
       maxActive = 0;
     const reads: string[] = [];
-    const application: Pick<
-      DesktopApplication,
-      'getSendConfiguration' | 'getBalanceReadiness' | 'executeBalance'
-    > = {
+    const application: LoadFinancialOperations = {
       getSendConfiguration: async () => ({
         ok: true,
         value: {

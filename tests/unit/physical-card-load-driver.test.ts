@@ -8,7 +8,7 @@ import type { BalanceExecution } from '../../packages/domain/src/balance-inquiry
 import { parseBalanceExecutionRequest } from '../../packages/domain/src/balance-inquiry';
 import { parseWithdrawalExecutionRequest } from '../../packages/domain/src/withdrawal';
 import { approvedWithdrawalExecution } from '../helpers/withdrawal';
-import type { DesktopApplication } from '../../apps/desktop/src/main/application';
+import type { LoadFinancialOperations } from '../../apps/desktop/src/main/load-ports';
 
 function fixture() {
   const original: CardIdentityReading = {
@@ -47,10 +47,7 @@ function fixture() {
   };
   const ask = vi.fn(async () => Uint8Array.of(1, 2, 3, 4));
   const pins = new LoadPinSession({ request: ask });
-  const application: Pick<
-    DesktopApplication,
-    'getSendConfiguration' | 'getBalanceReadiness' | 'executeBalance'
-  > = {
+  const application: LoadFinancialOperations = {
     getSendConfiguration: vi.fn(async () => ({
       ok: true as const,
       value: {

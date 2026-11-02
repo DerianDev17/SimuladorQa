@@ -6,6 +6,14 @@ Permitir que varias estaciones QA ejecuten transacciones ATM funcionales y carga
 
 ## Componentes
 
+La ejecución financiera se organiza en contratos independientes y un motor
+compartido. `DesktopApplication` consume `FinancialExecutionPort`; saldo y retiro
+son fachadas de composición que entregan su builder a `FinancialExecutionService`.
+Los DTO de mensaje pertenecen al contrato de Main y los adaptadores los consumen.
+La carga usa `load-ports.ts` para lector, sesión, ejecución, scheduler y almacenamiento.
+Lint y pruebas automáticas protegen estos límites. Diagrama de dependencias y
+decisión en [ADR-032](docs/adr/ADR-032-FINANCIAL-EXECUTION-PORTS.md).
+
 1. **Desktop App / Electron Agent**
    - React Renderer
    - Electron Main
@@ -115,8 +123,9 @@ Renderer solo muestra vista previa y solicita imprimir la referencia. F54 de ret
 aprobado se conserva hasta el diario/UI con tipos neutrales, sin inferir debito Core
 ni saldo disponible. Ver docs/transactions/WITHDRAWAL.md.
 
-Retiro QA (2026-10-16): WithdrawalService reutiliza el motor de escritura unica
-de BalanceInquiryService con validacion/armado de retiro y diario separado.
+Retiro QA (2026-10-16; estructura actualizada por ADR-032): WithdrawalService y
+BalanceInquiryService reutilizan FinancialExecutionService, con builder de la
+operación y diario separado.
 Renderer usa IPC dedicado; Main deriva destino y comparte la exclusion de
 ejecuciones con saldo. Los registros de retiro incluyen monto/cuenta/tipo de
 caso y preservan pendientes tras reinicio. QaWithdrawalExecutionProvider se

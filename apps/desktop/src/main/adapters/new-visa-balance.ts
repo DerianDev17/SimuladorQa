@@ -1,8 +1,11 @@
 import { Buffer } from 'node:buffer';
 import { balanceDynamicFields } from './coonecta-balance-rules';
-import type { BalanceDynamicInput } from './coonecta-balance-rules';
 import { CapturedVisaBalance } from './captured-visa-balance';
-import type { CapturedBalanceMetadata } from './captured-visa-balance';
+import type {
+  NewBalanceInput,
+  CapturedBalanceMetadata,
+  FinancialMessageBuilder,
+} from '../financial-message-contract';
 import { CapturedVisaFraming } from '../infrastructure/captured-visa-framing';
 import { isWithdrawalAmount } from '../../../../../packages/domain/src/withdrawal';
 import type { IsoMessage } from '../../../../../packages/domain/src/iso-message';
@@ -24,14 +27,7 @@ function ebcdic(text: string): Buffer {
     }),
   );
 }
-export interface NewBalanceInput extends BalanceDynamicInput {
-  header: Uint8Array;
-  extension: Uint8Array;
-  // Fresh, provider-generated encoded fields; never sourced from a replay/Renderer.
-  privateFields: ReadonlyMap<number, Uint8Array>;
-  amount?: string;
-}
-export class NewVisaBalance {
+export class NewVisaBalance implements FinancialMessageBuilder {
   constructor(private readonly operation: 'BALANCE' | 'WITHDRAWAL' = 'BALANCE') {}
   build(input: NewBalanceInput): {
     wire: Buffer;

@@ -1,52 +1,20 @@
+import type {
+  LoadRunDriver,
+  LoadRunSource,
+  LoadRunStore,
+  LoadSchedule,
+  LoadScheduler,
+} from './load-ports';
 import { performance } from 'node:perf_hooks';
 import { isUuid } from '../../../../packages/domain/src/catalogs';
 import { isRecord } from '../../../../packages/domain/src/index';
 import { parseLoadRunRequest } from '../../../../packages/domain/src/load-run';
 import { loadTestAtms } from '../../../../packages/domain/src/load-test';
-import type {
-  LoadRunRequest,
-  LoadRunSnapshot,
-  LoadRunItem,
-  LoadRunTimings,
-} from '../../../../packages/domain/src/load-run';
-import type { BalanceExecution } from '../../../../packages/domain/src/balance-inquiry';
+import type { LoadRunSnapshot, LoadRunItem } from '../../../../packages/domain/src/load-run';
 import { balanceDeliveryUncertain } from '../../../../packages/domain/src/balance-inquiry';
 import { failure } from '../../../../packages/shared/src/contracts';
 import type { Result } from '../../../../packages/shared/src/contracts';
 import type { RuntimeIdentity } from './ports';
-
-export type LoadExecutionResult = Result<BalanceExecution & { loadTimings?: LoadRunTimings }> & {
-  skipped?: 'DURATION';
-  cancelled?: true;
-};
-export interface LoadRunSource {
-  readerName: string;
-  execute(
-    signal: AbortSignal,
-    runId: string,
-    slot?: { index: number; deadline: number },
-  ): Promise<LoadExecutionResult>;
-  close(): void;
-}
-export interface LoadRunDriver {
-  prepare(request: LoadRunRequest): Promise<Result<LoadRunSource>>;
-}
-export interface LoadRunStore {
-  read(): Promise<LoadRunSnapshot | null>;
-  hasRequest(id: string): Promise<boolean>;
-  write(snapshot: LoadRunSnapshot): Promise<void>;
-}
-export interface LoadSchedule {
-  started?(operationStartedAt: number, ticket?: number): void;
-  next(operationStartedAt?: number, ticket?: number): void;
-  stop(): void;
-}
-export type LoadScheduler = (
-  request: LoadRunRequest,
-  tick: (ticket?: number) => void,
-  done: (reason: 'COUNT' | 'DURATION' | 'STOP' | 'ERROR') => void,
-  startedAt?: number,
-) => LoadSchedule;
 
 export class LoadRunService {
   private run: LoadRunSnapshot | null = null;

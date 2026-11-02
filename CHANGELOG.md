@@ -1,5 +1,11 @@
 # Changelog
 
+Arquitectura (2026-11-02): motor financiero compartido con builder inyectado,
+fachadas independientes de saldo/retiro y contratos propios para ejecución y
+carga. El driver de carga depende de interfaces de lector y ciclo de vida de
+sesiones. Lint y pruebas protegen las dependencias de dominio, Renderer y motores.
+Ver [ADR-032](docs/adr/ADR-032-FINANCIAL-EXECUTION-PORTS.md).
+
 Carga de retiros (2026-11-02): selector de saldo/retiro y monto por operación en
 QA/LOCAL/ahorros. Retiro secuencial con varios ATM alternados, PIN por corrida,
 seguridad nueva, resultado del host y parada al primer rechazo/error sin reenvíos.

@@ -6,7 +6,7 @@ import { isUuid, isUtcTimestamp } from '../../../../../packages/domain/src/catal
 import { parseLoadTestDraft } from '../../../../../packages/domain/src/load-test';
 import type { LoadRunSnapshot } from '../../../../../packages/domain/src/load-run';
 import { LOAD_RUN_MAX_CONCURRENCY } from '../../../../../packages/domain/src/load-run';
-import type { LoadRunStore } from '../load-run-service';
+import type { LoadRunStore } from '../load-ports';
 
 export function validLoadRunSnapshot(value: unknown): value is LoadRunSnapshot {
   if (

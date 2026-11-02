@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { analyseQaOnlineAtm } from '../../../../../packages/domain/src/emv-terminal-analysis';
 import type { EmvTerminalParameters } from '../../../../../packages/domain/src/emv-terminal-analysis';
-import type { HostCalendar } from './coonecta-balance-rules';
+import type { HostCalendar } from '../financial-message-contract';
 import type { BalanceDiagnostics } from '../../../../../packages/domain/src/balance-inquiry';
 import { exchangeCard, parseCardDol, parseCardTlv } from './emv-card-identity';
 import type { CardApduSession } from './emv-card-identity';

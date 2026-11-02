@@ -37,3 +37,4 @@ Cuando una decisión reemplaza a otra, ambas se conservan para trazabilidad.
 | [029](ADR-029-QA-SINGLE-FINANCIAL-CONNECTION.md)             | Una conexión financiera activa en el enlace QA    | Vigente                                     |
 | [030](ADR-030-ISO-DISPLAY-AND-REVERSAL-MESSAGES.md)          | Proyección ISO visible y mensajería del reverso   | Implementado; validación host pendiente     |
 | [031](ADR-031-WITHDRAWAL-LOAD.md)                          | Retiros secuenciales en carga QA                 | Implementado; validación host pendiente     |
+| [032](ADR-032-FINANCIAL-EXECUTION-PORTS.md)                 | Motor financiero y contratos independientes      | Implementado                               |

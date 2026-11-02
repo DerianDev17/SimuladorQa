@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { BalanceInquiryService } from '../../apps/desktop/src/main/balance-inquiry-service';
+import { WithdrawalService } from '../../apps/desktop/src/main/withdrawal-service';
 import { BalanceTcpTransport } from '../../apps/desktop/src/main/adapters/balance-tcp-transport';
 import { CapturedVisaBalance } from '../../apps/desktop/src/main/adapters/captured-visa-balance';
 import { CapturedVisaFraming } from '../../apps/desktop/src/main/infrastructure/captured-visa-framing';
@@ -63,7 +64,8 @@ describe('mensajería real por TCP local, servicio y persistencia', () => {
         if (mode === 'WITHDRAWAL')
           target.draft = { ...target.draft, transaction: 'WITHDRAWAL_APPROVED', amount: '20.00' };
         const request = balanceRequest(target);
-        const service = new BalanceInquiryService(
+        const Service = mode === 'WITHDRAWAL' ? WithdrawalService : BalanceInquiryService;
+        const service = new Service(
           journal,
           new BalanceTcpTransport(operation),
           {
@@ -82,7 +84,6 @@ describe('mensajería real por TCP local, servicio y persistencia', () => {
             }),
           },
           5000,
-          operation,
         );
         const result = await service.execute(
           request,

@@ -1,13 +1,16 @@
-import type { LoadRunDriver, LoadRunSource } from './load-run-service';
+import type {
+  LoadRunDriver,
+  LoadRunSource,
+  LoadCardReader,
+  LoadFinancialOperations,
+  LoadSessionResource,
+} from './load-ports';
 import type { LoadRunRequest } from '../../../../packages/domain/src/load-run';
 import type { LoadRunTimings } from '../../../../packages/domain/src/load-run';
 import { loadTestAtms } from '../../../../packages/domain/src/load-test';
 import { performance } from 'node:perf_hooks';
 import type { BalanceContextRequest } from '../../../../packages/domain/src/balance-inquiry';
 import { withdrawalBlocksNewExecution } from '../../../../packages/domain/src/balance-inquiry';
-import type { CardIdentityService } from './card-identity-service';
-import type { DesktopApplication } from './application';
-import type { LoadPinSession } from './adapters/load-pin-session';
 import type { RuntimeIdentity } from './ports';
 import type { BalanceJournal } from './balance-ports';
 import { failure } from '../../../../packages/shared/src/contracts';
@@ -16,17 +19,13 @@ import { LoadSendLimiter } from './infrastructure/load-send-limiter';
 
 export class PhysicalCardLoadDriver implements LoadRunDriver {
   constructor(
-    private readonly cards: Pick<CardIdentityService, 'current' | 'read'> &
-      Partial<Pick<CardIdentityService, 'beginLoadSession' | 'endLoadSession'>>,
-    private readonly application: Pick<
-      DesktopApplication,
-      'getSendConfiguration' | 'getBalanceReadiness' | 'executeBalance'
-    >,
-    private readonly pins: LoadPinSession,
+    private readonly cards: LoadCardReader,
+    private readonly application: LoadFinancialOperations,
+    private readonly pins: LoadSessionResource,
     private readonly journals: { balance: BalanceJournal; withdrawal: BalanceJournal },
     private readonly identity: RuntimeIdentity,
     private readonly publish: () => void,
-    private readonly cipherSession?: { begin(): void; end(): void },
+    private readonly cipherSession?: LoadSessionResource,
   ) {}
   async prepare(request: LoadRunRequest): Promise<Result<LoadRunSource>> {
     const original = await this.cards.current();
@@ -38,6 +37,7 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
       !original.panMasked
     )
       return failure('CONFLICT', 'Lee y selecciona la tarjeta física antes de iniciar la corrida.');
+    const applicationId = original.applicationId;
     const setup = await this.application.getSendConfiguration({ environment: 'QA' });
     if (!setup.ok) return setup;
     const configuration = setup.value.configuration;
@@ -158,7 +158,7 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
               ? { ok: true as const, value: original }
               : await this.cards.read({
                   readerName: original.readerName,
-                  applicationId: original.applicationId,
+                  applicationId,
                   terminalCountryCode: '218',
                 });
             const cardReadMs = Math.round(performance.now() - readStarted);

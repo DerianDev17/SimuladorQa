@@ -3,7 +3,7 @@ import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { isUuid } from '../../../../../packages/domain/src/catalogs';
 import type { LoadRunSnapshot } from '../../../../../packages/domain/src/load-run';
-import type { LoadRunStore } from '../load-run-service';
+import type { LoadRunStore } from '../load-ports';
 import { readLegacyLoadRuns, validLoadRunSnapshot } from './load-run-store';
 
 interface StoredRun {
