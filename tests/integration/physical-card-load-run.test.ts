@@ -9,6 +9,12 @@ import { PhysicalCardLoadDriver } from '../../apps/desktop/src/main/physical-car
 import { LoadRunService } from '../../apps/desktop/src/main/load-run-service';
 import { LoadPinSession } from '../../apps/desktop/src/main/adapters/load-pin-session';
 import { BalanceInquiryService } from '../../apps/desktop/src/main/balance-inquiry-service';
+import { WithdrawalService } from '../../apps/desktop/src/main/withdrawal-service';
+import {
+  parseWithdrawalContextRequest,
+  parseWithdrawalExecutionRequest,
+} from '../../packages/domain/src/withdrawal';
+import { withdrawalResponse } from '../helpers/withdrawal';
 import { BalanceTcpTransport } from '../../apps/desktop/src/main/adapters/balance-tcp-transport';
 import { QaSwitchConnection } from '../../apps/desktop/src/main/adapters/qa-switch-connection';
 import type { BalanceExchangeRequest } from '../../apps/desktop/src/main/balance-ports';
@@ -40,13 +46,23 @@ it.each([
   'CONCURRENT_FIVE',
   'CONCURRENT_TIMEOUT',
   'CONCURRENT_STOP',
+  'WITHDRAWAL_APPROVED',
+  'WITHDRAWAL_DECLINED',
+  'WITHDRAWAL_TIMEOUT',
+  'WITHDRAWAL_STOP',
 ] as const)(
   'una corrida con dos ATM alterna por TCP, persiste y respeta %s sin repetir envíos',
   async (mode) => {
     const concurrent = mode.startsWith('CONCURRENT');
-    const approved = mode === 'APPROVED' || mode === 'CONCURRENT' || mode === 'CONCURRENT_FIVE';
+    const withdrawal = mode.startsWith('WITHDRAWAL');
+    const operation = withdrawal ? 'WITHDRAWAL' : 'BALANCE';
+    const approved =
+      mode === 'APPROVED' ||
+      mode === 'CONCURRENT' ||
+      mode === 'CONCURRENT_FIVE' ||
+      mode === 'WITHDRAWAL_APPROVED';
     const operationCount = mode === 'CONCURRENT_FIVE' ? 7 : 3;
-    const stopping = mode === 'STOP' || mode === 'CONCURRENT_STOP';
+    const stopping = mode === 'STOP' || mode === 'CONCURRENT_STOP' || mode === 'WITHDRAWAL_STOP';
     const directory = await mkdtemp(join(tmpdir(), 'coonecta-multi-load-'));
     const worker = join(directory, 'worker.cjs');
     await build({
@@ -57,7 +73,7 @@ it.each([
       format: 'cjs',
     });
     const wire = new CapturedVisaFraming();
-    const codec = new CapturedVisaBalance();
+    const codec = new CapturedVisaBalance(operation);
     const received: { terminalId: string; stan: string }[] = [];
     const sockets = new Set<Socket>();
     const timers = new Set<ReturnType<typeof setTimeout>>();
@@ -88,12 +104,21 @@ it.each([
         for (const frame of decoder.push(chunk)) {
           const fields = fixtureFields(Buffer.from(frame.opaqueBody));
           const metadata = codec.inspect(frame.opaqueBody);
+          if (withdrawal) expect(metadata.amount).toBe('7525'.padStart(12, '0'));
           received.push({ terminalId: metadata.terminalId, stan: metadata.stan });
           pendingSockets.add(socket);
           peakSockets = Math.max(peakSockets, pendingSockets.size);
-          if (approved || (!concurrent && received.length === 1)) {
+          if (
+            approved ||
+            (!concurrent && received.length === 1) ||
+            mode === 'WITHDRAWAL_DECLINED'
+          ) {
             const reply = wire.encode(
-              balanceResponse(metadata, '00', (response) => response.set(41, fields.get(41)!)),
+              (withdrawal ? withdrawalResponse : balanceResponse)(
+                metadata,
+                mode === 'WITHDRAWAL_DECLINED' && received.length === 2 ? '91' : '00',
+                (response) => response.set(41, fields.get(41)!),
+              ),
               Buffer.alloc(2),
             );
             const respond = () => {
@@ -122,6 +147,9 @@ it.each([
     second.endpoint = { ...first.endpoint };
     second.terminalId = 'ATM20524';
     const targets = [first, second];
+    if (withdrawal)
+      for (const target of targets)
+        target.draft = { ...target.draft, transaction: 'WITHDRAWAL_APPROVED', amount: '75.25' };
     const runtime = {
       agentId: randomUUID(),
       hostname: 'synthetic',
@@ -135,6 +163,7 @@ it.each([
     const journal = new SqliteBalanceJournal(
       join(directory, 'balance.sqlite'),
       join(directory, 'balance.json'),
+      operation,
     );
     const store = new SqliteLoadRunStore(
       join(directory, 'runs.sqlite'),
@@ -143,7 +172,7 @@ it.each([
     let sequence = 650100;
     let chipActive = 0,
       peakChip = 0;
-    const tcp = new BalanceTcpTransport();
+    const tcp = new BalanceTcpTransport(operation);
     const measuredTransport = {
       exchange: (input: BalanceExchangeRequest) =>
         tcp.exchange({
@@ -158,7 +187,8 @@ it.each([
           },
         }),
     };
-    const financial = new BalanceInquiryService(
+    const FinancialService = withdrawal ? WithdrawalService : BalanceInquiryService;
+    const financial = new FinancialService(
       journal,
       new QaSwitchConnection().manageTransport(measuredTransport),
       runtime,
@@ -171,7 +201,11 @@ it.each([
             const pin = await pins.request(signal);
             if (!pin) throw Error('PIN_CANCELLED');
             pin.fill(0);
-            return { ...balanceLease(target), sequence: ++sequence };
+            return {
+              ...balanceLease(target),
+              ...(withdrawal ? { amount: '75.25' } : {}),
+              sequence: ++sequence,
+            };
           } finally {
             chipActive--;
           }
@@ -205,13 +239,19 @@ it.each([
           },
         },
       }),
-      getBalanceReadiness: async (value) => {
-        const context = parseBalanceContextRequest(value)!;
+      getBalanceReadiness: async (value, selectedOperation) => {
+        expect(selectedOperation).toBe(operation);
+        const context = (withdrawal ? parseWithdrawalContextRequest : parseBalanceContextRequest)(
+          value,
+        )!;
         const target = targets.find((atm) => atm.draft.atmId === context.draft.atmId)!;
         return { ok: true, value: await financial.inspect({ ...target, ...context }) };
       },
-      executeBalance: async (value, _operation, execution) => {
-        const request = parseBalanceExecutionRequest(value)!;
+      executeBalance: async (value, selectedOperation, execution) => {
+        expect(selectedOperation).toBe(operation);
+        const request = (
+          withdrawal ? parseWithdrawalExecutionRequest : parseBalanceExecutionRequest
+        )(value)!;
         const target = targets.find((atm) => atm.draft.atmId === request.draft.atmId)!;
         reads.push(request.cardReadId);
         maxActive = Math.max(maxActive, ++active);
@@ -253,7 +293,10 @@ it.each([
       },
       application,
       pins,
-      journal,
+      {
+        balance: withdrawal ? { read: async () => [], write: async () => {} } : journal,
+        withdrawal: withdrawal ? journal : { read: async () => [], write: async () => {} },
+      },
       runtime,
       () => {},
     );
@@ -263,7 +306,9 @@ it.each([
       cardReadId: original.readId,
       draft: {
         environment: 'QA',
-        operation: 'BALANCE',
+        ...(withdrawal
+          ? ({ operation: 'WITHDRAWAL', amount: '75.25' } as const)
+          : ({ operation: 'BALANCE' } as const)),
         mode: 'LOAD',
         atmId: first.draft.atmId!,
         atmRevision: 1,
@@ -287,6 +332,15 @@ it.each([
       const run = await store.read();
       // Stopping after a write preserves delivery uncertainty, as does timeout.
       expect(run?.state).toBe(approved ? 'COMPLETED' : 'FAILED');
+      expect(run?.draft).toEqual(request.draft);
+      if (mode === 'WITHDRAWAL_DECLINED')
+        expect(run?.items.at(-1)).toMatchObject({ outcome: 'NOT_APPROVED', responseCode: '91' });
+      if (mode === 'WITHDRAWAL_TIMEOUT')
+        expect(run?.items.at(-1)).toMatchObject({
+          outcome: 'RESPONSE_TIMEOUT',
+          sent: true,
+          received: false,
+        });
       const terminals = Array.from({ length: approved ? operationCount : 2 }, (_, index) =>
         index % 2 ? 'ATM20524' : 'ATM20521',
       );
@@ -320,6 +374,10 @@ it.each([
       const financialRecords = await journal.read();
       expect(financialRecords.every((item) => item.runId === run!.runId)).toBe(true);
       expect(financialRecords).toHaveLength(terminals.length);
+      if (withdrawal)
+        expect(financialRecords.every((record) => record.withdrawal?.amount === '75.25')).toBe(
+          true,
+        );
       expect(
         financialRecords.every((item) => item.finishedAt !== null && item.outcome !== 'PENDING'),
       ).toBe(true);

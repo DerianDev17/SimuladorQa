@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AtmProfile } from '../../../../packages/domain/src/catalogs';
 import type { Environment } from '../../../../packages/domain/src/index';
-import type { LoadTestDraft, LoadTestMode } from '../../../../packages/domain/src/load-test';
+import type {
+  LoadTestDraft,
+  LoadTestMode,
+  LoadTestOperation,
+} from '../../../../packages/domain/src/load-test';
+import { isWithdrawalAmount } from '../../../../packages/domain/src/withdrawal';
 import {
   LOAD_TEST_LOCAL_MIN_TPS,
   LOAD_TEST_LOCAL_MAX_TPS,
@@ -141,6 +146,8 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
   const [preset, setPreset] = useState<Preset>('QUICK');
   const [advanced, setAdvanced] = useState(false);
   const [mode, setMode] = useState<LoadTestMode>('LOAD');
+  const [operation, setOperation] = useState<LoadTestOperation>('BALANCE');
+  const [amount, setAmount] = useState('');
   const [count, setCount] = useState('30');
   const [tps, setTps] = useState('1');
   const [concurrency, setConcurrency] = useState('2');
@@ -161,7 +168,7 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
   const selected = available.find((atm) => atm.id === atmIds[0]);
   const draft: LoadTestDraft = {
     environment: 'QA',
-    operation: 'BALANCE',
+    ...(operation === 'WITHDRAWAL' ? { operation, amount } : { operation }),
     mode,
     atmId: selected?.id ?? '',
     atmRevision: selected?.revision ?? 0,
@@ -175,7 +182,7 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
       : {}),
     maxTransactions: Number(count),
     targetTps: Number(tps),
-    concurrency: Number(concurrency),
+    concurrency: operation === 'WITHDRAWAL' ? 1 : Number(concurrency),
     rampUpSeconds: mode === 'STRESS' ? Number(ramp) : 0,
     durationSeconds: Number(duration),
   };
@@ -235,6 +242,9 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
       draft,
     });
   const issues = [
+    ...(operation === 'WITHDRAWAL' && !isWithdrawalAmount(amount)
+      ? ['Ingresa un monto de retiro entre 0.01 y 9999999999.99 USD, con punto y dos decimales.']
+      : []),
     ...(!Number.isInteger(Number(concurrency)) ||
     Number(concurrency) < 1 ||
     Number(concurrency) > LOAD_RUN_MAX_CONCURRENCY
@@ -246,7 +256,7 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
       ? ['Uno de los ATM seleccionados ya no está disponible. Vuelve a seleccionar los perfiles.']
       : []),
     ...(Number(count) < atmIds.length
-      ? ['La cantidad debe permitir al menos una consulta por ATM seleccionado.']
+      ? ['La cantidad debe permitir al menos una operación por ATM seleccionado.']
       : []),
     ...(!card ? ['Lee y selecciona la tarjeta física QA.'] : []),
     ...(Number(count) < 1 ||
@@ -345,7 +355,7 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
       <header className="load-test-heading">
         <div>
           <h1>Carga y estrés</h1>
-          <p>Pruebas QA de saldo con resultados medidos en cada etapa.</p>
+          <p>Pruebas QA de saldo y retiro con resultados medidos en cada etapa.</p>
         </div>
         <div className="load-assistant">
           <Icon name="load" size={24} />
@@ -416,14 +426,40 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
               </div>
             </details>
             <p className="load-inline-note">
-              Las consultas se reparten entre los ATM seleccionados. El enlace QA atiende un envío a
-              la vez para conservar cada respuesta. TPS, cantidad y operaciones en preparación son
+              Las operaciones se reparten entre los ATM seleccionados. El enlace QA atiende un envío
+              a la vez para conservar cada respuesta. TPS, cantidad y operaciones en preparación son
               totales de la corrida.
             </p>
           </div>
           <div className="load-step">
             <div className="load-step-title">
               <h2>2. Escenario de prueba</h2>
+            </div>
+            <div className="load-test-form">
+              <label>
+                Operación de carga
+                <select
+                  value={operation}
+                  disabled={locked || disabled}
+                  onChange={(event) => setOperation(event.target.value as LoadTestOperation)}
+                >
+                  <option value="BALANCE">Consulta de saldo</option>
+                  <option value="WITHDRAWAL">Retiro</option>
+                </select>
+              </label>
+              {operation === 'WITHDRAWAL' && (
+                <label>
+                  Monto por retiro (USD)
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={amount}
+                    placeholder="20.00"
+                    disabled={locked || disabled}
+                    onChange={(event) => setAmount(event.target.value)}
+                  />
+                </label>
+              )}
             </div>
             <div className="load-preset-grid">
               {presets.map((item) => (
@@ -461,13 +497,13 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
             )}
             <p className="load-inline-note">
               Los perfiles guardados ayudan a elegir el AID, pero la prueba requiere el chip físico.
-              PIN una vez por corrida y seguridad EMV nueva por consulta.
+              PIN una vez por corrida y seguridad EMV nueva por operación.
             </p>
             <label>
               Operaciones en preparación y envío
               <select
-                value={concurrency}
-                disabled={locked || disabled}
+                value={operation === 'WITHDRAWAL' ? '1' : concurrency}
+                disabled={locked || disabled || operation === 'WITHDRAWAL'}
                 onChange={(event) => setConcurrency(event.target.value)}
               >
                 {[1, 2, 3, 4, 5].map((value) => (
@@ -478,15 +514,24 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
               </select>
             </label>
             <p className="load-inline-note">
-              El chip prepara una consulta a la vez y puede avanzar mientras el host responde a la
-              anterior. El enlace permite una sola conexión financiera; las demás consultas esperan
-              su turno. Más operaciones en curso no garantizan alcanzar los TPS objetivo.
+              {operation === 'WITHDRAWAL' ? (
+                'Los retiros se ejecutan uno a uno, con el mismo monto por operación. Cada retiro espera su respuesta antes del siguiente; el host determina si se aprueba.'
+              ) : (
+                <>
+                  El chip prepara una consulta a la vez y puede avanzar mientras el host responde a
+                  la anterior. El enlace permite una sola conexión financiera; las demás consultas
+                  esperan su turno. Más operaciones en curso no garantizan alcanzar los TPS
+                  objetivo.
+                </>
+              )}
             </p>
           </div>
           <div className="load-fixed-operation">
-            <strong>Transacción: consulta de saldo</strong>
+            <strong>
+              Transacción: {operation === 'WITHDRAWAL' ? 'retiro' : 'consulta de saldo'}
+            </strong>
             <small>
-              QA · ahorros · tarjeta presente. Otros flujos requieren contrato validado.
+              QA · local · ahorros · tarjeta presente. Se valida el contrato de cada ATM al iniciar.
             </small>
           </div>
           {advanced && (
@@ -616,6 +661,12 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
             </div>
             {run && metrics ? (
               <>
+                <p>
+                  {run.draft.operation === 'WITHDRAWAL'
+                    ? `Retiro · USD ${run.draft.amount} por operación`
+                    : 'Consulta de saldo'}{' '}
+                  · {run.draft.concurrency} en curso como máximo
+                </p>
                 <p role="status">
                   {run.state === 'COMPLETED'
                     ? 'Se alcanzó el límite de cantidad o duración.'
@@ -780,7 +831,7 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
                 <summary>Detalle y correlación</summary>
                 <p>Run ID: {run.runId}</p>
                 <p>
-                  Objetivo {run.draft.targetTps} TPS · {run.draft.maxTransactions} consultas ·{' '}
+                  Objetivo {run.draft.targetTps} TPS · {run.draft.maxTransactions} operaciones ·{' '}
                   {run.draft.durationSeconds} s.
                 </p>
               </details>

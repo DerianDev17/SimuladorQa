@@ -1,5 +1,15 @@
 # Changelog
 
+Carga de retiros (2026-11-02): selector de saldo/retiro y monto por operación en
+QA/LOCAL/ahorros. Retiro secuencial con varios ATM alternados, PIN por corrida,
+seguridad nueva, resultado del host y parada al primer rechazo/error sin reenvíos.
+Reutiliza el motor financiero existente y persiste operación/monto. Antes del PIN
+se revisan pendientes de ambos diarios. Ver [ADR-031](docs/adr/ADR-031-WITHDRAWAL-LOAD.md).
+
+Correcciones (2026-11-02): el plan de carga se copia antes del arranque asíncrono
+para impedir cambios de límites/perfiles ya validados. Las opciones de diagnóstico
+de Playwright pasan a `use`, corrigiendo el error de TypeScript de su configuración.
+
 Continuar tras un error de retiro (2026-10-28): **Nueva transacción** permite
 preparar otro retiro QA con lectura y PIN nuevos cuando el intento anterior
 terminó y quedó guardado. RC 59 y timeouts conservan su resultado en el historial

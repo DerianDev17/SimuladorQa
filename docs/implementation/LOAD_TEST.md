@@ -1,4 +1,46 @@
-# Carga y estrés de saldo en QA
+# Carga y estrés de saldo y retiro en QA
+
+## Retiros secuenciales — 2026-11-02 (ADR-031)
+
+En **Escenario de prueba**, elegir **Operación de carga → Retiro** e ingresar
+**Monto por retiro (USD)** con punto y dos decimales. El mismo importe se aplica
+a cada operación; no es el total de la corrida. El host decide si aprueba.
+Se conserva QA/LOCAL/ahorros, una tarjeta física y uno o varios ATM alternados.
+El monto inicial está vacío para que el operador lo indique explícitamente.
+
+Los retiros mantienen la exclusión del servicio individual: **una operación a
+la vez**, también al elegir los presets de 3 o 5 TPS. Esas tasas son objetivos,
+no una promesa de caudal. Saldo conserva de uno a cinco slots. Se mantienen los
+máximos locales de 100 operaciones, 300 segundos y 5 TPS.
+
+Main revalida para cada ATM el contrato de retiro y el monto mediante la ruta
+financiera existente. Reutiliza el validador de importe de retiro, sin nuevas
+reglas ISO o financieras. Cada operación recibe lectura y seguridad nuevas,
+UUID propio y el `runId` común; el PIN permanece acotado a la corrida. El diario
+de retiro conserva la mensajería y correlación del servicio individual. La carga
+no solicita comprobantes ni reversos automáticos y se detiene al primer rechazo,
+error o resultado incierto, sin reintentos. No se fuerza un resultado aprobado.
+
+Antes de abrir la sesión de PIN se revisan **ambos diarios**, también para carga
+de saldo. Un retiro pendiente, reverso sin finalizar o fallo de persistencia
+bloquea el inicio; los errores históricos terminados siguen la regla de ADR-025.
+Operación y monto se guardan en el plan inmutable y se muestran al recuperar los
+resultados, independientemente de la selección del formulario. Los registros
+anteriores de saldo siguen siendo compatibles.
+
+Pruebas sintéticas: validación de importe/concurrencia/ambiente, contrato ausente,
+pendientes en diario, lectura y PIN, worker real, TCP local y SQLite reabierto.
+Casos de retiro: aprobación, rechazo, timeout y parada después del envío. La
+verificación UI cubre IPC, monto obligatorio, exclusión y recuperación tras recarga.
+TODO-DATA LOAD-WITHDRAWAL-QA-ACCEPTANCE: falta medir el flujo de carga con chip y
+host reales; las pruebas locales no acreditan débito Core ni TPS sostenidos.
+La corrida real corresponde al operador. Ver [ADR-031](../adr/ADR-031-WITHDRAWAL-LOAD.md).
+
+Validación final local: 1006 pruebas unitarias, 263 de integración y 22 E2E
+correctas; lint, typecheck, formato, build y chequeo de secretos correctos.
+Hallazgos y deuda pendiente en [revisión técnica](TECHNICAL_REVIEW_20261102.md).
+
+Esta sección amplía el alcance de saldo de las revisiones históricas siguientes.
 
 ## Parámetros inmutables durante el arranque — 2026-11-02
 
@@ -163,10 +205,10 @@ No hace falta mantener la página abierta: al volver se recupera la corrida.
 
 ## Requisitos comprobados por Main
 
-Solo QA/LOCAL/ahorros/consulta de saldo. El destino y los plazos provienen de
+Solo QA/LOCAL/ahorros, consulta de saldo o retiro secuencial. El destino y los plazos provienen de
 Configuración; no se inventan desde la pantalla de carga. Se comprueban revisión
 ATM, lectura vigente, perfil financiero, cifrado, secuencias suficientes y
-ausencia de operaciones `PENDING` en el diario de saldo.
+ausencia de pendientes en saldo y de bloqueos activos en el diario de retiro.
 Si falla una comprobación se muestra su causa sin arrancar el worker.
 
 El intervalo permitido es 0,1–5 TPS. Los máximos locales son cinco operaciones simultáneas, 100 consultas y
@@ -237,7 +279,7 @@ con identificadores nuevos; nunca se repite la consulta anterior.
 TODO-DATA LOAD-VIRTUAL-PROVIDER: falta el contrato de un proveedor financiero QA
 para un pool virtual que alimente el motor sin esperar el chip. Las referencias VISA ficticias
 y las tarjetas guardadas no contienen PIN/EMV reutilizable. Ese alcance queda
-separado del piloto ejecutable con tarjeta física. PREPROD, retiros y carga
+separado del piloto ejecutable con tarjeta física. PREPROD, reversos en carga y carga
 distribuida no se habilitan aquí. TODO-DATA LOAD-PERSISTENT-TCP conserva pendiente
 el contrato para reutilizar conexiones financieras. No se inventa multiplexación.
 

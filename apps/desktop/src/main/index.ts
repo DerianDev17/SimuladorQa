@@ -336,7 +336,7 @@ void startupReady
         cardIdentity,
         application,
         pinEntry,
-        balanceJournal,
+        { balance: balanceJournal, withdrawal: withdrawalJournal },
         runtime,
         () => void publishReaderSnapshot(),
         pinCipher,

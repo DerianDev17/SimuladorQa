@@ -44,6 +44,7 @@ La columna `Referencias` apunta a los documentos que explican el alcance.
 | LOAD-LIMITS                       | `docs/INPUT_CHECKLIST.md`                                                                         |
 | LOAD-PERSISTENT-TCP               | `docs/INPUT_CHECKLIST.md`, `docs/implementation/LOAD_TEST.md`, `docs/adr/ADR-027-CONCURRENT-ATM-LOAD.md`, `docs/adr/ADR-029-QA-SINGLE-FINANCIAL-CONNECTION.md` |
 | LOAD-VIRTUAL-PROVIDER             | `docs/INPUT_CHECKLIST.md`, `docs/implementation/LOAD_TEST.md`, `docs/BACKLOG.md`, `docs/adr/ADR-020-PHYSICAL-CARD-LOAD.md` |
+| LOAD-WITHDRAWAL-QA-ACCEPTANCE      | `docs/INPUT_CHECKLIST.md`, `docs/implementation/LOAD_TEST.md`, `docs/adr/ADR-031-WITHDRAWAL-LOAD.md` |
 | MEDIATOR-FLOW-VERSION             | `docs/INPUT_CHECKLIST.md`, `docs/implementation/BALANCE_EXECUTION.md`, `docs/protocols/ISOBASEI_REVIEW.md` |
 | MEDIATOR-OBSERVER-ACCESS          | `docs/INPUT_CHECKLIST.md`                                                                         |
 | MEDIATOR-SQL-TIMEZONE             | `docs/INPUT_CHECKLIST.md`                                                                         |

@@ -45,6 +45,14 @@ en Configuracion; no reemplaza los adaptadores de transporte ni autoriza sockets
 
 ## Restricciones
 
+Carga de retiros (2026-11-02, ADR-031): el plan discrimina saldo sin monto y retiro
+con monto obligatorio. PhysicalCardLoadDriver selecciona la ruta financiera
+existente y revisa ambos diarios antes de la sesión PIN. Retiro mantiene una sola
+operación activa; no modifica las exclusiones ni los contratos ISO/PIN/EMV del
+servicio individual. Se reutilizan worker, limitador, métricas y persistencia,
+conservando operación/monto tras recuperar la corrida. Sin reintentos ni reversos
+automáticos. La validación local no certifica el resultado en host/Core.
+
 Conexión financiera exclusiva (2026-10-29, ADR-029): TCPComms del enlace QA
 reemplaza la conexión del PID 80131 al aceptar otra de la estación. Se sustituye
 el solapamiento de sockets de ADR-027 por una cola en QaSwitchConnection, con

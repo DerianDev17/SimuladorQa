@@ -6,6 +6,7 @@ import type { CardIdentityReading } from '../../packages/domain/src/card-reader'
 import type { LoadRunRequest } from '../../packages/domain/src/load-run';
 import type { BalanceExecution } from '../../packages/domain/src/balance-inquiry';
 import { parseBalanceExecutionRequest } from '../../packages/domain/src/balance-inquiry';
+import { parseWithdrawalExecutionRequest } from '../../packages/domain/src/withdrawal';
 import { approvedWithdrawalExecution } from '../helpers/withdrawal';
 import type { DesktopApplication } from '../../apps/desktop/src/main/application';
 
@@ -85,6 +86,7 @@ function fixture() {
     }),
   };
   const journal = { read: vi.fn(async () => [] as BalanceExecution[]), write: vi.fn() };
+  const withdrawalJournal = { read: vi.fn(async () => [] as BalanceExecution[]), write: vi.fn() };
   const runtime = {
     agentId: randomUUID(),
     hostname: 'test',
@@ -99,7 +101,7 @@ function fixture() {
       cards,
       application,
       pins,
-      journal,
+      { balance: journal, withdrawal: withdrawalJournal },
       runtime,
       () => {},
       cipher,
@@ -110,9 +112,85 @@ function fixture() {
     ask,
     input,
     journal,
+    withdrawalJournal,
   };
 }
 describe('adaptador de carga con tarjeta física', () => {
+  it('reutiliza retiro con monto, lectura nueva, UUID y runId; valida todos los ATM', async () => {
+    const f = fixture();
+    f.input.draft = {
+      ...f.input.draft,
+      operation: 'WITHDRAWAL',
+      amount: '75.25',
+      additionalAtms: [{ atmId: randomUUID(), atmRevision: 1 }],
+    };
+    const prepared = await f.driver.prepare(f.input);
+    if (!prepared.ok) throw Error('PREPARE');
+    const runId = randomUUID();
+    try {
+      await prepared.value.execute(new AbortController().signal, runId);
+      await prepared.value.execute(new AbortController().signal, runId);
+      const calls = vi.mocked(f.application.executeBalance).mock.calls;
+      const requests = calls.map(([payload, operation, execution]) => {
+        expect(operation).toBe('WITHDRAWAL');
+        expect(execution).toMatchObject({ runId, concurrency: 1 });
+        const parsed = parseWithdrawalExecutionRequest(payload);
+        expect(parsed?.draft).toMatchObject({
+          transaction: 'WITHDRAWAL_APPROVED',
+          amount: '75.25',
+        });
+        return parsed!;
+      });
+      expect(new Set(requests.map((item) => item.requestId)).size).toBe(2);
+      expect(new Set(requests.map((item) => item.cardReadId)).size).toBe(2);
+      expect(new Set(requests.map((item) => item.draft.atmId)).size).toBe(2);
+      expect(f.application.getBalanceReadiness).toHaveBeenCalledTimes(2);
+      expect(
+        vi
+          .mocked(f.application.getBalanceReadiness)
+          .mock.calls.every(([, op]) => op === 'WITHDRAWAL'),
+      ).toBe(true);
+      expect(f.ask).toHaveBeenCalledOnce();
+    } finally {
+      prepared.value.close();
+    }
+  });
+  it.each(['BALANCE', 'WITHDRAWAL'] as const)(
+    'bloquea carga %s ante retiro pendiente antes de PIN',
+    async (operation) => {
+      const f = fixture();
+      if (operation === 'WITHDRAWAL')
+        f.input.draft = { ...f.input.draft, operation, amount: '20.00' };
+      f.withdrawalJournal.read.mockResolvedValue([
+        { ...approvedWithdrawalExecution(), outcome: 'PENDING', finishedAt: null },
+      ]);
+      expect(await f.driver.prepare(f.input)).toMatchObject({
+        ok: false,
+        error: { code: 'CONFLICT' },
+      });
+      expect(f.ask).not.toHaveBeenCalled();
+      expect(f.cards.beginLoadSession).not.toHaveBeenCalled();
+      expect(f.application.executeBalance).not.toHaveBeenCalled();
+    },
+  );
+  it('rechaza el contrato de retiro no disponible sin leer chip ni pedir PIN', async () => {
+    const f = fixture();
+    f.input.draft = { ...f.input.draft, operation: 'WITHDRAWAL', amount: '75.25' };
+    vi.mocked(f.application.getBalanceReadiness).mockResolvedValue({
+      ok: true,
+      value: {
+        ready: false,
+        blockers: [{ id: 'WITHDRAWAL_POLICY', label: 'Contrato de retiro no disponible.' }],
+      },
+    });
+    expect(await f.driver.prepare(f.input)).toMatchObject({
+      ok: false,
+      error: { message: 'Contrato de retiro no disponible.' },
+    });
+    expect(f.cards.read).not.toHaveBeenCalled();
+    expect(f.ask).not.toHaveBeenCalled();
+    expect(f.application.executeBalance).not.toHaveBeenCalled();
+  });
   it.each(['DURATION', 'CANCELLED'] as const)(
     'conserva %s al abandonar la cola del enlace sin envío',
     async (reason) => {

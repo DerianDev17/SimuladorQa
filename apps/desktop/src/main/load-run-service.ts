@@ -155,7 +155,7 @@ export class LoadRunService {
     if (!request)
       return failure(
         'VALIDATION_ERROR',
-        'Usa QA, saldo, de 1 a 5 operaciones simultáneas, hasta 5 TPS, 100 consultas y 300 segundos.',
+        'Usa QA, saldo (1–5 simultáneas) o retiro secuencial con monto positivo: hasta 5 TPS, 100 operaciones y 300 segundos.',
       );
     if (this.busy) return failure('CONFLICT', 'Ya hay una corrida activa.');
     this.busy = true;
@@ -197,7 +197,10 @@ export class LoadRunService {
         startedAt: this.identity.now(),
         finishedAt: null,
         state: 'RUNNING',
-        message: 'Consultas de saldo con tarjeta física. PIN una vez por corrida.',
+        message:
+          request.draft.operation === 'WITHDRAWAL'
+            ? 'Retiros secuenciales con tarjeta física. PIN una vez por corrida.'
+            : 'Consultas de saldo con tarjeta física. PIN una vez por corrida.',
         active: 0,
         items: [],
         elapsedMs: 0,

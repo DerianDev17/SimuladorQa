@@ -1,7 +1,8 @@
 import { isUuid } from './catalogs';
 import { isRecord } from './index';
+import { isWithdrawalAmount } from './withdrawal';
 
-export type LoadTestOperation = 'BALANCE';
+export type LoadTestOperation = 'BALANCE' | 'WITHDRAWAL';
 export type LoadTestMode = 'LOAD' | 'STRESS';
 
 // Temporary local ceiling reported by the user for the QA switch. This does
@@ -9,10 +10,9 @@ export type LoadTestMode = 'LOAD' | 'STRESS';
 export const LOAD_TEST_LOCAL_MAX_TPS = 5;
 export const LOAD_TEST_LOCAL_MIN_TPS = 0.1;
 
-export interface LoadTestDraft {
+interface LoadTestParameters {
   environment: 'QA';
   mode: LoadTestMode;
-  operation: LoadTestOperation;
   atmId: string;
   atmRevision: number;
   // The original fields remain readable for existing single-ATM runs.
@@ -23,6 +23,9 @@ export interface LoadTestDraft {
   rampUpSeconds: number;
   durationSeconds: number;
 }
+
+export type LoadTestDraft = LoadTestParameters &
+  ({ operation: 'BALANCE'; amount?: never } | { operation: 'WITHDRAWAL'; amount: string });
 
 export interface LoadTestAtm {
   atmId: string;
@@ -91,13 +94,14 @@ export function parseLoadTestDraft(value: unknown): LoadTestDraft | undefined {
     'rampUpSeconds',
     'durationSeconds',
     ...(Object.hasOwn(request, 'additionalAtms') ? ['additionalAtms'] : []),
+    ...(request.operation === 'WITHDRAWAL' ? ['amount'] : []),
   ];
   if (
     Object.keys(request).length !== keys.length ||
     !keys.every((key) => Object.hasOwn(request, key)) ||
     request.environment !== 'QA' ||
     !['LOAD', 'STRESS'].includes(request.mode as string) ||
-    request.operation !== 'BALANCE' ||
+    !['BALANCE', 'WITHDRAWAL'].includes(request.operation as string) ||
     !isUuid(request.atmId) ||
     !positiveInteger(request.atmRevision) ||
     !positiveInteger(request.maxTransactions) ||
@@ -106,6 +110,12 @@ export function parseLoadTestDraft(value: unknown): LoadTestDraft | undefined {
     !positiveInteger(request.concurrency) ||
     !nonNegativeInteger(request.rampUpSeconds) ||
     !positiveInteger(request.durationSeconds)
+  )
+    return;
+  // Withdrawal retains the existing exclusive financial execution contract.
+  if (
+    request.operation === 'WITHDRAWAL' &&
+    (!isWithdrawalAmount(request.amount) || request.concurrency !== 1)
   )
     return;
   if (request.mode === 'STRESS' && request.rampUpSeconds === 0) return;

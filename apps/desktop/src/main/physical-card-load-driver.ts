@@ -4,6 +4,7 @@ import type { LoadRunTimings } from '../../../../packages/domain/src/load-run';
 import { loadTestAtms } from '../../../../packages/domain/src/load-test';
 import { performance } from 'node:perf_hooks';
 import type { BalanceContextRequest } from '../../../../packages/domain/src/balance-inquiry';
+import { withdrawalBlocksNewExecution } from '../../../../packages/domain/src/balance-inquiry';
 import type { CardIdentityService } from './card-identity-service';
 import type { DesktopApplication } from './application';
 import type { LoadPinSession } from './adapters/load-pin-session';
@@ -22,7 +23,7 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
       'getSendConfiguration' | 'getBalanceReadiness' | 'executeBalance'
     >,
     private readonly pins: LoadPinSession,
-    private readonly journal: BalanceJournal,
+    private readonly journals: { balance: BalanceJournal; withdrawal: BalanceJournal },
     private readonly identity: RuntimeIdentity,
     private readonly publish: () => void,
     private readonly cipherSession?: { begin(): void; end(): void },
@@ -45,10 +46,10 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
     const contexts: BalanceContextRequest[] = loadTestAtms(request.draft).map((atm) => ({
       draft: {
         environment: 'QA',
-        transaction: 'BALANCE',
+        transaction: request.draft.operation === 'WITHDRAWAL' ? 'WITHDRAWAL_APPROVED' : 'BALANCE',
         scenario: 'LOCAL',
         account: 'SAVINGS',
-        amount: null,
+        amount: request.draft.amount ?? null,
         atmId: atm.atmId,
         atmRevision: atm.atmRevision,
       },
@@ -56,13 +57,13 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
       cardReadId: original.readId,
     }));
     for (const context of contexts) {
-      const ready = await this.application.getBalanceReadiness(context);
+      const ready = await this.application.getBalanceReadiness(context, request.draft.operation);
       if (!ready.ok) return ready;
       if (!ready.value.ready)
         return failure(
           'CONFLICT',
           ready.value.blockers.map((blocker) => blocker.label).join('. ') ||
-            'Uno de los perfiles de saldo no está listo.',
+            'Uno de los perfiles no está listo para la operación solicitada.',
         );
       // Template ATMs share one pool: never sum availability across profiles.
       if (
@@ -74,8 +75,12 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
           'No hay suficientes secuencias QA disponibles para la cantidad solicitada.',
         );
     }
-    const history = await this.journal.read();
-    if (history.some((execution) => execution.outcome === 'PENDING'))
+    const balances = await this.journals.balance.read();
+    const withdrawals = await this.journals.withdrawal.read();
+    if (
+      balances.some((execution) => execution.outcome === 'PENDING') ||
+      withdrawals.some(withdrawalBlocksNewExecution)
+    )
       return failure(
         'CONFLICT',
         'El diario contiene una operación pendiente. Revisa su correlación antes de otra corrida.',
@@ -123,12 +128,12 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
           try {
             if (closed || signal.aborted)
               return {
-                ...failure('CONFLICT', 'La corrida terminó antes de preparar esta consulta.'),
+                ...failure('CONFLICT', 'La corrida terminó antes de preparar esta operación.'),
                 cancelled: true as const,
               };
             if (performance.now() >= deadline)
               return {
-                ...failure('CONFLICT', 'Duración alcanzada antes de preparar la consulta.'),
+                ...failure('CONFLICT', 'Duración alcanzada antes de preparar la operación.'),
                 skipped: 'DURATION' as const,
               };
             const phases: Required<
@@ -178,7 +183,7 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
                   cardReadId: reading.value.readId,
                   requestId: this.identity.uuid(),
                 },
-                'BALANCE',
+                request.draft.operation,
                 {
                   runId,
                   signal,

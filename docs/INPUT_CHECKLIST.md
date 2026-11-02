@@ -2,6 +2,13 @@
 
 El índice consolidado de pendientes está en [`TODO_DATA.md`](TODO_DATA.md).
 
+Carga de retiros (2026-11-02): por solicitud del usuario se reutiliza el flujo
+QA/LOCAL/ahorros/USD con monto explícito por operación, una tarjeta y varios ATM
+alternados. Se conserva retiro secuencial, PIN por corrida, seguridad nueva y
+parada al primer rechazo/error sin reintentos. TODO-DATA LOAD-WITHDRAWAL-QA-ACCEPTANCE:
+pendiente medir el recorrido con chip/host y correlación Core reales; las pruebas
+locales cubren el motor y no certifican resultados financieros ni TPS. ADR-031.
+
 TODO-DATA CARD-ISSUER-PRODUCT-DISPLAY (2026-10-29): la referencia visual del
 formulario incluye entidad emisora y producto. La identidad pública del lector
 no proporciona esos campos ni existe aquí una correspondencia aprobada.
