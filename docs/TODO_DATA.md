@@ -4,8 +4,16 @@ Este registro concentra los datos pendientes de fuente aprobada. Un `TODO-DATA`
 no se cierra por inferencia ni por un mock: requiere especificación del
 proveedor, captura/trama validada o confirmación formal registrada en un ADR.
 
-Estado de todos los elementos: **BLOQUEADO** hasta recibir la fuente indicada.
-La columna `Referencias` apunta a los documentos que explican el alcance.
+Este índice conserva identificadores históricos, incluidos elementos resueltos o
+sustituidos. No todos son bloqueos actuales: consultar la actualización fechada
+más reciente y el ADR aplicable en las referencias. Por ejemplo,
+QA-SEQUENCE-POOL-REPLENISHMENT, QA-INVALID-RESPONSE-900107,
+QA-F35-FIX-HOST-VALIDATION y QA-ARQC-900108 tienen resolución registrada en
+`docs/INPUT_CHECKLIST.md`. No reabrirlos por su presencia en esta tabla.
+
+Los pendientes de implementación y validación se resumen por alcance en
+[BACKLOG.md](BACKLOG.md). Cuando falte una fuente, solo queda bloqueada la regla
+que depende de ella; no toda la funcionalidad del módulo.
 
 | ID                                | Referencias                                                                                       |
 | --------------------------------- | ------------------------------------------------------------------------------------------------- |

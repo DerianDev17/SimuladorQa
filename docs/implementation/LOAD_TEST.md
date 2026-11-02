@@ -1,289 +1,113 @@
 # Carga y estrés de saldo y retiro en QA
 
-## Retiros secuenciales — 2026-11-02 (ADR-031)
+Guía vigente al 2026-11-02. La implementación usa `LoadRunService` para inicio,
+estado y parada. Se retiró el preparador virtual legado sin consumidores y su IPC
+`load:plan:prepare`. Reiniciar la app completa después de actualizar Main/preload.
 
-En **Escenario de prueba**, elegir **Operación de carga → Retiro** e ingresar
-**Monto por retiro (USD)** con punto y dos decimales. El mismo importe se aplica
-a cada operación; no es el total de la corrida. El host decide si aprueba.
-Se conserva QA/LOCAL/ahorros, una tarjeta física y uno o varios ATM alternados.
-El monto inicial está vacío para que el operador lo indique explícitamente.
+## Preparar e iniciar
 
-Los retiros mantienen la exclusión del servicio individual: **una operación a
-la vez**, también al elegir los presets de 3 o 5 TPS. Esas tasas son objetivos,
-no una promesa de caudal. Saldo conserva de uno a cinco slots. Se mantienen los
-máximos locales de 100 operaciones, 300 segundos y 5 TPS.
+1. Abrir **Carga y estrés** en QA y seleccionar uno o varios ATM activos.
+2. Elegir **Operación de carga**: consulta de saldo o retiro. Para retiro indicar
+   **Monto por retiro (USD)**, con punto y dos decimales; se aplica a cada operación.
+3. Elegir prueba rápida, 1/3/5 TPS o parámetros avanzados. Los TPS son un objetivo.
+4. Leer y seleccionar la tarjeta física QA. Un perfil guardado puede ayudar a
+   elegir AID, pero no sustituye el chip.
+5. Pulsar **Iniciar prueba** e ingresar PIN en el diálogo protegido. Mantener la
+   tarjeta insertada hasta terminar. El PIN se solicita una vez por corrida.
 
-Main revalida para cada ATM el contrato de retiro y el monto mediante la ruta
-financiera existente. Reutiliza el validador de importe de retiro, sin nuevas
-reglas ISO o financieras. Cada operación recibe lectura y seguridad nuevas,
-UUID propio y el `runId` común; el PIN permanece acotado a la corrida. El diario
-de retiro conserva la mensajería y correlación del servicio individual. La carga
-no solicita comprobantes ni reversos automáticos y se detiene al primer rechazo,
-error o resultado incierto, sin reintentos. No se fuerza un resultado aprobado.
+Las operaciones alternan entre los ATM en orden A → B → A. Cantidad, duración,
+concurrencia y TPS son totales de la corrida. Main valida todos los perfiles y
+las reservas suficientes antes de iniciar. La plantilla ATM20521 comparte su pool;
+no se suma la disponibilidad por ATM ni se repone al clonar un perfil.
 
-Antes de abrir la sesión de PIN se revisan **ambos diarios**, también para carga
-de saldo. Un retiro pendiente, reverso sin finalizar o fallo de persistencia
-bloquea el inicio; los errores históricos terminados siguen la regla de ADR-025.
-Operación y monto se guardan en el plan inmutable y se muestran al recuperar los
-resultados, independientemente de la selección del formulario. Los registros
-anteriores de saldo siguen siendo compatibles.
+## Parámetros y límites
 
-Pruebas sintéticas: validación de importe/concurrencia/ambiente, contrato ausente,
-pendientes en diario, lectura y PIN, worker real, TCP local y SQLite reabierto.
-Casos de retiro: aprobación, rechazo, timeout y parada después del envío. La
-verificación UI cubre IPC, monto obligatorio, exclusión y recuperación tras recarga.
-TODO-DATA LOAD-WITHDRAWAL-QA-ACCEPTANCE: falta medir el flujo de carga con chip y
-host reales; las pruebas locales no acreditan débito Core ni TPS sostenidos.
-La corrida real corresponde al operador. Ver [ADR-031](../adr/ADR-031-WITHDRAWAL-LOAD.md).
+| Parámetro | Valor admitido |
+| --- | --- |
+| Ambiente / escenario / cuenta | QA / LOCAL / ahorros |
+| Operación | Saldo o retiro |
+| Monto de retiro | `0.01` a `9999999999.99` USD, dos decimales; sujeto al contrato de cada ATM |
+| TPS objetivo | 0,1–5 |
+| Cantidad máxima | 1–100; al menos una operación posible por ATM seleccionado |
+| Duración máxima | 1–300 segundos |
+| Operaciones en curso de saldo | 1–5 |
+| Operaciones en curso de retiro | 1, también al seleccionar presets de 3/5 TPS |
+| Aumento gradual | Entero positivo menor que la duración, en modo estrés |
 
-Validación final local: 1006 pruebas unitarias, 263 de integración y 22 E2E
-correctas; lint, typecheck, formato, build y chequeo de secretos correctos.
-Hallazgos y deuda pendiente en [revisión técnica](TECHNICAL_REVIEW_20261102.md).
+El límite de importe es la representación técnica existente de F4, no una regla
+financiera ni de denominaciones. El host decide el resultado de cada retiro.
+Los límites de carga son controles locales; no acreditan capacidad ni límites
+aprobados del Switch/Core. TODO-DATA LOAD-LIMITS conserva esa validación pendiente.
+Cantidad o duración, lo que ocurra primero, termina la planificación. La duración
+incluye persistencia del inicio, arranque del worker, PIN y ejecución.
 
-Esta sección amplía el alcance de saldo de las revisiones históricas siguientes.
+Main revalida configuración, ATM, lectura, contrato financiero, seguridad y
+secuencias. Revisa ambos diarios antes del PIN: pendientes de saldo y retiros o
+reversos activos/fallos de persistencia bloquean el inicio. Errores históricos
+terminados conservan la regla de [ADR-025](../adr/ADR-025-QA-WITHDRAWAL-AFTER-ERROR.md).
 
-## Parámetros inmutables durante el arranque — 2026-11-02
+## Ejecución, parada y recuperación
 
-El parser copia el plan validado, incluidos los perfiles adicionales, antes de
-esperar el almacenamiento y las dependencias. Modificar el objeto original durante
-esa espera ya no altera TPS, cantidad ni revisiones del plan aceptado. Una regresión
-con almacenamiento retrasado verifica el plan recibido por el driver y persistido.
+El worker agenda operaciones sin ráfagas de recuperación. El chip se prepara
+exclusivamente; en saldo puede avanzar mientras responde el host. El enlace QA
+mantiene **una conexión financiera activa**. Las demás esperan turno y pueden
+cancelarse o vencer sin abrir conexión. Los plazos TCP empiezan al obtener turno;
+el límite global TPS se aplica antes de cada escritura.
 
-## Corrección del cierre de conexión — 2026-10-29 (ADR-029)
+Cada operación tiene lectura y seguridad nuevas, UUID y secuencia propios,
+con `runId` común. Se reutilizan procesos PC/SC/cifrado, no mensajes ni claves
+descifradas. La sesión PIN solo vive en Main y se borra al cerrar.
 
-El log del operador confirma que TCPComms sustituye la conexión existente del
-dispositivo 80131 cuando llega otra desde la misma estación. Esto produjo
-PEER_CLOSED en 900228 y cancelación local de 900229 y de tres consultas sin envío.
-Los estados locales no son códigos de rechazo del switch.
+**Detener prueba**, retirar la tarjeta, el primer rechazo o error detienen la
+corrida. No hay reintentos, reversos automáticos ni impresión durante carga.
+Un envío sin respuesta mantiene incertidumbre y su correlación para revisión.
+Al vencer la duración no se inicia ni escribe otra operación; el cierre espera
+hasta 35 segundos las operaciones en curso y después cancela si no terminaron.
 
-El envío por este enlace ahora es exclusivo: una conexión financiera a la vez.
-Se conservan de 1 a 5 operaciones en preparación y envío; el chip puede preparar
-la siguiente mientras espera el host, pero su conexión espera turno. La UI
-muestra **Espera del enlace**, **Canceladas** y **Enviadas sin respuesta**, y
-conserva el primer error con STAN. Los datos históricos permanecen intactos.
-Un slot cancelado/vencido no abre conexión, y una respuesta recibida se conserva
-al cerrar el socket. El primer rechazo/error sigue deteniendo la corrida.
+La corrida puede continuar al navegar fuera de la pantalla. Al volver se consulta
+su estado. Un timeout de IPC conserva el identificador para recuperar el resultado,
+sin crear otra corrida. Tras reiniciar, una corrida activa se marca interrumpida;
+no se reanuda ni repite. Revisar el diario antes de una nueva solicitud explícita.
 
-Esta decisión sustituye las referencias a sockets simultáneos de las revisiones
-históricas siguientes. No garantiza 3 TPS: el chip y la respuesta del host siguen
-limitando el ritmo. Reiniciar la aplicación si todavía ejecuta el Main anterior.
-Véase [evidencia y decisión](../adr/ADR-029-QA-SINGLE-FINANCIAL-CONNECTION.md).
+## Resultados y persistencia
 
-## Preparación reutilizable y resultado bajo objetivo — 2026-10-28 (ADR-028)
+Se guardan plan inmutable y resultados públicos en `qa-load-runs.sqlite`, sin
+borrado automático ni límite de 100 corridas históricas. La importación del JSON
+anterior es transaccional y conserva el original. Corrupción bloquea el inicio.
+La clave `requestId` impide repetir una solicitud, también después de reiniciar.
 
-La evidencia del usuario (8 consultas en 91 s, 0,09 TPS frente a 3 TPS) confirma
-que la preparación limitaba el envío pese a la concurrencia. La corrida ahora
-reutiliza el proceso PC/SC y los helpers de cifrado: evita arranques repetidos
-de PowerShell. Cada consulta sigue releyendo el chip, validando la credencial
-DPAPI y generando seguridad nueva. Los procesos se cierran al terminar, detener
-o fallar la corrida; no se reutiliza un readId consumido.
+El resultado recuperado conserva operación, monto, ATM y correlación. Los detalles
+financieros y mensajería protegida permanecen en el diario de saldo o retiro.
 
-El resultado muestra **TPS no alcanzados** si completa una carga sostenida
-con promedio inferior al objetivo. El promedio incluye preparación y últimas
-respuestas; la gráfica permite evaluar la estabilidad. Las sumas de espera
-concurrente pueden superar el tiempo de pared. Reiniciar la aplicación para
-cargar el nuevo Main antes de repetir la prueba con ambos ATM.
+- **TPS promedio:** envíos con bytes encolados / tiempo total, incluida preparación
+  y cierre. Completar cantidad/duración no prueba haber alcanzado el objetivo.
+- **Latencias:** min/promedio/max y p50/p90/p95/p99 de respuestas recibidas, usando
+  tiempo de transporte. La gráfica representa respuestas, no preparaciones locales.
+- **Estados:** enviados, respuestas, aprobados, rechazados, timeout, errores,
+  cancelados, en curso y enviados sin respuesta. Se conserva la primera causa de error.
+- **Etapas:** espera del lector/enlace/límite TPS, lectura, contexto PIN/EMV,
+  validación, diario, transporte y otras. Sumas concurrentes pueden superar el
+  tiempo de pared. No asignar tiempos faltantes a una etapa por inferencia.
 
-La validación sintética acredita reutilización, revocación y concurrencia local;
-no acredita todavía 3 TPS con hardware/host. Véase [ADR-028](../adr/ADR-028-LOAD-PREPARATION-REUSE.md).
+Las mediciones no almacenan PIN, PAN completo, tramas ni campos EMV. Registros
+antiguos sin desglose o tiempo monotónico conservan su información disponible.
 
-## Varios perfiles simultáneos — 2026-10-28 (ADR-027)
+## Pendientes y fuentes
 
-En **Selecciona los ATM**, marcar ATM20521 y ATM20524 (o los perfiles QA
-disponibles). Las consultas se asignan en el orden A → B → A → B, sin esperar
-la respuesta anterior. **Operaciones simultáneas** permite de 1 a 5; el
-escenario **3 TPS** configura cinco slots (ADR-028) y el modo avanzado permite ajustar
-TPS/cantidad/duración. El chip prepara seguridad exclusiva, mientras los sockets
-ya preparados pueden esperar al host en paralelo. La cantidad, duración y TPS
-son totales de la corrida, no por terminal. Si se completa una cantidad impar,
-el primer perfil recibe una consulta más. La parada por error o duración puede
-terminar antes de recorrer todos los perfiles.
+No están habilitados PREPROD financiero, reversos en carga, múltiples tarjetas,
+pool virtual o carga distribuida. Las referencias ficticias no son credenciales.
 
-Se validan todos los perfiles antes de pedir PIN o iniciar el worker. Cada
-operación vuelve a comprobar el contexto del ATM mediante la ruta de saldo
-existente. El pool de la plantilla es compartido: no se suma ni se duplica su
-disponibilidad. Conservadoramente, cada perfil debe informar reservas para la
-cantidad total; no se infiere independencia entre pools. El plan debe admitir
-al menos tantas consultas como perfiles seleccionados.
+- TODO-DATA LOAD-VIRTUAL-PROVIDER: contrato aprobado para seguridad virtual nueva.
+- TODO-DATA LOAD-PERSISTENT-TCP: contrato para reutilizar sesiones financieras.
+- TODO-DATA LOAD-3TPS-PHYSICAL: medir caudal sostenido con hardware y host reales.
+- TODO-DATA LOAD-WITHDRAWAL-QA-ACCEPTANCE: validar carga de retiros y correlación
+  financiera real. Las pruebas sintéticas no confirman débito Core.
 
-Cada fila identifica el ATM ejecutado, también después de recuperar la corrida.
-El contrato conserva los registros antiguos de un solo ATM. Las tarjetas
-virtuales siguen pendientes. La concurrencia local no acredita 3 TPS reales:
-si la preparación del chip tarda más, seguirá limitando el caudal de solicitudes.
-Los paneles separan espera del lector, lectura, PIN/EMV, límite TPS y transporte.
-
-## Revisión adicional: cierre y presupuesto de tiempo (2026-10-27)
-
-Se reprodujeron tres defectos con regresiones que fallaban antes del cambio:
-una parada durante la escritura final dejaba el estado en `STOPPING`; consultar
-una corrida terminada durante la preparación de la siguiente alteraba su tiempo
-y admitía una parada tardía; un callback atrasado del worker iniciaba una
-operación después de vencer el plazo. Los tres recorridos quedan corregidos.
-
-- Estado y métricas finales se congelan antes de persistir. Una parada tardía
-  no cambia el resultado anterior, ni oculta un fallo confirmado del worker.
-- La preparación previa verifica dependencias sin iniciar el cronómetro. Al
-  aceptar la corrida, Main y worker comparten un origen monotónico: guardar el
-  inicio, arrancar el worker, ingresar el PIN y ejecutar consumen el mismo
-  presupuesto. Ya no se añade otra duración completa al arrancar el worker.
-- Se comprueba el vencimiento tanto en el callback del worker como al recibir
-  el tick en Main. No empieza otra operación fuera de plazo; se mantiene la
-  espera acotada de la operación que sí empezó a tiempo.
-- Las confirmaciones duplicadas recibidas antes del siguiente tick no acumulan
-  temporizadores. Main devuelve el instante real en que inició la operación:
-  el intervalo siguiente se calcula desde ahí, no desde la emisión del tick.
-  Una regresión con entrega retrasada reprodujo dos inicios separados por
-  unos 64 ms a un objetivo de 5 TPS; ahora respeta el intervalo de 200 ms,
-  incluso si la entrega anterior se retrasó, sin ráfagas de recuperación.
-- Cada resultado nuevo conserva `finishedElapsedMs` además del timestamp UTC.
-  La gráfica usa ese tiempo transcurrido, independiente de ajustes del reloj
-  de Windows. Los registros antiguos siguen usando sus fechas disponibles.
-  El objetivo dibujado termina al vencer el plazo, aunque siga llegando una
-  respuesta durante el cierre.
-
-Regresiones con worker real, retraso intencional del event loop, almacenamiento
-lento, paradas tardías y SQLite reabierto. No se cambian tramas ISO, claves,
-contadores financieros, límites de TPS ni se envía carga al switch.
-
-## Lectura del historial existente
-
-Inspección de solo lectura el 2026-10-27: la última corrida guardada, iniciada
-el 2026-10-20T20:23:20.307Z, pidió 3 TPS/100 consultas/60 s. Completó cinco
-envíos y cinco respuestas aprobadas en 68,194 s: **0,0733 TPS**. El transporte
-y espera de respuesta sumaron 6,224 s, con promedio 1244,8 ms y p95 1395 ms.
-Los 61,970 s restantes no tienen desglose histórico; no pueden atribuirse a
-lector, PIN, cifrado, diario o espera programada a partir de ese registro.
-La duración incluye cierre de operaciones. No acredita estrés del switch a
-3 TPS ni permite inferir su capacidad máxima. Informe local sin datos privados:
-`artifacts/load-history-review-20261027.json`.
-
-## Correcciones verificables del 2026-10-27
-
-- Retirar la tarjeta o perder el lector detiene la corrida y libera la sesión
-  PIN. Tras una nueva lectura se puede iniciar otra corrida explícita, sin
-  reiniciar la aplicación. El cierre definitivo se reserva para salir de la app.
-- Detener durante la persistencia del inicio termina sin activar el worker;
-  ya no deja una corrida en `STOPPING` esperando su límite de duración.
-- Main y el worker admiten objetivos desde 0,1 hasta 5 TPS. El mínimo evita
-  desbordar el temporizador con tasas casi nulas. El lector de registros
-  anteriores conserva compatibilidad con los valores históricos.
-- Ante un timeout de IPC, la UI conserva el identificador de la solicitud y
-  recupera su estado confirmado o respuesta tardía. No crea otra corrida ni
-  deja un bloqueo permanente después de confirmar el resultado. Una respuesta
-  de polling anterior al inicio/parada no sobrescribe el estado nuevo.
-- La gráfica usa respuestas recibidas, omite el tramo futuro y representa el
-  objetivo gradual con la misma función del worker. Se muestran operaciones
-  en curso, p90 y latencia máxima además de las métricas existentes.
-- La selección única de esta revisión queda sustituida por la selección múltiple
-  secuencial del 2026-10-28. Se conservan validación de dependencias y eliminación
-  de la etiqueta ambigua «702» del flujo de saldo.
-
-Las regresiones usan worker real, almacenamiento temporal, TCP loopback y
-Electron con fuente sintética. No se ejecuta carga contra el switch QA.
-
-## Ejecutar el piloto con tarjeta física
-
-1. Abrir **Carga y estrés** en QA y marcar uno o varios ATM configurados para saldo.
-2. Elegir **Prueba rápida**, **1 TPS**, **3 TPS** o **5 TPS**. Los presets
-   completan cantidad y duración dentro de los límites locales; son objetivos,
-   no tasas garantizadas. **Modo avanzado** permite ajustar esos valores.
-   Elegir **Operaciones en preparación y envío**: 2 permite preparar la siguiente
-   consulta mientras se espera una respuesta; 5 es el preset de 3 TPS. Todos
-   comparten una sola conexión financiera activa. Elegir 1 serializa todo el flujo.
-3. Seleccionar la tarjeta QA en el lector. Un perfil guardado puede preseleccionar
-   el AID, pero hay que leer el chip físico antes de iniciar.
-4. Pulsar **Iniciar prueba** e ingresar el PIN en el diálogo nativo.
-   El PIN se pide una vez por corrida, según autorización del usuario.
-
-El panel muestra enviados, respuestas, aprobaciones, rechazos, errores, TPS
-reales y percentiles. **Detener prueba** cancela el trabajo y cierra los sockets.
-
-La interfaz ofrece un motor asíncrono con preparación física exclusiva y
-transporte exclusivo por enlace QA. El límite es lo primero que ocurra: cantidad o tiempo. Se detiene
-ante el primer rechazo/error o retiro de tarjeta. No hay reintentos automáticos.
-No hace falta mantener la página abierta: al volver se recupera la corrida.
-
-## Requisitos comprobados por Main
-
-Solo QA/LOCAL/ahorros, consulta de saldo o retiro secuencial. El destino y los plazos provienen de
-Configuración; no se inventan desde la pantalla de carga. Se comprueban revisión
-ATM, lectura vigente, perfil financiero, cifrado, secuencias suficientes y
-ausencia de pendientes en saldo y de bloqueos activos en el diario de retiro.
-Si falla una comprobación se muestra su causa sin arrancar el worker.
-
-El intervalo permitido es 0,1–5 TPS. Los máximos locales son cinco operaciones simultáneas, 100 consultas y
-300 segundos. El lector, las operaciones EMV, el cifrado y la respuesta del host
-pueden impedir alcanzar 5 TPS. El tiempo incluye la entrada inicial del PIN.
-Esta prueba no certifica la capacidad máxima del switch.
-La pantalla explica cuando la cantidad ingresada supera las 100 consultas y
-mantiene deshabilitado el inicio hasta corregirla.
-El selector muestra los ATM disponibles y permite elegir varios por corrida.
-Las consultas alternan entre los seleccionados. Main resuelve la plantilla reutilizable ATM20521 para los
-ATM QA/205 y comprueba las reservas del pool compartido de la estación. Crear
-otro ATM no duplica ni repone las reservas. Ver [plantilla](MULTI_ATM_PROFILES.md).
-Los perfiles QA guardados son referencias de lectura y no credenciales virtuales.
-Las comprobaciones de perfil financiero y secuencias ocurren al iniciar en Main.
-
-## Motor, seguridad y métricas
-
-Un worker agenda cada operación sin ráfagas de recuperación y recibe tickets
-separados de inicio y cierre. No espera la respuesta mientras tenga slots libres.
-Main mantiene como máximo la concurrencia solicitada, incluida la espera por
-lector. El acceso al chip permanece exclusivo y libera su slot de preparación
-cuando el transporte entra en la cola del enlace. Solo una conexión financiera
-puede estar activa; los plazos de conexión/respuesta empiezan al obtener turno,
-y la espera de cola respeta el plazo total de la corrida.
-Un limitador global se aplica además justo antes del write en cada socket:
-no acumula créditos durante preparación o conexión lenta. El objetivo de TPS
-no garantiza que se alcance. El timeout de respuesta empieza con el write.
-Al alcanzar duración no se inicia ni escribe otra consulta y se esperan hasta 35
-segundos para cerrar las operaciones en curso y registrar sus
-respuestas. Si siguen sin terminar, cancela las dependencias, marca la corrida como
-fallida y deja la correlación disponible para revisión; no reintenta el envío.
-Cada consulta vuelve a leer el chip, genera seguridad y reserva una secuencia
-nueva. La misma tarjeta debe permanecer insertada. El PIN de sesión permanece
-solo en memoria y se borra al terminar o detenerse, sin pasar por Renderer.
-Ver [ADR-020](../adr/ADR-020-PHYSICAL-CARD-LOAD.md).
-
-Las transacciones comparten `runId`, conservando `transactionId`, `requestId`
-y STAN/RRN propios. Se persisten parámetros inmutables y resultados públicos en
-`qa-load-runs.sqlite`, sin límite de 100 corridas ni borrado automático. Al primer
-acceso se importa el JSON anterior dentro de una transacción; el archivo original
-permanece como respaldo. Si está corrupto, el inicio se bloquea hasta revisarlo.
-Cada `requestId` queda como clave única, incluso después de reiniciar.
-TPS = envíos con bytes encolados / tiempo total. Los percentiles usan únicamente
-respuestas recibidas y su tiempo de transporte, sin contar como respuesta una
-lectura o preparación local. La UI distingue operaciones en curso de envíos.
-Cada resultado nuevo registra únicamente duraciones numéricas de lectura,
-revisión, preparación de contexto, validación, diario, transporte y resto.
-La espera por lector y la espera impuesta por TPS tienen mediciones separadas.
-Las sumas de etapas de operaciones concurrentes pueden superar el tiempo de
-pared de la corrida. El diario fusiona cada actualización bajo exclusión para
-conservar respuestas fuera de orden; la identidad ATM no depende del orden de fin.
-No se guardan PIN, PAN, tramas ni campos EMV en estas mediciones. Los resultados
-anteriores carecen de desglose: por ejemplo, la corrida local de 5 respuestas
-completadas en 68,2 s consumió 6,2 s en transporte; los ~62 s restantes no
-pueden asignarse retrospectivamente a una etapa concreta. La próxima corrida
-permitirá medirlos sin inferir que el host causó toda la demora.
-
-Un envío cancelado después de transmitir conserva estado incierto y bloquea
-continuaciones automáticas. Al reiniciar, una corrida activa se marca
-interrumpida; no se retoma ni se repite. Debe revisarse el diario antes de otra
-prueba. Los servicios reales siguen protegiendo solicitudes duplicadas.
-Una operación `PENDING` impide iniciar. Los errores históricos ya finalizados
-se conservan y no impiden iniciar explícitamente nuevas consultas de saldo
-con identificadores nuevos; nunca se repite la consulta anterior.
-
-## Alcance pendiente
-
-TODO-DATA LOAD-VIRTUAL-PROVIDER: falta el contrato de un proveedor financiero QA
-para un pool virtual que alimente el motor sin esperar el chip. Las referencias VISA ficticias
-y las tarjetas guardadas no contienen PIN/EMV reutilizable. Ese alcance queda
-separado del piloto ejecutable con tarjeta física. PREPROD, reversos en carga y carga
-distribuida no se habilitan aquí. TODO-DATA LOAD-PERSISTENT-TCP conserva pendiente
-el contrato para reutilizar conexiones financieras. No se inventa multiplexación.
-
-Validación del cambio: pruebas de dominio, sesión PIN, worker real, persistencia,
-cancelación TCP loopback, reutilización del flujo de saldo y UI Electron con
-fuente sintética. La primera corrida real debe iniciarla el operador; no se ha
-enviado carga al switch durante el desarrollo.
+Decisiones: [sesión física](../adr/ADR-020-PHYSICAL-CARD-LOAD.md),
+[preparación reutilizable](../adr/ADR-028-LOAD-PREPARATION-REUSE.md),
+[enlace exclusivo](../adr/ADR-029-QA-SINGLE-FINANCIAL-CONNECTION.md),
+[retiros](../adr/ADR-031-WITHDRAWAL-LOAD.md) y
+[contratos del motor](../adr/ADR-032-FINANCIAL-EXECUTION-PORTS.md).
+La evolución y las mediciones anteriores permanecen en los ADR, el
+[registro de fuentes](../INPUT_CHECKLIST.md), el historial Git y la
+[revisión técnica fechada](TECHNICAL_REVIEW_20261102.md).

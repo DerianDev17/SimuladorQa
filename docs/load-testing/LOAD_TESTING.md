@@ -1,36 +1,8 @@
-# Carga y estres
+# Carga y estrés
 
-## Modos
-- cantidad fija de transacciones;
-- TPS objetivo + duracion;
-- ramp-up;
-- single ATM;
-- multi ATM;
-- single card / card pool.
+La guía canónica está en [Carga de saldo y retiro en QA](../implementation/LOAD_TEST.md):
+operación, parámetros, límites, métricas, parada, recuperación y pendientes.
 
-## Parametros
-- targetTPS
-- duration
-- transactionCount
-- concurrency
-- connectionCount
-- atmStrategy
-- cardStrategy
-- rampUp
-- timeout
-
-## Metricas
-- sent
-- received
-- approved
-- declined
-- timeouts
-- tcpErrors
-- tpsCurrent
-- tpsAverage
-- latencyMin/Avg/Max
-- p50/p90/p95/p99
-- activeConnections
-
-## Guardrails
-Cada ambiente debe tener limites configurados. La app debe impedir superar el limite sin una elevacion autorizada de configuracion.
+Este documento conserva la ruta del índice original para evitar enlaces rotos.
+El pool virtual y la coordinación distribuida siguen siendo alcance pendiente;
+no son modos habilitados por una lista de parámetros de diseño.

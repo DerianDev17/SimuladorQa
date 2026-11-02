@@ -1,5 +1,10 @@
 # Changelog
 
+Documentación (2026-11-02): README, arquitectura y arranque describen el estado
+actual; carga tiene una única guía de referencia. Nuevo índice en docs/README.md
+y backlog que distingue implementación pendiente de validación externa. El índice
+TODO-DATA deja de presentar identificadores históricos resueltos como bloqueos.
+
 Limpieza (2026-11-02): eliminado el preparador virtual legado sin consumidores
 en Renderer, su canal `load:plan:prepare`, contrato y pruebas exclusivas. La carga
 vigente usa inicio/estado/parada de LoadRunService. Eliminado NewWithdrawalInput,
