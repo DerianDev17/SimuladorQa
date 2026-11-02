@@ -1,5 +1,12 @@
 # Carga y estrés de saldo en QA
 
+## Parámetros inmutables durante el arranque — 2026-11-02
+
+El parser copia el plan validado, incluidos los perfiles adicionales, antes de
+esperar el almacenamiento y las dependencias. Modificar el objeto original durante
+esa espera ya no altera TPS, cantidad ni revisiones del plan aceptado. Una regresión
+con almacenamiento retrasado verifica el plan recibido por el driver y persistido.
+
 ## Corrección del cierre de conexión — 2026-10-29 (ADR-029)
 
 El log del operador confirma que TCPComms sustituye la conexión existente del

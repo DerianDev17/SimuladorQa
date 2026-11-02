@@ -127,5 +127,6 @@ export function parseLoadTestDraft(value: unknown): LoadTestDraft | undefined {
     if (new Set(ids).size !== ids.length) return;
   }
 
-  return request as unknown as LoadTestDraft;
+  // Own the validated plan before an asynchronous preflight can yield to its caller.
+  return structuredClone(request) as unknown as LoadTestDraft;
 }
