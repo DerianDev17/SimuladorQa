@@ -1,3 +1,5 @@
+import { LoadConfigurationsView } from './LoadConfigurationsView';
+import { stressPreset } from '../../../../packages/domain/src/load-configurations';
 import { LoadHistoryView } from './LoadHistoryView';
 import { useEffect, useRef, useState } from 'react';
 import type { AtmProfile } from '../../../../packages/domain/src/catalogs';
@@ -145,6 +147,7 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
   const available = atms.filter((atm) => atm.active && atm.environment === 'QA');
   const [atmIds, setAtmIds] = useState<string[]>([]);
   const [preset, setPreset] = useState<Preset>('QUICK');
+  const [configurationsOpen, setConfigurationsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [advanced, setAdvanced] = useState(false);
   const [mode, setMode] = useState<LoadTestMode>('LOAD');
@@ -290,6 +293,24 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
     setConcurrency(String(choice.tps >= 3 ? LOAD_RUN_MAX_CONCURRENCY : 2));
     setDuration(String(choice.seconds));
   }
+  function applyConfiguration(saved: LoadTestDraft) {
+    if (locked || disabled) return;
+    setAtmIds(
+      [saved.atmId, ...(saved.additionalAtms ?? []).map((atm) => atm.atmId)].filter(Boolean),
+    );
+    setOperation(saved.operation);
+    setAmount(saved.operation === 'WITHDRAWAL' ? saved.amount : '');
+    setMode(saved.mode);
+    setPreset('CUSTOM');
+    setAdvanced(true);
+    setCount(String(saved.maxTransactions));
+    setTps(String(saved.targetTps));
+    setConcurrency(String(saved.concurrency));
+    setDuration(String(saved.durationSeconds));
+    setRamp(String(saved.rampUpSeconds));
+    setCard(undefined);
+    setError(undefined);
+  }
   async function start() {
     if (!valid || !card || locked || disabled || !statusReady || environment !== 'QA') return;
     const requestId = crypto.randomUUID();
@@ -367,17 +388,57 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
           </span>
         </div>
       </header>
-      <button aria-expanded={historyOpen} onClick={() => setHistoryOpen(!historyOpen)}>
-        {historyOpen ? 'Ocultar historial de carga' : 'Ver historial de carga'}
-      </button>
+      <div className="load-history-actions">
+        <button aria-expanded={historyOpen} onClick={() => setHistoryOpen(!historyOpen)}>
+          {historyOpen ? 'Ocultar historial de carga' : 'Ver historial de carga'}
+        </button>
+        <button
+          aria-expanded={configurationsOpen}
+          onClick={() => setConfigurationsOpen(!configurationsOpen)}
+        >
+          {configurationsOpen ? 'Ocultar configuraciones' : 'Configuraciones guardadas'}
+        </button>
+      </div>
       {historyOpen &&
         (environment === 'QA' ? (
           <LoadHistoryView atms={atms} />
         ) : (
           <p>Selecciona QA para consultar el historial de carga.</p>
         ))}
+      {configurationsOpen &&
+        (environment === 'QA' ? (
+          <LoadConfigurationsView
+            draft={draft}
+            atms={atms}
+            disabled={locked || disabled || !statusReady}
+            onLoad={applyConfiguration}
+          />
+        ) : (
+          <p>Selecciona QA para consultar las configuraciones.</p>
+        ))}
       <div className="load-test-columns">
         <section className="panel load-setup" aria-label="Configurar prueba">
+          <details className="inline-details">
+            <summary>Pruebas de estrés</summary>
+            <div className="load-history-actions" aria-label="Presets de estrés">
+              <button
+                disabled={locked || disabled || environment !== 'QA'}
+                onClick={() => applyConfiguration(stressPreset(draft, 3))}
+              >
+                Estrés gradual · 3 TPS
+              </button>
+              <button
+                disabled={locked || disabled || environment !== 'QA'}
+                onClick={() => applyConfiguration(stressPreset(draft, 5))}
+              >
+                Estrés gradual · 5 TPS
+              </button>
+            </div>
+            <p className="load-test-hint">
+              Estrés: rampa de 20 s, hasta 60 s o 100 operaciones. Retiro siempre secuencial; los
+              TPS son objetivos.
+            </p>
+          </details>
           <div className="load-mode-tabs">
             <button
               className={!advanced ? 'selected' : ''}

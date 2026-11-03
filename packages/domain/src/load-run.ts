@@ -65,7 +65,12 @@ export function parseLoadRunRequest(value: unknown): LoadRunRequest | undefined 
     !isUuid(value.cardReadId)
   )
     return;
-  const draft = parseLoadTestDraft(value.draft);
+  const draft = parseLoadRunDraft(value.draft);
+  return draft ? { requestId: value.requestId, cardReadId: value.cardReadId, draft } : undefined;
+}
+// The same local limits apply to executable runs and reusable configurations.
+export function parseLoadRunDraft(value: unknown): LoadTestDraft | undefined {
+  const draft = parseLoadTestDraft(value);
   if (
     !draft ||
     draft.targetTps < LOAD_TEST_LOCAL_MIN_TPS ||
@@ -76,8 +81,9 @@ export function parseLoadRunRequest(value: unknown): LoadRunRequest | undefined 
     draft.rampUpSeconds >= draft.durationSeconds
   )
     return;
-  return { requestId: value.requestId, cardReadId: value.cardReadId, draft };
+  return draft;
 }
+
 export function loadRunMetrics(run: LoadRunSnapshot) {
   const sent = run.items.filter((item) => item.sent).length;
   const received = run.items.filter((item) => item.received).length;

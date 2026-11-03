@@ -44,6 +44,7 @@ La compilación genera `dist/` para ejecución local; no crea un instalador firm
 | Retiro + reverso | Reverso único después de aprobación completa y espera de 1–30 s | Flujo explícito; no confundir con reverso automático por timeout |
 | Carga y estrés | Saldo y retiro, varios ATM alternados y una tarjeta física | Saldo 1–5 operaciones en curso; retiro secuencial; hasta 5 TPS objetivo |
 | Historial de carga | Corridas paginadas, filtros, detalle y exportación CSV/JSON | Evidencia local QA de corridas cerradas; conserva resultados inciertos |
+| Configuraciones de carga y estrés | Crear, editar, cargar y eliminar parámetros; presets de rampa a 3/5 TPS | Hasta 50 configuraciones QA, sin tarjeta/PIN; cargar no inicia la corrida |
 | Perfiles | Entidades, ATM y referencias QA de tarjetas | Los ATM QA/205 heredan la plantilla ATM20521 y su pool compartido |
 | Casos | Borradores guardados y expectativa local PASS/FAIL/INCONCLUSIVE | No certifica el resultado financiero en Switch/Core |
 | Inicio e historial | Feed Mediator QA/PREPROD y consulta manual del historial PREPROD | No sustituye la correlación financiera ni garantiza captura completa |
@@ -71,6 +72,10 @@ rechazo/error y solicita PIN una vez. Detalles en la [guía de carga](docs/imple
 Para recuperar evidencia: **Ver historial de carga → Ver detalle → Exportar CSV
 o Exportar JSON**. El archivo se guarda mediante el diálogo nativo; ver
 [formatos y alcance](docs/REPORTING.md).
+
+**Pruebas de estrés** ofrece rampas de 20 segundos hacia 3 o 5 TPS, ajustables en
+modo avanzado. **Configuraciones guardadas** permite reutilizar los parámetros
+del formulario; después de cargar, leer la tarjeta y pulsar **Iniciar prueba**.
 
 La consulta de saldo tiene evidencia QA aprobada documentada. Las pruebas locales
 no acreditan por sí mismas aceptación de nuevos flujos ni capacidad del host.

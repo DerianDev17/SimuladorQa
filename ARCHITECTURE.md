@@ -16,6 +16,7 @@ componentes actuales; la arquitectura objetivo distribuida sigue siendo una prop
 | Motor financiero | `financial-execution-service.ts` en Main | Idempotencia, contexto, diario previo al envío, transporte, cierre y limpieza |
 | Carga | `load-run-service.ts`, `physical-card-load-driver.ts` | Coordina corrida, tarjeta, ritmo, cancelación, métricas y resultados |
 | Evidencia de carga | `load-history-service.ts`, `load-export-service.ts` | Consulta paginada y exportación mediante puertos separados del control de ejecución |
+| Configuraciones de carga | `load-configuration-service.ts`, `load-configuration-ports.ts` | Biblioteca QA validada, con adaptador SQLite y auditoría independiente de las corridas |
 | Adaptadores e infraestructura | Subdirectorios de Main | ISO/framing, TCP, PC/SC, cifrado TEST, SQL, SQLite y workers |
 
 ## Dependencias

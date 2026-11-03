@@ -39,3 +39,4 @@ Cuando una decisión reemplaza a otra, ambas se conservan para trazabilidad.
 | [031](ADR-031-WITHDRAWAL-LOAD.md)                          | Retiros secuenciales en carga QA                 | Implementado; validación host pendiente     |
 | [032](ADR-032-FINANCIAL-EXECUTION-PORTS.md)                 | Motor financiero y contratos independientes      | Implementado                               |
 | [033](ADR-033-LOAD-HISTORY-EXPORT.md) | Historial y exportación de evidencia de carga | Implementado |
+| [034](ADR-034-STRESS-CONFIGURATIONS.md) | Presets de estrés y configuraciones reutilizables | Implementado |

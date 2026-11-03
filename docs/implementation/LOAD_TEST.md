@@ -22,6 +22,39 @@ no se suma la disponibilidad por ATM ni se repone al clonar un perfil.
 
 ## Parámetros y límites
 
+### Estrés y configuraciones reutilizables
+
+En **Pruebas de estrés**, los presets **Estrés gradual · 3 TPS** y **5 TPS**
+preparan STRESS con rampa de 20 s, duración máxima de 60 s y tope de 100 operaciones.
+Se aplica el primer límite alcanzado. La función de rampa vigente parte de 1 TPS
+y aumenta hacia el objetivo; no genera ráfagas para recuperar retrasos. Para
+retiro conserva concurrencia 1. Elegir un preset borra la selección efímera de
+tarjeta y abre los parámetros avanzados para revisión; no inicia envíos.
+
+En **Configuraciones guardadas**:
+
+1. Completar los parámetros y ATM del formulario, sin necesitar tarjeta/PIN.
+2. Escribir un nombre sin datos sensibles y pulsar **Guardar como nueva**.
+3. Seleccionar una configuración y pulsar **Cargar configuración** para preparar
+   el formulario. Se exige una lectura nueva antes de iniciar.
+4. Para editar, cargarla, modificar los parámetros y pulsar **Actualizar con el
+   formulario**. El nombre también es editable.
+5. **Eliminar configuración** pide confirmación y conserva las corridas históricas.
+
+Se guardan hasta 50 configuraciones QA en `qa-load-configurations.sqlite`, con
+UUID, revisión y timestamps UTC. Creación/edición/eliminación y auditoría se
+confirman en una sola transacción. No se guardan tarjeta, PIN ni autorizaciones.
+Los perfiles ATM deben seguir activos y conservar su revisión para cargar; si
+cambian, seleccionar perfiles actuales en el formulario y actualizar la
+configuración. El inicio vuelve a ejecutar el preflight financiero existente.
+
+Durante una corrida no se cambian configuraciones. Una edición obsoleta se rechaza.
+Después de un fallo o timeout de mutación, **Recargar configuraciones** comprueba
+el estado persistido antes de repetir. Una base corrupta se conserva y bloquea
+la biblioteca; no se reemplaza por una lista vacía. Ver [ADR-034](../adr/ADR-034-STRESS-CONFIGURATIONS.md).
+
+### Límites comunes
+
 | Parámetro | Valor admitido |
 | --- | --- |
 | Ambiente / escenario / cuenta | QA / LOCAL / ahorros |

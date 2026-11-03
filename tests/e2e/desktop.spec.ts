@@ -4024,3 +4024,132 @@ test('selección directa: cambiar tarjeta no la vuelve a seleccionar al actualiz
   await expect(send).toBeEnabled();
   await expect(window.getByRole('heading', { name: 'Aún no hay resultado' })).toBeVisible();
 });
+
+test('estrés y configuraciones: crear, recuperar, editar, ejecutar rampa y eliminar', async () => {
+  test.setTimeout(60000);
+  const window = await prepareBalanceSubmission();
+  await mkdir('artifacts', { recursive: true });
+  await build({
+    entryPoints: ['tests/helpers/load-electron.ts'],
+    outfile: 'artifacts/load-electron.cjs',
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    external: ['electron'],
+  });
+  const sample = approvedWithdrawalExecution();
+  delete sample.withdrawal;
+  await app!.evaluate(
+    ({ ipcMain, BrowserWindow }, options) => {
+      const require = process.getBuiltinModule('module').createRequire(options.fixture);
+      require(options.fixture).install(ipcMain, options.file, options.worker, options.sample);
+      BrowserWindow.getAllWindows()[0]?.setContentSize(1366, 900);
+    },
+    {
+      fixture: resolve('artifacts/load-electron.cjs'),
+      file: join(directory, 'stress-ui.sqlite'),
+      worker: resolve('dist/load-worker.cjs'),
+      sample,
+    },
+  );
+  await window.getByRole('button', { name: 'Carga y estrés', exact: true }).click();
+  await window.locator('summary').filter({ hasText: 'Pruebas de estrés' }).click();
+  await window.getByRole('button', { name: 'Estrés gradual · 3 TPS', exact: true }).click();
+  await expect(window.getByLabel('Tipo de corrida')).toHaveValue('STRESS');
+  await expect(window.getByLabel('Aumento gradual (segundos)')).toHaveValue('20');
+  await window.getByLabel('Operación de carga').selectOption('WITHDRAWAL');
+  await window.getByLabel('Monto por retiro (USD)').fill('25.50');
+  await expect(window.getByLabel('Operaciones en preparación y envío')).toHaveValue('1');
+  await window.getByLabel('Máximo de operaciones').fill('3');
+  await window.getByLabel('Duración máxima (segundos)').fill('10');
+  await window.getByLabel('Aumento gradual (segundos)').fill('2');
+  await window.getByRole('button', { name: 'Configuraciones guardadas', exact: true }).click();
+  const library = window.getByRole('region', {
+    name: 'Configuraciones de carga y estrés',
+    exact: true,
+  });
+  await expect(library).toContainText('No hay configuraciones guardadas.');
+  await library.getByLabel('Nombre de configuración').fill('Retiro con rampa');
+  await library.getByRole('button', { name: 'Guardar como nueva', exact: true }).click();
+  await expect(library).toContainText('Configuración creada.');
+  await window.reload();
+  await window.getByRole('button', { name: 'Carga y estrés', exact: true }).click();
+  await window.getByRole('button', { name: 'Configuraciones guardadas', exact: true }).click();
+  await library
+    .getByLabel('Configuración guardada')
+    .selectOption({ label: 'Retiro con rampa · STRESS · 3 TPS' });
+  await library.getByRole('button', { name: 'Cargar configuración', exact: true }).click();
+  await expect(window.getByLabel('Monto por retiro (USD)')).toHaveValue('25.50');
+  await expect(window.getByLabel('Tipo de corrida')).toHaveValue('STRESS');
+  const start = window.getByRole('button', { name: 'Iniciar prueba', exact: true });
+  await expect(start).toBeDisabled();
+  await window.getByLabel('TPS objetivo').fill('5');
+  await library.getByLabel('Nombre de configuración').fill('Retiro rampa ajustada');
+  await library.getByRole('button', { name: 'Actualizar con el formulario', exact: true }).click();
+  await expect(library).toContainText('Configuración actualizada.');
+  await library
+    .getByLabel('Configuración guardada')
+    .selectOption({ label: 'Retiro rampa ajustada · STRESS · 5 TPS' });
+  await library.getByRole('button', { name: 'Cargar configuración', exact: true }).click();
+  await library.screenshot({ path: 'artifacts/stress-configurations.png' });
+  await window.getByRole('button', { name: 'Ocultar configuraciones', exact: true }).click();
+  await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await expect(start).toBeEnabled();
+  await start.click();
+  const result = window.getByRole('region', { name: 'Resultado de carga', exact: true });
+  await expect(result).toContainText('Completada', { timeout: 10000 });
+  const run = await window.evaluate(() => globalThis.window.desktop!.getLoadRun());
+  expect(run).toMatchObject({
+    ok: true,
+    value: {
+      draft: {
+        mode: 'STRESS',
+        operation: 'WITHDRAWAL',
+        amount: '25.50',
+        rampUpSeconds: 2,
+        targetTps: 5,
+        concurrency: 1,
+      },
+      items: [{}, {}, {}],
+    },
+  });
+  await window.getByRole('button', { name: 'Configuraciones guardadas', exact: true }).click();
+  await library
+    .getByLabel('Configuración guardada')
+    .selectOption({ label: 'Retiro rampa ajustada · STRESS · 5 TPS' });
+  await library.getByRole('button', { name: 'Eliminar configuración', exact: true }).click();
+  await library.getByRole('button', { name: 'Cancelar eliminación', exact: true }).click();
+  await expect(
+    library.getByRole('button', { name: 'Confirmar eliminación', exact: true }),
+  ).toHaveCount(0);
+  await library.getByRole('button', { name: 'Eliminar configuración', exact: true }).click();
+  await library.getByRole('button', { name: 'Confirmar eliminación', exact: true }).click();
+  await expect(library).toContainText('Configuración eliminada.');
+  await expect(library).toContainText('No hay configuraciones guardadas.');
+  await expect(result).toContainText('Completada');
+});
+
+test('configuraciones de estrés: timeout de guardado exige recargar antes de repetir', async () => {
+  const window = await prepareBalanceSubmission();
+  await window.getByRole('button', { name: 'Carga y estrés', exact: true }).click();
+  await window.getByRole('button', { name: 'Configuraciones guardadas', exact: true }).click();
+  const library = window.getByRole('region', {
+    name: 'Configuraciones de carga y estrés',
+    exact: true,
+  });
+  await library.getByLabel('Nombre de configuración').fill('Configuración de prueba');
+  await app!.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('load:configurations:save');
+    ipcMain.handle('load:configurations:save', () => new Promise(() => {}));
+  });
+  await library.getByRole('button', { name: 'Guardar como nueva', exact: true }).click();
+  await expect(library.getByRole('alert')).toContainText('no respondió a tiempo', {
+    timeout: 7000,
+  });
+  await expect(
+    library.getByRole('button', { name: 'Guardar como nueva', exact: true }),
+  ).toBeDisabled();
+  await library.getByRole('button', { name: 'Recargar configuraciones', exact: true }).click();
+  await expect(library.getByRole('alert')).toHaveCount(0);
+  await expect(library).toContainText('No hay configuraciones guardadas.');
+});

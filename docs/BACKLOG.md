@@ -17,6 +17,8 @@ el estado actual. Alcance implementado en [README](../README.md) y
   Saldo admite 1–5 operaciones en curso; retiro conserva ejecución secuencial.
 - Historial de carga paginado con filtros y detalle; exportación CSV/JSON de
   evidencia local sanitizada de corridas cerradas, sin certificación Core (ADR-033).
+- Presets de estrés gradual y configuraciones QA guardadas con revisión y auditoría;
+  cargar no inicia una corrida ni conserva tarjeta/PIN (ADR-034).
 - Catálogos locales, perfiles QA de chip con referencias públicas, casos guardados
   y expectativas locales; no equivalen a un pool de tarjetas virtuales.
 - Feed e historial Mediator, inspector protegido y separación de Renderer,

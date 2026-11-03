@@ -1,3 +1,8 @@
+import type {
+  SavedLoadConfiguration,
+  SaveLoadConfiguration,
+  DeleteLoadConfiguration,
+} from '../../domain/src/load-configurations';
 import type { LoadExportRequest, LoadExportStatus } from '../../domain/src/load-export';
 import type { LoadHistoryQuery, LoadHistoryPage } from '../../domain/src/load-history';
 import type { LoadRunRequest, LoadRunSnapshot } from '../../domain/src/load-run';
@@ -94,6 +99,9 @@ export const channels = {
   observations: 'observations:search',
   startLoadRun: 'load:run:start',
   loadRun: 'load:run:status',
+  loadConfigurations: 'load:configurations:list',
+  saveLoadConfiguration: 'load:configurations:save',
+  deleteLoadConfiguration: 'load:configurations:delete',
   exportLoadRun: 'load:history:export',
   loadHistory: 'load:history:list',
   loadHistoryDetail: 'load:history:detail',
@@ -215,6 +223,11 @@ export interface DesktopApi {
   searchObservations(request: ObservationRequest): Promise<Result<ObservationSearch>>;
   getMediatorLive(request: MediatorLiveRequest): Promise<Result<MediatorLiveSnapshot>>;
   startLoadRun(request: LoadRunRequest): Promise<Result<LoadRunSnapshot>>;
+  getLoadConfigurations(): Promise<Result<SavedLoadConfiguration[]>>;
+  saveLoadConfiguration(request: SaveLoadConfiguration): Promise<Result<SavedLoadConfiguration[]>>;
+  deleteLoadConfiguration(
+    request: DeleteLoadConfiguration,
+  ): Promise<Result<SavedLoadConfiguration[]>>;
   exportLoadRun(request: LoadExportRequest): Promise<Result<LoadExportStatus>>;
   listLoadHistory(request: LoadHistoryQuery): Promise<Result<LoadHistoryPage>>;
   getLoadHistory(request: { runId: string }): Promise<Result<LoadRunSnapshot | null>>;

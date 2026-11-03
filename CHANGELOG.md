@@ -1,5 +1,11 @@
 # Changelog
 
+Estrés y configuraciones (2026-11-03): presets de rampa hacia 3/5 TPS y biblioteca
+QA para crear, editar, cargar y eliminar hasta 50 planes. Validación común con
+ejecución, SQLite con revisión/auditoría y recarga obligatoria tras errores de
+mutación. Cargar solo prepara el formulario y exige tarjeta nueva; retiro sigue
+secuencial. Ver [ADR-034](docs/adr/ADR-034-STRESS-CONFIGURATIONS.md).
+
 Evidencia de carga (2026-11-03): exportación CSV/JSON de corridas cerradas desde
 el historial, con campos permitidos y guardado nativo desde Main. Control de
 cancelación, plazo, destinos protegidos y errores sin exponer rutas privadas.

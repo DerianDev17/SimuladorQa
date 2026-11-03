@@ -52,6 +52,10 @@ const api: DesktopApi = Object.freeze<DesktopApi>({
   searchObservations: (request) => ipcRenderer.invoke(channels.observations, request),
   getMediatorLive: (request) => ipcRenderer.invoke(channels.mediatorLive, request),
   startLoadRun: (request) => ipcRenderer.invoke(channels.startLoadRun, request),
+  getLoadConfigurations: () => ipcRenderer.invoke(channels.loadConfigurations),
+  saveLoadConfiguration: (request) => ipcRenderer.invoke(channels.saveLoadConfiguration, request),
+  deleteLoadConfiguration: (request) =>
+    ipcRenderer.invoke(channels.deleteLoadConfiguration, request),
   exportLoadRun: (request) => ipcRenderer.invoke(channels.exportLoadRun, request),
   listLoadHistory: (request) => ipcRenderer.invoke(channels.loadHistory, request),
   getLoadHistory: (request) => ipcRenderer.invoke(channels.loadHistoryDetail, request),

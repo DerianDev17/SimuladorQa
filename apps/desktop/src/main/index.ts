@@ -1,3 +1,5 @@
+import { LoadConfigurationService } from './load-configuration-service';
+import { SqliteLoadConfigurations } from './infrastructure/sqlite-load-configurations';
 import { LoadExportService } from './load-export-service';
 import { FileLoadExportSink } from './infrastructure/file-load-export';
 import { ElectronExportDialog } from './adapters/electron-export-dialog';
@@ -69,6 +71,8 @@ let withdrawalReceipts: WithdrawalReceiptService | undefined;
 let loadRun: LoadRunService | undefined;
 let loadHistory: LoadHistoryService | undefined;
 let loadExporter: LoadExportService | undefined;
+let loadConfigurations: LoadConfigurationService | undefined;
+let loadConfigurationStore: SqliteLoadConfigurations | undefined;
 let loadRunStore: SqliteLoadRunStore | undefined;
 let virtualCardGenerator: VirtualCardGeneratorService | undefined;
 let savedCardProfiles: SavedCardProfileService | undefined;
@@ -359,6 +363,15 @@ void startupReady
       new FileLoadExportSink(new ElectronExportDialog(() => window), app.getPath('userData')),
       () => new Date().toISOString(),
     );
+    loadConfigurationStore = new SqliteLoadConfigurations(
+      join(app.getPath('userData'), 'qa-load-configurations.sqlite'),
+      runtime,
+    );
+    loadConfigurations = new LoadConfigurationService(
+      loadConfigurationStore,
+      preferences,
+      () => !!loadRun?.isBusy(),
+    );
     for (const channel of Object.values(channels)) {
       ipcMain.handle(channel, (event, payload: unknown) => {
         if (
@@ -406,6 +419,12 @@ void startupReady
             )
               return failure('CONFLICT', 'Espera a que termine la operación actual.');
             return loadRun!.start(payload);
+          case channels.loadConfigurations:
+            return loadConfigurations!.list(payload);
+          case channels.saveLoadConfiguration:
+            return loadConfigurations!.save(payload);
+          case channels.deleteLoadConfiguration:
+            return loadConfigurations!.delete(payload);
           case channels.exportLoadRun:
             return loadExporter!.export(payload);
           case channels.loadHistory:
@@ -574,6 +593,7 @@ app.on('before-quit', (event) => {
         observer?.close();
         cardReader?.close();
         cardIdentity?.close();
+        await loadConfigurationStore?.close().catch(() => undefined);
         await loadRunStore?.close().catch(() => undefined);
         await Promise.allSettled(financialJournals.map((journal) => journal.close()));
         await catalogs?.close().catch(() => undefined);
