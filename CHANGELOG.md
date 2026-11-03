@@ -1,5 +1,9 @@
 # Changelog
 
+Historial de carga (2026-11-03): consulta QA paginada de corridas SQLite, filtros
+por inicio/ATM/operación/estado y detalle con métricas, monto y correlación.
+IPC validado separado del control de ejecución; conserva recuperación e idempotencia.
+
 Limpieza documental adicional (2026-11-02): README con requisitos operativos,
 comandos y estructura del repositorio. Retirado el inventario duplicado de
 componentes; flujo transaccional, estrategia de pruebas y CI ajustados al código.

@@ -92,6 +92,26 @@ financieros y mensajería protegida permanecen en el diario de saldo o retiro.
 Las mediciones no almacenan PIN, PAN completo, tramas ni campos EMV. Registros
 antiguos sin desglose o tiempo monotónico conservan su información disponible.
 
+## Consultar corridas anteriores
+
+Desde **Carga y estrés → Ver historial de carga** se consultan las corridas QA
+guardadas, en páginas de 20 y por orden de registro descendente. Se puede filtrar
+por inicio (desde inclusive, hasta exclusivo), operación, estado y UUID de ATM,
+incluidos ATM secundarios. El selector sugiere perfiles actuales; un UUID antiguo
+permite buscar un perfil eliminado. Las fechas se introducen y muestran en hora
+local y se consultan en UTC.
+
+**Ver detalle** muestra parámetros, monto por retiro, métricas y todas las
+operaciones guardadas con UUID/STAN/RRN disponibles. **Actualizar detalle** vuelve
+a leer el registro; no es un seguimiento en vivo. Los contadores de errores
+incluyen timeouts y no son categorías excluyentes.
+
+Consultar el historial no sustituye la corrida activa ni repite envíos. Antes de
+consultar se aplica la recuperación existente de la última corrida interrumpida.
+Una página fallida se invalida y permite **Actualizar historial**; los registros
+corruptos no se omiten silenciosamente. La paginación por cursor evita duplicar
+corridas cuando se insertan nuevas; actualizar vuelve a la primera página.
+
 ## Pendientes y fuentes
 
 No están habilitados PREPROD financiero, reversos en carga, múltiples tarjetas,

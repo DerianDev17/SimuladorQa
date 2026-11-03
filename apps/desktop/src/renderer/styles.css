@@ -4129,3 +4129,42 @@ td {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.load-history {
+  min-width: 0;
+  padding: 20px;
+}
+.load-history-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  border: 0;
+  padding: 12px 0;
+}
+.load-history-filters label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.load-history-filters input,
+.load-history-filters select {
+  max-width: 100%;
+}
+.load-history .table-wrap {
+  max-width: 100%;
+  overflow: auto;
+  margin: 12px 0;
+}
+.load-history-detail {
+  margin-top: 20px;
+  overflow-wrap: anywhere;
+}
+.load-history-detail table {
+  min-width: 950px;
+}
+.load-history-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin: 12px 0;
+}

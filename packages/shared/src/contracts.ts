@@ -1,3 +1,4 @@
+import type { LoadHistoryQuery, LoadHistoryPage } from '../../domain/src/load-history';
 import type { LoadRunRequest, LoadRunSnapshot } from '../../domain/src/load-run';
 import type {
   DataBlocker,
@@ -92,6 +93,8 @@ export const channels = {
   observations: 'observations:search',
   startLoadRun: 'load:run:start',
   loadRun: 'load:run:status',
+  loadHistory: 'load:history:list',
+  loadHistoryDetail: 'load:history:detail',
   stopLoadRun: 'load:run:stop',
 } as const;
 
@@ -210,6 +213,8 @@ export interface DesktopApi {
   searchObservations(request: ObservationRequest): Promise<Result<ObservationSearch>>;
   getMediatorLive(request: MediatorLiveRequest): Promise<Result<MediatorLiveSnapshot>>;
   startLoadRun(request: LoadRunRequest): Promise<Result<LoadRunSnapshot>>;
+  listLoadHistory(request: LoadHistoryQuery): Promise<Result<LoadHistoryPage>>;
+  getLoadHistory(request: { runId: string }): Promise<Result<LoadRunSnapshot | null>>;
   getLoadRun(): Promise<Result<LoadRunSnapshot | null>>;
   stopLoadRun(request: { runId: string }): Promise<Result<LoadRunSnapshot | null>>;
 }

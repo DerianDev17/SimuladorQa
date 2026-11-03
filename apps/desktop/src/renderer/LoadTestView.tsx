@@ -1,3 +1,4 @@
+import { LoadHistoryView } from './LoadHistoryView';
 import { useEffect, useRef, useState } from 'react';
 import type { AtmProfile } from '../../../../packages/domain/src/catalogs';
 import type { Environment } from '../../../../packages/domain/src/index';
@@ -144,6 +145,7 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
   const available = atms.filter((atm) => atm.active && atm.environment === 'QA');
   const [atmIds, setAtmIds] = useState<string[]>([]);
   const [preset, setPreset] = useState<Preset>('QUICK');
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [advanced, setAdvanced] = useState(false);
   const [mode, setMode] = useState<LoadTestMode>('LOAD');
   const [operation, setOperation] = useState<LoadTestOperation>('BALANCE');
@@ -365,6 +367,15 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
           </span>
         </div>
       </header>
+      <button aria-expanded={historyOpen} onClick={() => setHistoryOpen(!historyOpen)}>
+        {historyOpen ? 'Ocultar historial de carga' : 'Ver historial de carga'}
+      </button>
+      {historyOpen &&
+        (environment === 'QA' ? (
+          <LoadHistoryView atms={atms} />
+        ) : (
+          <p>Selecciona QA para consultar el historial de carga.</p>
+        ))}
       <div className="load-test-columns">
         <section className="panel load-setup" aria-label="Configurar prueba">
           <div className="load-mode-tabs">

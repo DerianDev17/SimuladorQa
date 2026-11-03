@@ -1,3 +1,4 @@
+import { LoadHistoryService } from './load-history-service';
 import { LoadPinSession } from './adapters/load-pin-session';
 import { LoadRunService } from './load-run-service';
 import { PhysicalCardLoadDriver } from './physical-card-load-driver';
@@ -63,6 +64,7 @@ let balanceService: BalanceInquiryService | undefined;
 let withdrawalService: WithdrawalService | undefined;
 let withdrawalReceipts: WithdrawalReceiptService | undefined;
 let loadRun: LoadRunService | undefined;
+let loadHistory: LoadHistoryService | undefined;
 let loadRunStore: SqliteLoadRunStore | undefined;
 let virtualCardGenerator: VirtualCardGeneratorService | undefined;
 let savedCardProfiles: SavedCardProfileService | undefined;
@@ -345,6 +347,9 @@ void startupReady
       (request) => application.getWithdrawalExecution(request),
       new ElectronReceiptPrinter(() => window),
     );
+    loadHistory = new LoadHistoryService(loadRunStore!, preferences, () =>
+      loadRun!.current(undefined),
+    );
     for (const channel of Object.values(channels)) {
       ipcMain.handle(channel, (event, payload: unknown) => {
         if (
@@ -392,6 +397,10 @@ void startupReady
             )
               return failure('CONFLICT', 'Espera a que termine la operación actual.');
             return loadRun!.start(payload);
+          case channels.loadHistory:
+            return loadHistory!.list(payload);
+          case channels.loadHistoryDetail:
+            return loadHistory!.get(payload);
           case channels.loadRun:
             return loadRun!.current(payload);
           case channels.stopLoadRun:
