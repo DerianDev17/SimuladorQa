@@ -6,6 +6,7 @@
 | --- | --- |
 | Instalar, ejecutar y conocer el alcance actual | [README](../README.md) |
 | Entender capas y dependencias implementadas | [Arquitectura](../ARCHITECTURE.md) |
+| Seguir una solicitud financiera | [Flujo transaccional](architecture/DATA_FLOW.md) |
 | Diagnosticar arranque o recarga | [Bootstrap](implementation/BOOTSTRAP.md) |
 | Ejecutar carga de saldo o retiro | [Guía de carga](implementation/LOAD_TEST.md) |
 | Preparar una operación e inspeccionar mensajes | [Transacciones](implementation/TRANSACTION_PREPARATION.md) |
@@ -15,6 +16,7 @@
 | Revisar reverso explícito y sus límites | [Reversos](transactions/REVERSAL.md) |
 | Consultar Mediator | [Observador](implementation/MEDIATOR_OBSERVER.md) y [feed](implementation/DASHBOARD_LIVE_FEED.md) |
 | Validar cambios | [Estrategia QA](testing/TEST_STRATEGY.md) |
+| Consultar comandos y controles de CI | [CI vigente](CI_CHECKS.md) |
 | Identificar datos que bloquean una regla | [TODO-DATA](TODO_DATA.md) y [checklist](INPUT_CHECKLIST.md) |
 | Consultar lo que falta implementar o validar | [Backlog vigente](BACKLOG.md) |
 | Entender por qué se tomó una decisión | [Índice ADR](adr/README.md) |
@@ -35,3 +37,6 @@
 - No cerrar TODO-DATA por inferencia ni eliminarlo porque exista un mock.
 - Usar enlaces relativos a la fuente principal y revisar que resuelvan a archivos
   existentes después de mover o retirar documentación.
+
+El inventario duplicado `architecture/COMPONENTS.md` fue retirado. Las capas y
+responsabilidades se mantienen únicamente en [ARCHITECTURE.md](../ARCHITECTURE.md).

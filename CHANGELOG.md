@@ -1,5 +1,11 @@
 # Changelog
 
+Limpieza documental adicional (2026-11-02): README con requisitos operativos,
+comandos y estructura del repositorio. Retirado el inventario duplicado de
+componentes; flujo transaccional, estrategia de pruebas y CI ajustados al código.
+Control Plane, dashboard distribuido y releases se identifican como propuestas;
+el MVP inicial reconoce las decisiones posteriores que habilitaron carga QA.
+
 Documentación (2026-11-02): README, arquitectura y arranque describen el estado
 actual; carga tiene una única guía de referencia. Nuevo índice en docs/README.md
 y backlog que distingue implementación pendiente de validación externa. El índice

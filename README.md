@@ -4,6 +4,9 @@ Aplicación desktop de QA para preparar y ejecutar transacciones ATM, realizar
 carga controlada y consultar evidencia de Mediator. Electron, TypeScript strict
 y React; hardware, secretos, TCP y persistencia se ejecutan fuera del Renderer.
 
+Estado documentado: **2026-11-02**. Consultar el [backlog](docs/BACKLOG.md) para
+distinguir desarrollo pendiente de validación con hardware, Switch y Core.
+
 ## Inicio rápido
 
 Requiere Windows y Node.js `>=22.20.0 <23` o `>=24`, según `package.json`.
@@ -12,6 +15,12 @@ Requiere Windows y Node.js `>=22.20.0 <23` o `>=24`, según `package.json`.
 npm ci
 npm run dev
 ```
+
+Estos comandos arrancan la aplicación; ejecutar operaciones reales requiere
+lector PC/SC, tarjeta QA, perfil ATM y configuración privada válidos. Un perfil
+de tarjeta guardado no sustituye al chip. La configuración de la estación se
+describe en [perfiles ATM](docs/implementation/MULTI_ATM_PROFILES.md) y
+[conexión Switch](docs/implementation/SWITCH_CONNECTION.md).
 
 Para ejecutar la compilación local:
 
@@ -24,6 +33,7 @@ Main y preload deben corresponder a la misma compilación. El lanzador de desarr
 coordina la recarga y espera las operaciones activas. Configuración, perfiles
 privados y diarios viven fuera del repositorio, en el directorio de datos de
 Electron. Ver [arranque y diagnóstico](docs/implementation/BOOTSTRAP.md).
+La compilación genera `dist/` para ejecución local; no crea un instalador firmado.
 
 ## Funcionalidad actual
 
@@ -41,6 +51,8 @@ Producción permanece bloqueada. PREPROD tiene configuración y consultas propia
 no implica que los flujos financieros QA estén habilitados allí. BANRED, RTC,
 externas, pool virtual, carga distribuida y Control Plane conservan pendientes
 según el [registro de datos faltantes](docs/TODO_DATA.md).
+Tampoco están implementados la conciliación automática con SmartVista/Core ni
+el reverso automático por timeout. El reverso explícito tiene su propio alcance.
 
 ## Ejecutar una operación
 
@@ -71,9 +83,32 @@ build. CI añade auditoría de dependencias y cobertura; ver la
 [estrategia de pruebas](docs/testing/TEST_STRATEGY.md). Las pruebas automatizadas
 usan dependencias sintéticas, TCP local y directorios temporales cuando aplica.
 
+| Comando | Uso |
+| --- | --- |
+| `npm run dev` | Desarrollo con recarga coordinada de React, Main y preload |
+| `npm run build` / `npm start` | Compilar y ejecutar la app local |
+| `npm run lint` / `npm run typecheck` | Revisar código y contratos TypeScript |
+| `npm run test:unit` / `npm run test:integration` | Ejecutar suites por nivel |
+| `npm run test:e2e` | Preparar Electron, compilar y probar recorridos de escritorio |
+| `npm run test:coverage` | Obtener cobertura de unitarias e integración |
+
+## Estructura del repositorio
+
+- `apps/desktop/src/renderer`: interfaz React.
+- `apps/desktop/src/main`: aplicación, motor financiero, carga y adaptadores.
+- `apps/desktop/src/preload.ts`: puente IPC público.
+- `packages/domain` y `packages/shared`: dominio y contratos compartidos.
+- `tests` y `tooling`: pruebas y herramientas de desarrollo/compilación.
+- `docs` y `agents`: guías, fuentes, decisiones y reglas de trabajo.
+
+Las dependencias entre capas se explican en [ARCHITECTURE.md](ARCHITECTURE.md).
+Control Plane y agentes remotos son propuestas; no hay un servicio central que
+instalar o arrancar con los comandos de este repositorio.
+
 ## Documentación
 
 - [Índice y convenciones documentales](docs/README.md).
+- [Pendientes de implementación y validación](docs/BACKLOG.md).
 - [Arquitectura implementada](ARCHITECTURE.md) y [decisiones ADR](docs/adr/README.md).
 - [Saldo QA](docs/implementation/BALANCE_EXECUTION.md), [retiro](docs/transactions/WITHDRAWAL.md)
   y [reversos](docs/transactions/REVERSAL.md).
