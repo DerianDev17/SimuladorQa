@@ -1,6 +1,6 @@
 # Arquitectura implementada
 
-Estado de referencia: 2026-11-02. Las decisiones históricas y sus sustituciones
+Estado de referencia: 2026-11-03. Las decisiones históricas y sus sustituciones
 se consultan en el [índice ADR](docs/adr/README.md). Este documento describe los
 componentes actuales; la arquitectura objetivo distribuida sigue siendo una propuesta.
 
@@ -15,6 +15,7 @@ componentes actuales; la arquitectura objetivo distribuida sigue siendo una prop
 | Aplicación | `apps/desktop/src/main/application.ts` | Valida contexto, ambiente y revisiones; coordina exclusión financiera |
 | Motor financiero | `financial-execution-service.ts` en Main | Idempotencia, contexto, diario previo al envío, transporte, cierre y limpieza |
 | Carga | `load-run-service.ts`, `physical-card-load-driver.ts` | Coordina corrida, tarjeta, ritmo, cancelación, métricas y resultados |
+| Evidencia de carga | `load-history-service.ts`, `load-export-service.ts` | Consulta paginada y exportación mediante puertos separados del control de ejecución |
 | Adaptadores e infraestructura | Subdirectorios de Main | ISO/framing, TCP, PC/SC, cifrado TEST, SQL, SQLite y workers |
 
 ## Dependencias
@@ -104,3 +105,8 @@ financiero virtual son alcance propuesto, no componentes operativos de esta
 entrega. El [diagrama inicial](docs/architecture/architecture_overview.png) describe
 esa visión; para la estructura implementada usar el diagrama anterior.
 Los datos faltantes y sus bloqueos están en [TODO-DATA](docs/TODO_DATA.md).
+
+Historial y exportación usan los registros locales existentes. Dominio proyecta
+campos permitidos; Main valida consulta/ambiente y coordina los puertos de lectura
+y guardado. Adaptadores gestionan SQLite, diálogo nativo y reemplazo de archivos.
+Renderer no proporciona rutas ni contenidos. Ver [ADR-033](docs/adr/ADR-033-LOAD-HISTORY-EXPORT.md).

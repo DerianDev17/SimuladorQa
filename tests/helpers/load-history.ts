@@ -31,7 +31,7 @@ export function historyRun(overrides: Partial<LoadRunSnapshot> = {}): LoadRunSna
         received: true,
         elapsedMs: 100,
         responseCode: '00',
-        correlation: { stan: '000123', rrn: '000000000123', terminalId: 'ATM00001' },
+        correlation: { stan: '000123', rrn: '123'.padStart(12, '0'), terminalId: 'ATM00001' },
         finishedAt: '2026-11-02T10:00:01.000Z',
       },
     ],

@@ -1,3 +1,6 @@
+import { LoadExportService } from './load-export-service';
+import { FileLoadExportSink } from './infrastructure/file-load-export';
+import { ElectronExportDialog } from './adapters/electron-export-dialog';
 import { LoadHistoryService } from './load-history-service';
 import { LoadPinSession } from './adapters/load-pin-session';
 import { LoadRunService } from './load-run-service';
@@ -65,6 +68,7 @@ let withdrawalService: WithdrawalService | undefined;
 let withdrawalReceipts: WithdrawalReceiptService | undefined;
 let loadRun: LoadRunService | undefined;
 let loadHistory: LoadHistoryService | undefined;
+let loadExporter: LoadExportService | undefined;
 let loadRunStore: SqliteLoadRunStore | undefined;
 let virtualCardGenerator: VirtualCardGeneratorService | undefined;
 let savedCardProfiles: SavedCardProfileService | undefined;
@@ -350,6 +354,11 @@ void startupReady
     loadHistory = new LoadHistoryService(loadRunStore!, preferences, () =>
       loadRun!.current(undefined),
     );
+    loadExporter = new LoadExportService(
+      (request) => loadHistory!.get(request),
+      new FileLoadExportSink(new ElectronExportDialog(() => window), app.getPath('userData')),
+      () => new Date().toISOString(),
+    );
     for (const channel of Object.values(channels)) {
       ipcMain.handle(channel, (event, payload: unknown) => {
         if (
@@ -397,6 +406,8 @@ void startupReady
             )
               return failure('CONFLICT', 'Espera a que termine la operación actual.');
             return loadRun!.start(payload);
+          case channels.exportLoadRun:
+            return loadExporter!.export(payload);
           case channels.loadHistory:
             return loadHistory!.list(payload);
           case channels.loadHistoryDetail:

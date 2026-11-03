@@ -1,6 +1,6 @@
 # Carga y estrés de saldo y retiro en QA
 
-Guía vigente al 2026-11-02. La implementación usa `LoadRunService` para inicio,
+Guía vigente al 2026-11-03. La implementación usa `LoadRunService` para inicio,
 estado y parada. Se retiró el preparador virtual legado sin consumidores y su IPC
 `load:plan:prepare`. Reiniciar la app completa después de actualizar Main/preload.
 
@@ -111,6 +111,11 @@ consultar se aplica la recuperación existente de la última corrida interrumpid
 Una página fallida se invalida y permite **Actualizar historial**; los registros
 corruptos no se omiten silenciosamente. La paginación por cursor evita duplicar
 corridas cuando se insertan nuevas; actualizar vuelve a la primera página.
+
+El detalle de una corrida cerrada permite **Exportar CSV** o **Exportar JSON**.
+Main recupera el registro y genera evidencia sanitizada; el operador elige el
+destino en el diálogo nativo. Cancelar no escribe. Se conserva incertidumbre y no
+se confirma resultado Core. Formatos, límites y errores en [REPORTING](../REPORTING.md).
 
 ## Pendientes y fuentes
 

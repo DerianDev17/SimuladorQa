@@ -9,6 +9,7 @@
 | Seguir una solicitud financiera | [Flujo transaccional](architecture/DATA_FLOW.md) |
 | Diagnosticar arranque o recarga | [Bootstrap](implementation/BOOTSTRAP.md) |
 | Ejecutar carga de saldo o retiro | [Guía de carga](implementation/LOAD_TEST.md) |
+| Exportar evidencia de una corrida | [Formatos y alcance](REPORTING.md) |
 | Preparar una operación e inspeccionar mensajes | [Transacciones](implementation/TRANSACTION_PREPARATION.md) |
 | Configurar y clonar ATM | [Plantilla ATM](implementation/MULTI_ATM_PROFILES.md) |
 | Revisar consulta de saldo | [Saldo QA](implementation/BALANCE_EXECUTION.md) |

@@ -4168,3 +4168,20 @@ td {
   align-items: center;
   margin: 12px 0;
 }
+
+.load-history .load-metrics {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+.load-history-detail p {
+  margin: 8px 0;
+}
+.load-history-filters {
+  align-items: end;
+}
+.load-history-filters button {
+  align-self: end;
+  min-height: 46px;
+}
+.load-history-actions {
+  flex-wrap: wrap;
+}

@@ -4,7 +4,7 @@ Aplicación desktop de QA para preparar y ejecutar transacciones ATM, realizar
 carga controlada y consultar evidencia de Mediator. Electron, TypeScript strict
 y React; hardware, secretos, TCP y persistencia se ejecutan fuera del Renderer.
 
-Estado documentado: **2026-11-02**. Consultar el [backlog](docs/BACKLOG.md) para
+Estado documentado: **2026-11-03**. Consultar el [backlog](docs/BACKLOG.md) para
 distinguir desarrollo pendiente de validación con hardware, Switch y Core.
 
 ## Inicio rápido
@@ -43,7 +43,7 @@ La compilación genera `dist/` para ejecución local; no crea un instalador firm
 | Retiro | Monto personalizado y comprobante local opcional | USD, contrato vigente del ATM; el host determina el resultado |
 | Retiro + reverso | Reverso único después de aprobación completa y espera de 1–30 s | Flujo explícito; no confundir con reverso automático por timeout |
 | Carga y estrés | Saldo y retiro, varios ATM alternados y una tarjeta física | Saldo 1–5 operaciones en curso; retiro secuencial; hasta 5 TPS objetivo |
-| Historial de carga | Corridas paginadas, filtros y detalle con correlación | Consulta local QA, independiente de la prueba activa |
+| Historial de carga | Corridas paginadas, filtros, detalle y exportación CSV/JSON | Evidencia local QA de corridas cerradas; conserva resultados inciertos |
 | Perfiles | Entidades, ATM y referencias QA de tarjetas | Los ATM QA/205 heredan la plantilla ATM20521 y su pool compartido |
 | Casos | Borradores guardados y expectativa local PASS/FAIL/INCONCLUSIVE | No certifica el resultado financiero en Switch/Core |
 | Inicio e historial | Feed Mediator QA/PREPROD y consulta manual del historial PREPROD | No sustituye la correlación financiera ni garantiza captura completa |
@@ -67,6 +67,10 @@ el reverso automático por timeout. El reverso explícito tiene su propio alcanc
 Para carga, abrir **Carga y estrés**, seleccionar ATM, operación, límites y tarjeta.
 En retiro, indicar el monto **por operación**. La corrida se detiene al primer
 rechazo/error y solicita PIN una vez. Detalles en la [guía de carga](docs/implementation/LOAD_TEST.md).
+
+Para recuperar evidencia: **Ver historial de carga → Ver detalle → Exportar CSV
+o Exportar JSON**. El archivo se guarda mediante el diálogo nativo; ver
+[formatos y alcance](docs/REPORTING.md).
 
 La consulta de saldo tiene evidencia QA aprobada documentada. Las pruebas locales
 no acreditan por sí mismas aceptación de nuevos flujos ni capacidad del host.

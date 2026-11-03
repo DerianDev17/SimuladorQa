@@ -94,6 +94,9 @@ describe('límites de arquitectura', () => {
       'balance-ports.ts',
       'load-ports.ts',
       'load-run-service.ts',
+      'load-history-service.ts',
+      'load-history-ports.ts',
+      'load-export-service.ts',
     ];
     const concrete = [
       'balance-inquiry-service',

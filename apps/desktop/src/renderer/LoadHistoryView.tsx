@@ -1,3 +1,4 @@
+import { LoadExportActions } from './LoadExportActions';
 import { useEffect, useRef, useState } from 'react';
 import type { AtmProfile } from '../../../../packages/domain/src/catalogs';
 import {
@@ -27,6 +28,7 @@ export function LoadHistoryDetail({ run }: { run: LoadRunSnapshot }) {
   const metrics = loadRunMetrics(run);
   return (
     <section className="load-history-detail" aria-label="Detalle de corrida guardada">
+      <LoadExportActions key={run.runId} run={run} />
       <h3>
         {loadStateLabels[run.state]} · {run.draft.operation === 'WITHDRAWAL' ? 'Retiro' : 'Saldo'}
       </h3>
@@ -99,7 +101,11 @@ export function LoadHistoryDetail({ run }: { run: LoadRunSnapshot }) {
             {run.items.map((item) => (
               <tr key={item.requestId}>
                 <td>{localDate(item.finishedAt ?? null)}</td>
-                <td>{item.correlation?.terminalId ?? item.atmId ?? run.draft.atmId}</td>
+                <td>
+                  {item.correlation?.terminalId ??
+                    item.atmId ??
+                    (loadTestAtms(run.draft).length === 1 ? run.draft.atmId : 'No registrado')}
+                </td>
                 <td>{item.transactionId ?? '—'}</td>
                 <td>{item.correlation?.stan ?? '—'}</td>
                 <td>{item.correlation?.rrn ?? '—'}</td>
@@ -137,6 +143,7 @@ export function LoadHistoryView({ atms }: { atms: readonly AtmProfile[] }) {
     setError('');
     setPage(null);
     setDetail(null);
+    setQuery(request);
     const result = await client.call((api) => api.listLoadHistory(request));
     if (id !== generation.current) return;
     setBusy(false);
@@ -145,7 +152,6 @@ export function LoadHistoryView({ atms }: { atms: readonly AtmProfile[] }) {
       return;
     }
     setPage(result.value);
-    setQuery(request);
     setCursors(history);
   }
   useEffect(() => {

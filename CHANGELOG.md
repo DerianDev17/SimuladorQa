@@ -1,5 +1,11 @@
 # Changelog
 
+Evidencia de carga (2026-11-03): exportación CSV/JSON de corridas cerradas desde
+el historial, con campos permitidos y guardado nativo desde Main. Control de
+cancelación, plazo, destinos protegidos y errores sin exponer rutas privadas.
+No se infiere identidad de ATM ausente en operaciones antiguas de varios perfiles.
+Ver [ADR-033](docs/adr/ADR-033-LOAD-HISTORY-EXPORT.md) y [formatos](docs/REPORTING.md).
+
 Historial de carga (2026-11-03): consulta QA paginada de corridas SQLite, filtros
 por inicio/ATM/operación/estado y detalle con métricas, monto y correlación.
 IPC validado separado del control de ejecución; conserva recuperación e idempotencia.

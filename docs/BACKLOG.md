@@ -1,6 +1,6 @@
 # Backlog vigente
 
-Revisión: 2026-11-02. Este documento separa desarrollo pendiente de aceptación
+Revisión: 2026-11-03. Este documento separa desarrollo pendiente de aceptación
 externa. La lista inicial queda en el historial Git; sus casillas no describían
 el estado actual. Alcance implementado en [README](../README.md) y
 [arquitectura](../ARCHITECTURE.md).
@@ -15,6 +15,8 @@ el estado actual. Alcance implementado en [README](../README.md) y
 - Carga de saldo y retiro, varios ATM alternados con una tarjeta física,
   planificación inmutable, parada, recuperación, métricas y persistencia.
   Saldo admite 1–5 operaciones en curso; retiro conserva ejecución secuencial.
+- Historial de carga paginado con filtros y detalle; exportación CSV/JSON de
+  evidencia local sanitizada de corridas cerradas, sin certificación Core (ADR-033).
 - Catálogos locales, perfiles QA de chip con referencias públicas, casos guardados
   y expectativas locales; no equivalen a un pool de tarjetas virtuales.
 - Feed e historial Mediator, inspector protegido y separación de Renderer,

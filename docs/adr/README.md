@@ -38,3 +38,4 @@ Cuando una decisión reemplaza a otra, ambas se conservan para trazabilidad.
 | [030](ADR-030-ISO-DISPLAY-AND-REVERSAL-MESSAGES.md)          | Proyección ISO visible y mensajería del reverso   | Implementado; validación host pendiente     |
 | [031](ADR-031-WITHDRAWAL-LOAD.md)                          | Retiros secuenciales en carga QA                 | Implementado; validación host pendiente     |
 | [032](ADR-032-FINANCIAL-EXECUTION-PORTS.md)                 | Motor financiero y contratos independientes      | Implementado                               |
+| [033](ADR-033-LOAD-HISTORY-EXPORT.md) | Historial y exportación de evidencia de carga | Implementado |

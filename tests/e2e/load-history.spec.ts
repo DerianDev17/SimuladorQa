@@ -1,6 +1,6 @@
 import { _electron as electron, expect, test } from '@playwright/test';
 import type { ElectronApplication } from '@playwright/test';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, readFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { SqliteLoadRunStore } from '../../apps/desktop/src/main/infrastructure/sqlite-load-run-store';
@@ -58,7 +58,7 @@ test('historial de carga: paginación, filtros, correlación, recarga y reinicio
   let detail = history.getByRole('region', { name: 'Detalle de corrida guardada', exact: true });
   await expect(detail).toContainText('Monto por retiro: USD 25.50');
   await expect(detail).toContainText(withdrawal.items[0]!.transactionId!);
-  await expect(detail).toContainText('000000000123');
+  await expect(detail).toContainText('123'.padStart(12, '0'));
   await history.getByLabel('Operación del historial').selectOption('WITHDRAWAL');
   await history.getByRole('button', { name: 'Aplicar filtros', exact: true }).click();
   await expect(history.getByRole('button', { name: /^Ver corrida / })).toHaveCount(1);
@@ -112,4 +112,73 @@ test('historial de carga: timeout, recuperación y payload inválido', async () 
   await history.getByRole('button', { name: 'Actualizar historial', exact: true }).click();
   await expect(history).toContainText('No hay corridas para los filtros aplicados.');
   await expect(history.getByRole('alert')).toHaveCount(0);
+});
+
+test('historial de carga: exporta CSV y JSON por Main, permite cancelar y muestra fallos', async () => {
+  test.setTimeout(60000);
+  const output = await mkdtemp(join(tmpdir(), 'load-export-e2e-'));
+  try {
+    const store = new SqliteLoadRunStore(
+      join(directory, 'qa-load-runs.sqlite'),
+      join(directory, 'qa-load-runs.json'),
+    );
+    const run = historyRun();
+    run.draft = { ...run.draft, operation: 'WITHDRAWAL', amount: '25.50' };
+    await store.write(run);
+    await store.close();
+    const window = await launch();
+    const history = window.getByRole('region', { name: 'Historial de carga', exact: true });
+    await history.getByRole('button', { name: `Ver corrida ${run.runId}`, exact: true }).click();
+    const detail = history.getByRole('region', {
+      name: 'Detalle de corrida guardada',
+      exact: true,
+    });
+    for (const format of ['CSV', 'JSON'] as const) {
+      const file = join(output, 'result.' + format.toLowerCase());
+      await app!.evaluate(({ dialog }, filePath) => {
+        dialog.showSaveDialog = async () => ({ canceled: false, filePath });
+      }, file);
+      await detail.getByRole('button', { name: `Exportar ${format}`, exact: true }).click();
+      await expect(detail.getByRole('status')).toHaveText('Evidencia guardada.');
+      const content = await readFile(file, 'utf8');
+      expect(content).toContain(run.runId);
+      expect(content).toContain(run.items[0]!.transactionId!);
+      if (format === 'JSON')
+        expect(JSON.parse(content)).toMatchObject({
+          evidence: 'LOCAL_LOAD_RUN',
+          run: { plan: { amount: '25.50' } },
+        });
+      else expect(content).toContain(`"${'123'.padStart(12, '0')}"`);
+    }
+    await mkdir('artifacts', { recursive: true });
+    await history.screenshot({ path: 'artifacts/load-history-export.png' });
+    const existing = await readFile(join(output, 'result.json'), 'utf8');
+    await app!.evaluate(({ dialog }) => {
+      dialog.showSaveDialog = async () => ({ canceled: true, filePath: '' });
+    });
+    await detail.getByRole('button', { name: 'Exportar JSON', exact: true }).click();
+    await expect(detail.getByRole('status')).toHaveText('Exportación cancelada.');
+    expect(await readFile(join(output, 'result.json'), 'utf8')).toBe(existing);
+    await app!.evaluate(
+      ({ dialog }, filePath) => {
+        dialog.showSaveDialog = async () => ({ canceled: false, filePath });
+      },
+      join(output, 'missing', 'result.json'),
+    );
+    await detail.getByRole('button', { name: 'Exportar JSON', exact: true }).click();
+    await expect(detail.getByRole('alert')).toContainText('No se pudo guardar');
+    await expect(detail.getByRole('alert')).not.toContainText(output);
+    const forged = await window.evaluate(
+      (runId) =>
+        globalThis.window.desktop!.exportLoadRun({
+          runId,
+          format: 'JSON',
+          path: 'private',
+        } as never),
+      run.runId,
+    );
+    expect(forged).toMatchObject({ ok: false, error: { code: 'VALIDATION_ERROR' } });
+  } finally {
+    await removeTestDirectory(output, 'load-export-e2e-');
+  }
 });
