@@ -45,6 +45,12 @@ en Configuracion; no reemplaza los adaptadores de transporte ni autoriza sockets
 
 ## Restricciones
 
+Transacciones separa el controlador de preparación (`useTransactionPreparation`),
+el formulario (`TransactionComposer`), la documentación y la composición de la
+pantalla. Las etiquetas de resultado viven en un módulo puro compartido. Esta
+extracción conserva el flujo de envío, recuperación, lector e IPC existentes;
+los componentes de presentación no incorporan transporte ni persistencia.
+
 Sesiones de desarrollo (2026-11-04, ADR-032): Vite obtiene un puerto libre en
 loopback; el lanzador lo entrega a Main como entero, manteniendo la URL exacta
 para IPC y navegación. La CSP habilita WebSocket solo para ese puerto durante
