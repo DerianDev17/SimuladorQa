@@ -6,7 +6,9 @@ export default defineConfig({
   timeout: 30_000,
   reporter: 'list',
   outputDir: 'test-results',
-  trace: 'retain-on-failure',
-  video: 'retain-on-failure',
-  screenshot: 'only-on-failure',
+  use: {
+    trace: 'retain-on-failure',
+    video: 'retain-on-failure',
+    screenshot: 'only-on-failure',
+  },
 });
