@@ -80,6 +80,8 @@ npm run dev
 
 Compilacion local: `npm run build` y `npm start`.
 Validacion completa: `npm run check` y `npm run test:e2e`.
+El servidor de desarrollo usa un puerto local libre automáticamente; no hay que
+configurar el antiguo 5173. La compilación normal carga archivos locales.
 
 Ver `docs/implementation/BOOTSTRAP.md` para el comportamiento entregado y sus limites.
 Ver `docs/implementation/LOCAL_CATALOGS.md` para los catalogos locales y la configuracion en borrador.

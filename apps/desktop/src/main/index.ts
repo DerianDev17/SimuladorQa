@@ -16,7 +16,7 @@ import type {
 } from '../../../../packages/domain/src/card-reader';
 import { DesktopApplication } from './application';
 import { FilePreferencesStore } from './infrastructure/preferences-store';
-import { isTrustedSender } from './security';
+import { developmentRendererUrl, isTrustedSender } from './security';
 import { WorkerCatalogStore } from './infrastructure/worker-catalog-store';
 import { CmsV36Catalog } from './adapters/cms-v36-catalog';
 import { MediatorSchemaInspector } from './adapters/mediator-schema-inspector';
@@ -53,7 +53,9 @@ const development = process.argv.includes('--dev');
 // Vite serves development assets directly; avoid reusing a corrupt HTTP disk cache.
 if (development) app.commandLine.appendSwitch('disable-http-cache');
 const rendererFile = join(__dirname, 'renderer', 'index.html');
-const rendererUrl = development ? 'http://127.0.0.1:5173/' : pathToFileURL(rendererFile).href;
+const rendererUrl = development
+  ? developmentRendererUrl(process.argv)
+  : pathToFileURL(rendererFile).href;
 let window: BrowserWindow | null = null;
 let catalogs: WorkerCatalogStore | undefined;
 let observer: MediatorObserver | undefined;

@@ -9,7 +9,17 @@ npm ci
 npm run dev
 ```
 
-`dev` inicia Vite en http://127.0.0.1:5173 y abre Electron. React tiene HMR.
+`dev` inicia Vite en un puerto libre de `127.0.0.1` y abre Electron. React tiene HMR.
+Desde 2026-11-04 el sistema operativo asigna ese puerto automáticamente; el lanzador
+lo entrega a Main mediante `--dev-port`. No hay que conocerlo ni configurarlo.
+El antiguo 5173 era el servidor local de la interfaz durante desarrollo. La
+compilación normal (`npm start`) carga archivos locales y no necesita Vite.
+Las pruebas pueden iniciar otra sesión sin cerrar la aplicación del operador.
+Main acepta un único puerto numérico y mantiene el origen IPC exacto; la CSP de
+desarrollo permite WebSocket solo al puerto asignado. El HTML fuente y compilado
+mantiene `connect-src 'none'`, sin depender de una corrección posterior al build.
+Ver [ADR-032](../adr/ADR-032-ISOLATED-DEVELOPMENT-PORT.md).
+
 Desde 2026-10-16, Main desactiva la cache HTTP en disco solo en modo `--dev`
 mediante `disable-http-cache`, antes de `ready`, para evitar reutilizar entradas
 danadas de Chromium al cargar Vite. El aviso reportado `Critical error found -8`

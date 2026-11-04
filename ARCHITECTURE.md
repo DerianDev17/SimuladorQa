@@ -45,6 +45,12 @@ en Configuracion; no reemplaza los adaptadores de transporte ni autoriza sockets
 
 ## Restricciones
 
+Sesiones de desarrollo (2026-11-04, ADR-032): Vite obtiene un puerto libre en
+loopback; el lanzador lo entrega a Main como entero, manteniendo la URL exacta
+para IPC y navegación. La CSP habilita WebSocket solo para ese puerto durante
+desarrollo. El HTML normal ya contiene la política restrictiva y no necesita
+postprocesado. Las pruebas tienen puerto y caché independientes de la app abierta.
+
 Carga de retiros (2026-11-04, ADR-031): el driver comparte programación,
 PIN por corrida y preparación con saldo, pero selecciona el proveedor y diario
 de retiro, con monto exacto por operación. Main admite concurrencia interna solo

@@ -7,3 +7,12 @@ export interface Sender {
 export function isTrustedSender(sender: Sender, expectedId: number, expectedUrl: string): boolean {
   return sender.senderId === expectedId && sender.frameIsMain && sender.frameUrl === expectedUrl;
 }
+
+// The launcher supplies only a port, never a configurable renderer host or URL.
+export function developmentRendererUrl(args: readonly string[]): string {
+  const ports = args.filter((argument) => argument.startsWith('--dev-port='));
+  const value = ports[0]?.slice('--dev-port='.length);
+  if (ports.length !== 1 || !value || !/^[1-9]\d{0,4}$/.test(value) || Number(value) > 65535)
+    throw Error('DEV_PORT_INVALID');
+  return `http://127.0.0.1:${value}/`;
+}

@@ -7,6 +7,12 @@ import { buildMain } from './build.mjs';
 await buildMain();
 const server = await createServer();
 await server.listen();
+const address = server.httpServer?.address();
+if (!address || typeof address === 'string') {
+  await server.close();
+  throw Error('DEV_SERVER_UNAVAILABLE');
+}
+const rendererPortArgument = `--dev-port=${address.port}`;
 server.printUrls();
 const env = { ...process.env };
 delete env.ELECTRON_RUN_AS_NODE;
@@ -25,11 +31,15 @@ function requestReload() {
 }
 function launch() {
   ready = false;
-  child = spawn(electronPath, ['dist/main.cjs', '--dev', ...(dataArgument ? [dataArgument] : [])], {
-    stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
-    env,
-    windowsHide: false,
-  });
+  child = spawn(
+    electronPath,
+    ['dist/main.cjs', '--dev', rendererPortArgument, ...(dataArgument ? [dataArgument] : [])],
+    {
+      stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
+      env,
+      windowsHide: false,
+    },
+  );
   child.on('message', (message) => {
     if (message === 'DEV_READY') {
       ready = true;

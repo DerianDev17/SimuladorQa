@@ -564,7 +564,7 @@ for (const recovery of ['POLL', 'LATE_REJECTION'] as const) {
   });
 }
 
-async function launch(development = false) {
+async function launch(developmentPort?: number) {
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
     if (value !== undefined && key !== 'ELECTRON_RUN_AS_NODE') env[key] = value;
@@ -574,7 +574,7 @@ async function launch(development = false) {
       resolve('dist/main.cjs'),
       `--user-data-dir=${directory}`,
       '--simulate-reader',
-      ...(development ? ['--dev'] : []),
+      ...(developmentPort === undefined ? [] : ['--dev', `--dev-port=${developmentPort}`]),
     ],
     env,
   });
@@ -3075,10 +3075,30 @@ test('configuración corrupta muestra error seguro y bloquea preparación', asyn
 });
 
 test('modo desarrollo carga React y el puente IPC con Vite', async () => {
-  const server = await createServer({ configFile: resolve('vite.config.ts') });
-  await server.listen();
+  const companion = await createServer({
+    configFile: resolve('vite.config.ts'),
+    cacheDir: join(directory, 'vite-companion'),
+  });
+  const server = await createServer({
+    configFile: resolve('vite.config.ts'),
+    cacheDir: join(directory, 'vite-renderer'),
+  });
   try {
-    const window = await launch(true);
+    // A running development server must not prevent another isolated test session.
+    await companion.listen();
+    await server.listen();
+    const address = server.httpServer!.address();
+    const other = companion.httpServer!.address();
+    if (!address || typeof address === 'string' || !other || typeof other === 'string')
+      throw Error('NO_SERVER');
+    expect(address.port).not.toBe(other.port);
+    const window = await launch(address.port);
+    expect(window.url()).toBe(`http://127.0.0.1:${address.port}/`);
+    const csp = await window
+      .locator('meta[http-equiv="Content-Security-Policy"]')
+      .getAttribute('content');
+    expect(csp).toContain(`connect-src 'self' ws://127.0.0.1:${address.port};`);
+    expect(csp).not.toContain('127.0.0.1:*');
     const errors: string[] = [];
     window.on('pageerror', (error) => errors.push(error.message));
     await expect(window.locator('.sidebar-station')).toContainText('Estación QA');
@@ -3090,6 +3110,7 @@ test('modo desarrollo carga React y el puente IPC con Vite', async () => {
     await app?.close();
     app = undefined;
     await server.close();
+    await companion.close();
   }
 });
 
@@ -3109,6 +3130,7 @@ test('el lanzador dev muestra la ventana nativa de Electron en Windows', async (
     'System32/WindowsPowerShell/v1.0/powershell.exe',
   );
   let electronPid: number | undefined;
+  let rendererPort: number | undefined;
   try {
     await expect
       .poll(
@@ -3119,19 +3141,26 @@ test('el lanzador dev muestra la ventana nativa de Electron en Windows', async (
               '-NoProfile',
               '-NonInteractive',
               '-Command',
-              `[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); Get-CimInstance Win32_Process -Filter "Name='electron.exe' AND ParentProcessId=${launcherPid}" | ForEach-Object { $p=Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue; [pscustomobject]@{id=$_.ProcessId;visible=($p.MainWindowHandle -ne 0);title=$p.MainWindowTitle} } | ConvertTo-Json -Compress`,
+              `[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); Get-CimInstance Win32_Process -Filter "Name='electron.exe' AND ParentProcessId=${launcherPid}" | ForEach-Object { $p=Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue; [pscustomobject]@{id=$_.ProcessId;visible=($p.MainWindowHandle -ne 0);title=$p.MainWindowTitle;port=[regex]::Match($_.CommandLine, '--dev-port=([0-9]+)').Groups[1].Value} } | ConvertTo-Json -Compress`,
             ],
             { windowsHide: true, timeout: 5000 },
           );
           if (!stdout.trim()) return false;
-          const state = JSON.parse(stdout) as { id: number; visible: boolean; title: string };
+          const state = JSON.parse(stdout) as {
+            id: number;
+            visible: boolean;
+            title: string;
+            port: string;
+          };
           electronPid = state.id;
+          rendererPort = Number(state.port);
           return state.visible && state.title.includes('ATM Transaction Simulator');
         },
         { timeout: 15000, intervals: [250, 500] },
       )
       .toBe(true);
-    const response = await fetch('http://127.0.0.1:5173/', {
+    expect(rendererPort).toBeGreaterThan(0);
+    const response = await fetch(`http://127.0.0.1:${rendererPort}/`, {
       signal: AbortSignal.timeout(3000),
     });
     expect(response.status).toBe(200);
