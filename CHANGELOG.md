@@ -1,5 +1,16 @@
 # Changelog
 
+Reducción de deuda técnica (2026-11-04): desarrollo y E2E usan puertos locales
+libres, conservando origen IPC/CSP exactos y la sesión del operador. La política
+restrictiva de la compilación normal vive en el HTML fuente, sin postprocesado
+dependiente del puerto. La validación de carga se comparte entre UI y Main;
+se elimina la duplicación de límites y el UUID ficticio del formulario. Ver
+[ADR-032](docs/adr/ADR-032-ISOLATED-DEVELOPMENT-PORT.md) y
+[carga](docs/implementation/LOAD_TEST.md).
+Validado con `npm run check`: 1.044 unitarias y 270 de integración, formato,
+lint, TypeScript, seguridad y build. Ocho E2E del alcance pasaron, incluida
+coexistencia de Vite, lanzador Windows, aislamiento y carga. Sin tráfico financiero QA.
+
 Retiros en carga (2026-11-04): **Operación de carga** permite saldo o retiro
 QA/local/ahorros con monto USD por operación. Básico aplica presets completos;
 avanzado permite ajustar TPS, cantidad, duración, concurrencia y rampa. Main

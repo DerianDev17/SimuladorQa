@@ -4,7 +4,10 @@ import {
   parseLoadRunRequest,
   loadRunMetrics,
   loadRunBelowTarget,
+  loadRunParameterIssues,
 } from '../../packages/domain/src/load-run';
+import type { LoadRunParameterIssue } from '../../packages/domain/src/load-run';
+import type { LoadTestDraft } from '../../packages/domain/src/load-test';
 import { LoadPinSession } from '../../apps/desktop/src/main/adapters/load-pin-session';
 import { validLoadRunSnapshot } from '../../apps/desktop/src/main/infrastructure/load-run-store';
 import type { LoadRunSnapshot } from '../../packages/domain/src/load-run';
@@ -26,6 +29,55 @@ export const loadRequest = () => ({
   },
 });
 describe('corrida QA acotada', () => {
+  it.each<[Partial<LoadTestDraft>, LoadRunParameterIssue]>([
+    [{ targetTps: 0.09 }, 'TARGET_TPS'],
+    [{ targetTps: 5.01 }, 'TARGET_TPS'],
+    [{ targetTps: NaN }, 'TARGET_TPS'],
+    [{ targetTps: Infinity }, 'TARGET_TPS'],
+    [{ concurrency: 0 }, 'CONCURRENCY'],
+    [{ concurrency: 1.5 }, 'CONCURRENCY'],
+    [{ concurrency: 6 }, 'CONCURRENCY'],
+    [{ maxTransactions: 0 }, 'TRANSACTION_COUNT'],
+    [{ maxTransactions: 101 }, 'TRANSACTION_COUNT'],
+    [{ maxTransactions: 1 }, 'ATM_COUNT'],
+    [{ durationSeconds: 301 }, 'DURATION'],
+    [{ durationSeconds: 0 }, 'DURATION'],
+    [{ rampUpSeconds: 10 }, 'RAMP'],
+    [{ mode: 'STRESS', rampUpSeconds: 0 }, 'RAMP'],
+    [{ operation: 'WITHDRAWAL', amount: '0.00' }, 'WITHDRAWAL_AMOUNT'],
+    [{ operation: 'WITHDRAWAL', amount: '20' }, 'WITHDRAWAL_AMOUNT'],
+  ])(
+    'la validación compartida explica %j y Main rechaza la misma solicitud (%s)',
+    (patch, issue) => {
+      const request = loadRequest();
+      const draft = {
+        ...request.draft,
+        additionalAtms: [{ atmId: randomUUID(), atmRevision: 1 }],
+        ...patch,
+      };
+      expect(loadRunParameterIssues(draft, 2)).toContain(issue);
+      expect(parseLoadRunRequest({ ...request, draft })).toBeUndefined();
+    },
+  );
+  it.each(['BALANCE', 'WITHDRAWAL'] as const)(
+    'acepta los límites inclusivos en UI y Main para %s',
+    (operation) => {
+      const request = loadRequest();
+      for (const boundary of [
+        { targetTps: 0.1, durationSeconds: 1, concurrency: 1, maxTransactions: 1 },
+        { targetTps: 5, durationSeconds: 300, concurrency: 5, maxTransactions: 100 },
+      ]) {
+        const draft = {
+          ...request.draft,
+          ...boundary,
+          operation,
+          ...(operation === 'WITHDRAWAL' ? { amount: '75.25' } : {}),
+        };
+        expect(loadRunParameterIssues(draft, 1)).toEqual([]);
+        expect(parseLoadRunRequest({ ...request, draft })).toBeDefined();
+      }
+    },
+  );
   it('separa cancelaciones locales, conserva incertidumbre y valida registros nuevos y anteriores', () => {
     const run: LoadRunSnapshot = {
       runId: randomUUID(),

@@ -1,13 +1,71 @@
 import { isUuid } from './catalogs';
 import { isRecord } from './index';
-import { LOAD_TEST_LOCAL_MIN_TPS, parseLoadTestDraft, loadTestAtms } from './load-test';
+import {
+  LOAD_TEST_LOCAL_MIN_TPS,
+  LOAD_TEST_LOCAL_MAX_TPS,
+  parseLoadTestDraft,
+  loadTestAtms,
+} from './load-test';
 import type { LoadTestDraft } from './load-test';
 import type { BalanceExecution } from './balance-inquiry';
+import { isWithdrawalAmount } from './withdrawal';
 
 // Local pilot limits, not a statement of switch capacity.
 export const LOAD_RUN_MAX_OPERATIONS = 100;
 export const LOAD_RUN_MAX_SECONDS = 300;
 export const LOAD_RUN_MAX_CONCURRENCY = 5;
+export type LoadRunParameterIssue =
+  | 'WITHDRAWAL_AMOUNT'
+  | 'CONCURRENCY'
+  | 'ATM_COUNT'
+  | 'TRANSACTION_COUNT'
+  | 'TARGET_TPS'
+  | 'DURATION'
+  | 'RAMP';
+
+// Shared by the form and execution parser. Identity, payload shape and historical
+// snapshot compatibility remain the responsibility of their respective parsers.
+export function loadRunParameterIssues(
+  parameters: Pick<
+    LoadTestDraft,
+    | 'operation'
+    | 'amount'
+    | 'mode'
+    | 'maxTransactions'
+    | 'targetTps'
+    | 'concurrency'
+    | 'durationSeconds'
+    | 'rampUpSeconds'
+  >,
+  atmCount: number,
+): LoadRunParameterIssue[] {
+  const issues: LoadRunParameterIssue[] = [];
+  const integerBetween = (value: number, min: number, max: number) =>
+    Number.isSafeInteger(value) && value >= min && value <= max;
+  if (parameters.operation === 'WITHDRAWAL' && !isWithdrawalAmount(parameters.amount))
+    issues.push('WITHDRAWAL_AMOUNT');
+  if (!integerBetween(parameters.concurrency, 1, LOAD_RUN_MAX_CONCURRENCY))
+    issues.push('CONCURRENCY');
+  if (parameters.maxTransactions < atmCount) issues.push('ATM_COUNT');
+  if (!integerBetween(parameters.maxTransactions, 1, LOAD_RUN_MAX_OPERATIONS))
+    issues.push('TRANSACTION_COUNT');
+  if (
+    !Number.isFinite(parameters.targetTps) ||
+    parameters.targetTps < LOAD_TEST_LOCAL_MIN_TPS ||
+    parameters.targetTps > LOAD_TEST_LOCAL_MAX_TPS
+  )
+    issues.push('TARGET_TPS');
+  if (!integerBetween(parameters.durationSeconds, 1, LOAD_RUN_MAX_SECONDS)) issues.push('DURATION');
+  if (
+    !integerBetween(
+      parameters.rampUpSeconds,
+      parameters.mode === 'STRESS' ? 1 : 0,
+      parameters.durationSeconds - 1,
+    )
+  )
+    issues.push('RAMP');
+  return issues;
+}
 export interface LoadRunRequest {
   requestId: string;
   cardReadId: string;
@@ -66,16 +124,7 @@ export function parseLoadRunRequest(value: unknown): LoadRunRequest | undefined 
   )
     return;
   const draft = parseLoadTestDraft(value.draft);
-  if (
-    !draft ||
-    draft.targetTps < LOAD_TEST_LOCAL_MIN_TPS ||
-    draft.concurrency > LOAD_RUN_MAX_CONCURRENCY ||
-    draft.maxTransactions < loadTestAtms(draft).length ||
-    draft.maxTransactions > LOAD_RUN_MAX_OPERATIONS ||
-    draft.durationSeconds > LOAD_RUN_MAX_SECONDS ||
-    draft.rampUpSeconds >= draft.durationSeconds
-  )
-    return;
+  if (!draft || loadRunParameterIssues(draft, loadTestAtms(draft).length).length) return;
   return { requestId: value.requestId, cardReadId: value.cardReadId, draft };
 }
 export function loadRunMetrics(run: LoadRunSnapshot) {

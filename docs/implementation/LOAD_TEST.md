@@ -1,5 +1,18 @@
 # Carga y estrés de saldo y retiros en QA
 
+## Reducción de deuda técnica — 2026-11-04
+
+La pantalla y Main comparten `loadRunParameterIssues` para validar monto, TPS,
+concurrencia, cantidad, duración, rampa y cantidad mínima por ATM. La UI traduce
+los códigos de validación a mensajes; ya no construye un requestId ficticio para
+validar parámetros. Main conserva la validación estricta de forma, UUID y campos
+adicionales por IPC. Los lectores de historial mantienen sus reglas de compatibilidad.
+Los límites y presets de ADR-031 no cambian. Los tests de frontera verifican que
+las mismas entradas sean aceptadas/rechazadas por la UI y el parser de ejecución.
+
+El conflicto de puerto de la verificación anterior queda corregido por ADR-032:
+cada sesión de desarrollo obtiene un puerto local libre sin cerrar otras sesiones.
+
 ## Retiros y modos configurados — 2026-11-04 (ADR-031)
 
 En **Operación de carga**, seleccionar **Consulta de saldo** o **Retiro**.

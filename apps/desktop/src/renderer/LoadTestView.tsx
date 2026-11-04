@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AtmProfile } from '../../../../packages/domain/src/catalogs';
+import { isUuid } from '../../../../packages/domain/src/catalogs';
 import type { Environment } from '../../../../packages/domain/src/index';
 import type {
   LoadTestDraft,
   LoadTestMode,
   LoadTestOperation,
 } from '../../../../packages/domain/src/load-test';
-import { isWithdrawalAmount } from '../../../../packages/domain/src/withdrawal';
 import {
   LOAD_TEST_LOCAL_MIN_TPS,
   LOAD_TEST_LOCAL_MAX_TPS,
@@ -19,9 +19,13 @@ import {
   loadRunMetrics,
   loadRunBelowTarget,
   loadResponseSeries,
-  parseLoadRunRequest,
+  loadRunParameterIssues,
 } from '../../../../packages/domain/src/load-run';
-import type { LoadRunSnapshot, LoadRunTimings } from '../../../../packages/domain/src/load-run';
+import type {
+  LoadRunSnapshot,
+  LoadRunTimings,
+  LoadRunParameterIssue,
+} from '../../../../packages/domain/src/load-run';
 import { DesktopClient } from './desktop-client';
 import { CardReaderView } from './CardReaderView';
 import type { TransactionCard } from './transaction-card';
@@ -91,6 +95,16 @@ const stages: { key: keyof LoadRunTimings; label: string }[] = [
 ];
 const ms = (value: number | null | undefined) =>
   value == null ? '—' : Math.round(value).toLocaleString() + ' ms';
+const parameterIssueLabels: Record<LoadRunParameterIssue, string> = {
+  WITHDRAWAL_AMOUNT:
+    'El monto por retiro debe ser positivo, con punto y dos decimales (máximo 9999999999.99 USD).',
+  CONCURRENCY: `La concurrencia debe estar entre 1 y ${LOAD_RUN_MAX_CONCURRENCY} operaciones.`,
+  ATM_COUNT: 'La cantidad debe permitir al menos una operación por ATM seleccionado.',
+  TRANSACTION_COUNT: `La cantidad debe estar entre 1 y ${LOAD_RUN_MAX_OPERATIONS}.`,
+  TARGET_TPS: `El objetivo debe estar entre ${String(LOAD_TEST_LOCAL_MIN_TPS).replace('.', ',')} y ${LOAD_TEST_LOCAL_MAX_TPS} TPS.`,
+  DURATION: `La duración debe estar entre 1 y ${LOAD_RUN_MAX_SECONDS} segundos.`,
+  RAMP: 'El aumento gradual debe durar menos que la prueba.',
+};
 
 function TpsChart({ run }: { run: LoadRunSnapshot }) {
   if (
@@ -233,55 +247,16 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
       clearInterval(timer);
     };
   }, []);
-  const valid =
-    !!card &&
-    !!selected &&
-    atmIds.every((id) => available.some((atm) => atm.id === id)) &&
-    !!parseLoadRunRequest({
-      requestId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
-      cardReadId: card.readId,
-      draft,
-    });
   const issues = [
-    ...(operation === 'WITHDRAWAL' && !isWithdrawalAmount(amount)
-      ? [
-          'El monto por retiro debe ser positivo, con punto y dos decimales (máximo 9999999999.99 USD).',
-        ]
-      : []),
-    ...(!Number.isInteger(Number(concurrency)) ||
-    Number(concurrency) < 1 ||
-    Number(concurrency) > LOAD_RUN_MAX_CONCURRENCY
-      ? ['La concurrencia debe estar entre 1 y 5 operaciones.']
-      : []),
+    ...loadRunParameterIssues(draft, atmIds.length).map((issue) => parameterIssueLabels[issue]),
     ...(environment !== 'QA' ? ['Selecciona el ambiente QA.'] : []),
     ...(!atmIds.length ? ['Selecciona un ATM QA.'] : []),
     ...(atmIds.some((id) => !available.some((atm) => atm.id === id))
       ? ['Uno de los ATM seleccionados ya no está disponible. Vuelve a seleccionar los perfiles.']
       : []),
-    ...(Number(count) < atmIds.length
-      ? ['La cantidad debe permitir al menos una operación por ATM seleccionado.']
-      : []),
     ...(!card ? ['Lee y selecciona la tarjeta física QA.'] : []),
-    ...(Number(count) < 1 ||
-    Number(count) > LOAD_RUN_MAX_OPERATIONS ||
-    !Number.isSafeInteger(Number(count))
-      ? ['La cantidad debe estar entre 1 y ' + LOAD_RUN_MAX_OPERATIONS + '.']
-      : []),
-    ...(!Number.isFinite(Number(tps)) ||
-    Number(tps) < LOAD_TEST_LOCAL_MIN_TPS ||
-    Number(tps) > LOAD_TEST_LOCAL_MAX_TPS
-      ? ['El objetivo debe estar entre 0,1 y 5 TPS.']
-      : []),
-    ...(Number(duration) < 1 ||
-    Number(duration) > LOAD_RUN_MAX_SECONDS ||
-    !Number.isSafeInteger(Number(duration))
-      ? ['La duración debe estar entre 1 y ' + LOAD_RUN_MAX_SECONDS + ' segundos.']
-      : []),
-    ...(mode === 'STRESS' &&
-    (!Number.isSafeInteger(Number(ramp)) || Number(ramp) < 1 || Number(ramp) >= Number(duration))
-      ? ['El aumento gradual debe durar menos que la prueba.']
-      : []),
   ];
+  const valid = !!card && isUuid(card.readId) && !!selected && issues.length === 0;
   function choosePreset(id: Exclude<Preset, 'CUSTOM'>) {
     const choice = presets.find((item) => item.id === id)!;
     setPreset(id);
