@@ -33,7 +33,7 @@ ni certifica el resultado en Visa, Switch o Core. Ver
 [ADR-022](docs/adr/ADR-022-LOCAL-CASE-VERDICTS.md).
 
 La pantalla **Carga y estrés** ofrece escenarios rápida/1/3/5 TPS y ejecuta consultas
-de saldo QA con una tarjeta física, PIN una vez por corrida y seguridad nueva por
+de saldo o retiros QA con monto USD por operación, una tarjeta física, PIN una vez por corrida y seguridad nueva por
 operación. Permite seleccionar varios perfiles ATM y de 1 a 5 operaciones
 en preparación y envío por corrida. La preparación del chip es exclusiva y
 puede avanzar mientras responde el host. El enlace QA usa una sola conexión
@@ -54,7 +54,7 @@ Ver [guía de ejecución](docs/implementation/LOAD_TEST.md).
 - Hardware: HID OMNIKEY 5422 mediante PC/SC.
 - Tarjetas: lectura fisica + perfiles de prueba configurables.
 - MVP 1: consulta de saldo, retiro aprobado, retiro rechazado, reverso y reverso por timeout.
-- Carga: piloto QA/LOCAL de saldo con una tarjeta fisica y uno o varios ATM por
+- Carga: piloto QA/LOCAL de saldo y retiros de ahorros con una tarjeta fisica y uno o varios ATM por
   corrida, con concurrencia y TPS objetivo totales configurables.
   Multiples tarjetas y pool virtual pendientes.
 - Monitoreo: dashboard realtime de todas las instancias de la app.

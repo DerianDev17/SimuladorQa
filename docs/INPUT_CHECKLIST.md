@@ -2,6 +2,12 @@
 
 El índice consolidado de pendientes está en [`TODO_DATA.md`](TODO_DATA.md).
 
+TODO-DATA LOAD-WITHDRAWAL-QA (2026-11-04): retiros en carga y modos básico/avanzado
+implementados por solicitud del usuario, reutilizando el contrato QA vigente.
+Falta medir una corrida iniciada por el operador y correlacionar sus resultados
+en host/Core. Las pruebas sintéticas no acreditan débito, aceptación ni TPS reales.
+No bloquea el motor local. Ver [ADR-031](adr/ADR-031-WITHDRAWAL-LOAD.md).
+
 TODO-DATA CARD-ISSUER-PRODUCT-DISPLAY (2026-10-29): la referencia visual del
 formulario incluye entidad emisora y producto. La identidad pública del lector
 no proporciona esos campos ni existe aquí una correspondencia aprobada.

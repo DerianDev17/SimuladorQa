@@ -47,9 +47,33 @@ describe('validación del borrador de carga de saldo', () => {
     expect(parseLoadTestDraft({ ...draft, targetTps: 5.001 })).toBeUndefined();
   });
 
-  it('solo admite consultas QA y descarta operaciones financieras distintas', () => {
+  it('admite retiro QA con monto exacto y rechaza montos inválidos o campos ajenos', () => {
+    const draft = { ...validDraft(), operation: 'WITHDRAWAL', amount: '75.25' };
+    expect(parseLoadTestDraft(draft)).toEqual(draft);
+    for (const amount of [
+      undefined,
+      null,
+      20,
+      '',
+      '0.00',
+      '-1.00',
+      '20',
+      '20.1',
+      '20,00',
+      '1e2',
+      '10000000000.00',
+    ])
+      expect(parseLoadTestDraft({ ...draft, amount })).toBeUndefined();
+    expect(parseLoadTestDraft({ ...draft, operation: 'BALANCE' })).toBeUndefined();
+    expect(parseLoadTestDraft({ ...draft, reversalDelaySeconds: 5 })).toBeUndefined();
+    expect(parseLoadTestDraft({ ...draft, mode: 'STRESS', rampUpSeconds: 2 })).toBeDefined();
+  });
+  it('solo admite saldo o retiro QA y descarta operaciones financieras distintas', () => {
     const draft = validDraft();
     expect(parseLoadTestDraft({ ...draft, operation: 'WITHDRAWAL' })).toBeUndefined();
+    expect(
+      parseLoadTestDraft({ ...draft, operation: 'REVERSAL', amount: '20.00' }),
+    ).toBeUndefined();
     expect(parseLoadTestDraft({ ...draft, environment: 'PREPROD' })).toBeUndefined();
     expect(parseLoadTestDraft({ ...draft, cardData: 'private-test-value' })).toBeUndefined();
   });

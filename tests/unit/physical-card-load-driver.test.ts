@@ -6,6 +6,7 @@ import type { CardIdentityReading } from '../../packages/domain/src/card-reader'
 import type { LoadRunRequest } from '../../packages/domain/src/load-run';
 import type { BalanceExecution } from '../../packages/domain/src/balance-inquiry';
 import { parseBalanceExecutionRequest } from '../../packages/domain/src/balance-inquiry';
+import { parseWithdrawalExecutionRequest } from '../../packages/domain/src/withdrawal';
 import { approvedWithdrawalExecution } from '../helpers/withdrawal';
 import type { DesktopApplication } from '../../apps/desktop/src/main/application';
 
@@ -94,6 +95,7 @@ function fixture() {
     now: () => new Date().toISOString(),
   };
   const cipher = { begin: vi.fn(), end: vi.fn() };
+  const withdrawalJournal = { read: vi.fn(async () => [] as BalanceExecution[]), write: vi.fn() };
   return {
     driver: new PhysicalCardLoadDriver(
       cards,
@@ -103,6 +105,7 @@ function fixture() {
       runtime,
       () => {},
       cipher,
+      withdrawalJournal,
     ),
     cipher,
     cards,
@@ -110,9 +113,80 @@ function fixture() {
     ask,
     input,
     journal,
+    withdrawalJournal,
   };
 }
 describe('adaptador de carga con tarjeta física', () => {
+  it('prepara retiros con contrato, monto exacto, PIN único y lectura nueva por operación', async () => {
+    const f = fixture();
+    f.input.draft.operation = 'WITHDRAWAL';
+    f.input.draft.amount = '75.25';
+    const prepared = await f.driver.prepare(f.input);
+    expect(f.application.getBalanceReadiness).toHaveBeenCalledWith(
+      expect.objectContaining({
+        draft: expect.objectContaining({
+          transaction: 'WITHDRAWAL_APPROVED',
+          amount: '75.25',
+          account: 'SAVINGS',
+        }),
+      }),
+      'WITHDRAWAL',
+    );
+    if (!prepared.ok) throw Error('READY');
+    const runId = randomUUID();
+    try {
+      for (let index = 0; index < 2; index++)
+        await prepared.value.execute(new AbortController().signal, runId);
+      const calls = vi.mocked(f.application.executeBalance).mock.calls;
+      const requests = calls.map(([value]) => parseWithdrawalExecutionRequest(value)!);
+      expect(requests.every((value) => value.draft.amount === '75.25')).toBe(true);
+      expect(new Set(requests.map((value) => value.cardReadId)).size).toBe(2);
+      expect(new Set(requests.map((value) => value.requestId)).size).toBe(2);
+      expect(
+        calls.every(
+          ([, operation, execution]) => operation === 'WITHDRAWAL' && execution?.runId === runId,
+        ),
+      ).toBe(true);
+      expect(f.ask).toHaveBeenCalledOnce();
+    } finally {
+      prepared.value.close();
+    }
+  });
+  it.each(['PENDING', 'STORAGE_ERROR'] as const)(
+    'bloquea retiro %s antes de activar PIN o helpers',
+    async (outcome) => {
+      const f = fixture();
+      f.input.draft.operation = 'WITHDRAWAL';
+      f.input.draft.amount = '20.00';
+      f.withdrawalJournal.read.mockResolvedValue([{ ...approvedWithdrawalExecution(), outcome }]);
+      expect(await f.driver.prepare(f.input)).toMatchObject({
+        ok: false,
+        error: { code: 'CONFLICT' },
+      });
+      expect(f.ask).not.toHaveBeenCalled();
+      expect(f.cipher.begin).not.toHaveBeenCalled();
+    },
+  );
+  it('no ejecuta retiros sin contrato disponible aunque saldo esté habilitado', async () => {
+    const f = fixture();
+    f.input.draft.operation = 'WITHDRAWAL';
+    f.input.draft.amount = '20.00';
+    vi.mocked(f.application.getBalanceReadiness).mockImplementation(
+      async (_context, operation) => ({
+        ok: true,
+        value: {
+          ready: operation === 'BALANCE',
+          blockers: [{ id: 'POLICY', label: 'Contrato de retiro no disponible.' }],
+        },
+      }),
+    );
+    expect(await f.driver.prepare(f.input)).toMatchObject({
+      ok: false,
+      error: { message: 'Contrato de retiro no disponible.' },
+    });
+    expect(f.ask).not.toHaveBeenCalled();
+    expect(f.application.executeBalance).not.toHaveBeenCalled();
+  });
   it.each(['DURATION', 'CANCELLED'] as const)(
     'conserva %s al abandonar la cola del enlace sin envío',
     async (reason) => {

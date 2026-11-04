@@ -80,6 +80,40 @@ async function nonApprovedWithdrawal() {
 }
 
 describe('resultado de retiro separado de conciliacion', () => {
+  it.each(['PENDING', 'STORAGE_ERROR', 'REVERSAL'] as const)(
+    'un contexto de carga no ignora un retiro recuperado %s del mismo runId',
+    async (state) => {
+      const f = await nonApprovedWithdrawal();
+      const record: BalanceExecution = {
+        ...f.previous,
+        ...(state === 'REVERSAL'
+          ? {
+              reversal: {
+                transactionId: randomUUID(),
+                delaySeconds: 1,
+                outcome: 'WAITING' as const,
+                dueAt: null,
+                finishedAt: null,
+                responseCode: null,
+                transmissionAttempted: false,
+                bytesQueued: 0,
+              },
+            }
+          : { outcome: state, finishedAt: state === 'PENDING' ? null : f.previous.finishedAt }),
+      };
+      await f.journal.write([record]);
+      const before = f.transport.exchange.mock.calls.length;
+      const result = await f.service.execute(
+        { ...f.request, requestId: randomUUID() },
+        f.target,
+        deadlines,
+        async () => true,
+        { runId: record.runId, concurrency: 5, signal: new AbortController().signal },
+      );
+      expect(result).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+      expect(f.transport.exchange).toHaveBeenCalledTimes(before);
+    },
+  );
   it.each([
     'REQUIRES_REVIEW',
     'RESPONSE_TIMEOUT',

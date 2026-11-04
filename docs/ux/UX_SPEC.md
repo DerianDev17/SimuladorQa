@@ -96,13 +96,21 @@ local no aparece para ejecuciones previas ni se asocia a un formulario modificad
 
 ## Pantalla Load Test
 
+- Ambos modos permiten elegir saldo o retiro. Retiro muestra monto USD por
+  operación (inicial `20.00`, decimal positivo exacto), QA/local/ahorros.
+- Básico aplica todos los límites del preset, incluida concurrencia; avanzado
+  permite personalizarlos. Volver a básico desde valores personalizados restaura
+  Prueba rápida sin rampa. El resumen siempre muestra los límites efectivos.
+- Una corrida activa bloquea cambios de modo, operación y monto. Los resultados
+  muestran operación y monto guardados, independientes del siguiente borrador.
+
 - El modo básico presenta ATM, escenarios rápida/1/3/5 TPS, tarjeta física o
   perfil QA asociado a esa lectura e **Iniciar prueba**. Main valida perfil,
   seguridad, secuencias y diario al iniciar; los límites locales se explican
   junto a los controles.
 - El modo avanzado muestra cantidad, objetivo TPS, duración y rampa. Se pueden
   seleccionar varios ATM y de 1 a 5 operaciones en preparación y envío. El chip
-  prepara una consulta a la vez, solapada con la espera host. El enlace QA usa
+  prepara una operación a la vez, solapada con la espera host. El enlace QA usa
   una sola conexión financiera activa (ADR-029); no se prometen envíos paralelos.
 - El panel derecho distingue objetivo de TPS real, muestra latencias de host,
   desglose numérico por etapa cuando existe y las últimas 20 transacciones.

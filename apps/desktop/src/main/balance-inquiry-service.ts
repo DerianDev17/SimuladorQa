@@ -199,7 +199,8 @@ export class BalanceInquiryService {
           'El transporte no admite retiro con reverso. No se envió el retiro.',
         ),
       );
-    const scope = this.operation === 'BALANCE' ? loadExecutionScope(execution) : undefined;
+    const scope =
+      request.reversalDelaySeconds === undefined ? loadExecutionScope(execution) : undefined;
     const duplicate = this.running.get(request.requestId);
     if (duplicate) {
       if (duplicate.fingerprint !== fingerprint || duplicate.scope !== scope)
@@ -297,7 +298,23 @@ export class BalanceInquiryService {
         return failure('CONFLICT', 'La referencia de ejecución ya pertenece a otra transacción.');
       return { ok: true, value: previous };
     }
-    if (this.operation === 'WITHDRAWAL' && records.some(withdrawalBlocksNewExecution))
+    const scope =
+      request.reversalDelaySeconds === undefined ? loadExecutionScope(execution) : undefined;
+    if (
+      this.operation === 'WITHDRAWAL' &&
+      records.some((item) => {
+        if (!withdrawalBlocksNewExecution(item)) return false;
+        // Only a live, ordinary withdrawal from this admitted run may overlap.
+        // Persisted pending records after restart and storage/reversal failures still block.
+        return !(
+          scope &&
+          item.outcome === 'PENDING' &&
+          !item.reversal &&
+          item.runId === execution!.runId &&
+          this.running.get(item.requestId)?.scope === scope
+        );
+      })
+    )
       return failure(
         'CONFLICT',
         'Hay un retiro sin finalizar o sin guardar. Recupera su referencia antes de enviar otro.',
@@ -503,7 +520,7 @@ export class BalanceInquiryService {
                   }),
               }
             : {}),
-          ...(loadExecutionScope(execution) && this.operation === 'BALANCE'
+          ...(scope
             ? {
                 load: {
                   runId: execution!.runId,

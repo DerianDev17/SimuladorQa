@@ -45,6 +45,14 @@ en Configuracion; no reemplaza los adaptadores de transporte ni autoriza sockets
 
 ## Restricciones
 
+Carga de retiros (2026-11-04, ADR-031): el driver comparte programación,
+PIN por corrida y preparación con saldo, pero selecciona el proveedor y diario
+de retiro, con monto exacto por operación. Main admite concurrencia interna solo
+del mismo runId y operación. Un retiro PENDING solo admite otra preparación si
+sigue activo dentro de ese grupo; los pendientes recuperados, reversos y errores
+de almacenamiento bloquean. Las operaciones manuales siguen excluidas y el
+enlace mantiene una sola conexión financiera. No se agregan reglas ISO ni reversos.
+
 Conexión financiera exclusiva (2026-10-29, ADR-029): TCPComms del enlace QA
 reemplaza la conexión del PID 80131 al aceptar otra de la estación. Se sustituye
 el solapamiento de sockets de ADR-027 por una cola en QaSwitchConnection, con
@@ -69,7 +77,8 @@ PIN/EMV y validación hasta registrar PENDING y abrir el transporte, liberando
 el lector mientras espera el host. Cada socket pasa por un limitador global
 antes del write, sin créditos acumulados ni envíos después del plazo. El
 servicio financiero y la conexión admiten concurrencia solo del mismo runId
-y límite interno; operaciones manuales y retiros conservan exclusión. Las
+y límite interno; operaciones manuales conservan exclusión. ADR-031 amplía el
+grupo a retiros ordinarios de una misma corrida, sin mezclar operaciones. Las
 escrituras del diario hacen read-modify-write serializado para evitar pérdidas
 y regresiones de estado con respuestas fuera de orden. La observación se
 restaura al cerrar el último socket del grupo. No se reutilizan tramas ni AC.

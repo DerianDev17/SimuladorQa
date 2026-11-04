@@ -1,4 +1,48 @@
-# Carga y estrés de saldo en QA
+# Carga y estrés de saldo y retiros en QA
+
+## Retiros y modos configurados — 2026-11-04 (ADR-031)
+
+En **Operación de carga**, seleccionar **Consulta de saldo** o **Retiro**.
+El retiro usa QA/LOCAL/ahorros/USD y el mismo contrato del flujo individual.
+**Monto por retiro (USD)** comienza en `20.00` y admite un importe positivo con
+punto y dos decimales, sujeto al contrato del ATM. Se solicita ese monto en cada
+operación; la respuesta del host determina su resultado. El resultado recuperado
+identifica la operación y el monto original aunque se edite otro borrador.
+
+| Modo básico | TPS objetivo | Duración máxima | Operaciones máximas | En curso |
+| --- | --- | --- | --- | --- |
+| Prueba rápida | 1 | 30 s | 30 | 2 |
+| 1 TPS | 1 | 60 s | 60 | 2 |
+| 3 TPS | 3 | 60 s | 100 | 5 |
+| 5 TPS | 5 | 60 s | 100 | 5 |
+
+Estos límites son totales y termina al primero que se alcance. **Modo avanzado**
+permite cambiar cantidad (1–100), objetivo (0,1–5 TPS), duración (1–300 s),
+operaciones en curso (1–5) y tipo de corrida sostenida o aumento gradual.
+La rampa debe ser positiva y menor que la duración. Volver al modo básico desde
+parámetros personalizados aplica Prueba rápida sin rampa; conserva ATM, tarjeta,
+operación y monto. El resumen muestra todos los límites efectivos antes de iniciar.
+
+Ambas operaciones alternan entre los ATM seleccionados y usan PIN una vez por
+corrida con seguridad nueva por operación. Se comprueban ambos diarios y todos
+los perfiles/contratos antes de iniciar. La preparación de retiros del mismo grupo
+puede avanzar mientras responde el host, conservando una sola conexión activa.
+El primer resultado no aprobado, incierto o error detiene la corrida; no se
+reintenta ni se generan reversos/comprobantes automáticos. Los pendientes de otra
+sesión y fallos de persistencia requieren recuperación.
+
+Validación local: dominio, driver, exclusión Main, worker real, TCP loopback,
+SQLite y UI sintética. TODO-DATA LOAD-WITHDRAWAL-QA: aceptación y caudal real
+requieren una corrida del operador con correlación host/Core. Durante el
+desarrollo no se envía carga al switch. Ver [ADR-031](../adr/ADR-031-WITHDRAWAL-LOAD.md).
+
+Verificación local de esta entrega: 1.013 pruebas unitarias, 270 de integración
+y cinco E2E específicas de carga aprobadas; lint, TypeScript, formato, seguridad
+y build correctos. Las 18 combinaciones TCP de saldo/retiro se repitieron tras
+ajustar la representación del monto sintético en el fixture para el escáner de
+seguridad. La selección E2E ampliada también incluyó una prueba de arranque dev
+ajena a carga que no pudo iniciar porque el puerto 5173 ya estaba ocupado por
+la sesión de desarrollo existente; esa sesión se conserva intacta.
 
 ## Corrección del cierre de conexión — 2026-10-29 (ADR-029)
 
@@ -134,7 +178,7 @@ Electron con fuente sintética. No se ejecuta carga contra el switch QA.
 
 ## Ejecutar el piloto con tarjeta física
 
-1. Abrir **Carga y estrés** en QA y marcar uno o varios ATM configurados para saldo.
+1. Abrir **Carga y estrés** en QA y marcar uno o varios ATM configurados para la operación elegida.
 2. Elegir **Prueba rápida**, **1 TPS**, **3 TPS** o **5 TPS**. Los presets
    completan cantidad y duración dentro de los límites locales; son objetivos,
    no tasas garantizadas. **Modo avanzado** permite ajustar esos valores.
@@ -156,10 +200,10 @@ No hace falta mantener la página abierta: al volver se recupera la corrida.
 
 ## Requisitos comprobados por Main
 
-Solo QA/LOCAL/ahorros/consulta de saldo. El destino y los plazos provienen de
+Solo QA/LOCAL/ahorros, saldo o retiro con monto USD. El destino y los plazos provienen de
 Configuración; no se inventan desde la pantalla de carga. Se comprueban revisión
 ATM, lectura vigente, perfil financiero, cifrado, secuencias suficientes y
-ausencia de operaciones `PENDING` en el diario de saldo.
+ausencia de operaciones `PENDING` en el diario de saldo y retiros sin finalizar o sin guardar.
 Si falla una comprobación se muestra su causa sin arrancar el worker.
 
 El intervalo permitido es 0,1–5 TPS. Los máximos locales son cinco operaciones simultáneas, 100 consultas y
@@ -230,7 +274,7 @@ con identificadores nuevos; nunca se repite la consulta anterior.
 TODO-DATA LOAD-VIRTUAL-PROVIDER: falta el contrato de un proveedor financiero QA
 para un pool virtual que alimente el motor sin esperar el chip. Las referencias VISA ficticias
 y las tarjetas guardadas no contienen PIN/EMV reutilizable. Ese alcance queda
-separado del piloto ejecutable con tarjeta física. PREPROD, retiros y carga
+separado del piloto ejecutable con tarjeta física. PREPROD y carga
 distribuida no se habilitan aquí. TODO-DATA LOAD-PERSISTENT-TCP conserva pendiente
 el contrato para reutilizar conexiones financieras. No se inventa multiplexación.
 

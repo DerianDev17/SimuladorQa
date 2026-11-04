@@ -606,7 +606,9 @@ export class DesktopApplication {
         'VALIDATION_ERROR',
         'Revisa el contexto de ejecución; este canal no acepta tramas ni secretos.',
       );
-    const scope = operation === 'BALANCE' ? loadExecutionScope(execution) : undefined;
+    const loadScope =
+      request.reversalDelaySeconds === undefined ? loadExecutionScope(execution) : undefined;
+    const scope = loadScope ? `${operation}:${loadScope}` : undefined;
     if (
       this.balanceBusy &&
       (!scope || scope !== this.balanceScope || this.balanceCount >= execution!.concurrency!)

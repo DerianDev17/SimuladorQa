@@ -1,7 +1,8 @@
 import { isUuid } from './catalogs';
 import { isRecord } from './index';
+import { isWithdrawalAmount } from './withdrawal';
 
-export type LoadTestOperation = 'BALANCE';
+export type LoadTestOperation = 'BALANCE' | 'WITHDRAWAL';
 export type LoadTestMode = 'LOAD' | 'STRESS';
 
 // Temporary local ceiling reported by the user for the QA switch. This does
@@ -13,6 +14,8 @@ export interface LoadTestDraft {
   environment: 'QA';
   mode: LoadTestMode;
   operation: LoadTestOperation;
+  // Required only for withdrawals; exact decimal USD per operation.
+  amount?: string;
   atmId: string;
   atmRevision: number;
   // The original fields remain readable for existing single-ATM runs.
@@ -90,6 +93,7 @@ export function parseLoadTestDraft(value: unknown): LoadTestDraft | undefined {
     'concurrency',
     'rampUpSeconds',
     'durationSeconds',
+    ...(request.operation === 'WITHDRAWAL' ? ['amount'] : []),
     ...(Object.hasOwn(request, 'additionalAtms') ? ['additionalAtms'] : []),
   ];
   if (
@@ -97,7 +101,8 @@ export function parseLoadTestDraft(value: unknown): LoadTestDraft | undefined {
     !keys.every((key) => Object.hasOwn(request, key)) ||
     request.environment !== 'QA' ||
     !['LOAD', 'STRESS'].includes(request.mode as string) ||
-    request.operation !== 'BALANCE' ||
+    !['BALANCE', 'WITHDRAWAL'].includes(request.operation as string) ||
+    (request.operation === 'WITHDRAWAL' && !isWithdrawalAmount(request.amount)) ||
     !isUuid(request.atmId) ||
     !positiveInteger(request.atmRevision) ||
     !positiveInteger(request.maxTransactions) ||

@@ -1,5 +1,11 @@
 # Changelog
 
+Retiros en carga (2026-11-04): **Operación de carga** permite saldo o retiro
+QA/local/ahorros con monto USD por operación. Básico aplica presets completos;
+avanzado permite ajustar TPS, cantidad, duración, concurrencia y rampa. Main
+reutiliza contrato/diario de retiro y seguridad nueva, con conexión exclusiva,
+parada por error y parámetros persistidos. Ver [ADR-031](docs/adr/ADR-031-WITHDRAWAL-LOAD.md).
+
 Continuar tras un error de retiro (2026-10-28): **Nueva transacción** permite
 preparar otro retiro QA con lectura y PIN nuevos cuando el intento anterior
 terminó y quedó guardado. RC 59 y timeouts conservan su resultado en el historial

@@ -340,6 +340,7 @@ void startupReady
         runtime,
         () => void publishReaderSnapshot(),
         pinCipher,
+        withdrawalJournal,
       ),
       loadRunStore,
       workerLoadScheduler(join(__dirname, 'load-worker.cjs')),

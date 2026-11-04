@@ -12,6 +12,7 @@ import type { BalanceJournal } from './balance-ports';
 import { failure } from '../../../../packages/shared/src/contracts';
 import type { Result } from '../../../../packages/shared/src/contracts';
 import { LoadSendLimiter } from './infrastructure/load-send-limiter';
+import { withdrawalBlocksNewExecution } from '../../../../packages/domain/src/balance-inquiry';
 
 export class PhysicalCardLoadDriver implements LoadRunDriver {
   constructor(
@@ -26,8 +27,12 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
     private readonly identity: RuntimeIdentity,
     private readonly publish: () => void,
     private readonly cipherSession?: { begin(): void; end(): void },
+    private readonly withdrawalJournal?: BalanceJournal,
   ) {}
   async prepare(request: LoadRunRequest): Promise<Result<LoadRunSource>> {
+    const operation = request.draft.operation;
+    if (operation === 'WITHDRAWAL' && !this.withdrawalJournal)
+      return failure('SERVICE_UNAVAILABLE', 'El diario de retiros no está disponible.');
     const original = await this.cards.current();
     if (
       !original ||
@@ -45,10 +50,10 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
     const contexts: BalanceContextRequest[] = loadTestAtms(request.draft).map((atm) => ({
       draft: {
         environment: 'QA',
-        transaction: 'BALANCE',
+        transaction: operation === 'WITHDRAWAL' ? 'WITHDRAWAL_APPROVED' : 'BALANCE',
         scenario: 'LOCAL',
         account: 'SAVINGS',
-        amount: null,
+        amount: operation === 'WITHDRAWAL' ? request.draft.amount! : null,
         atmId: atm.atmId,
         atmRevision: atm.atmRevision,
       },
@@ -56,13 +61,13 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
       cardReadId: original.readId,
     }));
     for (const context of contexts) {
-      const ready = await this.application.getBalanceReadiness(context);
+      const ready = await this.application.getBalanceReadiness(context, operation);
       if (!ready.ok) return ready;
       if (!ready.value.ready)
         return failure(
           'CONFLICT',
           ready.value.blockers.map((blocker) => blocker.label).join('. ') ||
-            'Uno de los perfiles de saldo no está listo.',
+            'Uno de los perfiles de la operación seleccionada no está listo.',
         );
       // Template ATMs share one pool: never sum availability across profiles.
       if (
@@ -79,6 +84,14 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
       return failure(
         'CONFLICT',
         'El diario contiene una operación pendiente. Revisa su correlación antes de otra corrida.',
+      );
+    if (
+      this.withdrawalJournal &&
+      (await this.withdrawalJournal.read()).some(withdrawalBlocksNewExecution)
+    )
+      return failure(
+        'CONFLICT',
+        'Hay un retiro sin finalizar o sin guardar. Revisa su referencia antes de otra corrida.',
       );
     try {
       this.pins.begin();
@@ -123,12 +136,12 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
           try {
             if (closed || signal.aborted)
               return {
-                ...failure('CONFLICT', 'La corrida terminó antes de preparar esta consulta.'),
+                ...failure('CONFLICT', 'La corrida terminó antes de preparar esta operación.'),
                 cancelled: true as const,
               };
             if (performance.now() >= deadline)
               return {
-                ...failure('CONFLICT', 'Duración alcanzada antes de preparar la consulta.'),
+                ...failure('CONFLICT', 'Duración alcanzada antes de preparar la operación.'),
                 skipped: 'DURATION' as const,
               };
             const phases: Required<
@@ -178,7 +191,7 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
                   cardReadId: reading.value.readId,
                   requestId: this.identity.uuid(),
                 },
-                'BALANCE',
+                operation,
                 {
                   runId,
                   signal,

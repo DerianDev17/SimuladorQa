@@ -228,83 +228,130 @@ test('mensajería ISO junto al resultado: campos reales, pestañas y pantalla es
   await window.screenshot({ path: 'artifacts/transaction-messages-narrow.png', fullPage: true });
 });
 
-test('carga de saldo: iniciar, medir, recuperar y detener con motor real y fuente sintética', async () => {
-  test.setTimeout(60000);
-  const window = await prepareBalanceSubmission();
-  await mkdir('artifacts', { recursive: true });
-  await build({
-    entryPoints: ['tests/helpers/load-electron.ts'],
-    outfile: 'artifacts/load-electron.cjs',
-    bundle: true,
-    platform: 'node',
-    format: 'cjs',
-    external: ['electron'],
+for (const operation of ['BALANCE', 'WITHDRAWAL'] as const) {
+  test(`carga de ${operation}: modos básico y avanzado, medir, recuperar y detener`, async () => {
+    test.setTimeout(60000);
+    const window = await prepareBalanceSubmission();
+    await mkdir('artifacts', { recursive: true });
+    await build({
+      entryPoints: ['tests/helpers/load-electron.ts'],
+      outfile: 'artifacts/load-electron.cjs',
+      bundle: true,
+      platform: 'node',
+      format: 'cjs',
+      external: ['electron'],
+    });
+    const sample = approvedWithdrawalExecution();
+    delete sample.withdrawal;
+    await app!.evaluate(
+      ({ ipcMain, BrowserWindow }, options) => {
+        const require = process.getBuiltinModule('module').createRequire(options.fixture);
+        require(options.fixture).install(ipcMain, options.file, options.worker, options.sample);
+        BrowserWindow.getAllWindows()[0]?.setContentSize(1366, 900);
+      },
+      {
+        fixture: resolve('artifacts/load-electron.cjs'),
+        file: join(directory, 'load-ui.sqlite'),
+        worker: resolve('dist/load-worker.cjs'),
+        sample,
+      },
+    );
+    await window.getByRole('button', { name: 'Carga y estrés', exact: true }).click();
+    await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+    await window.getByRole('button', { name: '3 TPS', exact: false }).click();
+    const start = window.getByRole('button', { name: 'Iniciar prueba', exact: true });
+    await window.getByLabel('Operación de carga').selectOption(operation);
+    if (operation === 'WITHDRAWAL') {
+      for (const amount of ['0.00', '20', '20,00', '-1.00']) {
+        await window.getByLabel('Monto por retiro (USD)').fill(amount);
+        await expect(start).toBeDisabled();
+      }
+      await window.getByLabel('Monto por retiro (USD)').fill('75.25');
+    }
+    await expect(start).toBeEnabled();
+    await expect(start).toBeInViewport();
+    await window.screenshot({ path: `artifacts/load-assistant-basic-${operation}.png` });
+    await window.getByRole('button', { name: 'Modo avanzado', exact: false }).click();
+    await window.getByLabel('Máximo de operaciones').fill('150');
+    await expect(start).toBeDisabled();
+    await expect(window.locator('.load-validation')).toContainText('entre 1 y 100');
+    await window.getByLabel('Máximo de operaciones').fill('3');
+    await expect(window.locator('.load-validation')).toHaveCount(0);
+    await window.getByLabel('TPS objetivo').fill('6');
+    await expect(start).toBeDisabled();
+    await window.getByLabel('TPS objetivo').fill('0.01');
+    await expect(start).toBeDisabled();
+    await expect(window.locator('.load-validation')).toContainText('entre 0,1 y 5');
+    await window.getByLabel('TPS objetivo').fill('5');
+    await expect(start).toBeEnabled();
+    await window.screenshot({ path: 'artifacts/load-ready.png', fullPage: true });
+    await start.click();
+    const result = window.getByRole('region', { name: 'Resultado de carga', exact: true });
+    await expect(result).toContainText('Completada', { timeout: 10000 });
+    await expect(result.locator('.load-metrics')).toContainText('Aprobadas3');
+    const completed = await window.evaluate(() => globalThis.window.desktop!.getLoadRun());
+    expect(completed).toMatchObject({
+      ok: true,
+      value: { draft: { operation, ...(operation === 'WITHDRAWAL' ? { amount: '75.25' } : {}) } },
+    });
+    if (operation === 'WITHDRAWAL') await expect(result).toContainText('75.25 USD por operación');
+    await expect(result).toContainText('PIN, EMV y contexto');
+    await window.screenshot({ path: 'artifacts/load-completed.png', fullPage: true });
+    await window.getByRole('button', { name: 'Inicio', exact: true }).click();
+    await window.getByRole('button', { name: 'Carga y estrés', exact: true }).click();
+    await expect(result).toContainText('Completada');
+    await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+    await window.getByRole('button', { name: 'Modo avanzado', exact: false }).click();
+    await window.getByLabel('Máximo de operaciones').fill('100');
+    await window.getByLabel('Operación de carga').selectOption(operation);
+    if (operation === 'WITHDRAWAL') await window.getByLabel('Monto por retiro (USD)').fill('75.25');
+    await window.getByLabel('Tipo de corrida').selectOption('STRESS');
+    await window.getByLabel('TPS objetivo').fill('0.01');
+    await window.getByRole('button', { name: 'Modo básico', exact: false }).click();
+    await expect(window.getByLabel('Máximo de operaciones')).toHaveCount(0);
+    await expect(window.getByLabel('Operaciones en preparación y envío')).toHaveValue('2');
+    await expect(window.getByLabel('Operaciones en preparación y envío')).toBeDisabled();
+    await expect(start).toBeEnabled();
+    await start.click();
+    await expect(window.getByRole('button', { name: 'Detener prueba', exact: true })).toBeVisible();
+    const basic = await window.evaluate(() => globalThis.window.desktop!.getLoadRun());
+    expect(basic).toMatchObject({
+      ok: true,
+      value: {
+        draft: {
+          operation,
+          mode: 'LOAD',
+          maxTransactions: 30,
+          targetTps: 1,
+          concurrency: 2,
+          durationSeconds: 30,
+          rampUpSeconds: 0,
+          ...(operation === 'WITHDRAWAL' ? { amount: '75.25' } : {}),
+        },
+      },
+    });
+    await expect(window.getByLabel('Operación de carga')).toBeDisabled();
+    await expect(
+      window.getByRole('button', { name: 'Modo avanzado', exact: false }),
+    ).toBeDisabled();
+    await window.getByRole('button', { name: 'Detener prueba', exact: true }).click();
+    await expect(result).toContainText('Detenida', { timeout: 10000 });
+    await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+    await window.getByRole('button', { name: 'Modo avanzado', exact: false }).click();
+    await window.getByLabel('Máximo de operaciones').fill('2');
+    await window.getByLabel('Duración máxima (segundos)').fill('5');
+    await window.getByLabel('Tipo de corrida').selectOption('STRESS');
+    await window.getByLabel('Aumento gradual (segundos)').fill('5');
+    await expect(start).toBeDisabled();
+    await window.getByLabel('Aumento gradual (segundos)').fill('1');
+    await start.click();
+    await expect(result).toContainText('Completada', { timeout: 10000 });
+    await expect(result.locator('.load-metrics')).toContainText('Aprobadas2');
+    expect(await window.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
   });
-  const sample = approvedWithdrawalExecution();
-  delete sample.withdrawal;
-  await app!.evaluate(
-    ({ ipcMain, BrowserWindow }, options) => {
-      const require = process.getBuiltinModule('module').createRequire(options.fixture);
-      require(options.fixture).install(ipcMain, options.file, options.worker, options.sample);
-      BrowserWindow.getAllWindows()[0]?.setContentSize(1366, 900);
-    },
-    {
-      fixture: resolve('artifacts/load-electron.cjs'),
-      file: join(directory, 'load-ui.sqlite'),
-      worker: resolve('dist/load-worker.cjs'),
-      sample,
-    },
-  );
-  await window.getByRole('button', { name: 'Carga y estrés', exact: true }).click();
-  await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
-  await window.getByRole('button', { name: '3 TPS', exact: false }).click();
-  const start = window.getByRole('button', { name: 'Iniciar prueba', exact: true });
-  await expect(start).toBeEnabled();
-  await expect(start).toBeInViewport();
-  await window.screenshot({ path: 'artifacts/load-assistant-basic.png' });
-  await window.getByRole('button', { name: 'Modo avanzado', exact: false }).click();
-  await window.getByLabel('Máximo de operaciones').fill('150');
-  await expect(start).toBeDisabled();
-  await expect(window.locator('.load-validation')).toContainText('entre 1 y 100');
-  await window.getByLabel('Máximo de operaciones').fill('3');
-  await expect(window.locator('.load-validation')).toHaveCount(0);
-  await window.getByLabel('TPS objetivo').fill('6');
-  await expect(start).toBeDisabled();
-  await window.getByLabel('TPS objetivo').fill('0.01');
-  await expect(start).toBeDisabled();
-  await expect(window.locator('.load-validation')).toContainText('entre 0,1 y 5');
-  await window.getByLabel('TPS objetivo').fill('5');
-  await expect(start).toBeEnabled();
-  await window.screenshot({ path: 'artifacts/load-ready.png', fullPage: true });
-  await start.click();
-  const result = window.getByRole('region', { name: 'Resultado de carga', exact: true });
-  await expect(result).toContainText('Completada', { timeout: 10000 });
-  await expect(result.locator('.load-metrics')).toContainText('Aprobadas3');
-  await expect(result).toContainText('PIN, EMV y contexto');
-  await window.screenshot({ path: 'artifacts/load-completed.png', fullPage: true });
-  await window.getByRole('button', { name: 'Inicio', exact: true }).click();
-  await window.getByRole('button', { name: 'Carga y estrés', exact: true }).click();
-  await expect(result).toContainText('Completada');
-  await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
-  await window.getByRole('button', { name: 'Modo avanzado', exact: false }).click();
-  await window.getByLabel('Máximo de operaciones').fill('100');
-  await start.click();
-  await window.getByRole('button', { name: 'Detener prueba', exact: true }).click();
-  await expect(result).toContainText('Detenida', { timeout: 10000 });
-  await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
-  await window.getByLabel('Máximo de operaciones').fill('2');
-  await window.getByLabel('Duración máxima (segundos)').fill('5');
-  await window.getByLabel('Tipo de corrida').selectOption('STRESS');
-  await window.getByLabel('Aumento gradual (segundos)').fill('5');
-  await expect(start).toBeDisabled();
-  await window.getByLabel('Aumento gradual (segundos)').fill('1');
-  await start.click();
-  await expect(result).toContainText('Completada', { timeout: 10000 });
-  await expect(result.locator('.load-metrics')).toContainText('Aprobadas2');
-  expect(await window.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-    true,
-  );
-});
+}
 
 test('carga: selecciona ambos ATM y conserva su identidad al recuperar resultados', async () => {
   test.setTimeout(60000);
@@ -337,7 +384,7 @@ test('carga: selecciona ambos ATM y conserva su identidad al recuperar resultado
   await expect(window.getByLabel('Operaciones en preparación y envío')).toHaveValue('5');
   await window.getByLabel('Máximo de operaciones').fill('1');
   await expect(start).toBeDisabled();
-  await expect(window.locator('.load-validation')).toContainText('al menos una consulta por ATM');
+  await expect(window.locator('.load-validation')).toContainText('al menos una operación por ATM');
   await window.getByLabel('Máximo de operaciones').fill('4');
   await window.getByLabel('TPS objetivo', { exact: true }).fill('3');
   await window.getByLabel('Operaciones en preparación y envío').selectOption('2');
