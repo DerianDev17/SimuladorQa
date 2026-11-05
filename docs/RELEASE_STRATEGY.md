@@ -1,5 +1,10 @@
 # Estrategia de releases
 
+**Estrategia objetivo.** Actualmente `npm run build` genera la aplicación local
+en `dist/`; `npm start` la ejecuta. No hay pipeline de publicación, instalador
+firmado ni paquete Control Plane. La CI valida el desktop, como se describe en
+[CI_CHECKS.md](CI_CHECKS.md). Los canales y artefactos siguientes están propuestos.
+
 ## Canales
 - dev
 - qa

@@ -1,217 +1,121 @@
-# Arquitectura de alto nivel
+# Arquitectura implementada
 
-## Objetivo
+Estado de referencia: 2026-11-03. Las decisiones históricas y sus sustituciones
+se consultan en el [índice ADR](docs/adr/README.md). Este documento describe los
+componentes actuales; la arquitectura objetivo distribuida sigue siendo una propuesta.
 
-Permitir que varias estaciones QA ejecuten transacciones ATM funcionales y carga controlada, mientras una capa central monitorea agentes, consolida metricas y permite correlacionar cada transaccion con Switch y Core.
+## Capas y responsabilidades
 
-## Componentes
+| Capa | Ubicación | Responsabilidad |
+| --- | --- | --- |
+| Dominio | `packages/domain/src` | Validación, contratos transaccionales y métricas; sin Node, Electron ni adaptadores |
+| Contratos públicos | `packages/shared/src` | API tipada del puente IPC y mensajes entre procesos; sin secretos |
+| UI | `apps/desktop/src/renderer` | Formularios y resultados; consume el puente de preload |
+| Preload | `apps/desktop/src/preload.ts` | API mínima bajo context isolation |
+| Aplicación | `apps/desktop/src/main/application.ts` | Valida contexto, ambiente y revisiones; coordina exclusión financiera |
+| Motor financiero | `financial-execution-service.ts` en Main | Idempotencia, contexto, diario previo al envío, transporte, cierre y limpieza |
+| Carga | `load-run-service.ts`, `physical-card-load-driver.ts` | Coordina corrida, tarjeta, ritmo, cancelación, métricas y resultados |
+| Evidencia de carga | `load-history-service.ts`, `load-export-service.ts` | Consulta paginada y exportación mediante puertos separados del control de ejecución |
+| Configuraciones de carga | `load-configuration-service.ts`, `load-configuration-ports.ts` | Biblioteca QA validada, con adaptador SQLite y auditoría independiente de las corridas |
+| Adaptadores e infraestructura | Subdirectorios de Main | ISO/framing, TCP, PC/SC, cifrado TEST, SQL, SQLite y workers |
 
-1. **Desktop App / Electron Agent**
-   - React Renderer
-   - Electron Main
-   - Card Reader Adapter
-   - ATM/Card Profile Manager
-   - Transaction Engine
-   - ISO8583 Engine
-   - TCP Engine
-   - Load Engine
-   - Local SQLite
-   - Realtime Agent
+## Dependencias
 
-2. **Control Plane**
-   - REST API
-   - WebSocket Gateway
-   - Agent Registry / Heartbeats
-   - Run Coordinator
-   - Metrics Aggregator
-   - PostgreSQL
+```mermaid
+flowchart TD
+  UI[Renderer] --> Public[Contratos públicos / preload]
+  Public --> App[DesktopApplication en Main]
+  App --> Port[FinancialExecutionPort]
+  Balance[Fachada de saldo] -. implementa .-> Port
+  Withdrawal[Fachada de retiro] -. implementa .-> Port
+  Balance --> Engine[FinancialExecutionService]
+  Withdrawal --> Engine
+  Engine --> Financial[Puertos de builder, contexto, transporte y diario]
+  Adapters[Adaptadores ISO / TCP / PIN-EMV / persistencia] -. implementan .-> Financial
+  Load[LoadRunService] --> LoadPorts[load-ports]
+  Driver[PhysicalCardLoadDriver] -. implementa .-> LoadPorts
+  Driver --> App
+  Worker[Scheduler worker y almacenamiento] -. implementan .-> LoadPorts
+```
 
-3. **Transaction Targets**
-   - SVFE / Switch Coonecta
-   - Core Adapter(s)
-   - BANRED / Externa segun escenario
+Las fachadas de saldo y retiro inyectan su builder y configuración al mismo motor.
+Retiro no hereda del servicio de saldo. Los DTO de mensaje pertenecen a contratos
+internos de Main y los adaptadores los consumen. El driver de carga depende de
+interfaces de lector, operaciones financieras y ciclo de vida de sesiones; no
+lee el PIN. Ver [ADR-032](docs/adr/ADR-032-FINANCIAL-EXECUTION-PORTS.md).
 
-4. **Observers**
-   - SmartVista Observer: consulta datos de correlacion del Switch.
-   - Core Observer: valida aplicacion contable o respuesta Core.
-   - Consulta Mediator: Inicio usa el mismo origen SQL para QA y PREPROD;
-     Historial conserva su consulta manual PREPROD. Ambos viven fuera del
-     Renderer. Inicio proyecta una referencia protegida de tarjeta y no asigna
-     resultados financieros. Ver ADR-009.
+Lint y las pruebas de `architecture-boundaries.test.ts` protegen dominio,
+contratos públicos, Renderer y motores frente a imports indebidos, incluyendo
+imports de tipos, reexports e imports dinámicos.
 
-La evidencia documental de red se carga en Main desde un archivo privado
-acotado mediante NetworkEvidenceCatalog. Se valida y se proyecta por ambiente
-en Configuracion; no reemplaza los adaptadores de transporte ni autoriza sockets.
+## Ejecución y persistencia
 
-## Restricciones
+Main deriva el destino desde configuración y vuelve a validar el ATM y la
+seguridad antes de transmitir. El motor registra PENDING antes del envío y
+conserva `runId`, `transactionId`, `requestId`, STAN/RRN cuando existen. La misma
+solicitud no se retransmite tras reinicio. Los diarios serializan sus escrituras
+para conservar respuestas fuera de orden.
 
-Transacciones separa el controlador de preparación (`useTransactionPreparation`),
-el formulario (`TransactionComposer`), la documentación y la composición de la
-pantalla. Las etiquetas de resultado viven en un módulo puro compartido. Esta
-extracción conserva el flujo de envío, recuperación, lector e IPC existentes;
-los componentes de presentación no incorporan transporte ni persistencia.
+Los diarios financieros y de carga usan SQLite; las importaciones desde JSON
+conservan el original como respaldo. Una corrida activa recuperada se marca
+interrumpida y no se reanuda. Un resultado incierto conserva esa clasificación.
+Los errores históricos de retiro terminados y guardados permiten una nueva
+solicitud explícita; pendientes, reversos activos y fallos de persistencia mantienen
+su bloqueo. Ver [ADR-025](docs/adr/ADR-025-QA-WITHDRAWAL-AFTER-ERROR.md).
 
-La inspección tiene selección propia por `requestId`, independiente del borrador.
-`transaction-inspection` proyecta etapas, filtros y versiones sin efectos.
-`TransactionHistoryStore` recibe un puerto de lectura; el adaptador
-`desktopTransactionHistory` usa el IPC existente con plazo acotado. React se
-suscribe al store y descarta respuestas de generaciones/ambientes anteriores.
-Los errores parciales conservan la última fuente disponible con aviso explícito.
-Ver límites, dependencias y validación en [ADR-033](docs/adr/ADR-033-TRANSACTION-INSPECTION.md).
+## Concurrencia y recursos
 
-Sesiones de desarrollo (2026-11-04, ADR-032): Vite obtiene un puerto libre en
-loopback; el lanzador lo entrega a Main como entero, manteniendo la URL exacta
-para IPC y navegación. La CSP habilita WebSocket solo para ese puerto durante
-desarrollo. El HTML normal ya contiene la política restrictiva y no necesita
-postprocesado. Las pruebas tienen puerto y caché independientes de la app abierta.
+- **Enlace QA:** una conexión financiera activa. La cola de QaSwitchConnection
+  espera turno, respeta cancelación y plazo, y cierra antes de liberar el enlace.
+- **Saldo en carga:** 1–5 operaciones en preparación/envío; chip exclusivo y
+  posibilidad de preparar mientras el host responde.
+- **Retiro:** una operación activa, también en carga. Operaciones manuales
+  conservan exclusión respecto de la corrida.
+- **Ritmo:** límite global antes de cada escritura, sin créditos acumulados.
+  El objetivo de TPS no garantiza el caudal observado.
+- **Sesiones:** PC/SC y cifrado reutilizan procesos durante la corrida, con
+  lectura y seguridad nuevas por operación. PIN de sesión solo en Main y borrado
+  al cerrar. No se cachean tramas ni claves descifradas.
+- **Observación:** la conexión de observación se libera antes del transporte
+  financiero y se restaura al terminar cuando corresponde al mismo destino.
 
-Carga de retiros (2026-11-04, ADR-031): el driver comparte programación,
-PIN por corrida y preparación con saldo, pero selecciona el proveedor y diario
-de retiro, con monto exacto por operación. Main admite concurrencia interna solo
-del mismo runId y operación. Un retiro PENDING solo admite otra preparación si
-sigue activo dentro de ese grupo; los pendientes recuperados, reversos y errores
-de almacenamiento bloquean. Las operaciones manuales siguen excluidas y el
-enlace mantiene una sola conexión financiera. No se agregan reglas ISO ni reversos.
+Fuentes: [ADR-028](docs/adr/ADR-028-LOAD-PREPARATION-REUSE.md),
+[ADR-029](docs/adr/ADR-029-QA-SINGLE-FINANCIAL-CONNECTION.md) y
+[ADR-031](docs/adr/ADR-031-WITHDRAWAL-LOAD.md). Parámetros operativos en la
+[guía de carga](docs/implementation/LOAD_TEST.md).
 
-Conexión financiera exclusiva (2026-10-29, ADR-029): TCPComms del enlace QA
-reemplaza la conexión del PID 80131 al aceptar otra de la estación. Se sustituye
-el solapamiento de sockets de ADR-027 por una cola en QaSwitchConnection, con
-cancelación y vencimiento antes de conectar. La preparación puede avanzar en
-paralelo con la espera host, pero una sola conexión financiera ocupa el enlace.
-El transporte termina el cierre antes de liberar el turno; un fallo detiene la
-admisión de pendientes. Las métricas separan espera del enlace y cancelaciones;
-se conserva la primera causa sin alterar resultados financieros ni registros previos.
+## Seguridad y perfiles
 
-Preparación de carga (2026-10-28, ADR-028): Main conserva los procesos PC/SC y
-cifrado durante la corrida. PC/SC libera exclusión entre operaciones; el
-readId se consume y sus campos privados se borran. Lectura, relectura exclusiva
-y AC siguen siendo nuevas por operación. Cada comando de cifrado reabre la
-credencial DPAPI y borra sus buffers. El driver cierra ambos recursos al terminar.
-No se cachean tramas, claves descifradas ni resultados de disponibilidad.
-La UI distingue completar el plan de alcanzar el promedio de TPS solicitado.
+Renderer no abre sockets ni accede a secretos. Los valores públicos están
+sanitizados y el PAN enmascarado; no se registran PIN, CVV, PIN Block ni Track 2.
+Producción permanece bloqueada. QA y PREPROD mantienen validación de ambiente.
 
-Carga concurrente (2026-10-28, ADR-027; sockets sustituidos por ADR-029): sustituye la restricción secuencial de
-ADR-026 por 1–5 slots asíncronos. El worker confirma inicio y cierre por ticket;
-Main limita capacidad y cantidad. PhysicalCardLoadDriver serializa lectura,
-PIN/EMV y validación hasta registrar PENDING y abrir el transporte, liberando
-el lector mientras espera el host. Cada socket pasa por un limitador global
-antes del write, sin créditos acumulados ni envíos después del plazo. El
-servicio financiero y la conexión admiten concurrencia solo del mismo runId
-y límite interno; operaciones manuales conservan exclusión. ADR-031 amplía el
-grupo a retiros ordinarios de una misma corrida, sin mezclar operaciones. Las
-escrituras del diario hacen read-modify-write serializado para evitar pérdidas
-y regresiones de estado con respuestas fuera de orden. La observación se
-restaura al cerrar el último socket del grupo. No se reutilizan tramas ni AC.
+La plantilla ATM20521 resuelve los perfiles actuales QA/205 y comparte parámetros,
+referencia de clave y pool persistente. Crear otro ATM no duplica reservas. La
+fecha contable del mensaje no certifica la fecha efectiva del switch. Ver
+[ADR-024](docs/adr/ADR-024-REUSABLE-ATM-TEMPLATE.md).
 
-Carga con varios perfiles (primera entrega, sustituida por ADR-027): LoadTestDraft conserva el ATM principal
-y acepta additionalAtms con UUID/revisión. PhysicalCardLoadDriver valida todos
-antes de iniciar, alterna sus contextos en orden y reutiliza la revalidación de
-DesktopApplication antes de cada operación. Un worker y una tarjeta física
-mantienen concurrencia uno, PIN por corrida y seguridad nueva por consulta.
-Los límites son totales; las reservas compartidas nunca se suman por perfil.
-Cada resultado conserva atmId y correlación; SQLite admite corridas anteriores.
-Ver ADR-026.
+## Observación y alcance pendiente
 
-Continuación QA tras error (2026-10-28): el bloqueo por diario de retiro se limita
-a ejecuciones/reversos sin finalizar y fallos de persistencia. Un resultado
-incierto terminado y guardado admite otra solicitud explícita con UUID nuevo;
-la anterior conserva su resultado y nunca se retransmite. Renderer ofrece
-Nueva transacción con lectura nueva y deja los errores históricos en el historial.
-La exclusión en Main, PIN/EMV nuevos y protección de idempotencia permanecen.
-Ver ADR-025.
+Mediator tiene adaptador SQL fuera de Renderer para Inicio e Historial. El feed
+no garantiza captura completa bajo carga y no sustituye un asiento Core validado.
+SmartVista/Core generales dependen de fuentes y adaptadores pendientes.
 
-Plantilla reutilizable (2026-10-27): QaAtmTemplate resuelve el catálogo actual
-y el perfil de ATM20521 en Main por operación. QaTemplateContextProvider
-proyecta identidad/adquirente para nuevos ATM QA/205 y comparte referencia
-DPAPI, parámetros ISO/EMV, contrato de retiro y pool persistente del origen.
-No exige un archivo por terminal ni reinicio tras el alta. Se revalida el
-contexto antes de TCP. La fecha F15 se hereda del mensaje funcional, sin
-consulta SQL por ATM ni afirmación sobre la contabilidad del switch. ADR-024
-sustituye el aprovisionamiento individual dentro del mismo enlace/entidad.
+Control Plane, coordinación distribuida, agregación central, PostgreSQL y pool
+financiero virtual son alcance propuesto, no componentes operativos de esta
+entrega. El [diagrama inicial](docs/architecture/architecture_overview.png) describe
+esa visión; para la estructura implementada usar el diagrama anterior.
+Los datos faltantes y sus bloqueos están en [TODO-DATA](docs/TODO_DATA.md).
 
-Comprobante local de retiro (2026-10-19): WithdrawalReceiptService recibe un UUID
-por IPC validado y consulta el diario, sin invocar transporte financiero. El puerto
-ReceiptPrinter encapsula la impresion Electron en una ventana aislada sin Node/JS.
-Renderer solo muestra vista previa y solicita imprimir la referencia. F54 de retiro
-aprobado se conserva hasta el diario/UI con tipos neutrales, sin inferir debito Core
-ni saldo disponible. Ver docs/transactions/WITHDRAWAL.md.
+Historial y exportación usan los registros locales existentes. Dominio proyecta
+campos permitidos; Main valida consulta/ambiente y coordina los puertos de lectura
+y guardado. Adaptadores gestionan SQLite, diálogo nativo y reemplazo de archivos.
+Renderer no proporciona rutas ni contenidos. Ver [ADR-033](docs/adr/ADR-033-LOAD-HISTORY-EXPORT.md).
 
-Retiro QA (2026-10-16): WithdrawalService reutiliza el motor de escritura unica
-de BalanceInquiryService con validacion/armado de retiro y diario separado.
-Renderer usa IPC dedicado; Main deriva destino y comparte la exclusion de
-ejecuciones con saldo. Los registros de retiro incluyen monto/cuenta/tipo de
-caso y preservan pendientes tras reinicio. QaWithdrawalExecutionProvider se
-vincula en Main y comparte infraestructura PIN/PCSC con saldo, parametrizada
-explicitamente para efectivo. FileQaWithdrawalPolicies mantiene un contrato
-independiente por huella del perfil, montos permitidos y resultado conservador.
-Desde el 2026-10-27 admite una lista exacta o ANY_POSITIVE_AMOUNT explicito,
-validando siempre importe positivo y representable en F4; la plantilla ATM20521
-usa montos personalizados por instruccion del usuario (ADR-016).
-Se revalida hasta antes de TCP; ausencia, revocacion o contradiccion impiden
-solo retiro. La implementacion CASH/01 no activa ATM20521 sin validacion de
-la discrepancia 9F02/9C. La instruccion posterior del usuario habilita un
-contrato separado BOUND_PROFILE/ZERO para ATM20521/USD20: reutiliza la
-preparacion EMV de saldo con seguridad nueva, manteniendo F3/F4 de retiro.
-Fuente USER_QA_INSTRUCTION y alcance en ADR-016 y docs/transactions/WITHDRAWAL.md.
-
-Conexion QA (actualizado 2026-10-19): Main mantiene un socket de observacion mediante
-SwitchConnectionPort/QaSwitchConnection. IPC solo acepta el ambiente; el destino
-procede de SendConfigurationService. Renderer consulta metadata de estado cada
-segundo y ofrece conectar/desconectar. Al cambiar ambiente, salir o abrir el
-transporte financiero se libera el socket de observacion. Se espera su cierre
-antes de enviar y se restaura una vez al terminar si el operador lo tenia
-abierto para el mismo destino. Se respeta cierre/cambio de entorno/desconexion;
-la restauracion nunca reenvia la transaccion ni cambia su resultado. No hay respuestas
-ISO automaticas ni dependencia de PIN/lector para comprobar conectividad.
-Ver docs/implementation/SWITCH_CONNECTION.md.
-
-Actualizacion posterior 2026-10-13: Main carga perfiles aprobados y conecta
-QaBalanceExecutionProvider por ATM. PIN por proceso nativo privado, cifrado
-TEST Windows/DPAPI y primera AC PC/SC fuera del Renderer. La activacion requiere
-vinculacion TEST aprobada; no instala perfiles sinteticos. No es un kernel EMV
-completo ni genera seguridad virtual sin chip. Ver ADR-013 y
-docs/implementation/QA_PIN_EXECUTION.md; las observaciones siguientes conservan
-el estado anterior a esta implementacion.
-
-Precision de alcance 2026-10-13: cada ATM es un perfil de software; no requiere
-un cajero fisico. Main inyecta QaBalanceContextRouter para resolver proveedores
-independientes por UUID/revision/terminal/destino. El Router no consulta lectores.
-Backends financieros reales y seleccion de tarjetas QA virtuales siguen
-pendientes; las pruebas actuales de varios ATM son sinteticas/TCP local.
-Ver docs/implementation/MULTI_ATM_CONTEXT.md.
-
-- Produccion bloqueada.
-- El Control Plane no genera tramas ISO por si mismo; coordina agentes.
-- Las pruebas de carga deben tener limites configurados por ambiente.
-- Los datos sensibles se enmascaran antes de salir del agente.
-
-## Diagrama
-
-Ver `docs/architecture/architecture_overview.png`.
-
-Configuracion de envio (2026-10-11): el Renderer usa tres IPC protegidos para
-leer/guardar configuracion y preparar un plan. SendConfigurationService depende
-de un puerto de almacenamiento y evidencia documental, sin transporte. Main
-deriva el endpoint, serializa cambios y audita UUID/revision/UTC. La generacion
-de nuevos payloads y la ejecucion permanecen bloqueadas por fuentes pendientes.
-Ver `docs/implementation/SEND_CONFIGURATION.md`; no se conecta el replay historico
-al recorrido de nuevas transacciones.
-
-Ejecucion de saldo (2026-10-12): BalanceInquiryService en Main depende de
-BalanceContextProvider, BalanceTransport y BalanceJournal. El dominio conserva
-contratos/resultados; reglas del proveedor y wire permanecen en adaptadores.
-Renderer envia una referencia de tarjeta y clave de idempotencia, sin secretos.
-Se registra PENDING antes del write y no se repite una referencia tras reinicio.
-La fuente física QA genera contexto por operación; si falta un perfil válido,
-se bloquea el transporte antes de conectar. Ver ADR-012 y
-`docs/implementation/BALANCE_EXECUTION.md`.
-
-Carga física QA (2026-10-20): LoadRunService coordina un worker de ritmo y un
-PhysicalCardLoadDriver que reutiliza DesktopApplication/BalanceInquiryService.
-Cada operación obtiene lectura nueva y conserva el runId común. IPC expone solo
-inicio, estado y parada con metadatos validados. LoadPinSession conserva una copia
-acotada del PIN exclusivamente en Main por autorización explícita del usuario;
-se borra al cerrar la corrida. No cambia el protocolo ISO. Cancelación propagada
-al proveedor y socket, con resultado incierto después de transmitir. El diario
-financiero y qa-load-runs.json impiden reintentos y reanudación silenciosa.
-Ver docs/adr/ADR-020-PHYSICAL-CARD-LOAD.md.
+La pantalla Transacciones separa `useTransactionPreparation` de las vistas de
+preparación e inspección. `transaction-inspection` proyecta etapas y filtros
+sin efectos; `TransactionHistoryStore` lee los diarios mediante un puerto y
+descarta respuestas de generaciones anteriores. La selección del resultado
+se identifica por `requestId` y no modifica el borrador. Ver
+[ADR-036](docs/adr/ADR-036-TRANSACTION-INSPECTION.md). El desarrollo usa un
+puerto loopback libre por sesión según [ADR-035](docs/adr/ADR-035-ISOLATED-DEVELOPMENT-PORT.md).

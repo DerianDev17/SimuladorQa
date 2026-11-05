@@ -10,12 +10,9 @@ export type LoadTestMode = 'LOAD' | 'STRESS';
 export const LOAD_TEST_LOCAL_MAX_TPS = 5;
 export const LOAD_TEST_LOCAL_MIN_TPS = 0.1;
 
-export interface LoadTestDraft {
+interface LoadTestParameters {
   environment: 'QA';
   mode: LoadTestMode;
-  operation: LoadTestOperation;
-  // Required only for withdrawals; exact decimal USD per operation.
-  amount?: string;
   atmId: string;
   atmRevision: number;
   // The original fields remain readable for existing single-ATM runs.
@@ -26,6 +23,9 @@ export interface LoadTestDraft {
   rampUpSeconds: number;
   durationSeconds: number;
 }
+
+export type LoadTestDraft = LoadTestParameters &
+  ({ operation: 'BALANCE'; amount?: never } | { operation: 'WITHDRAWAL'; amount: string });
 
 export interface LoadTestAtm {
   atmId: string;
@@ -46,19 +46,6 @@ export function loadTargetTps(plan: LoadTestDraft, elapsedMs: number): number {
         plan.targetTps * Math.min(1, Math.max(0, elapsedMs) / (plan.rampUpSeconds * 1000)),
       )
     : plan.targetTps;
-}
-
-export interface LoadTestPlan {
-  planId: string;
-  createdAt: string;
-  draft: LoadTestDraft;
-  status: 'BLOCKED_EXECUTION';
-  blockers: readonly {
-    id: 'LOAD_LIMITS_NOT_APPROVED' | 'QA_CARD_SOURCE_NOT_READY' | 'LOAD_EXECUTOR_NOT_IMPLEMENTED';
-    label: string;
-  }[];
-  frameGenerated: false;
-  transmissionAttempted: false;
 }
 
 function positiveNumber(value: unknown): value is number {
@@ -93,8 +80,8 @@ export function parseLoadTestDraft(value: unknown): LoadTestDraft | undefined {
     'concurrency',
     'rampUpSeconds',
     'durationSeconds',
-    ...(request.operation === 'WITHDRAWAL' ? ['amount'] : []),
     ...(Object.hasOwn(request, 'additionalAtms') ? ['additionalAtms'] : []),
+    ...(request.operation === 'WITHDRAWAL' ? ['amount'] : []),
   ];
   if (
     Object.keys(request).length !== keys.length ||
@@ -102,7 +89,6 @@ export function parseLoadTestDraft(value: unknown): LoadTestDraft | undefined {
     request.environment !== 'QA' ||
     !['LOAD', 'STRESS'].includes(request.mode as string) ||
     !['BALANCE', 'WITHDRAWAL'].includes(request.operation as string) ||
-    (request.operation === 'WITHDRAWAL' && !isWithdrawalAmount(request.amount)) ||
     !isUuid(request.atmId) ||
     !positiveInteger(request.atmRevision) ||
     !positiveInteger(request.maxTransactions) ||
@@ -111,6 +97,12 @@ export function parseLoadTestDraft(value: unknown): LoadTestDraft | undefined {
     !positiveInteger(request.concurrency) ||
     !nonNegativeInteger(request.rampUpSeconds) ||
     !positiveInteger(request.durationSeconds)
+  )
+    return;
+  // Withdrawal retains the existing exclusive financial execution contract.
+  if (
+    request.operation === 'WITHDRAWAL' &&
+    (!isWithdrawalAmount(request.amount) || request.concurrency !== 1)
   )
     return;
   if (request.mode === 'STRESS' && request.rampUpSeconds === 0) return;
@@ -132,5 +124,6 @@ export function parseLoadTestDraft(value: unknown): LoadTestDraft | undefined {
     if (new Set(ids).size !== ids.length) return;
   }
 
-  return request as unknown as LoadTestDraft;
+  // Own the validated plan before an asynchronous preflight can yield to its caller.
+  return structuredClone(request) as unknown as LoadTestDraft;
 }

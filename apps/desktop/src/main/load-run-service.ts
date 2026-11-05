@@ -1,52 +1,20 @@
+import type {
+  LoadRunDriver,
+  LoadRunSource,
+  LoadRunStore,
+  LoadSchedule,
+  LoadScheduler,
+} from './load-ports';
 import { performance } from 'node:perf_hooks';
 import { isUuid } from '../../../../packages/domain/src/catalogs';
 import { isRecord } from '../../../../packages/domain/src/index';
 import { parseLoadRunRequest } from '../../../../packages/domain/src/load-run';
 import { loadTestAtms } from '../../../../packages/domain/src/load-test';
-import type {
-  LoadRunRequest,
-  LoadRunSnapshot,
-  LoadRunItem,
-  LoadRunTimings,
-} from '../../../../packages/domain/src/load-run';
-import type { BalanceExecution } from '../../../../packages/domain/src/balance-inquiry';
+import type { LoadRunSnapshot, LoadRunItem } from '../../../../packages/domain/src/load-run';
 import { balanceDeliveryUncertain } from '../../../../packages/domain/src/balance-inquiry';
 import { failure } from '../../../../packages/shared/src/contracts';
 import type { Result } from '../../../../packages/shared/src/contracts';
 import type { RuntimeIdentity } from './ports';
-
-export type LoadExecutionResult = Result<BalanceExecution & { loadTimings?: LoadRunTimings }> & {
-  skipped?: 'DURATION';
-  cancelled?: true;
-};
-export interface LoadRunSource {
-  readerName: string;
-  execute(
-    signal: AbortSignal,
-    runId: string,
-    slot?: { index: number; deadline: number },
-  ): Promise<LoadExecutionResult>;
-  close(): void;
-}
-export interface LoadRunDriver {
-  prepare(request: LoadRunRequest): Promise<Result<LoadRunSource>>;
-}
-export interface LoadRunStore {
-  read(): Promise<LoadRunSnapshot | null>;
-  hasRequest(id: string): Promise<boolean>;
-  write(snapshot: LoadRunSnapshot): Promise<void>;
-}
-export interface LoadSchedule {
-  started?(operationStartedAt: number, ticket?: number): void;
-  next(operationStartedAt?: number, ticket?: number): void;
-  stop(): void;
-}
-export type LoadScheduler = (
-  request: LoadRunRequest,
-  tick: (ticket?: number) => void,
-  done: (reason: 'COUNT' | 'DURATION' | 'STOP' | 'ERROR') => void,
-  startedAt?: number,
-) => LoadSchedule;
 
 export class LoadRunService {
   private run: LoadRunSnapshot | null = null;
@@ -155,7 +123,7 @@ export class LoadRunService {
     if (!request)
       return failure(
         'VALIDATION_ERROR',
-        'Usa QA, saldo o retiro con monto positivo, de 1 a 5 operaciones simultáneas, hasta 5 TPS, 100 operaciones y 300 segundos.',
+        'Usa QA, saldo (1–5 simultáneas) o retiro secuencial con monto positivo: hasta 5 TPS, 100 operaciones y 300 segundos.',
       );
     if (this.busy) return failure('CONFLICT', 'Ya hay una corrida activa.');
     this.busy = true;
@@ -199,7 +167,7 @@ export class LoadRunService {
         state: 'RUNNING',
         message:
           request.draft.operation === 'WITHDRAWAL'
-            ? 'Retiros con tarjeta física. PIN una vez por corrida.'
+            ? 'Retiros secuenciales con tarjeta física. PIN una vez por corrida.'
             : 'Consultas de saldo con tarjeta física. PIN una vez por corrida.',
         active: 0,
         items: [],
@@ -331,7 +299,7 @@ export class LoadRunService {
         if (balanceDeliveryUncertain(value) && !this.failureRecorded && !result.cancelled) {
           this.finishReason = 'FAILED';
           this.failureRecorded = true;
-          this.run.message = `Primer error: ${value.outcome}${value.correlation ? ` · STAN ${value.correlation.stan}` : ''}. ${item.received ? 'Respuesta recibida con resultado por revisar' : 'Envío sin respuesta confirmada'}; revisa su correlación. No se reintentará.`;
+          this.run.message = `Primer error: ${value.outcome}${value.correlation ? ` · STAN ${value.correlation.stan}` : ''}. Envío sin respuesta confirmada; revisa su correlación. No se reintentará.`;
         } else if (
           value.outcome !== 'APPROVED' &&
           this.run.state !== 'STOPPING' &&

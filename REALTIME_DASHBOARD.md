@@ -1,5 +1,10 @@
 # Dashboard realtime
 
+**Diseño propuesto para carga distribuida, no implementado.** El Inicio actual
+de la app usa el [feed Mediator](docs/implementation/DASHBOARD_LIVE_FEED.md);
+los resultados locales de carga se describen en la [guía de carga](docs/implementation/LOAD_TEST.md).
+Las vistas Fleet y Run centralizadas siguientes dependen del Control Plane.
+
 ## Vista Fleet
 Por agente:
 - online/offline

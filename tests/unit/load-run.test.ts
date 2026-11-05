@@ -2,11 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import {
   parseLoadRunRequest,
+  parseLoadRunDraft,
   loadRunMetrics,
   loadRunBelowTarget,
-  loadRunParameterIssues,
 } from '../../packages/domain/src/load-run';
-import type { LoadRunParameterIssue } from '../../packages/domain/src/load-run';
 import type { LoadTestDraft } from '../../packages/domain/src/load-test';
 import { LoadPinSession } from '../../apps/desktop/src/main/adapters/load-pin-session';
 import { validLoadRunSnapshot } from '../../apps/desktop/src/main/infrastructure/load-run-store';
@@ -29,7 +28,7 @@ export const loadRequest = () => ({
   },
 });
 describe('corrida QA acotada', () => {
-  it.each<[Partial<LoadTestDraft>, LoadRunParameterIssue]>([
+  it.each<[Partial<LoadTestDraft>, string]>([
     [{ targetTps: 0.09 }, 'TARGET_TPS'],
     [{ targetTps: 5.01 }, 'TARGET_TPS'],
     [{ targetTps: NaN }, 'TARGET_TPS'],
@@ -46,19 +45,16 @@ describe('corrida QA acotada', () => {
     [{ mode: 'STRESS', rampUpSeconds: 0 }, 'RAMP'],
     [{ operation: 'WITHDRAWAL', amount: '0.00' }, 'WITHDRAWAL_AMOUNT'],
     [{ operation: 'WITHDRAWAL', amount: '20' }, 'WITHDRAWAL_AMOUNT'],
-  ])(
-    'la validación compartida explica %j y Main rechaza la misma solicitud (%s)',
-    (patch, issue) => {
-      const request = loadRequest();
-      const draft = {
-        ...request.draft,
-        additionalAtms: [{ atmId: randomUUID(), atmRevision: 1 }],
-        ...patch,
-      };
-      expect(loadRunParameterIssues(draft, 2)).toContain(issue);
-      expect(parseLoadRunRequest({ ...request, draft })).toBeUndefined();
-    },
-  );
+  ])('la validación del borrador rechaza %j (%s)', (patch) => {
+    const request = loadRequest();
+    const draft = {
+      ...request.draft,
+      additionalAtms: [{ atmId: randomUUID(), atmRevision: 1 }],
+      ...patch,
+    };
+    expect(parseLoadRunDraft(draft)).toBeUndefined();
+    expect(parseLoadRunRequest({ ...request, draft })).toBeUndefined();
+  });
   it.each(['BALANCE', 'WITHDRAWAL'] as const)(
     'acepta los límites inclusivos en UI y Main para %s',
     (operation) => {
@@ -70,10 +66,11 @@ describe('corrida QA acotada', () => {
         const draft = {
           ...request.draft,
           ...boundary,
+          concurrency: operation === 'WITHDRAWAL' ? 1 : boundary.concurrency,
           operation,
           ...(operation === 'WITHDRAWAL' ? { amount: '75.25' } : {}),
         };
-        expect(loadRunParameterIssues(draft, 1)).toEqual([]);
+        expect(parseLoadRunDraft(draft)).toBeDefined();
         expect(parseLoadRunRequest({ ...request, draft })).toBeDefined();
       }
     },

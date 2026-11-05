@@ -1,10 +1,11 @@
-import { BalanceInquiryService } from './balance-inquiry-service';
+import { FinancialExecutionService } from './financial-execution-service';
+import { NewVisaWithdrawal } from './adapters/new-visa-withdrawal';
 import type { BalanceContextProvider, BalanceJournal, BalanceTransport } from './balance-ports';
 import type { RuntimeIdentity } from './ports';
 
 // Reuse the single-write, durable idempotency and late-lease cleanup engine.
 // No balance provider is installed here: withdrawal security needs its own contract.
-export class WithdrawalService extends BalanceInquiryService {
+export class WithdrawalService extends FinancialExecutionService {
   constructor(
     journal: BalanceJournal,
     transport: BalanceTransport,
@@ -12,6 +13,14 @@ export class WithdrawalService extends BalanceInquiryService {
     context?: BalanceContextProvider,
     contextDeadlineMs = 90000,
   ) {
-    super(journal, transport, identity, context, contextDeadlineMs, 'WITHDRAWAL');
+    super(
+      journal,
+      transport,
+      identity,
+      new NewVisaWithdrawal(),
+      context,
+      contextDeadlineMs,
+      'WITHDRAWAL',
+    );
   }
 }

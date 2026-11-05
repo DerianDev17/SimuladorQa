@@ -1,3 +1,4 @@
+import type { CapturedBalanceMetadata } from '../financial-message-contract';
 import { Buffer } from 'node:buffer';
 import { parseBalanceValues } from './coonecta-balance-rules';
 import type { BalanceValue } from '../../../../../packages/domain/src/balance-inquiry';
@@ -51,19 +52,6 @@ const requestFields = [
 ];
 const responseFields = [2, 3, 7, 11, 15, 19, 25, 32, 37, 39, 41, 42, 44, 48, 49, 54, 55, 63];
 
-export interface CapturedBalanceMetadata {
-  mti: '0200' | '0210';
-  processingCode: '301000' | '011000';
-  stan: string;
-  rrn: string;
-  terminalId: string;
-  currency: '840';
-  panMask: string;
-  bodyBytes: number;
-  fields: number[];
-  amount?: string;
-  responseCode?: string;
-}
 function invalid(): never {
   throw new Error('BALANCE_SOURCE_UNSUPPORTED');
 }

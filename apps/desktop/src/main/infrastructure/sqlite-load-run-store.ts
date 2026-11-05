@@ -3,7 +3,17 @@ import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { isUuid } from '../../../../../packages/domain/src/catalogs';
 import type { LoadRunSnapshot } from '../../../../../packages/domain/src/load-run';
-import type { LoadRunStore } from '../load-run-service';
+import {
+  LOAD_HISTORY_PAGE_SIZE,
+  parseLoadHistoryQuery,
+} from '../../../../../packages/domain/src/load-history';
+import type {
+  LoadHistoryPage,
+  LoadHistoryQuery,
+} from '../../../../../packages/domain/src/load-history';
+import { loadRunMetrics } from '../../../../../packages/domain/src/load-run';
+import type { LoadHistoryStore } from '../load-history-ports';
+import type { LoadRunStore } from '../load-ports';
 import { readLegacyLoadRuns, validLoadRunSnapshot } from './load-run-store';
 
 interface StoredRun {
@@ -12,7 +22,7 @@ interface StoredRun {
   payload: string;
 }
 
-export class SqliteLoadRunStore implements LoadRunStore {
+export class SqliteLoadRunStore implements LoadRunStore, LoadHistoryStore {
   private database: DatabaseSync | undefined;
   private pending: Promise<void> = Promise.resolve();
 
@@ -98,19 +108,86 @@ export class SqliteLoadRunStore implements LoadRunStore {
         .prepare('SELECT run_id, request_id, payload FROM runs ORDER BY sequence DESC LIMIT 1')
         .get() as unknown as StoredRun | undefined;
       if (!row) return null;
-      let value: unknown;
-      try {
-        value = JSON.parse(row.payload);
-      } catch {
-        throw Error('LOAD_STORE_INVALID');
+      return this.decode(row);
+    });
+  }
+
+  private decode(row: StoredRun): LoadRunSnapshot {
+    const value: unknown = JSON.parse(row.payload);
+    if (
+      !validLoadRunSnapshot(value) ||
+      value.runId !== row.run_id ||
+      value.requestId !== row.request_id
+    )
+      throw Error('LOAD_STORE_INVALID');
+    return value;
+  }
+
+  async get(id: string): Promise<LoadRunSnapshot | null> {
+    return this.serialize(async () => {
+      if (!isUuid(id)) throw Error('LOAD_RUN_INVALID');
+      const row = (await this.open())
+        .prepare('SELECT run_id, request_id, payload FROM runs WHERE run_id = ?')
+        .get(id) as unknown as StoredRun | undefined;
+      return row ? this.decode(row) : null;
+    });
+  }
+
+  async list(input: LoadHistoryQuery): Promise<LoadHistoryPage> {
+    // Snapshot the caller's filters before entering the serialized queue.
+    const query = parseLoadHistoryQuery(input);
+    if (!query) throw Error('LOAD_HISTORY_INVALID');
+    return this.serialize(async () => {
+      const clauses: string[] = [];
+      const values: (string | number)[] = [];
+      if (query.before !== undefined) {
+        clauses.push('sequence < ?');
+        values.push(query.before);
       }
-      if (
-        !validLoadRunSnapshot(value) ||
-        value.runId !== row.run_id ||
-        value.requestId !== row.request_id
-      )
-        throw Error('LOAD_STORE_INVALID');
-      return value;
+      if (query.from) {
+        clauses.push("julianday(json_extract(payload, '$.startedAt')) >= julianday(?)");
+        values.push(query.from);
+      }
+      if (query.to) {
+        clauses.push("julianday(json_extract(payload, '$.startedAt')) < julianday(?)");
+        values.push(query.to);
+      }
+      if (query.operation) {
+        clauses.push("json_extract(payload, '$.draft.operation') = ?");
+        values.push(query.operation);
+      }
+      if (query.state) {
+        clauses.push("json_extract(payload, '$.state') = ?");
+        values.push(query.state);
+      }
+      if (query.atmId) {
+        clauses.push(
+          "(json_extract(payload, '$.draft.atmId') = ? OR EXISTS (SELECT 1 FROM json_each(payload, '$.draft.additionalAtms') WHERE json_extract(value, '$.atmId') = ?))",
+        );
+        values.push(query.atmId, query.atmId);
+      }
+      const rows = (await this.open())
+        .prepare(
+          `SELECT sequence, run_id, request_id, payload FROM runs ${clauses.length ? 'WHERE ' + clauses.join(' AND ') : ''} ORDER BY sequence DESC LIMIT ?`,
+        )
+        .all(...values, LOAD_HISTORY_PAGE_SIZE + 1) as unknown as (StoredRun & {
+        sequence: number;
+      })[];
+      const page = rows.slice(0, LOAD_HISTORY_PAGE_SIZE);
+      return {
+        entries: page.map((row) => {
+          const run = this.decode(row);
+          return {
+            runId: run.runId,
+            startedAt: run.startedAt,
+            finishedAt: run.finishedAt,
+            state: run.state,
+            draft: run.draft,
+            metrics: loadRunMetrics(run),
+          };
+        }),
+        next: rows.length > LOAD_HISTORY_PAGE_SIZE ? page.at(-1)!.sequence : null,
+      };
     });
   }
 

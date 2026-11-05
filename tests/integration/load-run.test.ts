@@ -4,14 +4,15 @@ import { randomUUID } from 'node:crypto';
 import { mkdtemp, readFile, mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { LoadRunService, type LoadScheduler } from '../../apps/desktop/src/main/load-run-service';
+import { LoadRunService } from '../../apps/desktop/src/main/load-run-service';
+import type { LoadScheduler } from '../../apps/desktop/src/main/load-ports';
 import { workerLoadScheduler } from '../../apps/desktop/src/main/infrastructure/load-scheduler';
 import { FileLoadRunStore } from '../../apps/desktop/src/main/infrastructure/load-run-store';
 import { approvedWithdrawalExecution } from '../helpers/withdrawal';
 import { removeTestDirectory } from '../helpers/temporary-directory';
 import type { LoadRunSnapshot } from '../../packages/domain/src/load-run';
 import { loadRunMetrics } from '../../packages/domain/src/load-run';
-import type { LoadExecutionResult } from '../../apps/desktop/src/main/load-run-service';
+import type { LoadExecutionResult } from '../../apps/desktop/src/main/load-ports';
 import type { BalanceExecution } from '../../packages/domain/src/balance-inquiry';
 import type { Result } from '../../packages/shared/src/contracts';
 
@@ -93,6 +94,38 @@ function setup(
   };
 }
 describe('worker de carga con persistencia real', () => {
+  it('congela límites y perfiles validados antes de esperar el almacenamiento', async () => {
+    const { service, store, driver } = setup(async () => ({ ok: true, value: result() }));
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.spyOn(store, 'read').mockImplementationOnce(async () => {
+      await gate;
+      return null;
+    });
+    const input = {
+      ...request(),
+      draft: {
+        ...request().draft,
+        additionalAtms: [{ atmId: randomUUID(), atmRevision: 1 }],
+      },
+    };
+    const original = structuredClone(input);
+    const starting = service.start(input);
+    input.draft.targetTps = 999;
+    input.draft.maxTransactions = 999;
+    input.draft.additionalAtms[0]!.atmRevision = 999;
+    release();
+    try {
+      expect(await starting).toMatchObject({ ok: true, value: { draft: original.draft } });
+      expect(driver.prepare).toHaveBeenCalledWith(original);
+    } finally {
+      service.close();
+      await service.whenIdle();
+    }
+    expect((await store.read())?.draft).toEqual(original.draft);
+  });
   it('conserva el primer cierre como causa y no suma las cancelaciones posteriores como errores', async () => {
     let calls = 0;
     const failed = { ...result(), outcome: 'PEER_CLOSED' as const, responseCode: null };

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { BalanceTarget, BalanceContextLease } from '../../apps/desktop/src/main/balance-ports';
 import type { BalanceExecutionRequest } from '../../packages/domain/src/balance-inquiry';
-import type { CapturedBalanceMetadata } from '../../apps/desktop/src/main/adapters/captured-visa-balance';
+import type { CapturedBalanceMetadata } from '../../apps/desktop/src/main/financial-message-contract';
 import { capturedBalanceRequest, capturedBalanceResponse } from './captured-visa-balance';
 
 // Synthetic encoded fixture spans, never a real captured PIN/EMV source.

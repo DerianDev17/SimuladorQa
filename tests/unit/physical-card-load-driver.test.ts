@@ -8,7 +8,7 @@ import type { BalanceExecution } from '../../packages/domain/src/balance-inquiry
 import { parseBalanceExecutionRequest } from '../../packages/domain/src/balance-inquiry';
 import { parseWithdrawalExecutionRequest } from '../../packages/domain/src/withdrawal';
 import { approvedWithdrawalExecution } from '../helpers/withdrawal';
-import type { DesktopApplication } from '../../apps/desktop/src/main/application';
+import type { LoadFinancialOperations } from '../../apps/desktop/src/main/load-ports';
 
 function fixture() {
   const original: CardIdentityReading = {
@@ -47,10 +47,7 @@ function fixture() {
   };
   const ask = vi.fn(async () => Uint8Array.of(1, 2, 3, 4));
   const pins = new LoadPinSession({ request: ask });
-  const application: Pick<
-    DesktopApplication,
-    'getSendConfiguration' | 'getBalanceReadiness' | 'executeBalance'
-  > = {
+  const application: LoadFinancialOperations = {
     getSendConfiguration: vi.fn(async () => ({
       ok: true as const,
       value: {
@@ -86,6 +83,7 @@ function fixture() {
     }),
   };
   const journal = { read: vi.fn(async () => [] as BalanceExecution[]), write: vi.fn() };
+  const withdrawalJournal = { read: vi.fn(async () => [] as BalanceExecution[]), write: vi.fn() };
   const runtime = {
     agentId: randomUUID(),
     hostname: 'test',
@@ -95,17 +93,15 @@ function fixture() {
     now: () => new Date().toISOString(),
   };
   const cipher = { begin: vi.fn(), end: vi.fn() };
-  const withdrawalJournal = { read: vi.fn(async () => [] as BalanceExecution[]), write: vi.fn() };
   return {
     driver: new PhysicalCardLoadDriver(
       cards,
       application,
       pins,
-      journal,
+      { balance: journal, withdrawal: withdrawalJournal },
       runtime,
       () => {},
       cipher,
-      withdrawalJournal,
     ),
     cipher,
     cards,
@@ -117,73 +113,78 @@ function fixture() {
   };
 }
 describe('adaptador de carga con tarjeta física', () => {
-  it('prepara retiros con contrato, monto exacto, PIN único y lectura nueva por operación', async () => {
+  it('reutiliza retiro con monto, lectura nueva, UUID y runId; valida todos los ATM', async () => {
     const f = fixture();
-    f.input.draft.operation = 'WITHDRAWAL';
-    f.input.draft.amount = '75.25';
+    f.input.draft = {
+      ...f.input.draft,
+      operation: 'WITHDRAWAL',
+      amount: '75.25',
+      additionalAtms: [{ atmId: randomUUID(), atmRevision: 1 }],
+    };
     const prepared = await f.driver.prepare(f.input);
-    expect(f.application.getBalanceReadiness).toHaveBeenCalledWith(
-      expect.objectContaining({
-        draft: expect.objectContaining({
-          transaction: 'WITHDRAWAL_APPROVED',
-          amount: '75.25',
-          account: 'SAVINGS',
-        }),
-      }),
-      'WITHDRAWAL',
-    );
-    if (!prepared.ok) throw Error('READY');
+    if (!prepared.ok) throw Error('PREPARE');
     const runId = randomUUID();
     try {
-      for (let index = 0; index < 2; index++)
-        await prepared.value.execute(new AbortController().signal, runId);
+      await prepared.value.execute(new AbortController().signal, runId);
+      await prepared.value.execute(new AbortController().signal, runId);
       const calls = vi.mocked(f.application.executeBalance).mock.calls;
-      const requests = calls.map(([value]) => parseWithdrawalExecutionRequest(value)!);
-      expect(requests.every((value) => value.draft.amount === '75.25')).toBe(true);
-      expect(new Set(requests.map((value) => value.cardReadId)).size).toBe(2);
-      expect(new Set(requests.map((value) => value.requestId)).size).toBe(2);
+      const requests = calls.map(([payload, operation, execution]) => {
+        expect(operation).toBe('WITHDRAWAL');
+        expect(execution).toMatchObject({ runId, concurrency: 1 });
+        const parsed = parseWithdrawalExecutionRequest(payload);
+        expect(parsed?.draft).toMatchObject({
+          transaction: 'WITHDRAWAL_APPROVED',
+          amount: '75.25',
+        });
+        return parsed!;
+      });
+      expect(new Set(requests.map((item) => item.requestId)).size).toBe(2);
+      expect(new Set(requests.map((item) => item.cardReadId)).size).toBe(2);
+      expect(new Set(requests.map((item) => item.draft.atmId)).size).toBe(2);
+      expect(f.application.getBalanceReadiness).toHaveBeenCalledTimes(2);
       expect(
-        calls.every(
-          ([, operation, execution]) => operation === 'WITHDRAWAL' && execution?.runId === runId,
-        ),
+        vi
+          .mocked(f.application.getBalanceReadiness)
+          .mock.calls.every(([, op]) => op === 'WITHDRAWAL'),
       ).toBe(true);
       expect(f.ask).toHaveBeenCalledOnce();
     } finally {
       prepared.value.close();
     }
   });
-  it.each(['PENDING', 'STORAGE_ERROR'] as const)(
-    'bloquea retiro %s antes de activar PIN o helpers',
-    async (outcome) => {
+  it.each(['BALANCE', 'WITHDRAWAL'] as const)(
+    'bloquea carga %s ante retiro pendiente antes de PIN',
+    async (operation) => {
       const f = fixture();
-      f.input.draft.operation = 'WITHDRAWAL';
-      f.input.draft.amount = '20.00';
-      f.withdrawalJournal.read.mockResolvedValue([{ ...approvedWithdrawalExecution(), outcome }]);
+      if (operation === 'WITHDRAWAL')
+        f.input.draft = { ...f.input.draft, operation, amount: '20.00' };
+      f.withdrawalJournal.read.mockResolvedValue([
+        { ...approvedWithdrawalExecution(), outcome: 'PENDING', finishedAt: null },
+      ]);
       expect(await f.driver.prepare(f.input)).toMatchObject({
         ok: false,
         error: { code: 'CONFLICT' },
       });
       expect(f.ask).not.toHaveBeenCalled();
-      expect(f.cipher.begin).not.toHaveBeenCalled();
+      expect(f.cards.beginLoadSession).not.toHaveBeenCalled();
+      expect(f.application.executeBalance).not.toHaveBeenCalled();
     },
   );
-  it('no ejecuta retiros sin contrato disponible aunque saldo esté habilitado', async () => {
+  it('rechaza el contrato de retiro no disponible sin leer chip ni pedir PIN', async () => {
     const f = fixture();
-    f.input.draft.operation = 'WITHDRAWAL';
-    f.input.draft.amount = '20.00';
-    vi.mocked(f.application.getBalanceReadiness).mockImplementation(
-      async (_context, operation) => ({
-        ok: true,
-        value: {
-          ready: operation === 'BALANCE',
-          blockers: [{ id: 'POLICY', label: 'Contrato de retiro no disponible.' }],
-        },
-      }),
-    );
+    f.input.draft = { ...f.input.draft, operation: 'WITHDRAWAL', amount: '75.25' };
+    vi.mocked(f.application.getBalanceReadiness).mockResolvedValue({
+      ok: true,
+      value: {
+        ready: false,
+        blockers: [{ id: 'WITHDRAWAL_POLICY', label: 'Contrato de retiro no disponible.' }],
+      },
+    });
     expect(await f.driver.prepare(f.input)).toMatchObject({
       ok: false,
       error: { message: 'Contrato de retiro no disponible.' },
     });
+    expect(f.cards.read).not.toHaveBeenCalled();
     expect(f.ask).not.toHaveBeenCalled();
     expect(f.application.executeBalance).not.toHaveBeenCalled();
   });

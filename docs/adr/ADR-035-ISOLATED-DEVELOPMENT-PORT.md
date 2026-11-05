@@ -1,4 +1,4 @@
-# ADR-032: Puerto local independiente por sesión de desarrollo
+# ADR-035: Puerto local independiente por sesión de desarrollo
 
 Fecha: 2026-11-04. Estado: implementado.
 

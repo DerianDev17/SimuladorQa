@@ -169,7 +169,7 @@ describe('Main, proveedor y diario de saldo real en archivo', () => {
     };
   }
   it.each(['BALANCE', 'WITHDRAWAL'] as const)(
-    'Main admite slots de %s del mismo run y mantiene la exclusión hasta el último resultado',
+    'Main mantiene la exclusión de %s hasta confirmar el último resultado',
     async (operation) => {
       const f = await fixture(undefined, {
         inspect: async () => ({ ready: true, blockers: [] }),
@@ -210,6 +210,21 @@ describe('Main, proveedor y diario de saldo real en archivo', () => {
       const first = f.app.executeBalance(request, operation, execution);
       // Start the second after the first has persisted PENDING.
       await vi.waitFor(() => expect(releases).toHaveLength(1));
+      if (operation === 'WITHDRAWAL') {
+        // The current load contract executes financial withdrawals sequentially.
+        expect(
+          await f.app.executeBalance({ ...request, requestId: randomUUID() }, operation, {
+            ...execution,
+            concurrency: 1,
+          }),
+        ).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+        expect(f.app.isFinancialBusy()).toBe(true);
+        releases[0]!();
+        await first;
+        await f.app.whenFinancialIdle();
+        expect(f.app.isFinancialBusy()).toBe(false);
+        return;
+      }
       const second = f.app.executeBalance(
         { ...request, requestId: randomUUID() },
         operation,
@@ -230,13 +245,13 @@ describe('Main, proveedor y diario de saldo real en archivo', () => {
         ok: false,
         error: { code: 'CONFLICT' },
       });
-      const otherOperation = operation === 'WITHDRAWAL' ? 'BALANCE' : 'WITHDRAWAL';
+      const otherOperation = 'WITHDRAWAL';
       const otherRequest = {
         ...extra,
         draft: {
           ...extra.draft,
-          transaction: otherOperation === 'BALANCE' ? 'BALANCE' : 'WITHDRAWAL_APPROVED',
-          amount: otherOperation === 'BALANCE' ? null : '20.00',
+          transaction: 'WITHDRAWAL_APPROVED',
+          amount: '20.00',
         },
       };
       expect(await f.app.executeBalance(otherRequest, otherOperation, execution)).toMatchObject({

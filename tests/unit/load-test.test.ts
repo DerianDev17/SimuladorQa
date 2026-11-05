@@ -47,7 +47,7 @@ describe('validación del borrador de carga de saldo', () => {
     expect(parseLoadTestDraft({ ...draft, targetTps: 5.001 })).toBeUndefined();
   });
 
-  it('admite retiro QA con monto exacto y rechaza montos inválidos o campos ajenos', () => {
+  it('admite retiro QA secuencial con monto explícito y rechaza entradas ambiguas', () => {
     const draft = { ...validDraft(), operation: 'WITHDRAWAL', amount: '75.25' };
     expect(parseLoadTestDraft(draft)).toEqual(draft);
     for (const amount of [
@@ -58,22 +58,22 @@ describe('validación del borrador de carga de saldo', () => {
       '0.00',
       '-1.00',
       '20',
-      '20.1',
-      '20,00',
+      '1.001',
       '1e2',
+      '20,00',
       '10000000000.00',
     ])
       expect(parseLoadTestDraft({ ...draft, amount })).toBeUndefined();
+    for (const amount of ['0.01', '9999999999.99'])
+      expect(parseLoadTestDraft({ ...draft, amount })).toBeDefined();
+    expect(parseLoadTestDraft({ ...draft, concurrency: 2 })).toBeUndefined();
     expect(parseLoadTestDraft({ ...draft, operation: 'BALANCE' })).toBeUndefined();
     expect(parseLoadTestDraft({ ...draft, reversalDelaySeconds: 5 })).toBeUndefined();
-    expect(parseLoadTestDraft({ ...draft, mode: 'STRESS', rampUpSeconds: 2 })).toBeDefined();
+    expect(parseLoadTestDraft({ ...draft, environment: 'PROD' })).toBeUndefined();
   });
-  it('solo admite saldo o retiro QA y descarta operaciones financieras distintas', () => {
+  it('solo admite QA y descarta retiros sin monto y operaciones distintas', () => {
     const draft = validDraft();
     expect(parseLoadTestDraft({ ...draft, operation: 'WITHDRAWAL' })).toBeUndefined();
-    expect(
-      parseLoadTestDraft({ ...draft, operation: 'REVERSAL', amount: '20.00' }),
-    ).toBeUndefined();
     expect(parseLoadTestDraft({ ...draft, environment: 'PREPROD' })).toBeUndefined();
     expect(parseLoadTestDraft({ ...draft, cardData: 'private-test-value' })).toBeUndefined();
   });

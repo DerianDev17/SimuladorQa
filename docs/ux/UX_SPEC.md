@@ -19,7 +19,7 @@ no está adjunto. Observación conserva el visor remoto de Mediator.
 Esta disposición sustituye las descripciones históricas de tres columnas y
 documentación estática siguientes. Criterios y límites en
 [preparación](../implementation/TRANSACTION_PREPARATION.md) y
-[ADR-033](../adr/ADR-033-TRANSACTION-INSPECTION.md).
+[ADR-036](../adr/ADR-036-TRANSACTION-INSPECTION.md).
 
 ## Datos de la transacción — panel compacto
 

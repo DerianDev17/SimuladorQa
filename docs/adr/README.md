@@ -36,6 +36,9 @@ Cuando una decisión reemplaza a otra, ambas se conservan para trazabilidad.
 | [028](ADR-028-LOAD-PREPARATION-REUSE.md)                     | Reutilizar procesos durante la preparación        | Implementado; caudal QA pendiente           |
 | [029](ADR-029-QA-SINGLE-FINANCIAL-CONNECTION.md)             | Una conexión financiera activa en el enlace QA    | Vigente                                     |
 | [030](ADR-030-ISO-DISPLAY-AND-REVERSAL-MESSAGES.md)          | Proyección ISO visible y mensajería del reverso   | Implementado; validación host pendiente     |
-| [031](ADR-031-WITHDRAWAL-LOAD.md) | Retiros en carga física y modos básico/avanzado | Implementado; carga QA pendiente |
-| [032](ADR-032-ISOLATED-DEVELOPMENT-PORT.md) | Puerto local independiente por sesión de desarrollo | Implementado |
-| [033](ADR-033-TRANSACTION-INSPECTION.md) | Preparación e inspección independientes de transacciones | Implementado |
+| [031](ADR-031-WITHDRAWAL-LOAD.md)                          | Retiros secuenciales en carga QA                 | Implementado; validación host pendiente     |
+| [032](ADR-032-FINANCIAL-EXECUTION-PORTS.md)                 | Motor financiero y contratos independientes      | Implementado                               |
+| [033](ADR-033-LOAD-HISTORY-EXPORT.md) | Historial y exportación de evidencia de carga | Implementado |
+| [034](ADR-034-STRESS-CONFIGURATIONS.md) | Presets de estrés y configuraciones reutilizables | Implementado |
+| [035](ADR-035-ISOLATED-DEVELOPMENT-PORT.md) | Puerto local independiente por sesión de desarrollo | Implementado |
+| [036](ADR-036-TRANSACTION-INSPECTION.md) | Preparación e inspección independientes de transacciones | Implementado |

@@ -5,7 +5,7 @@
 La disposición vigente es preparación compacta y resultado con pestañas
 **Flujo / Mensajes / Evidencia**, seguida del historial local. Sustituye la
 disposición de tres columnas y el flujo documental descritos en las secciones
-históricas siguientes. Ver [ADR-033](../adr/ADR-033-TRANSACTION-INSPECTION.md).
+históricas siguientes. Ver [ADR-036](../adr/ADR-036-TRANSACTION-INSPECTION.md).
 
 El historial combina saldos y retiros QA, permite buscar operación/ATM/STAN/RRN
 y filtrar ATM/resultado. Abrir una fila conserva borrador, monto y lectura; no

@@ -1,36 +1,63 @@
 # Changelog
 
-Transacciones interactivas (2026-11-04): preparación compacta y ocultable,
-resultado con Flujo/Mensajes/Evidencia, etapas seleccionables y detalle de campos
-protegidos. Historial local de saldo y retiro con búsqueda/filtros, selección
-independiente del borrador y recuperación de fallos parciales. El observador
-remoto pasa a llamarse Observación. Las referencias documentales son contextuales;
-abrir el original requiere el mapeo aprobado registrado en TODO-DATA.
-La arquitectura separa controlador, formulario, inspección, proyecciones puras
-y store de historial con puerto de lectura. No cambian contratos financieros.
-Ver [ADR-033](docs/adr/ADR-033-TRANSACTION-INSPECTION.md).
-Validación final (2026-11-05): `npm run check` aprobado con 1.060 unitarias,
-270 de integración, formato, lint, TypeScript, seguridad y build. Pasaron 20 E2E
-del alcance; se verificaron navegación por teclado, selección independiente,
-ventanas estrechas, errores parciales, lectura, retiro/reverso y recuperación.
-Datos sintéticos y transporte de loopback; sin tráfico financiero hacia QA.
+Transacciones interactivas (2026-11-05): preparación compacta y ocultable,
+Flujo/Mensajes/Evidencia navegables, detalle ISO protegido e historial local
+unificado de saldos y retiros. La selección del historial no modifica el
+borrador. El controlador, la inspección y el puerto de lectura se separaron;
+ver [ADR-036](docs/adr/ADR-036-TRANSACTION-INSPECTION.md). Los originales CMS
+requieren la fuente aprobada registrada como TODO-DATA.
 
-Reducción de deuda técnica (2026-11-04): desarrollo y E2E usan puertos locales
-libres, conservando origen IPC/CSP exactos y la sesión del operador. La política
-restrictiva de la compilación normal vive en el HTML fuente, sin postprocesado
-dependiente del puerto. La validación de carga se comparte entre UI y Main;
-se elimina la duplicación de límites y el UUID ficticio del formulario. Ver
-[ADR-032](docs/adr/ADR-032-ISOLATED-DEVELOPMENT-PORT.md) y
-[carga](docs/implementation/LOAD_TEST.md).
-Validado con `npm run check`: 1.044 unitarias y 270 de integración, formato,
-lint, TypeScript, seguridad y build. Ocho E2E del alcance pasaron, incluida
-coexistencia de Vite, lanzador Windows, aislamiento y carga. Sin tráfico financiero QA.
+Desarrollo aislado (2026-11-04): Vite usa un puerto libre por sesión y lo entrega
+a Electron sin configuración manual; ver [ADR-035](docs/adr/ADR-035-ISOLATED-DEVELOPMENT-PORT.md).
 
-Retiros en carga (2026-11-04): **Operación de carga** permite saldo o retiro
-QA/local/ahorros con monto USD por operación. Básico aplica presets completos;
-avanzado permite ajustar TPS, cantidad, duración, concurrencia y rampa. Main
-reutiliza contrato/diario de retiro y seguridad nueva, con conexión exclusiva,
-parada por error y parámetros persistidos. Ver [ADR-031](docs/adr/ADR-031-WITHDRAWAL-LOAD.md).
+Estrés y configuraciones (2026-11-03): presets de rampa hacia 3/5 TPS y biblioteca
+QA para crear, editar, cargar y eliminar hasta 50 planes. Validación común con
+ejecución, SQLite con revisión/auditoría y recarga obligatoria tras errores de
+mutación. Cargar solo prepara el formulario y exige tarjeta nueva; retiro sigue
+secuencial. Ver [ADR-034](docs/adr/ADR-034-STRESS-CONFIGURATIONS.md).
+
+Evidencia de carga (2026-11-03): exportación CSV/JSON de corridas cerradas desde
+el historial, con campos permitidos y guardado nativo desde Main. Control de
+cancelación, plazo, destinos protegidos y errores sin exponer rutas privadas.
+No se infiere identidad de ATM ausente en operaciones antiguas de varios perfiles.
+Ver [ADR-033](docs/adr/ADR-033-LOAD-HISTORY-EXPORT.md) y [formatos](docs/REPORTING.md).
+
+Historial de carga (2026-11-03): consulta QA paginada de corridas SQLite, filtros
+por inicio/ATM/operación/estado y detalle con métricas, monto y correlación.
+IPC validado separado del control de ejecución; conserva recuperación e idempotencia.
+
+Limpieza documental adicional (2026-11-02): README con requisitos operativos,
+comandos y estructura del repositorio. Retirado el inventario duplicado de
+componentes; flujo transaccional, estrategia de pruebas y CI ajustados al código.
+Control Plane, dashboard distribuido y releases se identifican como propuestas;
+el MVP inicial reconoce las decisiones posteriores que habilitaron carga QA.
+
+Documentación (2026-11-02): README, arquitectura y arranque describen el estado
+actual; carga tiene una única guía de referencia. Nuevo índice en docs/README.md
+y backlog que distingue implementación pendiente de validación externa. El índice
+TODO-DATA deja de presentar identificadores históricos resueltos como bloqueos.
+
+Limpieza (2026-11-02): eliminado el preparador virtual legado sin consumidores
+en Renderer, su canal `load:plan:prepare`, contrato y pruebas exclusivas. La carga
+vigente usa inicio/estado/parada de LoadRunService. Eliminado NewWithdrawalInput,
+tipo sin referencias tras la extracción del contrato financiero. Reiniciar la
+aplicación completa para cargar Main y preload de la misma versión.
+
+Arquitectura (2026-11-02): motor financiero compartido con builder inyectado,
+fachadas independientes de saldo/retiro y contratos propios para ejecución y
+carga. El driver de carga depende de interfaces de lector y ciclo de vida de
+sesiones. Lint y pruebas protegen las dependencias de dominio, Renderer y motores.
+Ver [ADR-032](docs/adr/ADR-032-FINANCIAL-EXECUTION-PORTS.md).
+
+Carga de retiros (2026-11-02): selector de saldo/retiro y monto por operación en
+QA/LOCAL/ahorros. Retiro secuencial con varios ATM alternados, PIN por corrida,
+seguridad nueva, resultado del host y parada al primer rechazo/error sin reenvíos.
+Reutiliza el motor financiero existente y persiste operación/monto. Antes del PIN
+se revisan pendientes de ambos diarios. Ver [ADR-031](docs/adr/ADR-031-WITHDRAWAL-LOAD.md).
+
+Correcciones (2026-11-02): el plan de carga se copia antes del arranque asíncrono
+para impedir cambios de límites/perfiles ya validados. Las opciones de diagnóstico
+de Playwright pasan a `use`, corrigiendo el error de TypeScript de su configuración.
 
 Continuar tras un error de retiro (2026-10-28): **Nueva transacción** permite
 preparar otro retiro QA con lectura y PIN nuevos cuando el intento anterior

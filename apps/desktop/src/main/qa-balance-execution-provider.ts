@@ -10,7 +10,7 @@ import type {
   FileQaExecutionProfiles,
 } from './infrastructure/qa-execution-profiles';
 import { qaExecutionProfileIdentity } from './infrastructure/qa-execution-profiles';
-import type { HostCalendar } from './adapters/coonecta-balance-rules';
+import type { HostCalendar } from './financial-message-contract';
 import type { QaPinEntry } from './adapters/qa-pin-entry';
 import { LegacyQaPinEncryption } from './adapters/legacy-qa-pin';
 import type { QaPinCipher } from './adapters/legacy-qa-pin';

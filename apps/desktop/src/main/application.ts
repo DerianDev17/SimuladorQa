@@ -47,8 +47,9 @@ import type {
   BalanceExecution,
 } from '../../../../packages/domain/src/balance-inquiry';
 import type { BalanceTarget } from './balance-ports';
-import { missingBalanceContext, loadExecutionScope } from './balance-inquiry-service';
-import type { BalanceInquiryService } from './balance-inquiry-service';
+import { missingBalanceContext, loadExecutionScope } from './financial-execution-context';
+import type { BalanceExecutionContext } from './financial-execution-context';
+import type { FinancialExecutionPort } from './financial-execution-port';
 import type { SwitchConnectionPort } from './switch-connection-port';
 import type { SwitchConnectionSnapshot } from '../../../../packages/domain/src/switch-connection';
 import {
@@ -56,7 +57,6 @@ import {
   parseWithdrawalExecutionRequest,
   missingWithdrawalContext,
 } from '../../../../packages/domain/src/withdrawal';
-import type { WithdrawalService } from './withdrawal-service';
 
 export class DesktopApplication {
   private queue: Promise<unknown> = Promise.resolve();
@@ -85,9 +85,9 @@ export class DesktopApplication {
     private readonly networkEvidence?: NetworkEvidenceCatalog,
     private readonly readerAdapter?: CardReaderAdapter,
     private readonly sendConfiguration?: SendConfigurationService,
-    private readonly balanceInquiry?: BalanceInquiryService,
+    private readonly balanceInquiry?: FinancialExecutionPort,
     private readonly switchConnection?: SwitchConnectionPort,
-    private readonly withdrawalService?: WithdrawalService,
+    private readonly withdrawalService?: FinancialExecutionPort,
   ) {}
 
   private serialize<T>(operation: () => Promise<T>): Promise<T> {
@@ -595,7 +595,7 @@ export class DesktopApplication {
   async executeBalance(
     payload: unknown,
     operation: 'BALANCE' | 'WITHDRAWAL' = 'BALANCE',
-    execution?: import('./balance-inquiry-service').BalanceExecutionContext,
+    execution?: BalanceExecutionContext,
   ): Promise<Result<BalanceExecution>> {
     const request =
       operation === 'WITHDRAWAL'

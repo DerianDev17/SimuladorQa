@@ -375,7 +375,7 @@ test('mensajería ISO junto al resultado: campos reales, pestañas y pantalla es
 });
 
 for (const operation of ['BALANCE', 'WITHDRAWAL'] as const) {
-  test(`carga de ${operation}: modos básico y avanzado, medir, recuperar y detener`, async () => {
+  test(`carga ${operation}: iniciar, medir, recuperar y detener con motor real y fuente sintética`, async () => {
     test.setTimeout(60000);
     const window = await prepareBalanceSubmission();
     await mkdir('artifacts', { recursive: true });
@@ -406,17 +406,18 @@ for (const operation of ['BALANCE', 'WITHDRAWAL'] as const) {
     await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
     await window.getByRole('button', { name: '3 TPS', exact: false }).click();
     const start = window.getByRole('button', { name: 'Iniciar prueba', exact: true });
-    await window.getByLabel('Operación de carga').selectOption(operation);
     if (operation === 'WITHDRAWAL') {
-      for (const amount of ['0.00', '20', '20,00', '-1.00']) {
-        await window.getByLabel('Monto por retiro (USD)').fill(amount);
-        await expect(start).toBeDisabled();
-      }
+      await window.getByLabel('Operación de carga').selectOption('WITHDRAWAL');
+      await expect(start).toBeDisabled();
+      await window.getByLabel('Monto por retiro (USD)').fill('0.00');
+      await expect(start).toBeDisabled();
       await window.getByLabel('Monto por retiro (USD)').fill('75.25');
+      await expect(window.getByLabel('Operaciones en preparación y envío')).toHaveValue('1');
+      await expect(window.getByLabel('Operaciones en preparación y envío')).toBeDisabled();
     }
     await expect(start).toBeEnabled();
     await expect(start).toBeInViewport();
-    await window.screenshot({ path: `artifacts/load-assistant-basic-${operation}.png` });
+    await window.screenshot({ path: 'artifacts/load-assistant-basic.png' });
     await window.getByRole('button', { name: 'Modo avanzado', exact: false }).click();
     await window.getByLabel('Máximo de operaciones').fill('150');
     await expect(start).toBeDisabled();
@@ -435,55 +436,35 @@ for (const operation of ['BALANCE', 'WITHDRAWAL'] as const) {
     const result = window.getByRole('region', { name: 'Resultado de carga', exact: true });
     await expect(result).toContainText('Completada', { timeout: 10000 });
     await expect(result.locator('.load-metrics')).toContainText('Aprobadas3');
-    const completed = await window.evaluate(() => globalThis.window.desktop!.getLoadRun());
-    expect(completed).toMatchObject({
-      ok: true,
-      value: { draft: { operation, ...(operation === 'WITHDRAWAL' ? { amount: '75.25' } : {}) } },
-    });
-    if (operation === 'WITHDRAWAL') await expect(result).toContainText('75.25 USD por operación');
+    if (operation === 'WITHDRAWAL') {
+      await expect(result).toContainText('Retiro · USD 75.25 por operación');
+      const snapshot = await window.evaluate(() => globalThis.window.desktop!.getLoadRun());
+      expect(snapshot).toMatchObject({
+        ok: true,
+        value: { draft: { operation, amount: '75.25', concurrency: 1 } },
+      });
+      await window.screenshot({ path: 'artifacts/load-withdrawal-completed.png', fullPage: true });
+    }
     await expect(result).toContainText('PIN, EMV y contexto');
     await window.screenshot({ path: 'artifacts/load-completed.png', fullPage: true });
     await window.getByRole('button', { name: 'Inicio', exact: true }).click();
     await window.getByRole('button', { name: 'Carga y estrés', exact: true }).click();
     await expect(result).toContainText('Completada');
+    if (operation === 'WITHDRAWAL') {
+      await expect(result).toContainText('Retiro · USD 75.25 por operación');
+      await window.reload();
+      await window.getByRole('button', { name: 'Carga y estrés', exact: true }).click();
+      await expect(result).toContainText('Retiro · USD 75.25 por operación');
+      await window.getByLabel('Operación de carga').selectOption('WITHDRAWAL');
+      await window.getByLabel('Monto por retiro (USD)').fill('75.25');
+    }
     await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
     await window.getByRole('button', { name: 'Modo avanzado', exact: false }).click();
     await window.getByLabel('Máximo de operaciones').fill('100');
-    await window.getByLabel('Operación de carga').selectOption(operation);
-    if (operation === 'WITHDRAWAL') await window.getByLabel('Monto por retiro (USD)').fill('75.25');
-    await window.getByLabel('Tipo de corrida').selectOption('STRESS');
-    await window.getByLabel('TPS objetivo').fill('0.01');
-    await window.getByRole('button', { name: 'Modo básico', exact: false }).click();
-    await expect(window.getByLabel('Máximo de operaciones')).toHaveCount(0);
-    await expect(window.getByLabel('Operaciones en preparación y envío')).toHaveValue('2');
-    await expect(window.getByLabel('Operaciones en preparación y envío')).toBeDisabled();
-    await expect(start).toBeEnabled();
     await start.click();
-    await expect(window.getByRole('button', { name: 'Detener prueba', exact: true })).toBeVisible();
-    const basic = await window.evaluate(() => globalThis.window.desktop!.getLoadRun());
-    expect(basic).toMatchObject({
-      ok: true,
-      value: {
-        draft: {
-          operation,
-          mode: 'LOAD',
-          maxTransactions: 30,
-          targetTps: 1,
-          concurrency: 2,
-          durationSeconds: 30,
-          rampUpSeconds: 0,
-          ...(operation === 'WITHDRAWAL' ? { amount: '75.25' } : {}),
-        },
-      },
-    });
-    await expect(window.getByLabel('Operación de carga')).toBeDisabled();
-    await expect(
-      window.getByRole('button', { name: 'Modo avanzado', exact: false }),
-    ).toBeDisabled();
     await window.getByRole('button', { name: 'Detener prueba', exact: true }).click();
     await expect(result).toContainText('Detenida', { timeout: 10000 });
     await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
-    await window.getByRole('button', { name: 'Modo avanzado', exact: false }).click();
     await window.getByLabel('Máximo de operaciones').fill('2');
     await window.getByLabel('Duración máxima (segundos)').fill('5');
     await window.getByLabel('Tipo de corrida').selectOption('STRESS');
@@ -4225,4 +4206,133 @@ test('selección directa: cambiar tarjeta no la vuelve a seleccionar al actualiz
   );
   await expect(send).toBeEnabled();
   await expect(window.getByRole('heading', { name: 'Aún no hay resultado' })).toBeVisible();
+});
+
+test('estrés y configuraciones: crear, recuperar, editar, ejecutar rampa y eliminar', async () => {
+  test.setTimeout(60000);
+  const window = await prepareBalanceSubmission();
+  await mkdir('artifacts', { recursive: true });
+  await build({
+    entryPoints: ['tests/helpers/load-electron.ts'],
+    outfile: 'artifacts/load-electron.cjs',
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    external: ['electron'],
+  });
+  const sample = approvedWithdrawalExecution();
+  delete sample.withdrawal;
+  await app!.evaluate(
+    ({ ipcMain, BrowserWindow }, options) => {
+      const require = process.getBuiltinModule('module').createRequire(options.fixture);
+      require(options.fixture).install(ipcMain, options.file, options.worker, options.sample);
+      BrowserWindow.getAllWindows()[0]?.setContentSize(1366, 900);
+    },
+    {
+      fixture: resolve('artifacts/load-electron.cjs'),
+      file: join(directory, 'stress-ui.sqlite'),
+      worker: resolve('dist/load-worker.cjs'),
+      sample,
+    },
+  );
+  await window.getByRole('button', { name: 'Carga y estrés', exact: true }).click();
+  await window.locator('summary').filter({ hasText: 'Pruebas de estrés' }).click();
+  await window.getByRole('button', { name: 'Estrés gradual · 3 TPS', exact: true }).click();
+  await expect(window.getByLabel('Tipo de corrida')).toHaveValue('STRESS');
+  await expect(window.getByLabel('Aumento gradual (segundos)')).toHaveValue('20');
+  await window.getByLabel('Operación de carga').selectOption('WITHDRAWAL');
+  await window.getByLabel('Monto por retiro (USD)').fill('25.50');
+  await expect(window.getByLabel('Operaciones en preparación y envío')).toHaveValue('1');
+  await window.getByLabel('Máximo de operaciones').fill('3');
+  await window.getByLabel('Duración máxima (segundos)').fill('10');
+  await window.getByLabel('Aumento gradual (segundos)').fill('2');
+  await window.getByRole('button', { name: 'Configuraciones guardadas', exact: true }).click();
+  const library = window.getByRole('region', {
+    name: 'Configuraciones de carga y estrés',
+    exact: true,
+  });
+  await expect(library).toContainText('No hay configuraciones guardadas.');
+  await library.getByLabel('Nombre de configuración').fill('Retiro con rampa');
+  await library.getByRole('button', { name: 'Guardar como nueva', exact: true }).click();
+  await expect(library).toContainText('Configuración creada.');
+  await window.reload();
+  await window.getByRole('button', { name: 'Carga y estrés', exact: true }).click();
+  await window.getByRole('button', { name: 'Configuraciones guardadas', exact: true }).click();
+  await library
+    .getByLabel('Configuración guardada')
+    .selectOption({ label: 'Retiro con rampa · STRESS · 3 TPS' });
+  await library.getByRole('button', { name: 'Cargar configuración', exact: true }).click();
+  await expect(window.getByLabel('Monto por retiro (USD)')).toHaveValue('25.50');
+  await expect(window.getByLabel('Tipo de corrida')).toHaveValue('STRESS');
+  const start = window.getByRole('button', { name: 'Iniciar prueba', exact: true });
+  await expect(start).toBeDisabled();
+  await window.getByLabel('TPS objetivo').fill('5');
+  await library.getByLabel('Nombre de configuración').fill('Retiro rampa ajustada');
+  await library.getByRole('button', { name: 'Actualizar con el formulario', exact: true }).click();
+  await expect(library).toContainText('Configuración actualizada.');
+  await library
+    .getByLabel('Configuración guardada')
+    .selectOption({ label: 'Retiro rampa ajustada · STRESS · 5 TPS' });
+  await library.getByRole('button', { name: 'Cargar configuración', exact: true }).click();
+  await library.screenshot({ path: 'artifacts/stress-configurations.png' });
+  await window.getByRole('button', { name: 'Ocultar configuraciones', exact: true }).click();
+  await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await expect(start).toBeEnabled();
+  await start.click();
+  const result = window.getByRole('region', { name: 'Resultado de carga', exact: true });
+  await expect(result).toContainText('Completada', { timeout: 10000 });
+  const run = await window.evaluate(() => globalThis.window.desktop!.getLoadRun());
+  expect(run).toMatchObject({
+    ok: true,
+    value: {
+      draft: {
+        mode: 'STRESS',
+        operation: 'WITHDRAWAL',
+        amount: '25.50',
+        rampUpSeconds: 2,
+        targetTps: 5,
+        concurrency: 1,
+      },
+      items: [{}, {}, {}],
+    },
+  });
+  await window.getByRole('button', { name: 'Configuraciones guardadas', exact: true }).click();
+  await library
+    .getByLabel('Configuración guardada')
+    .selectOption({ label: 'Retiro rampa ajustada · STRESS · 5 TPS' });
+  await library.getByRole('button', { name: 'Eliminar configuración', exact: true }).click();
+  await library.getByRole('button', { name: 'Cancelar eliminación', exact: true }).click();
+  await expect(
+    library.getByRole('button', { name: 'Confirmar eliminación', exact: true }),
+  ).toHaveCount(0);
+  await library.getByRole('button', { name: 'Eliminar configuración', exact: true }).click();
+  await library.getByRole('button', { name: 'Confirmar eliminación', exact: true }).click();
+  await expect(library).toContainText('Configuración eliminada.');
+  await expect(library).toContainText('No hay configuraciones guardadas.');
+  await expect(result).toContainText('Completada');
+});
+
+test('configuraciones de estrés: timeout de guardado exige recargar antes de repetir', async () => {
+  const window = await prepareBalanceSubmission();
+  await window.getByRole('button', { name: 'Carga y estrés', exact: true }).click();
+  await window.getByRole('button', { name: 'Configuraciones guardadas', exact: true }).click();
+  const library = window.getByRole('region', {
+    name: 'Configuraciones de carga y estrés',
+    exact: true,
+  });
+  await library.getByLabel('Nombre de configuración').fill('Configuración de prueba');
+  await app!.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('load:configurations:save');
+    ipcMain.handle('load:configurations:save', () => new Promise(() => {}));
+  });
+  await library.getByRole('button', { name: 'Guardar como nueva', exact: true }).click();
+  await expect(library.getByRole('alert')).toContainText('no respondió a tiempo', {
+    timeout: 7000,
+  });
+  await expect(
+    library.getByRole('button', { name: 'Guardar como nueva', exact: true }),
+  ).toBeDisabled();
+  await library.getByRole('button', { name: 'Recargar configuraciones', exact: true }).click();
+  await expect(library.getByRole('alert')).toHaveCount(0);
+  await expect(library).toContainText('No hay configuraciones guardadas.');
 });

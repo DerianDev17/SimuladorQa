@@ -4,13 +4,20 @@ Este registro concentra los datos pendientes de fuente aprobada. Un `TODO-DATA`
 no se cierra por inferencia ni por un mock: requiere especificación del
 proveedor, captura/trama validada o confirmación formal registrada en un ADR.
 
-Estado de todos los elementos: **BLOQUEADO** hasta recibir la fuente indicada.
-La columna `Referencias` apunta a los documentos que explican el alcance.
+Este índice conserva identificadores históricos, incluidos elementos resueltos o
+sustituidos. No todos son bloqueos actuales: consultar la actualización fechada
+más reciente y el ADR aplicable en las referencias. Por ejemplo,
+QA-SEQUENCE-POOL-REPLENISHMENT, QA-INVALID-RESPONSE-900107,
+QA-F35-FIX-HOST-VALIDATION y QA-ARQC-900108 tienen resolución registrada en
+`docs/INPUT_CHECKLIST.md`. No reabrirlos por su presencia en esta tabla.
+
+Los pendientes de implementación y validación se resumen por alcance en
+[BACKLOG.md](BACKLOG.md). Cuando falte una fuente, solo queda bloqueada la regla
+que depende de ella; no toda la funcionalidad del módulo.
 
 | ID                                | Referencias                                                                                       |
 | --------------------------------- | ------------------------------------------------------------------------------------------------- |
-| TRANSACTION-REFERENCE-SOURCES | `docs/INPUT_CHECKLIST.md`, `docs/implementation/TRANSACTION_PREPARATION.md`, `docs/adr/ADR-033-TRANSACTION-INSPECTION.md` |
-| LOAD-WITHDRAWAL-QA | `docs/INPUT_CHECKLIST.md`, `docs/implementation/LOAD_TEST.md`, `docs/adr/ADR-031-WITHDRAWAL-LOAD.md` |
+| TRANSACTION-REFERENCE-SOURCES | `docs/INPUT_CHECKLIST.md`, `docs/implementation/TRANSACTION_PREPARATION.md`, `docs/adr/ADR-036-TRANSACTION-INSPECTION.md` |
 | AMOUNT-RULES                      | `docs/INPUT_CHECKLIST.md`, `docs/transactions/WITHDRAWAL.md`, `docs/adr/ADR-016-QA-WITHDRAWAL-BALANCE-COMPATIBILITY.md` |
 | ATM-IMAGE-ACTIVE-PROFILE          | `docs/INPUT_CHECKLIST.md`, `docs/implementation/BALANCE_EXECUTION.md`, `docs/protocols/ISOBASEI_REVIEW.md` |
 | AUTOMATIC-FRAME-GENERATOR         | `docs/INPUT_CHECKLIST.md`, `docs/implementation/SEND_CONFIGURATION.md`, `docs/transactions/BALANCE_INQUIRY.md`, `docs/adr/ADR-011-OFFLINE-SEND-CONFIGURATION.md` |
@@ -46,6 +53,7 @@ La columna `Referencias` apunta a los documentos que explican el alcance.
 | LOAD-LIMITS                       | `docs/INPUT_CHECKLIST.md`                                                                         |
 | LOAD-PERSISTENT-TCP               | `docs/INPUT_CHECKLIST.md`, `docs/implementation/LOAD_TEST.md`, `docs/adr/ADR-027-CONCURRENT-ATM-LOAD.md`, `docs/adr/ADR-029-QA-SINGLE-FINANCIAL-CONNECTION.md` |
 | LOAD-VIRTUAL-PROVIDER             | `docs/INPUT_CHECKLIST.md`, `docs/implementation/LOAD_TEST.md`, `docs/BACKLOG.md`, `docs/adr/ADR-020-PHYSICAL-CARD-LOAD.md` |
+| LOAD-WITHDRAWAL-QA-ACCEPTANCE      | `docs/INPUT_CHECKLIST.md`, `docs/implementation/LOAD_TEST.md`, `docs/adr/ADR-031-WITHDRAWAL-LOAD.md` |
 | MEDIATOR-FLOW-VERSION             | `docs/INPUT_CHECKLIST.md`, `docs/implementation/BALANCE_EXECUTION.md`, `docs/protocols/ISOBASEI_REVIEW.md` |
 | MEDIATOR-OBSERVER-ACCESS          | `docs/INPUT_CHECKLIST.md`                                                                         |
 | MEDIATOR-SQL-TIMEZONE             | `docs/INPUT_CHECKLIST.md`                                                                         |

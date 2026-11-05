@@ -1,4 +1,4 @@
-# ADR-033: Preparación e inspección independientes de transacciones
+# ADR-036: Preparación e inspección independientes de transacciones
 
 - Fecha: 2026-11-04
 - Estado: Implementado

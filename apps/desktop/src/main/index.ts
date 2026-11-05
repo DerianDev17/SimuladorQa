@@ -1,3 +1,9 @@
+import { LoadConfigurationService } from './load-configuration-service';
+import { SqliteLoadConfigurations } from './infrastructure/sqlite-load-configurations';
+import { LoadExportService } from './load-export-service';
+import { FileLoadExportSink } from './infrastructure/file-load-export';
+import { ElectronExportDialog } from './adapters/electron-export-dialog';
+import { LoadHistoryService } from './load-history-service';
 import { LoadPinSession } from './adapters/load-pin-session';
 import { LoadRunService } from './load-run-service';
 import { PhysicalCardLoadDriver } from './physical-card-load-driver';
@@ -43,7 +49,6 @@ import { SimulatedCardReader } from './adapters/simulated-card-reader';
 import { QaSwitchConnection } from './adapters/qa-switch-connection';
 import { WindowsCardSession } from './adapters/windows-card-session';
 import { CardIdentityService } from './card-identity-service';
-import { LoadTestService } from './load-test-service';
 import { VirtualCardGeneratorService } from './virtual-card-generator-service';
 import { SavedCardProfileService } from './saved-card-profile-service';
 import { FileSavedCardProfileStore } from './infrastructure/saved-card-profile-store';
@@ -66,7 +71,10 @@ let balanceService: BalanceInquiryService | undefined;
 let withdrawalService: WithdrawalService | undefined;
 let withdrawalReceipts: WithdrawalReceiptService | undefined;
 let loadRun: LoadRunService | undefined;
-let loadTestService: LoadTestService | undefined;
+let loadHistory: LoadHistoryService | undefined;
+let loadExporter: LoadExportService | undefined;
+let loadConfigurations: LoadConfigurationService | undefined;
+let loadConfigurationStore: SqliteLoadConfigurations | undefined;
 let loadRunStore: SqliteLoadRunStore | undefined;
 let virtualCardGenerator: VirtualCardGeneratorService | undefined;
 let savedCardProfiles: SavedCardProfileService | undefined;
@@ -230,7 +238,6 @@ void startupReady
       now: () => new Date().toISOString(),
     };
     const preferences = new FilePreferencesStore(join(app.getPath('userData'), 'preferences.json'));
-    loadTestService = new LoadTestService(runtime, preferences);
     virtualCardGenerator = new VirtualCardGeneratorService(runtime, preferences);
     savedCardProfiles = new SavedCardProfileService(
       cardIdentity,
@@ -338,11 +345,10 @@ void startupReady
         cardIdentity,
         application,
         pinEntry,
-        balanceJournal,
+        { balance: balanceJournal, withdrawal: withdrawalJournal },
         runtime,
         () => void publishReaderSnapshot(),
         pinCipher,
-        withdrawalJournal,
       ),
       loadRunStore,
       workerLoadScheduler(join(__dirname, 'load-worker.cjs')),
@@ -350,6 +356,23 @@ void startupReady
     withdrawalReceipts = new WithdrawalReceiptService(
       (request) => application.getWithdrawalExecution(request),
       new ElectronReceiptPrinter(() => window),
+    );
+    loadHistory = new LoadHistoryService(loadRunStore!, preferences, () =>
+      loadRun!.current(undefined),
+    );
+    loadExporter = new LoadExportService(
+      (request) => loadHistory!.get(request),
+      new FileLoadExportSink(new ElectronExportDialog(() => window), app.getPath('userData')),
+      () => new Date().toISOString(),
+    );
+    loadConfigurationStore = new SqliteLoadConfigurations(
+      join(app.getPath('userData'), 'qa-load-configurations.sqlite'),
+      runtime,
+    );
+    loadConfigurations = new LoadConfigurationService(
+      loadConfigurationStore,
+      preferences,
+      () => !!loadRun?.isBusy(),
     );
     for (const channel of Object.values(channels)) {
       ipcMain.handle(channel, (event, payload: unknown) => {
@@ -398,6 +421,18 @@ void startupReady
             )
               return failure('CONFLICT', 'Espera a que termine la operación actual.');
             return loadRun!.start(payload);
+          case channels.loadConfigurations:
+            return loadConfigurations!.list(payload);
+          case channels.saveLoadConfiguration:
+            return loadConfigurations!.save(payload);
+          case channels.deleteLoadConfiguration:
+            return loadConfigurations!.delete(payload);
+          case channels.exportLoadRun:
+            return loadExporter!.export(payload);
+          case channels.loadHistory:
+            return loadHistory!.list(payload);
+          case channels.loadHistoryDetail:
+            return loadHistory!.get(payload);
           case channels.loadRun:
             return loadRun!.current(payload);
           case channels.stopLoadRun:
@@ -498,11 +533,6 @@ void startupReady
             return application.searchObservations(payload);
           case channels.mediatorLive:
             return application.getMediatorLive(payload);
-          case channels.prepareLoadTest:
-            return (
-              loadTestService?.prepare(payload) ??
-              failure('SERVICE_UNAVAILABLE', 'El preparador de carga no está disponible.')
-            );
           case channels.catalog:
             return application.catalog('list', payload);
           case channels.saveEntity:
@@ -565,6 +595,7 @@ app.on('before-quit', (event) => {
         observer?.close();
         cardReader?.close();
         cardIdentity?.close();
+        await loadConfigurationStore?.close().catch(() => undefined);
         await loadRunStore?.close().catch(() => undefined);
         await Promise.allSettled(financialJournals.map((journal) => journal.close()));
         await catalogs?.close().catch(() => undefined);

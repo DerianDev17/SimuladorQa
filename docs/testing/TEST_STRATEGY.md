@@ -1,37 +1,53 @@
-# Estrategia de pruebas del producto
+# Estrategia de pruebas
 
-## Unitarias
-- bitmap
-- codecs
-- generators
-- validators
-- scenario classifier
-- percentile calculations
+Esta guía distingue validación automatizada local de aceptación en hardware y
+ambientes reales. Los comandos y la matriz CI están en [CI_CHECKS](../CI_CHECKS.md).
 
-## Integracion
-- ISO builder/parser roundtrip
-- TCP framing
-- reconnect/timeout
-- SQLite
-- PC/SC adapter con stub y hardware real
-- SmartVista/Core adapters con entornos QA
+## Suites implementadas
 
-## Contract tests
-Guardar ejemplos de request/response reales sanitizados y verificar byte-level output cuando aplique.
+| Nivel | Comando | Cobertura principal |
+| --- | --- | --- |
+| Unitarias | `npm run test:unit` | Validadores, codecs, builders, métricas, límites de arquitectura y reglas locales |
+| Integración | `npm run test:integration` | Orquestación, IPC a nivel de aplicación, TCP loopback, SQLite, workers y adaptadores con dependencias controladas |
+| Escritorio | `npm run test:e2e` | Electron/Renderer, catálogos, transacciones, carga, errores y recuperación con fuentes sintéticas |
+| Cobertura | `npm run test:coverage` | Unitarias e integración; no mide aceptación financiera |
 
-## E2E
-- Desarrollo usa puertos loopback libres y cachés temporales por sesión; puede
-  coexistir con la aplicación del operador. Los tests comprueban el origen IPC
-  exacto, la CSP normal y el lanzador nativo. Véase ADR-032.
-- abrir app
-- seleccionar ATM/tarjeta
-- enviar consulta
-- recibir respuesta
-- validar inspector
-- guardar resultado
+Las suites usan datos de prueba y directorios temporales. No necesitan ejecutar
+transacciones contra el host QA ni reemplazan una prueba de lector físico.
+La preparación de Electron y el build están incluidos en `test:e2e`.
 
-## Performance del simulador
-Medir CPU/RAM del agente para separar degradacion del simulador de degradacion del Switch.
+## Criterios de regresión
 
-## Regression
-Cada bug transaccional debe agregar fixture + test reproducible cuando sea posible.
+Cada función nueva incluye camino correcto, entradas inválidas, errores y
+timeout/dependencia no disponible cuando aplica. Para defectos transaccionales,
+añadir un caso reproducible o fixture sanitizado que detecte la regresión.
+
+Las pruebas del motor financiero deben comprobar correlación, idempotencia,
+registro previo al envío, tratamiento de incertidumbre, cancelación y errores de
+persistencia. En carga también se comprueban inmutabilidad del plan, ritmo,
+exclusión del lector/enlace, parada y recuperación sin repetir operaciones.
+No generar pruebas que den por aprobada una regla externa ausente.
+
+## Contratos y evidencia
+
+Los fixtures de protocolos deben tener fuente identificada. La comparación
+byte a byte solo acredita el perfil/muestra correspondiente; no generaliza a
+otros escenarios. No guardar PAN completo, PIN, PIN Block, CVV ni claves en
+fixtures, logs o capturas de resultados.
+
+## Aceptación externa pendiente
+
+Las pruebas físicas y de ambiente se realizan por separado, con configuración y
+alcance autorizados. Deben conservar correlación y evidencia sanitizada de
+lector, host y Core cuando corresponda. Un mock correcto no confirma un débito,
+un reverso conciliado ni capacidad del Switch.
+
+Antes de release debe verificarse la regresión de los cinco flujos MVP conforme
+a [QA_AGENT](../../agents/QA_AGENT.md). El reverso por timeout y otros contratos
+siguen pendientes; las suites locales no cierran ese requisito de release.
+Consultar [BACKLOG](../BACKLOG.md), [TODO-DATA](../TODO_DATA.md) y
+[INPUT_CHECKLIST](../INPUT_CHECKLIST.md).
+
+Para rendimiento, medir preparación física, transporte, TPS sostenidos y recursos
+del simulador por separado. Los objetivos de 3/5 TPS no son resultados medidos;
+ver [carga](../implementation/LOAD_TEST.md).

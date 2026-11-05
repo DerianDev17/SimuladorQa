@@ -1,5 +1,9 @@
 # Product Specification
 
+Este documento conserva el alcance objetivo del producto. La lista de capacidades
+no representa funcionalidades disponibles en todos los ambientes. Para el estado
+implementado usar el [README](../../README.md) y el [backlog](../BACKLOG.md).
+
 ## Nombre de trabajo
 
 Coonecta ATM Transaction Simulator.
@@ -15,8 +19,8 @@ QA necesita ejecutar y repetir transacciones ATM de forma controlada sin depende
 
 ## Ambientes
 
-- QA: habilitado.
-- PREPROD: habilitado.
+- QA: ejecución financiera acotada a los perfiles implementados.
+- PREPROD: configuración y observación; ejecución financiera pendiente.
 - PROD: deshabilitado por diseno.
 
 ## Escenarios

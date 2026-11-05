@@ -1,12 +1,15 @@
+import { LoadConfigurationsView } from './LoadConfigurationsView';
+import { stressPreset } from '../../../../packages/domain/src/load-configurations';
+import { LoadHistoryView } from './LoadHistoryView';
 import { useEffect, useRef, useState } from 'react';
 import type { AtmProfile } from '../../../../packages/domain/src/catalogs';
-import { isUuid } from '../../../../packages/domain/src/catalogs';
 import type { Environment } from '../../../../packages/domain/src/index';
 import type {
   LoadTestDraft,
   LoadTestMode,
   LoadTestOperation,
 } from '../../../../packages/domain/src/load-test';
+import { isWithdrawalAmount } from '../../../../packages/domain/src/withdrawal';
 import {
   LOAD_TEST_LOCAL_MIN_TPS,
   LOAD_TEST_LOCAL_MAX_TPS,
@@ -19,13 +22,9 @@ import {
   loadRunMetrics,
   loadRunBelowTarget,
   loadResponseSeries,
-  loadRunParameterIssues,
+  parseLoadRunRequest,
 } from '../../../../packages/domain/src/load-run';
-import type {
-  LoadRunSnapshot,
-  LoadRunTimings,
-  LoadRunParameterIssue,
-} from '../../../../packages/domain/src/load-run';
+import type { LoadRunSnapshot, LoadRunTimings } from '../../../../packages/domain/src/load-run';
 import { DesktopClient } from './desktop-client';
 import { CardReaderView } from './CardReaderView';
 import type { TransactionCard } from './transaction-card';
@@ -95,16 +94,6 @@ const stages: { key: keyof LoadRunTimings; label: string }[] = [
 ];
 const ms = (value: number | null | undefined) =>
   value == null ? '—' : Math.round(value).toLocaleString() + ' ms';
-const parameterIssueLabels: Record<LoadRunParameterIssue, string> = {
-  WITHDRAWAL_AMOUNT:
-    'El monto por retiro debe ser positivo, con punto y dos decimales (máximo 9999999999.99 USD).',
-  CONCURRENCY: `La concurrencia debe estar entre 1 y ${LOAD_RUN_MAX_CONCURRENCY} operaciones.`,
-  ATM_COUNT: 'La cantidad debe permitir al menos una operación por ATM seleccionado.',
-  TRANSACTION_COUNT: `La cantidad debe estar entre 1 y ${LOAD_RUN_MAX_OPERATIONS}.`,
-  TARGET_TPS: `El objetivo debe estar entre ${String(LOAD_TEST_LOCAL_MIN_TPS).replace('.', ',')} y ${LOAD_TEST_LOCAL_MAX_TPS} TPS.`,
-  DURATION: `La duración debe estar entre 1 y ${LOAD_RUN_MAX_SECONDS} segundos.`,
-  RAMP: 'El aumento gradual debe durar menos que la prueba.',
-};
 
 function TpsChart({ run }: { run: LoadRunSnapshot }) {
   if (
@@ -158,10 +147,12 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
   const available = atms.filter((atm) => atm.active && atm.environment === 'QA');
   const [atmIds, setAtmIds] = useState<string[]>([]);
   const [preset, setPreset] = useState<Preset>('QUICK');
+  const [configurationsOpen, setConfigurationsOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [advanced, setAdvanced] = useState(false);
-  const [operation, setOperation] = useState<LoadTestOperation>('BALANCE');
-  const [amount, setAmount] = useState('20.00');
   const [mode, setMode] = useState<LoadTestMode>('LOAD');
+  const [operation, setOperation] = useState<LoadTestOperation>('BALANCE');
+  const [amount, setAmount] = useState('');
   const [count, setCount] = useState('30');
   const [tps, setTps] = useState('1');
   const [concurrency, setConcurrency] = useState('2');
@@ -182,8 +173,7 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
   const selected = available.find((atm) => atm.id === atmIds[0]);
   const draft: LoadTestDraft = {
     environment: 'QA',
-    operation,
-    ...(operation === 'WITHDRAWAL' ? { amount } : {}),
+    ...(operation === 'WITHDRAWAL' ? { operation, amount } : { operation }),
     mode,
     atmId: selected?.id ?? '',
     atmRevision: selected?.revision ?? 0,
@@ -197,7 +187,7 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
       : {}),
     maxTransactions: Number(count),
     targetTps: Number(tps),
-    concurrency: Number(concurrency),
+    concurrency: operation === 'WITHDRAWAL' ? 1 : Number(concurrency),
     rampUpSeconds: mode === 'STRESS' ? Number(ramp) : 0,
     durationSeconds: Number(duration),
   };
@@ -247,16 +237,53 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
       clearInterval(timer);
     };
   }, []);
+  const valid =
+    !!card &&
+    !!selected &&
+    atmIds.every((id) => available.some((atm) => atm.id === id)) &&
+    !!parseLoadRunRequest({
+      requestId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+      cardReadId: card.readId,
+      draft,
+    });
   const issues = [
-    ...loadRunParameterIssues(draft, atmIds.length).map((issue) => parameterIssueLabels[issue]),
+    ...(operation === 'WITHDRAWAL' && !isWithdrawalAmount(amount)
+      ? ['Ingresa un monto de retiro entre 0.01 y 9999999999.99 USD, con punto y dos decimales.']
+      : []),
+    ...(!Number.isInteger(Number(concurrency)) ||
+    Number(concurrency) < 1 ||
+    Number(concurrency) > LOAD_RUN_MAX_CONCURRENCY
+      ? ['La concurrencia debe estar entre 1 y 5 operaciones.']
+      : []),
     ...(environment !== 'QA' ? ['Selecciona el ambiente QA.'] : []),
     ...(!atmIds.length ? ['Selecciona un ATM QA.'] : []),
     ...(atmIds.some((id) => !available.some((atm) => atm.id === id))
       ? ['Uno de los ATM seleccionados ya no está disponible. Vuelve a seleccionar los perfiles.']
       : []),
+    ...(Number(count) < atmIds.length
+      ? ['La cantidad debe permitir al menos una operación por ATM seleccionado.']
+      : []),
     ...(!card ? ['Lee y selecciona la tarjeta física QA.'] : []),
+    ...(Number(count) < 1 ||
+    Number(count) > LOAD_RUN_MAX_OPERATIONS ||
+    !Number.isSafeInteger(Number(count))
+      ? ['La cantidad debe estar entre 1 y ' + LOAD_RUN_MAX_OPERATIONS + '.']
+      : []),
+    ...(!Number.isFinite(Number(tps)) ||
+    Number(tps) < LOAD_TEST_LOCAL_MIN_TPS ||
+    Number(tps) > LOAD_TEST_LOCAL_MAX_TPS
+      ? ['El objetivo debe estar entre 0,1 y 5 TPS.']
+      : []),
+    ...(Number(duration) < 1 ||
+    Number(duration) > LOAD_RUN_MAX_SECONDS ||
+    !Number.isSafeInteger(Number(duration))
+      ? ['La duración debe estar entre 1 y ' + LOAD_RUN_MAX_SECONDS + ' segundos.']
+      : []),
+    ...(mode === 'STRESS' &&
+    (!Number.isSafeInteger(Number(ramp)) || Number(ramp) < 1 || Number(ramp) >= Number(duration))
+      ? ['El aumento gradual debe durar menos que la prueba.']
+      : []),
   ];
-  const valid = !!card && isUuid(card.readId) && !!selected && issues.length === 0;
   function choosePreset(id: Exclude<Preset, 'CUSTOM'>) {
     const choice = presets.find((item) => item.id === id)!;
     setPreset(id);
@@ -265,6 +292,24 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
     setTps(String(choice.tps));
     setConcurrency(String(choice.tps >= 3 ? LOAD_RUN_MAX_CONCURRENCY : 2));
     setDuration(String(choice.seconds));
+  }
+  function applyConfiguration(saved: LoadTestDraft) {
+    if (locked || disabled) return;
+    setAtmIds(
+      [saved.atmId, ...(saved.additionalAtms ?? []).map((atm) => atm.atmId)].filter(Boolean),
+    );
+    setOperation(saved.operation);
+    setAmount(saved.operation === 'WITHDRAWAL' ? saved.amount : '');
+    setMode(saved.mode);
+    setPreset('CUSTOM');
+    setAdvanced(true);
+    setCount(String(saved.maxTransactions));
+    setTps(String(saved.targetTps));
+    setConcurrency(String(saved.concurrency));
+    setDuration(String(saved.durationSeconds));
+    setRamp(String(saved.rampUpSeconds));
+    setCard(undefined);
+    setError(undefined);
   }
   async function start() {
     if (!valid || !card || locked || disabled || !statusReady || environment !== 'QA') return;
@@ -333,7 +378,7 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
       <header className="load-test-heading">
         <div>
           <h1>Carga y estrés</h1>
-          <p>Pruebas QA de saldo y retiros con resultados medidos en cada etapa.</p>
+          <p>Pruebas QA de saldo y retiro con resultados medidos en cada etapa.</p>
         </div>
         <div className="load-assistant">
           <Icon name="load" size={24} />
@@ -343,17 +388,62 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
           </span>
         </div>
       </header>
+      <div className="load-history-actions">
+        <button aria-expanded={historyOpen} onClick={() => setHistoryOpen(!historyOpen)}>
+          {historyOpen ? 'Ocultar historial de carga' : 'Ver historial de carga'}
+        </button>
+        <button
+          aria-expanded={configurationsOpen}
+          onClick={() => setConfigurationsOpen(!configurationsOpen)}
+        >
+          {configurationsOpen ? 'Ocultar configuraciones' : 'Configuraciones guardadas'}
+        </button>
+      </div>
+      {historyOpen &&
+        (environment === 'QA' ? (
+          <LoadHistoryView atms={atms} />
+        ) : (
+          <p>Selecciona QA para consultar el historial de carga.</p>
+        ))}
+      {configurationsOpen &&
+        (environment === 'QA' ? (
+          <LoadConfigurationsView
+            draft={draft}
+            atms={atms}
+            disabled={locked || disabled || !statusReady}
+            onLoad={applyConfiguration}
+          />
+        ) : (
+          <p>Selecciona QA para consultar las configuraciones.</p>
+        ))}
       <div className="load-test-columns">
         <section className="panel load-setup" aria-label="Configurar prueba">
+          <details className="inline-details">
+            <summary>Pruebas de estrés</summary>
+            <div className="load-history-actions" aria-label="Presets de estrés">
+              <button
+                disabled={locked || disabled || environment !== 'QA'}
+                onClick={() => applyConfiguration(stressPreset(draft, 3))}
+              >
+                Estrés gradual · 3 TPS
+              </button>
+              <button
+                disabled={locked || disabled || environment !== 'QA'}
+                onClick={() => applyConfiguration(stressPreset(draft, 5))}
+              >
+                Estrés gradual · 5 TPS
+              </button>
+            </div>
+            <p className="load-test-hint">
+              Estrés: rampa de 20 s, hasta 60 s o 100 operaciones. Retiro siempre secuencial; los
+              TPS son objetivos.
+            </p>
+          </details>
           <div className="load-mode-tabs">
             <button
               className={!advanced ? 'selected' : ''}
               aria-pressed={!advanced}
-              disabled={locked || disabled}
-              onClick={() => {
-                if (advanced) choosePreset(preset === 'CUSTOM' ? 'QUICK' : preset);
-                setAdvanced(false);
-              }}
+              onClick={() => setAdvanced(false)}
             >
               <Icon name="load" size={19} />
               <span>
@@ -364,7 +454,6 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
             <button
               className={advanced ? 'selected' : ''}
               aria-pressed={advanced}
-              disabled={locked || disabled}
               onClick={() => setAdvanced(true)}
             >
               <Icon name="settings" size={19} />
@@ -437,7 +526,7 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
                     type="text"
                     inputMode="decimal"
                     value={amount}
-                    maxLength={13}
+                    placeholder="20.00"
                     disabled={locked || disabled}
                     onChange={(event) => setAmount(event.target.value)}
                   />
@@ -485,12 +574,9 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
             <label>
               Operaciones en preparación y envío
               <select
-                value={concurrency}
-                disabled={locked || disabled || !advanced}
-                onChange={(event) => {
-                  setConcurrency(event.target.value);
-                  setPreset('CUSTOM');
-                }}
+                value={operation === 'WITHDRAWAL' ? '1' : concurrency}
+                disabled={locked || disabled || operation === 'WITHDRAWAL'}
+                onChange={(event) => setConcurrency(event.target.value)}
               >
                 {[1, 2, 3, 4, 5].map((value) => (
                   <option key={value} value={value}>
@@ -500,27 +586,24 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
               </select>
             </label>
             <p className="load-inline-note">
-              El chip prepara una operación a la vez y puede avanzar mientras el host responde a la
-              anterior. El enlace permite una sola conexión financiera; las demás operaciones
-              esperan su turno. Más operaciones en curso no garantizan alcanzar los TPS objetivo.
+              {operation === 'WITHDRAWAL' ? (
+                'Los retiros se ejecutan uno a uno, con el mismo monto por operación. Cada retiro espera su respuesta antes del siguiente; el host determina si se aprueba.'
+              ) : (
+                <>
+                  El chip prepara una consulta a la vez y puede avanzar mientras el host responde a
+                  la anterior. El enlace permite una sola conexión financiera; las demás consultas
+                  esperan su turno. Más operaciones en curso no garantizan alcanzar los TPS
+                  objetivo.
+                </>
+              )}
             </p>
           </div>
           <div className="load-fixed-operation">
             <strong>
-              {operation === 'WITHDRAWAL'
-                ? `Retiro de ${amount} USD por operación`
-                : 'Transacción: consulta de saldo'}
+              Transacción: {operation === 'WITHDRAWAL' ? 'retiro' : 'consulta de saldo'}
             </strong>
             <small>
-              QA · local · ahorros · tarjeta presente.
-              {operation === 'WITHDRAWAL' &&
-                ' Cada retiro solicita el monto indicado al host; la respuesta determina su aprobación.'}
-            </small>
-            <small>
-              {advanced ? 'Configuración personalizada' : 'Escenario preconfigurado'} · hasta{' '}
-              {count} operaciones · {tps} TPS objetivo · {duration} s · {concurrency} en curso
-              {mode === 'STRESS' && ` · aumento gradual de ${ramp} s`}.
-              {!advanced && ' El modo avanzado permite ajustar estos límites.'}
+              QA · local · ahorros · tarjeta presente. Se valida el contrato de cada ATM al iniciar.
             </small>
           </div>
           {advanced && (
@@ -650,11 +733,11 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
             </div>
             {run && metrics ? (
               <>
-                <p className="load-run-operation">
+                <p>
                   {run.draft.operation === 'WITHDRAWAL'
-                    ? `Retiros · ${run.draft.amount} USD por operación`
-                    : 'Consultas de saldo'}{' '}
-                  · QA · ahorros
+                    ? `Retiro · USD ${run.draft.amount} por operación`
+                    : 'Consulta de saldo'}{' '}
+                  · {run.draft.concurrency} en curso como máximo
                 </p>
                 <p role="status">
                   {run.state === 'COMPLETED'

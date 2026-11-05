@@ -1,14 +1,6 @@
 import type { BalanceValue } from '../../../../../packages/domain/src/balance-inquiry';
-import type { AccountType } from '../../../../../packages/domain/src/transaction-draft';
+import type { HostCalendar, BalanceDynamicInput } from '../financial-message-contract';
 
-export interface HostCalendar {
-  year: number;
-  month: number;
-  day: number;
-  hour: number;
-  minute: number;
-  second: number;
-}
 function calendar(value: HostCalendar): Date {
   const numbers = [value.year, value.month, value.day, value.hour, value.minute, value.second];
   if (!numbers.every(Number.isInteger) || value.year < 2000 || value.year > 2099)
@@ -29,14 +21,6 @@ function calendar(value: HostCalendar): Date {
   return date;
 }
 const two = (number: number) => String(number).padStart(2, '0');
-export interface BalanceDynamicInput {
-  account: AccountType;
-  sequence: number;
-  transmission: HostCalendar;
-  local: HostCalendar;
-  accounting: HostCalendar;
-  terminalId: string;
-}
 export function balanceDynamicFields(input: BalanceDynamicInput): ReadonlyMap<number, string> {
   calendar(input.transmission);
   const local = calendar(input.local);

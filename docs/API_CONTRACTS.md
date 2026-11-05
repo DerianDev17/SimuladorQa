@@ -1,5 +1,11 @@
 # Contratos iniciales Control Plane
 
+Los endpoints REST y canales WebSocket siguientes son una **propuesta sin
+implementación**. La app actual usa IPC, con contrato tipado en
+[contracts.ts](../packages/shared/src/contracts.ts) y exposición en
+[preload.ts](../apps/desktop/src/preload.ts). Las secciones desktop de este
+documento describen partes de esa API; no sustituyen el contrato completo.
+
 ## POST /agents/register
 Registra una instancia.
 

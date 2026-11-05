@@ -1,5 +1,10 @@
 # MVP 1
 
+Alcance objetivo inicial, aún no certificado como conjunto. Para funcionalidades
+vigentes consultar el [README](../../README.md); para aceptación externa pendiente,
+el [backlog](../BACKLOG.md). Seleccionar un perfil guardado no sustituye la tarjeta
+física que requieren los flujos actuales.
+
 ## Transacciones obligatorias
 
 1. Consulta de saldo.
@@ -26,4 +31,8 @@ MVP 1 esta completo cuando un tester puede:
 
 ## Gate tecnico previo a carga
 
-No se habilita carga hasta que cada transaccion MVP pase pruebas funcionales deterministas de una sola transaccion.
+El requisito inicial de completar los cinco flujos antes de habilitar cualquier
+carga fue sustituido para el piloto QA por [ADR-020](../adr/ADR-020-PHYSICAL-CARD-LOAD.md)
+y para retiros por [ADR-031](../adr/ADR-031-WITHDRAWAL-LOAD.md).
+La carga disponible reutiliza saldo/retiro y sus pruebas; no habilita reversos
+en carga ni acredita la aceptación de los cinco flujos en host/Core.

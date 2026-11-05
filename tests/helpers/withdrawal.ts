@@ -5,7 +5,7 @@ import {
   balanceTarget,
   ebcdicNumeric,
 } from './balance-inquiry';
-import type { CapturedBalanceMetadata } from '../../apps/desktop/src/main/adapters/captured-visa-balance';
+import type { CapturedBalanceMetadata } from '../../apps/desktop/src/main/financial-message-contract';
 import type { BalanceExecution } from '../../packages/domain/src/balance-inquiry';
 import { randomUUID } from 'node:crypto';
 

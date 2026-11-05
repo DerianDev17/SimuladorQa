@@ -1,38 +1,33 @@
-import type { LoadRunDriver, LoadRunSource } from './load-run-service';
+import type {
+  LoadRunDriver,
+  LoadRunSource,
+  LoadCardReader,
+  LoadFinancialOperations,
+  LoadSessionResource,
+} from './load-ports';
 import type { LoadRunRequest } from '../../../../packages/domain/src/load-run';
 import type { LoadRunTimings } from '../../../../packages/domain/src/load-run';
 import { loadTestAtms } from '../../../../packages/domain/src/load-test';
 import { performance } from 'node:perf_hooks';
 import type { BalanceContextRequest } from '../../../../packages/domain/src/balance-inquiry';
-import type { CardIdentityService } from './card-identity-service';
-import type { DesktopApplication } from './application';
-import type { LoadPinSession } from './adapters/load-pin-session';
+import { withdrawalBlocksNewExecution } from '../../../../packages/domain/src/balance-inquiry';
 import type { RuntimeIdentity } from './ports';
 import type { BalanceJournal } from './balance-ports';
 import { failure } from '../../../../packages/shared/src/contracts';
 import type { Result } from '../../../../packages/shared/src/contracts';
 import { LoadSendLimiter } from './infrastructure/load-send-limiter';
-import { withdrawalBlocksNewExecution } from '../../../../packages/domain/src/balance-inquiry';
 
 export class PhysicalCardLoadDriver implements LoadRunDriver {
   constructor(
-    private readonly cards: Pick<CardIdentityService, 'current' | 'read'> &
-      Partial<Pick<CardIdentityService, 'beginLoadSession' | 'endLoadSession'>>,
-    private readonly application: Pick<
-      DesktopApplication,
-      'getSendConfiguration' | 'getBalanceReadiness' | 'executeBalance'
-    >,
-    private readonly pins: LoadPinSession,
-    private readonly journal: BalanceJournal,
+    private readonly cards: LoadCardReader,
+    private readonly application: LoadFinancialOperations,
+    private readonly pins: LoadSessionResource,
+    private readonly journals: { balance: BalanceJournal; withdrawal: BalanceJournal },
     private readonly identity: RuntimeIdentity,
     private readonly publish: () => void,
-    private readonly cipherSession?: { begin(): void; end(): void },
-    private readonly withdrawalJournal?: BalanceJournal,
+    private readonly cipherSession?: LoadSessionResource,
   ) {}
   async prepare(request: LoadRunRequest): Promise<Result<LoadRunSource>> {
-    const operation = request.draft.operation;
-    if (operation === 'WITHDRAWAL' && !this.withdrawalJournal)
-      return failure('SERVICE_UNAVAILABLE', 'El diario de retiros no está disponible.');
     const original = await this.cards.current();
     if (
       !original ||
@@ -42,6 +37,7 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
       !original.panMasked
     )
       return failure('CONFLICT', 'Lee y selecciona la tarjeta física antes de iniciar la corrida.');
+    const applicationId = original.applicationId;
     const setup = await this.application.getSendConfiguration({ environment: 'QA' });
     if (!setup.ok) return setup;
     const configuration = setup.value.configuration;
@@ -50,10 +46,10 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
     const contexts: BalanceContextRequest[] = loadTestAtms(request.draft).map((atm) => ({
       draft: {
         environment: 'QA',
-        transaction: operation === 'WITHDRAWAL' ? 'WITHDRAWAL_APPROVED' : 'BALANCE',
+        transaction: request.draft.operation === 'WITHDRAWAL' ? 'WITHDRAWAL_APPROVED' : 'BALANCE',
         scenario: 'LOCAL',
         account: 'SAVINGS',
-        amount: operation === 'WITHDRAWAL' ? request.draft.amount! : null,
+        amount: request.draft.amount ?? null,
         atmId: atm.atmId,
         atmRevision: atm.atmRevision,
       },
@@ -61,13 +57,13 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
       cardReadId: original.readId,
     }));
     for (const context of contexts) {
-      const ready = await this.application.getBalanceReadiness(context, operation);
+      const ready = await this.application.getBalanceReadiness(context, request.draft.operation);
       if (!ready.ok) return ready;
       if (!ready.value.ready)
         return failure(
           'CONFLICT',
           ready.value.blockers.map((blocker) => blocker.label).join('. ') ||
-            'Uno de los perfiles de la operación seleccionada no está listo.',
+            'Uno de los perfiles no está listo para la operación solicitada.',
         );
       // Template ATMs share one pool: never sum availability across profiles.
       if (
@@ -79,19 +75,15 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
           'No hay suficientes secuencias QA disponibles para la cantidad solicitada.',
         );
     }
-    const history = await this.journal.read();
-    if (history.some((execution) => execution.outcome === 'PENDING'))
-      return failure(
-        'CONFLICT',
-        'El diario contiene una operación pendiente. Revisa su correlación antes de otra corrida.',
-      );
+    const balances = await this.journals.balance.read();
+    const withdrawals = await this.journals.withdrawal.read();
     if (
-      this.withdrawalJournal &&
-      (await this.withdrawalJournal.read()).some(withdrawalBlocksNewExecution)
+      balances.some((execution) => execution.outcome === 'PENDING') ||
+      withdrawals.some(withdrawalBlocksNewExecution)
     )
       return failure(
         'CONFLICT',
-        'Hay un retiro sin finalizar o sin guardar. Revisa su referencia antes de otra corrida.',
+        'El diario contiene una operación pendiente. Revisa su correlación antes de otra corrida.',
       );
     try {
       this.pins.begin();
@@ -166,7 +158,7 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
               ? { ok: true as const, value: original }
               : await this.cards.read({
                   readerName: original.readerName,
-                  applicationId: original.applicationId,
+                  applicationId,
                   terminalCountryCode: '218',
                 });
             const cardReadMs = Math.round(performance.now() - readStarted);
@@ -191,7 +183,7 @@ export class PhysicalCardLoadDriver implements LoadRunDriver {
                   cardReadId: reading.value.readId,
                   requestId: this.identity.uuid(),
                 },
-                operation,
+                request.draft.operation,
                 {
                   runId,
                   signal,
