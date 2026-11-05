@@ -1,5 +1,13 @@
 # Preparacion documental de transacciones
 
+## Depósito QA — 2026-11-05
+
+El selector incluye **Depósito** con monto USD positivo, ahorros y ATM Local.
+Usa canal y diario propios, comparte exclusión financiera y aparece en Flujo,
+Mensajes, Evidencia e historial con su monto. No ofrece opciones de comprobante
+o reverso de retiro. Fuente: trama e instrucción explícita del operador,
+no catálogo CMS. Ver [depósito](../transactions/DEPOSIT.md) y ADR-038.
+
 ## Valores completos de sesión QA — 2026-11-05
 
 Por solicitud del operador, **Mostrar todos los valores de esta sesión** permite

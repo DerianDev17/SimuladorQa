@@ -137,14 +137,22 @@ export function TransactionHistoryView({
               >
                 <td>{new Date(item.startedAt).toLocaleString('es-EC')}</td>
                 <td>
-                  {item.withdrawal
-                    ? item.reversal
-                      ? 'Retiro + reverso'
-                      : 'Retiro'
-                    : 'Consulta de saldo'}
+                  {item.deposit
+                    ? 'Depósito'
+                    : item.withdrawal
+                      ? item.reversal
+                        ? 'Retiro + reverso'
+                        : 'Retiro'
+                      : 'Consulta de saldo'}
                 </td>
                 <td>{executionAtm(item, catalog)}</td>
-                <td>{item.withdrawal ? `USD ${item.withdrawal.amount}` : '—'}</td>
+                <td>
+                  {item.deposit
+                    ? `USD ${item.deposit.amount}`
+                    : item.withdrawal
+                      ? `USD ${item.withdrawal.amount}`
+                      : '—'}
+                </td>
                 <td>
                   <span className={`history-outcome is-${executionCategory(item)}`}>
                     {executionOutcomeLabel(item)}

@@ -1,5 +1,12 @@
 # Registro de TODO-DATA
 
+Depósito QA, 2026-11-05: **QA-DEPOSIT-HOST-ACCEPTANCE**,
+**QA-DEPOSIT-PRIVATE-FIELDS**, **QA-DEPOSIT-F55-ENVELOPE** y
+**QA-DEPOSIT-RESULT-RULES** permanecen abiertos. La prueba autorizada usa
+211000/ahorros/USD, seguridad nueva y 9C=30/9F02=monto; los pendientes no
+se sustituyen por datos de la captura. Alcance y evidencia en
+[DEPOSIT.md](transactions/DEPOSIT.md), decisión [ADR-038](adr/ADR-038-QA-DEPOSIT.md).
+
 Este registro concentra los datos pendientes de fuente aprobada. Un `TODO-DATA`
 no se cierra por inferencia ni por un mock: requiere especificación del
 proveedor, captura/trama validada o confirmación formal registrada en un ADR.

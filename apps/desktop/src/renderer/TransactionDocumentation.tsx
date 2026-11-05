@@ -30,11 +30,15 @@ export function TransactionDocumentation({
               <>
                 <dl>
                   <div>
-                    <dt>TrnCode CMS</dt>
+                    <dt>
+                      {transaction === 'DEPOSIT' ? 'Código de procesamiento F3' : 'TrnCode CMS'}
+                    </dt>
                     <dd className="documented-code">{operation.code}</dd>
                   </div>
                   <div>
-                    <dt>Tipo de cuenta CMS</dt>
+                    <dt>
+                      {transaction === 'DEPOSIT' ? 'Cuenta de prueba QA' : 'Tipo de cuenta CMS'}
+                    </dt>
                     <dd>
                       {operation.accountCode} ·{' '}
                       {accountTypes.find((item) => item.id === operation.account)?.label}
@@ -43,21 +47,28 @@ export function TransactionDocumentation({
                 </dl>
                 <p>
                   {operation.source.title} v{operation.source.version} · p. {operation.source.page};
-                  cuenta p. 17.
+                  {transaction === 'DEPOSIT'
+                    ? 'Configuración de prueba QA solicitada por el operador.'
+                    : 'cuenta p. 17.'}
                 </p>
                 <small>
-                  Referencia del catálogo CMS; no sustituye el contrato del mensaje ATM ni acredita
-                  el resultado financiero.
+                  {transaction === 'DEPOSIT'
+                    ? 'La trama de referencia recibió RC 12. La prueba requiere validar el resultado con el host.'
+                    : 'Referencia del catálogo CMS; no sustituye el contrato del mensaje ATM ni acredita el resultado financiero.'}
                 </small>
                 <details className="inline-details">
                   <summary>Consultar referencia</summary>
                   <p>
                     {operation.source.title} · versión {operation.source.version}, página{' '}
-                    {operation.source.page}. La cuenta se documenta en la página 17.
+                    {operation.source.page}.{' '}
+                    {transaction === 'DEPOSIT'
+                      ? 'Ahorros/USD confirmados por el operador.'
+                      : 'La cuenta se documenta en la página 17.'}
                   </p>
                   <p>
-                    El documento original no está adjunto a esta vista. Se conserva la referencia
-                    aprobada del catálogo.
+                    {transaction === 'DEPOSIT'
+                      ? 'La transcripción sanitizada y sus límites están documentados en docs/transactions/DEPOSIT.md.'
+                      : 'El documento original no está adjunto a esta vista. Se conserva la referencia aprobada del catálogo.'}
                   </p>
                 </details>
               </>

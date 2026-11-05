@@ -26,7 +26,7 @@ const unavailable = (): BalanceReadiness => ({
 
 export class QaBalanceContextRouter implements BalanceContextProvider {
   private readonly bindings = new Map<string, QaAtmContextBinding>();
-  constructor(private readonly operation: 'BALANCE' | 'WITHDRAWAL' = 'BALANCE') {}
+  constructor(private readonly operation: 'BALANCE' | 'WITHDRAWAL' | 'DEPOSIT' = 'BALANCE') {}
 
   // Registration stays inside Main. Renderer cannot supply executable adapters,
   // endpoints, financial bytes or a claim that a virtual card has fresh security.
@@ -53,9 +53,11 @@ export class QaBalanceContextRouter implements BalanceContextProvider {
   private resolve(target: BalanceTarget): QaAtmContextBinding | undefined {
     if (
       target.draft.environment !== 'QA' ||
-      (this.operation === 'BALANCE'
-        ? target.draft.transaction !== 'BALANCE'
-        : !['WITHDRAWAL_APPROVED', 'WITHDRAWAL_DECLINED'].includes(target.draft.transaction)) ||
+      (this.operation === 'DEPOSIT'
+        ? target.draft.transaction !== 'DEPOSIT'
+        : this.operation === 'BALANCE'
+          ? target.draft.transaction !== 'BALANCE'
+          : !['WITHDRAWAL_APPROVED', 'WITHDRAWAL_DECLINED'].includes(target.draft.transaction)) ||
       target.draft.account !== 'SAVINGS' ||
       !isUuid(target.cardReadId) ||
       !isUuid(target.draft.atmId)
@@ -88,7 +90,7 @@ export class QaBalanceContextRouter implements BalanceContextProvider {
       lease.endpoint.host !== binding.endpoint.host ||
       lease.endpoint.port !== binding.endpoint.port ||
       lease.securitySource !== 'GENERATED_TEST_SESSION' ||
-      (this.operation === 'WITHDRAWAL'
+      (this.operation !== 'BALANCE'
         ? lease.amount !== target.draft.amount
         : lease.amount !== undefined)
     ) {

@@ -3,6 +3,7 @@ import type { Scenario } from './index';
 import { isRevision, isUuid, isUtcTimestamp } from './catalogs';
 import { parseDraftRequest } from './transaction-draft';
 import type { DraftRequest } from './transaction-draft';
+import type { DepositDetails } from './deposit';
 import type { WithdrawalDetails } from './withdrawal';
 import type { WithdrawalReversal } from './withdrawal-reversal';
 import type { TransactionMessages } from './iso-message';
@@ -102,6 +103,7 @@ export interface BalanceExecution {
   messages?: TransactionMessages;
   // Absent in historical balance records. Never infer this from the selected UI operation.
   withdrawal?: WithdrawalDetails;
+  deposit?: DepositDetails;
   reversal?: WithdrawalReversal;
   // Legacy manual QA decision, retained only to read existing audit records.
   qaContinuation?: { id: string; createdAt: string; agentId: string };
@@ -216,6 +218,7 @@ export function balanceResponseConfirmed(execution: BalanceExecution): boolean {
 export function canStartAfterUnconfirmedBalance(execution: BalanceExecution): boolean {
   return (
     !execution.withdrawal &&
+    !execution.deposit &&
     execution.finishedAt !== null &&
     balanceDeliveryUncertain(execution) &&
     [

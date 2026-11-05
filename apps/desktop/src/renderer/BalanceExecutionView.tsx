@@ -65,6 +65,14 @@ export function BalanceExecutionView({
   );
   const details = (
     <>
+      {execution.deposit && (
+        <p>
+          Monto solicitado: USD {execution.deposit.amount} · Ahorros.{' '}
+          {approved
+            ? 'Autorizado por el host; acreditación en Core sin verificar.'
+            : 'Acreditación sin confirmar.'}
+        </p>
+      )}
       {execution.withdrawal && (
         <>
           <p className="execution-requested">
@@ -114,8 +122,9 @@ export function BalanceExecutionView({
       )}
       {execution.outcome === 'NOT_APPROVED' && !withdrawalHostNotApproved(execution) && (
         <p>
-          El host respondió sin aprobar {execution.withdrawal ? 'el retiro' : 'la consulta'}. El
-          motivo interno requiere correlación con Switch/Core.
+          El host respondió sin aprobar{' '}
+          {execution.deposit ? 'el depósito' : execution.withdrawal ? 'el retiro' : 'la consulta'}.
+          El motivo interno requiere correlación con Switch/Core.
         </p>
       )}
       {(!compact || execution.withdrawal) && hostBalances}
@@ -142,9 +151,11 @@ export function BalanceExecutionView({
               withdrawalHostNotApproved(execution)
               ? 'Respuesta del host recibida.'
               : 'Intento registrado.'
-            : execution.withdrawal
-              ? 'No se transmitió el retiro.'
-              : 'No se transmitió la consulta.'}
+            : execution.deposit
+              ? 'No se transmitió el depósito.'
+              : execution.withdrawal
+                ? 'No se transmitió el retiro.'
+                : 'No se transmitió la consulta.'}
         </p>
       ) : null}
       {execution.correlation && (
@@ -229,7 +240,13 @@ export function BalanceExecutionView({
     <div
       className={`preparation balance-execution ${fullyApproved ? 'balance-approved' : ''}`}
       role="status"
-      aria-label={execution.withdrawal ? 'Resultado de retiro' : 'Resultado de consulta de saldo'}
+      aria-label={
+        execution.deposit
+          ? 'Resultado de depósito'
+          : execution.withdrawal
+            ? 'Resultado de retiro'
+            : 'Resultado de consulta de saldo'
+      }
     >
       <div className={`execution-status ${fullyApproved ? 'is-approved' : ''}`}>
         <span className="execution-status-icon">
@@ -237,7 +254,14 @@ export function BalanceExecutionView({
         </span>
         <div>
           <strong>{executionOutcomeLabel(execution)}</strong>
-          <span>{execution.withdrawal ? 'Retiro · Ahorros' : 'Consulta de saldo'} · QA</span>
+          <span>
+            {execution.deposit
+              ? 'Depósito · Ahorros'
+              : execution.withdrawal
+                ? 'Retiro · Ahorros'
+                : 'Consulta de saldo'}{' '}
+            · QA
+          </span>
         </div>
         {(execution.reversal?.responseCode ?? execution.responseCode) && (
           <span className="execution-response-code">
@@ -291,6 +315,14 @@ export function BalanceExecutionView({
       {compact && (
         <div className="compact-execution-summary">
           <div>
+            {execution.deposit && (
+              <p>
+                Monto solicitado: USD {execution.deposit.amount} · Ahorros.{' '}
+                {approved
+                  ? 'Autorizado por el host; acreditación en Core sin verificar.'
+                  : 'Acreditación sin confirmar.'}
+              </p>
+            )}
             {execution.withdrawal && (
               <strong>Monto solicitado: USD {execution.withdrawal.amount}</strong>
             )}

@@ -85,6 +85,10 @@ export const channels = {
   executeBalance: 'transaction:balance:execute',
   balanceExecution: 'transaction:balance:result',
   balanceHistory: 'transaction:balance:history',
+  depositReadiness: 'transaction:deposit:readiness',
+  executeDeposit: 'transaction:deposit:execute',
+  depositExecution: 'transaction:deposit:result',
+  depositHistory: 'transaction:deposit:history',
   withdrawalReadiness: 'transaction:withdrawal:readiness',
   executeWithdrawal: 'transaction:withdrawal:execute',
   withdrawalExecution: 'transaction:withdrawal:result',
@@ -194,6 +198,13 @@ export interface DesktopApi {
     requestId: string;
   }): Promise<Result<BalanceExecution | null>>;
   getBalanceHistory(environment: 'QA'): Promise<Result<readonly BalanceExecution[]>>;
+  getDepositReadiness(request: BalanceContextRequest): Promise<Result<BalanceReadiness>>;
+  executeDeposit(request: BalanceExecutionRequest): Promise<Result<BalanceExecution>>;
+  getDepositExecution(request: {
+    environment: 'QA';
+    requestId: string;
+  }): Promise<Result<BalanceExecution | null>>;
+  getDepositHistory(environment: 'QA'): Promise<Result<readonly BalanceExecution[]>>;
   getWithdrawalReadiness(request: BalanceContextRequest): Promise<Result<BalanceReadiness>>;
   executeWithdrawal(request: BalanceExecutionRequest): Promise<Result<BalanceExecution>>;
   getWithdrawalExecution(request: {

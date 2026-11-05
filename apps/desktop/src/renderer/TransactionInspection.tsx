@@ -148,10 +148,14 @@ export function TransactionInspection({
             <TransactionDocumentation
               operation={snapshot?.documentedOperations.find(
                 (item) =>
-                  item.transaction === (execution.withdrawal?.transaction ?? 'BALANCE') &&
-                  item.account === 'SAVINGS',
+                  item.transaction ===
+                    (execution.deposit?.transaction ??
+                      execution.withdrawal?.transaction ??
+                      'BALANCE') && item.account === 'SAVINGS',
               )}
-              transaction={execution.withdrawal?.transaction ?? 'BALANCE'}
+              transaction={
+                execution.deposit?.transaction ?? execution.withdrawal?.transaction ?? 'BALANCE'
+              }
               original={false}
               captureEvidence={snapshot?.captureEvidence}
             />

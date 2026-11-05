@@ -32,9 +32,85 @@ import { NewVisaWithdrawal } from '../../apps/desktop/src/main/adapters/new-visa
 import { QaVisaReversal } from '../../apps/desktop/src/main/adapters/qa-visa-reversal';
 import { reversalFixture, reversalResponse } from '../helpers/withdrawal-reversal';
 import { withdrawalResponse } from '../helpers/withdrawal';
+import { depositFixture, depositResponse } from '../helpers/deposit';
+import { NewVisaDeposit } from '../../apps/desktop/src/main/adapters/new-visa-deposit';
 
 let directory: string;
 let app: ElectronApplication | undefined;
+
+test('depósito QA: monto, canal propio, RC12, mensajes e historial sin opciones de retiro', async () => {
+  test.setTimeout(60000);
+  const window = await prepareBalanceSubmission();
+  const built = new NewVisaDeposit().build(depositFixture('10.00').lease);
+  const sample = approvedWithdrawalExecution();
+  delete sample.withdrawal;
+  sample.deposit = { transaction: 'DEPOSIT', account: 'SAVINGS', currency: '840', amount: '10.00' };
+  sample.outcome = 'NOT_APPROVED';
+  sample.responseCode = '12';
+  sample.balances = [];
+  sample.messages = {
+    request: built.message,
+    response: new CapturedVisaBalance('DEPOSIT').message(depositResponse(built.metadata)),
+  };
+  await app!.evaluate(({ ipcMain }, result) => {
+    const state = globalThis as typeof globalThis & { depositSends?: number };
+    state.depositSends = 0;
+    let saved: typeof result | undefined;
+    for (const action of ['readiness', 'execute', 'history'])
+      ipcMain.removeHandler(`transaction:deposit:${action}`);
+    ipcMain.handle('transaction:deposit:readiness', () => ({
+      ok: true,
+      value: { ready: true, blockers: [] },
+    }));
+    ipcMain.handle('transaction:deposit:history', () => ({
+      ok: true,
+      value: saved ? [saved] : [],
+    }));
+    ipcMain.handle('transaction:deposit:execute', (_event, request) => {
+      if (
+        request.draft.transaction !== 'DEPOSIT' ||
+        request.draft.amount !== '10.00' ||
+        request.reversalDelaySeconds !== undefined
+      )
+        throw Error('TEST_INVALID_DEPOSIT');
+      state.depositSends!++;
+      saved = {
+        ...result,
+        requestId: request.requestId,
+        atmId: request.draft.atmId,
+        cardReadId: request.cardReadId,
+      };
+      return { ok: true, value: saved };
+    });
+  }, sample);
+  await window.getByLabel('Transacción', { exact: true }).selectOption('DEPOSIT');
+  await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  const send = window.getByRole('button', { name: 'Ejecutar Transacción', exact: true });
+  await window.getByLabel('Monto de prueba').fill('0.00');
+  await expect(send).toBeDisabled();
+  await window.getByLabel('Monto de prueba').fill('10.00');
+  await expect(send).toBeEnabled();
+  await expect(window.getByText('Con impresión', { exact: true })).toHaveCount(0);
+  await send.click();
+  const result = window.getByRole('region', { name: 'Resultado', exact: true });
+  await expect(result).toContainText('Depósito no aprobado');
+  await expect(result).toContainText('Monto solicitado: USD 10.00');
+  await window.getByRole('tab', { name: 'Mensajes', exact: true }).click();
+  await expect(window.getByRole('tabpanel', { name: 'Mensajes', exact: true })).toContainText(
+    '211000',
+  );
+  const history = window.getByRole('region', { name: 'Historial local', exact: true });
+  await expect(history).toContainText('Depósito');
+  await expect(history).toContainText('USD 10.00');
+  await expect(send).toBeDisabled();
+  expect(
+    await app!.evaluate(
+      () => (globalThis as typeof globalThis & { depositSends?: number }).depositSends,
+    ),
+  ).toBe(1);
+  await mkdir('artifacts', { recursive: true });
+  await window.screenshot({ path: 'artifacts/deposit-qa-result.png', fullPage: true });
+});
 
 test('inspección interactiva: historial independiente, flujo, evidencia y fallos parciales', async () => {
   test.setTimeout(90000);

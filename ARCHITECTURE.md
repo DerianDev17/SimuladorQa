@@ -28,8 +28,10 @@ flowchart TD
   App --> Port[FinancialExecutionPort]
   Balance[Fachada de saldo] -. implementa .-> Port
   Withdrawal[Fachada de retiro] -. implementa .-> Port
+  Deposit[Fachada de depósito] -. implementa .-> Port
   Balance --> Engine[FinancialExecutionService]
   Withdrawal --> Engine
+  Deposit --> Engine
   Engine --> Financial[Puertos de builder, contexto, transporte y diario]
   Adapters[Adaptadores ISO / TCP / PIN-EMV / persistencia] -. implementan .-> Financial
   Load[LoadRunService] --> LoadPorts[load-ports]
@@ -38,7 +40,7 @@ flowchart TD
   Worker[Scheduler worker y almacenamiento] -. implementan .-> LoadPorts
 ```
 
-Las fachadas de saldo y retiro inyectan su builder y configuración al mismo motor.
+Las fachadas de saldo, retiro y depósito inyectan su builder y configuración al mismo motor.
 Retiro no hereda del servicio de saldo. Los DTO de mensaje pertenecen a contratos
 internos de Main y los adaptadores los consumen. El driver de carga depende de
 interfaces de lector, operaciones financieras y ciclo de vida de sesiones; no
@@ -127,3 +129,8 @@ descarta respuestas de generaciones anteriores. La selección del resultado
 se identifica por `requestId` y no modifica el borrador. Ver
 [ADR-036](docs/adr/ADR-036-TRANSACTION-INSPECTION.md). El desarrollo usa un
 puerto loopback libre por sesión según [ADR-035](docs/adr/ADR-035-ISOLATED-DEVELOPMENT-PORT.md).
+
+Depósito usa el motor común, transporte con selección DEPOSIT y diario SQLite
+independiente. La plantilla QA aplica 9C=30/9F02=monto antes de GENERATE AC
+por instrucción del operador; resultados inciertos bloquean otro depósito.
+Ver [ADR-038](docs/adr/ADR-038-QA-DEPOSIT.md).

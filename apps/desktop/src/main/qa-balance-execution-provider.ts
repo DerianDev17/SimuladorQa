@@ -20,6 +20,7 @@ import { balanceContextErrorLabels } from './balance-context-errors';
 import { isWithdrawalAmount } from '../../../../packages/domain/src/withdrawal';
 
 export type QaExecutionOperation =
+  | { kind: 'DEPOSIT'; amount: string; validate(): Promise<void> }
   | { kind: 'BALANCE' }
   | {
       kind: 'WITHDRAWAL';
@@ -71,18 +72,22 @@ export class QaBalanceExecutionProvider implements BalanceContextProvider {
 
   async inspect(target: BalanceTarget): Promise<BalanceReadiness> {
     const blockers: { id: string; label: string }[] = [];
-    if (this.operation.kind === 'WITHDRAWAL') await this.operation.validate();
+    if (this.operation.kind !== 'BALANCE') await this.operation.validate();
     const state = await this.profiles.read();
     const row = state.file.profiles.find((item) => item.id === this.profile.id);
     const current = state.profiles.find((item) => item.id === this.profile.id);
     if (
       target.draft.environment !== 'QA' ||
       target.draft.scenario !== 'LOCAL' ||
-      (this.operation.kind === 'BALANCE'
-        ? target.draft.transaction !== 'BALANCE'
-        : !['WITHDRAWAL_APPROVED', 'WITHDRAWAL_DECLINED'].includes(target.draft.transaction) ||
+      (this.operation.kind === 'DEPOSIT'
+        ? target.draft.transaction !== 'DEPOSIT' ||
           !isWithdrawalAmount(target.draft.amount) ||
-          target.draft.amount !== this.operation.amount) ||
+          target.draft.amount !== this.operation.amount
+        : this.operation.kind === 'BALANCE'
+          ? target.draft.transaction !== 'BALANCE'
+          : !['WITHDRAWAL_APPROVED', 'WITHDRAWAL_DECLINED'].includes(target.draft.transaction) ||
+            !isWithdrawalAmount(target.draft.amount) ||
+            target.draft.amount !== this.operation.amount) ||
       target.draft.account !== 'SAVINGS' ||
       target.draft.atmId !== this.profile.atmId ||
       target.draft.atmRevision !== this.profile.atmRevision ||
@@ -207,7 +212,7 @@ export class QaBalanceExecutionProvider implements BalanceContextProvider {
           // Preserve the finite approved pool on card/cipher failures. Reserve
           // before GENERATE AC; never recycle a sequence after chip processing.
           stageError = 'QA_SEQUENCE_UNAVAILABLE';
-          if (this.operation.kind === 'WITHDRAWAL') await this.operation.validate();
+          if (this.operation.kind !== 'BALANCE') await this.operation.validate();
           const sequence = await this.profiles.reserve(
             this.profile.id,
             signal,
@@ -217,9 +222,16 @@ export class QaBalanceExecutionProvider implements BalanceContextProvider {
           emv = await new QaEmvOperation().generate(
             session,
             card,
-            this.operation.kind === 'WITHDRAWAL' && this.operation.emv === 'CASH'
-              ? { ...this.profile.emv, issuerUsage: 'CASH', transactionType: '01' }
-              : this.profile.emv,
+            this.operation.kind === 'DEPOSIT'
+              ? {
+                  ...this.profile.emv,
+                  issuerUsage: 'SERVICES',
+                  transactionType: '30',
+                  amountSource: 'DEPOSIT_AMOUNT',
+                }
+              : this.operation.kind === 'WITHDRAWAL' && this.operation.emv === 'CASH'
+                ? { ...this.profile.emv, issuerUsage: 'CASH', transactionType: '01' }
+                : this.profile.emv,
             local,
             signal,
             (analysis) => {
@@ -229,7 +241,8 @@ export class QaBalanceExecutionProvider implements BalanceContextProvider {
                 accountingDate: this.profile.accountingDate,
               };
             },
-            this.operation.kind === 'WITHDRAWAL' && this.operation.emv === 'CASH'
+            this.operation.kind === 'DEPOSIT' ||
+              (this.operation.kind === 'WITHDRAWAL' && this.operation.emv === 'CASH')
               ? this.operation.amount
               : undefined,
           );
@@ -239,9 +252,9 @@ export class QaBalanceExecutionProvider implements BalanceContextProvider {
         this.profile.emv.countryCode,
       );
       for (const [field, value] of this.profile.fixedFields) fields.set(field, Buffer.from(value));
-      if (this.operation.kind === 'WITHDRAWAL') await this.operation.validate();
+      if (this.operation.kind !== 'BALANCE') await this.operation.validate();
       return {
-        ...(this.operation.kind === 'WITHDRAWAL'
+        ...(this.operation.kind !== 'BALANCE'
           ? {
               amount: this.operation.amount,
               validate: this.operation.validate,

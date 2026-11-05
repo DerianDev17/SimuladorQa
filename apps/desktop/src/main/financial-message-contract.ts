@@ -27,7 +27,7 @@ export interface NewBalanceInput extends BalanceDynamicInput {
 }
 export interface CapturedBalanceMetadata {
   mti: '0200' | '0210';
-  processingCode: '301000' | '011000';
+  processingCode: '301000' | '011000' | '211000';
   stan: string;
   rrn: string;
   terminalId: string;

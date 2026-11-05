@@ -1,3 +1,7 @@
+import {
+  parseDepositContextRequest,
+  depositBlocksNewExecution,
+} from '../../../../packages/domain/src/deposit';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   BalanceExecution,
@@ -98,7 +102,9 @@ export function useTransactionPreparation({
   const [recoveringBalance, setRecoveringBalance] = useState(false);
   const [checkingBalance, setCheckingBalance] = useState(false);
   const [balanceRequestId, setBalanceRequestId] = useState<string>();
-  const [requestOperation, setRequestOperation] = useState<'BALANCE' | 'WITHDRAWAL'>('BALANCE');
+  const [requestOperation, setRequestOperation] = useState<'BALANCE' | 'WITHDRAWAL' | 'DEPOSIT'>(
+    'BALANCE',
+  );
   const [sessionExecutions, setSessionExecutions] = useState<readonly BalanceExecution[]>([]);
   const executionLock = useRef(false);
   useEffect(() => {
@@ -284,7 +290,11 @@ export function useTransactionPreparation({
     sendSetup?.configuration &&
     selectedAtm &&
     scenario === 'LOCAL'
-      ? (monetary ? parseWithdrawalContextRequest : parseBalanceContextRequest)({
+      ? (transaction === 'DEPOSIT'
+          ? parseDepositContextRequest
+          : monetary
+            ? parseWithdrawalContextRequest
+            : parseBalanceContextRequest)({
           draft,
           cardReadId: selectedCard?.readId,
           configurationRevision: sendSetup.configuration.revision,
@@ -302,7 +312,9 @@ export function useTransactionPreparation({
     )
       return;
     void client
-      .call((api) => api.getWithdrawalHistory('QA'))
+      .call((api) =>
+        transaction === 'DEPOSIT' ? api.getDepositHistory('QA') : api.getWithdrawalHistory('QA'),
+      )
       .then((result) => {
         if (!current || executionLock.current) return;
         if (!result.ok) {
@@ -310,18 +322,28 @@ export function useTransactionPreparation({
           return;
         }
         // Completed errors belong to history, not to a newly opened form.
-        const previous = result.value.find(withdrawalBlocksNewExecution);
+        const previous = result.value.find(
+          transaction === 'DEPOSIT' ? depositBlocksNewExecution : withdrawalBlocksNewExecution,
+        );
         if (previous) {
           setBalanceExecution(previous);
-          if (withdrawalBlocksNewExecution(previous)) setBalanceRequestId(previous.requestId);
-          setRequestOperation('WITHDRAWAL');
+          setBalanceRequestId(previous.requestId);
+          setRequestOperation(transaction === 'DEPOSIT' ? 'DEPOSIT' : 'WITHDRAWAL');
           recordExecution(previous);
         }
       });
     return () => {
       current = false;
     };
-  }, [visible, monetary, snapshot?.environment, balanceRequestId, balanceExecution, client]);
+  }, [
+    visible,
+    monetary,
+    transaction,
+    snapshot?.environment,
+    balanceRequestId,
+    balanceExecution,
+    client,
+  ]);
   useEffect(() => {
     let current = true;
     setBalanceReadiness(undefined);
@@ -339,9 +361,11 @@ export function useTransactionPreparation({
     void client
       .call(
         (api) =>
-          monetary
-            ? api.getWithdrawalReadiness(balanceContext)
-            : api.getBalanceReadiness(balanceContext),
+          transaction === 'DEPOSIT'
+            ? api.getDepositReadiness(balanceContext)
+            : monetary
+              ? api.getWithdrawalReadiness(balanceContext)
+              : api.getBalanceReadiness(balanceContext),
         10000,
       )
       .then((result) => {
@@ -540,11 +564,16 @@ export function useTransactionPreparation({
         ? { saved: currentCase, requestId }
         : undefined,
     );
-    receiptRequest.current = monetary && receiptPreference === 'WITH_PRINT' ? requestId : undefined;
+    receiptRequest.current =
+      monetary && transaction !== 'DEPOSIT' && receiptPreference === 'WITH_PRINT'
+        ? requestId
+        : undefined;
     executionLock.current = true;
     setExecutingBalance(true);
     setBalanceRequestId(requestId);
-    setRequestOperation(monetary ? 'WITHDRAWAL' : 'BALANCE');
+    setRequestOperation(
+      transaction === 'DEPOSIT' ? 'DEPOSIT' : monetary ? 'WITHDRAWAL' : 'BALANCE',
+    );
     setBalanceExecution(undefined);
     setBalanceReadiness(undefined);
     setSendPlan(undefined);
@@ -560,9 +589,11 @@ export function useTransactionPreparation({
               ? { reversalDelaySeconds: reversalDelay }
               : {}),
           };
-          backendResult = await (monetary
-            ? api.executeWithdrawal(request)
-            : api.executeBalance(request));
+          backendResult = await (transaction === 'DEPOSIT'
+            ? api.executeDeposit(request)
+            : monetary
+              ? api.executeWithdrawal(request)
+              : api.executeBalance(request));
           return backendResult;
         },
         180000,
@@ -596,9 +627,11 @@ export function useTransactionPreparation({
     setRecoveringBalance(true);
     try {
       const result = await client.call((api) =>
-        requestOperation === 'WITHDRAWAL'
-          ? api.getWithdrawalExecution({ environment: 'QA', requestId: balanceRequestId })
-          : api.getBalanceExecution({ environment: 'QA', requestId: balanceRequestId }),
+        requestOperation === 'DEPOSIT'
+          ? api.getDepositExecution({ environment: 'QA', requestId: balanceRequestId })
+          : requestOperation === 'WITHDRAWAL'
+            ? api.getWithdrawalExecution({ environment: 'QA', requestId: balanceRequestId })
+            : api.getBalanceExecution({ environment: 'QA', requestId: balanceRequestId }),
       );
       if (!active.current) return;
       if (result.ok && result.value) {
@@ -675,7 +708,7 @@ export function useTransactionPreparation({
             (!monetary && transaction !== 'BALANCE') ||
             account !== 'SAVINGS' ||
             scenario !== 'LOCAL'
-          ? 'Ejecución disponible para saldo o retiro · Ahorros · ATM Local · QA.'
+          ? 'Ejecución disponible para saldo, retiro o depósito · Ahorros · ATM Local · QA.'
           : monetary && !isWithdrawalAmount(amount)
             ? 'Escribe un monto positivo con punto y dos decimales (máximo 10 dígitos enteros).'
             : !selectedCard

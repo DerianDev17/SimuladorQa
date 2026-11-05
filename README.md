@@ -5,7 +5,7 @@ carga controlada y consultar evidencia de Mediator. Electron, TypeScript strict
 y React; hardware, secretos, TCP y persistencia se ejecutan fuera del Renderer.
 
 Transacciones presenta Flujo, Mensajes y Evidencia para cada ejecución. Su
-historial local combina saldos y retiros y permite seleccionar una operación
+historial local combina saldos, retiros y depósitos y permite seleccionar una operación
 sin modificar el borrador. Ver [preparación](docs/implementation/TRANSACTION_PREPARATION.md)
 y [ADR-036](docs/adr/ADR-036-TRANSACTION-INSPECTION.md).
 
@@ -49,6 +49,7 @@ La compilación genera `dist/` para ejecución local; no crea un instalador firm
 | Área | Disponible | Alcance y límites |
 | --- | --- | --- |
 | Operación | Consulta de saldo y retiro; mensajería protegida de solicitud/respuesta | Ejecución QA/LOCAL/ahorros, con perfil, lector y seguridad válidos |
+| Depósito | Prueba manual ahorros/USD, código 211000, PIN/EMV nuevos | Configuración QA confirmada por el operador; aceptación host/Core pendiente. Ver [depósito](docs/transactions/DEPOSIT.md) |
 | Retiro | Monto personalizado y comprobante local opcional | USD, contrato vigente del ATM; el host determina el resultado |
 | Retiro + reverso | Reverso único después de aprobación completa y espera de 1–30 s | Flujo explícito; no confundir con reverso automático por timeout |
 | Carga y estrés | Saldo y retiro, varios ATM alternados y una tarjeta física | Saldo 1–5 operaciones en curso; retiro secuencial; hasta 5 TPS objetivo |

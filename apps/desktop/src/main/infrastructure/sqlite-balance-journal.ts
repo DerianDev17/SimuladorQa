@@ -19,7 +19,7 @@ export class SqliteBalanceJournal implements BalanceJournal {
   constructor(
     private readonly path: string,
     private readonly legacyPath: string,
-    private readonly operation: 'BALANCE' | 'WITHDRAWAL' = 'BALANCE',
+    private readonly operation: 'BALANCE' | 'WITHDRAWAL' | 'DEPOSIT' = 'BALANCE',
   ) {}
 
   private serialize<T>(operation: () => Promise<T>): Promise<T> {
@@ -32,7 +32,11 @@ export class SqliteBalanceJournal implements BalanceJournal {
   }
 
   private accepts(item: BalanceExecution): boolean {
-    return this.operation === 'WITHDRAWAL' ? !!item.withdrawal : !item.withdrawal;
+    return this.operation === 'DEPOSIT'
+      ? !!item.deposit
+      : this.operation === 'WITHDRAWAL'
+        ? !!item.withdrawal
+        : !item.withdrawal && !item.deposit;
   }
 
   private parseItem(value: unknown): BalanceExecution {

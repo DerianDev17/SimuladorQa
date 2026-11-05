@@ -34,6 +34,13 @@ import { parseWithdrawalReversal } from '../../../../packages/domain/src/withdra
 import { parseIsoMessage } from '../../../../packages/domain/src/iso-message';
 import type { SessionMessagePort } from './session-message-port';
 
+import {
+  parseDepositExecutionRequest,
+  parseDepositDetails,
+  missingDepositContext,
+  depositBlocksNewExecution,
+} from '../../../../packages/domain/src/deposit';
+
 function release(lease: BalanceContextLease): void {
   lease.header.fill(0);
   lease.extension.fill(0);
@@ -57,7 +64,7 @@ export class FinancialExecutionService implements FinancialExecutionPort {
     private readonly builder: FinancialMessageBuilder,
     private readonly context?: BalanceContextProvider,
     private readonly contextDeadlineMs = 5000,
-    private readonly operation: 'BALANCE' | 'WITHDRAWAL' = 'BALANCE',
+    private readonly operation: 'BALANCE' | 'WITHDRAWAL' | 'DEPOSIT' = 'BALANCE',
     private readonly sessionMessages?: SessionMessagePort,
   ) {}
 
@@ -81,7 +88,11 @@ export class FinancialExecutionService implements FinancialExecutionPort {
   async inspect(target: BalanceTarget): Promise<BalanceReadiness> {
     if (!this.context)
       return structuredClone(
-        this.operation === 'WITHDRAWAL' ? missingWithdrawalContext : missingBalanceContext,
+        this.operation === 'DEPOSIT'
+          ? missingDepositContext
+          : this.operation === 'WITHDRAWAL'
+            ? missingWithdrawalContext
+            : missingBalanceContext,
       );
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -143,9 +154,11 @@ export class FinancialExecutionService implements FinancialExecutionPort {
     execution?: BalanceExecutionContext,
   ): Promise<Result<BalanceExecution>> {
     if (
-      !(this.operation === 'WITHDRAWAL'
-        ? parseWithdrawalExecutionRequest(request)
-        : parseBalanceExecutionRequest(request)) ||
+      !(this.operation === 'DEPOSIT'
+        ? parseDepositExecutionRequest(request)
+        : this.operation === 'WITHDRAWAL'
+          ? parseWithdrawalExecutionRequest(request)
+          : parseBalanceExecutionRequest(request)) ||
       JSON.stringify(request.draft) !== JSON.stringify(target.draft) ||
       request.cardReadId !== target.cardReadId ||
       request.configurationRevision !== target.configurationRevision ||
@@ -252,10 +265,12 @@ export class FinancialExecutionService implements FinancialExecutionPort {
         previous.cardReadId !== request.cardReadId ||
         previous.scenario !== request.draft.scenario ||
         previous.reversal?.delaySeconds !== request.reversalDelaySeconds ||
-        (this.operation === 'WITHDRAWAL'
-          ? previous.withdrawal?.amount !== request.draft.amount ||
-            previous.withdrawal?.transaction !== request.draft.transaction
-          : previous.withdrawal !== undefined)
+        (this.operation === 'DEPOSIT'
+          ? previous.deposit?.amount !== request.draft.amount
+          : this.operation === 'WITHDRAWAL'
+            ? previous.withdrawal?.amount !== request.draft.amount ||
+              previous.withdrawal?.transaction !== request.draft.transaction
+            : previous.withdrawal !== undefined || previous.deposit !== undefined)
       )
         return failure('CONFLICT', 'La referencia de ejecución ya pertenece a otra transacción.');
       return { ok: true, value: previous };
@@ -264,6 +279,11 @@ export class FinancialExecutionService implements FinancialExecutionPort {
       return failure(
         'CONFLICT',
         'Hay un retiro sin finalizar o sin guardar. Recupera su referencia antes de enviar otro.',
+      );
+    if (this.operation === 'DEPOSIT' && records.some(depositBlocksNewExecution))
+      return failure(
+        'CONFLICT',
+        'Hay un depósito pendiente o incierto. Recupera su referencia antes de enviar otro.',
       );
     const record: BalanceExecution = {
       requestId: request.requestId,
@@ -298,6 +318,16 @@ export class FinancialExecutionService implements FinancialExecutionPort {
               transmissionAttempted: false,
               bytesQueued: 0,
             },
+          }
+        : {}),
+      ...(this.operation === 'DEPOSIT'
+        ? {
+            deposit: parseDepositDetails({
+              transaction: request.draft.transaction,
+              account: request.draft.account,
+              currency: '840',
+              amount: request.draft.amount,
+            })!,
           }
         : {}),
       ...(this.operation === 'WITHDRAWAL'
@@ -385,7 +415,7 @@ export class FinancialExecutionService implements FinancialExecutionPort {
         !isUuid(lease.profileId) ||
         lease.cardReadId !== target.cardReadId ||
         lease.account !== 'SAVINGS' ||
-        (this.operation === 'WITHDRAWAL'
+        (this.operation !== 'BALANCE'
           ? lease.amount !== request.draft.amount
           : lease.amount !== undefined) ||
         lease.terminalId !== target.terminalId ||
@@ -543,10 +573,10 @@ export class FinancialExecutionService implements FinancialExecutionPort {
       )
         throw Error('TRANSPORT_RESULT_INVALID');
       if (
-        this.operation === 'WITHDRAWAL' &&
+        this.operation !== 'BALANCE' &&
         ((result.outcome === 'APPROVED' && result.responseCode !== '00') ||
           (result.outcome === 'NOT_APPROVED' &&
-            (result.responseCode !== '91' ||
+            (result.responseCode !== (this.operation === 'DEPOSIT' ? '12' : '91') ||
               !result.transmissionAttempted ||
               result.bytesQueued <= 0)) ||
           (result.outcome !== 'APPROVED' && result.balances.length > 0))

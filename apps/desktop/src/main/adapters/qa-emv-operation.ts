@@ -13,6 +13,8 @@ export interface QaEmvOperationPolicy {
   transactionType: string;
   applicationVersion: string;
   issuerUsage: 'SERVICES' | 'CASH';
+  // Explicit QA operator instruction 2026-11-05, never inferred from the amount.
+  amountSource?: 'DEPOSIT_AMOUNT';
   extraTags: ReadonlyMap<string, Uint8Array>;
   field55Tags: readonly string[];
 }
@@ -104,8 +106,11 @@ export class QaEmvOperation {
     let responseData: Uint8Array | undefined;
     try {
       const cash = policy.issuerUsage === 'CASH';
+      const deposit = policy.amountSource === 'DEPOSIT_AMOUNT';
       if (
         signal.aborted ||
+        (policy.amountSource !== undefined && !deposit) ||
+        (deposit && cash) ||
         policy.parameters.environment !== 'QA' ||
         policy.parameters.terminalType !== '14' ||
         policy.parameters.terminalCapabilities !== '604020' ||
@@ -113,7 +118,8 @@ export class QaEmvOperation {
         !/^\d{3}$/.test(policy.countryCode) ||
         (cash
           ? policy.transactionType !== '01' || !isWithdrawalAmount(amount)
-          : policy.transactionType !== '30' || amount !== undefined) ||
+          : policy.transactionType !== '30' ||
+            (deposit ? !isWithdrawalAmount(amount) : amount !== undefined)) ||
         !/^[A-F0-9]{4}$/.test(policy.applicationVersion)
       )
         invalid();
@@ -121,7 +127,8 @@ export class QaEmvOperation {
       if (panSequence[0]! >> 4 > 9 || (panSequence[0]! & 0x0f) > 9) invalid();
       const aip = required(card, '82', 2);
       if (!(aip[0]! & 0x10)) invalid(); // cardholder verification supported
-      const authorised = cash ? amount!.replace('.', '').padStart(12, '0') : '0'.repeat(12);
+      const authorised =
+        cash || deposit ? amount!.replace('.', '').padStart(12, '0') : '0'.repeat(12);
       const cvm = operationCvm(card, cash, BigInt(authorised));
       const tvr = Buffer.of(0x80, 0, cvm.tvrByte3, 0, 0); // ODA not performed; actual CVM result
       if (
@@ -191,7 +198,7 @@ export class QaEmvOperation {
       // This cash contract covers only cards which bind both fields into the
       // first AC. No post-AC amount/type rewriting is permitted in F55.
       if (
-        cash &&
+        (cash || deposit) &&
         (dol.filter((item) => item.tag === '9F02' && item.length === 6).length !== 1 ||
           dol.filter((item) => item.tag === '9C' && item.length === 1).length !== 1)
       )

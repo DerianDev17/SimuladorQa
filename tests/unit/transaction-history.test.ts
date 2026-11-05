@@ -17,6 +17,7 @@ function deferred<T>() {
 function batch(): HistoryBatch {
   return {
     balances: { ok: true, value: [] },
+    deposits: { ok: true, value: [] },
     withdrawals: { ok: true, value: [approvedWithdrawalExecution()] },
   };
 }
@@ -69,6 +70,7 @@ describe('adaptador del historial y ciclo de vida', () => {
       .mockResolvedValueOnce({
         balances: { ok: false, error: { code: 'TIMEOUT', message: 'Plazo agotado' } },
         withdrawals: { ok: true, value: [] },
+        deposits: { ok: true, value: [] },
       });
     const store = new TransactionHistoryStore({ read });
     const listener = vi.fn();
@@ -96,7 +98,7 @@ describe('adaptador del historial y ciclo de vida', () => {
     });
     store.setEnabled(true);
     await store.refresh();
-    expect(store.getSnapshot().issues).toHaveLength(2);
+    expect(store.getSnapshot().issues).toHaveLength(3);
     expect(JSON.stringify(store.getSnapshot())).not.toContain('private-detail');
   });
   it('limita el plazo IPC por fuente y conserva el retiro aunque saldo no responda', async () => {
@@ -104,6 +106,7 @@ describe('adaptador del historial y ciclo de vida', () => {
     const records = [approvedWithdrawalExecution()];
     const api = {
       getBalanceHistory: () => new Promise(() => {}),
+      getDepositHistory: async () => ({ ok: true, value: [] }),
       getWithdrawalHistory: async () => ({ ok: true, value: records }),
     } as unknown as DesktopApi;
     const store = new TransactionHistoryStore(

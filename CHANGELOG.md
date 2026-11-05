@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-05 — Depósito QA
+
+- Agrega depósito manual QA/LOCAL/ahorros/USD, F3 211000, monto vinculado
+  a CDOL1/F55 (9C=30, 9F02=monto) y seguridad nueva por operación.
+- Admite F23/PAN19 en la respuesta, conserva RC12, correlación, diario propio
+  e idempotencia; integra resultado, mensajería e historial en Electron.
+- Documenta validaciones host/Core y variantes privadas pendientes en ADR-038.
+
 Transacciones interactivas (2026-11-05): preparación compacta y ocultable,
 Flujo/Mensajes/Evidencia navegables, detalle ISO protegido e historial local
 unificado de saldos y retiros. La selección del historial no modifica el

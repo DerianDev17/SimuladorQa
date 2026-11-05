@@ -19,6 +19,11 @@ export function executionOutcomeLabel(execution: BalanceExecution): string {
   if (execution.reversal && execution.outcome === 'APPROVED')
     return reversalOutcomeLabels[execution.reversal.outcome];
   if (withdrawalHostNotApproved(execution)) return 'Retiro no aprobado';
+  if (execution.deposit) {
+    if (execution.outcome === 'APPROVED') return 'Depósito autorizado por el host';
+    if (execution.outcome === 'BLOCKED') return 'Depósito bloqueado';
+    if (execution.outcome === 'NOT_APPROVED') return 'Depósito no aprobado';
+  }
   if (execution.withdrawal) {
     if (execution.outcome === 'APPROVED') return 'Retiro autorizado por el host';
     if (execution.outcome === 'BLOCKED') return 'Retiro bloqueado';

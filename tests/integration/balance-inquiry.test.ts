@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DesktopApplication } from '../../apps/desktop/src/main/application';
 import { BalanceInquiryService } from '../../apps/desktop/src/main/balance-inquiry-service';
+import { DepositService } from '../../apps/desktop/src/main/deposit-service';
 import { WithdrawalService } from '../../apps/desktop/src/main/withdrawal-service';
 import {
   FileBalanceJournal,
@@ -44,6 +45,7 @@ describe('Main, proveedor y diario de saldo real en archivo', () => {
       acquire: async (target) => balanceLease(target),
     },
     withdrawalContext?: BalanceContextProvider,
+    depositContext?: BalanceContextProvider,
   ) {
     const target = balanceTarget();
     const request = balanceRequest(target);
@@ -151,6 +153,13 @@ describe('Main, proveedor y diario de saldo real en archivo', () => {
       service,
       undefined,
       withdrawal,
+      undefined,
+      new DepositService(
+        new FileBalanceJournal(join(directory, 'deposit-executions.json'), 'DEPOSIT'),
+        transport,
+        runtime,
+        depositContext,
+      ),
     );
     return {
       app,
@@ -500,6 +509,97 @@ describe('Main, proveedor y diario de saldo real en archivo', () => {
       value: [],
     });
     expect(f.transport.exchange).not.toHaveBeenCalled();
+  });
+  it('Main enruta depósito por su canal, comparte exclusión y conserva historial propio', async () => {
+    const context = {
+      inspect: async () => ({ ready: true, blockers: [] }),
+      acquire: vi.fn(async (target: ReturnType<typeof balanceTarget>) => ({
+        ...balanceLease(target),
+        amount: target.draft.amount!,
+      })),
+    };
+    const f = await fixture(undefined, undefined, context);
+    const request = {
+      ...f.request,
+      draft: { ...f.request.draft, transaction: 'DEPOSIT' as const, amount: '10.00' },
+    };
+    expect(await f.app.executeBalance(request)).toMatchObject({
+      ok: false,
+      error: { code: 'VALIDATION_ERROR' },
+    });
+    expect(await f.app.executeWithdrawal(request)).toMatchObject({
+      ok: false,
+      error: { code: 'VALIDATION_ERROR' },
+    });
+    expect(await f.app.executeDeposit(f.request)).toMatchObject({
+      ok: false,
+      error: { code: 'VALIDATION_ERROR' },
+    });
+    expect(await f.app.executeDeposit({ ...request, reversalDelaySeconds: 1 })).toMatchObject({
+      ok: false,
+      error: { code: 'VALIDATION_ERROR' },
+    });
+    expect(
+      await f.app.getDepositReadiness({
+        draft: request.draft,
+        cardReadId: request.cardReadId,
+        configurationRevision: request.configurationRevision,
+      }),
+    ).toMatchObject({ ok: true, value: { ready: true } });
+    let release!: () => void;
+    vi.mocked(f.transport.exchange).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () =>
+            resolve({
+              outcome: 'NOT_APPROVED',
+              transmissionAttempted: true,
+              bytesQueued: 500,
+              elapsedMs: 1,
+              responseCode: '12',
+              balances: [],
+            });
+        }),
+    );
+    const pending = f.app.executeDeposit(request);
+    await vi.waitFor(() => expect(f.transport.exchange).toHaveBeenCalledTimes(1));
+    expect(await f.app.executeBalance(f.request)).toMatchObject({
+      ok: false,
+      error: { code: 'CONFLICT' },
+    });
+    expect(await f.app.setEnvironment({ environment: 'PREPROD' })).toMatchObject({
+      ok: false,
+      error: { code: 'CONFLICT' },
+    });
+    release();
+    const result = await pending;
+    expect(result).toMatchObject({
+      ok: true,
+      value: { outcome: 'NOT_APPROVED', deposit: { amount: '10.00' }, responseCode: '12' },
+    });
+    expect(
+      await f.app.getDepositExecution({ environment: 'QA', requestId: request.requestId }),
+    ).toEqual(result);
+    expect(await f.app.getDepositHistory({ environment: 'QA' })).toMatchObject({
+      ok: true,
+      value: [{ deposit: { amount: '10.00' } }],
+    });
+    expect(await f.app.getBalanceHistory({ environment: 'QA' })).toEqual({ ok: true, value: [] });
+    expect(await f.app.getWithdrawalHistory({ environment: 'QA' })).toEqual({
+      ok: true,
+      value: [],
+    });
+    expect(await f.app.executeDeposit(request)).toEqual(result);
+    expect(context.acquire).toHaveBeenCalledTimes(1);
+    f.setEnvironment('PREPROD');
+    expect(await f.app.executeDeposit(request)).toMatchObject({
+      ok: false,
+      error: { code: 'CONFLICT' },
+    });
+    expect(await f.app.getDepositHistory({ environment: 'QA' })).toMatchObject({
+      ok: false,
+      error: { code: 'CONFLICT' },
+    });
   });
   it('termina el retiro 91 en Main y permite otra solicitud con lectura nueva', async () => {
     const acquire = vi.fn(async (target: ReturnType<typeof balanceTarget>) => ({

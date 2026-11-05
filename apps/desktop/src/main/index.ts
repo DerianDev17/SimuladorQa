@@ -24,7 +24,7 @@ import { DesktopApplication } from './application';
 import { FilePreferencesStore } from './infrastructure/preferences-store';
 import { developmentRendererUrl, isTrustedSender } from './security';
 import { WorkerCatalogStore } from './infrastructure/worker-catalog-store';
-import { CmsV36Catalog } from './adapters/cms-v36-catalog';
+import { QaOperationCatalog } from './adapters/qa-operation-catalog';
 import { MediatorSchemaInspector } from './adapters/mediator-schema-inspector';
 import { CapturedEvidenceCatalog } from './adapters/captured-evidence-catalog';
 import { MediatorObserver } from './adapters/mediator-observer';
@@ -32,6 +32,7 @@ import { FileSendConfigurationStore } from './infrastructure/send-configuration-
 import { SendConfigurationService } from './send-configuration-service';
 import { BalanceInquiryService } from './balance-inquiry-service';
 import { SessionMessageStore } from './infrastructure/session-message-store';
+import { DepositService } from './deposit-service';
 import { WithdrawalService } from './withdrawal-service';
 import { WithdrawalReceiptService } from './withdrawal-receipt-service';
 import { ElectronReceiptPrinter } from './adapters/electron-receipt-printer';
@@ -69,6 +70,7 @@ let cardReader: CardReaderMonitor | undefined;
 let switchConnection: QaSwitchConnection | undefined;
 let cardIdentity: CardIdentityService | undefined;
 let balanceService: BalanceInquiryService | undefined;
+let depositService: DepositService | undefined;
 let withdrawalService: WithdrawalService | undefined;
 let withdrawalReceipts: WithdrawalReceiptService | undefined;
 let loadRun: LoadRunService | undefined;
@@ -92,6 +94,7 @@ function reloadDevelopmentWhenIdle(): void {
     loadRun?.isBusy() ||
     balanceService?.isBusy() ||
     withdrawalService?.isBusy() ||
+    depositService?.isBusy() ||
     cardIdentity?.isBusy() ||
     withdrawalReceipts?.isBusy()
   ) {
@@ -315,7 +318,20 @@ void startupReady
       join(app.getPath('userData'), 'withdrawal-executions.json'),
       'WITHDRAWAL',
     );
-    financialJournals = [balanceJournal, withdrawalJournal];
+    const depositJournal = new SqliteBalanceJournal(
+      join(app.getPath('userData'), 'deposit-executions.sqlite'),
+      join(app.getPath('userData'), 'deposit-executions.json'),
+      'DEPOSIT',
+    );
+    depositService = new DepositService(
+      depositJournal,
+      connection.manageTransport(new BalanceTcpTransport('DEPOSIT')),
+      runtime,
+      new QaTemplateContextProvider(template, 'DEPOSIT', cardIdentity, pinEntry, pinCipher),
+      90000,
+      sessionMessages,
+    );
+    financialJournals = [balanceJournal, withdrawalJournal, depositJournal];
     withdrawalService = new WithdrawalService(
       withdrawalJournal,
       connection.manageTransport(withdrawalTransport),
@@ -328,7 +344,7 @@ void startupReady
       preferences,
       runtime,
       catalogs,
-      new CmsV36Catalog(),
+      new QaOperationCatalog(),
       new MediatorSchemaInspector(),
       new CapturedEvidenceCatalog(),
       observer,
@@ -339,6 +355,7 @@ void startupReady
       switchConnection,
       withdrawalService,
       sessionMessages,
+      depositService,
     );
     financialApplication = application;
     loadRunStore = new SqliteLoadRunStore(
@@ -423,6 +440,7 @@ void startupReady
               application.isFinancialBusy() ||
               balanceService?.isBusy() ||
               withdrawalService?.isBusy() ||
+              depositService?.isBusy() ||
               cardIdentity?.isBusy()
             )
               return failure('CONFLICT', 'Espera a que termine la operación actual.');
@@ -505,6 +523,21 @@ void startupReady
             return application.prepareSendPlan(payload);
           case channels.balanceReadiness:
             return application.getBalanceReadiness(payload);
+          case channels.depositReadiness:
+            return application.getDepositReadiness(payload);
+          case channels.depositExecution:
+            return application.getDepositExecution(payload);
+          case channels.depositHistory:
+            return application.getDepositHistory(payload);
+          case channels.executeDeposit:
+            if (developmentReload)
+              return failure(
+                'IN_USE',
+                'Actualizando la aplicación. Espera a que termine el reinicio.',
+              );
+            return application.executeDeposit(payload).finally(() => {
+              void publishReaderSnapshot();
+            });
           case channels.withdrawalReadiness:
             return application.getWithdrawalReadiness(payload);
           case channels.executeWithdrawal:

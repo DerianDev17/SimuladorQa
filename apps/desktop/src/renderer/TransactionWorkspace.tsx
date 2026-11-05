@@ -66,7 +66,7 @@ export function TransactionWorkspace(props: TransactionPreparationProps) {
         ].join(':')
       : undefined,
   );
-  const persisted = mergeExecutionHistory(history.balances, history.withdrawals);
+  const persisted = mergeExecutionHistory(history.balances, history.withdrawals, history.deposits);
   const records =
     snapshot?.environment === 'QA'
       ? mergeExecutionHistory(
@@ -197,7 +197,12 @@ export function TransactionWorkspace(props: TransactionPreparationProps) {
               disabled={recoveringBalance}
               onClick={() => void preparation.recoverBalance()}
             >
-              Consultar resultado de {requestOperation === 'WITHDRAWAL' ? 'retiro' : 'saldo'}
+              Consultar resultado de{' '}
+              {requestOperation === 'DEPOSIT'
+                ? 'depósito'
+                : requestOperation === 'WITHDRAWAL'
+                  ? 'retiro'
+                  : 'saldo'}
             </button>
           )}
           {balanceRequestId && (

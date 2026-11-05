@@ -92,12 +92,14 @@ describe('borrador sin ejecución ni datos de tarjeta', () => {
       operation: { code: '301000' },
     });
   });
-  it('mantiene bloqueados los cinco flujos y cuatro escenarios, sin RC ni mensajes fabricados', () => {
+  it('mantiene bloqueados los flujos documentales y cuatro escenarios, sin RC ni mensajes fabricados', () => {
     for (const transaction of transactions)
       for (const scenario of scenarios) {
         const original = transaction.id === 'REVERSAL' || transaction.id === 'TIMEOUT_REVERSAL';
         const monetary =
-          transaction.id === 'WITHDRAWAL_APPROVED' || transaction.id === 'WITHDRAWAL_DECLINED';
+          transaction.id === 'DEPOSIT' ||
+          transaction.id === 'WITHDRAWAL_APPROVED' ||
+          transaction.id === 'WITHDRAWAL_DECLINED';
         const candidate = {
           ...request,
           transaction: transaction.id,
@@ -112,7 +114,7 @@ describe('borrador sin ejecución ni datos de tarjeta', () => {
         expect(reviewed.specification).toBe(transaction.document);
         expect(reviewed).not.toHaveProperty('responseCode');
         expect(reviewed).not.toHaveProperty('raw');
-        expect(reviewed.operation === null).toBe(original);
+        expect(reviewed.operation === null).toBe(original || transaction.id === 'DEPOSIT');
         expect(reviewed.blockers.map((item) => item.id)).toContain('GOLDEN_SAMPLES');
         if (original)
           expect(reviewed.blockers.map((item) => item.id)).toContain('ORIGINAL_TRANSACTION');

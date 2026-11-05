@@ -91,11 +91,11 @@ export function filterExecutionHistory(
       (!query ||
         normalized(
           [
-            item.withdrawal ? 'Retiro' : 'Consulta de saldo',
+            item.deposit ? 'Depósito' : item.withdrawal ? 'Retiro' : 'Consulta de saldo',
             executionOutcomeLabel(item),
             executionAtm(item, catalog),
             catalog?.atms.find((atm) => atm.id === item.atmId)?.alias ?? '',
-            item.withdrawal?.amount ?? '',
+            item.deposit?.amount ?? item.withdrawal?.amount ?? '',
             item.requestId,
             item.transactionId,
             item.runId,

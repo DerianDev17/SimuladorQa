@@ -51,7 +51,11 @@ export function needsOriginal(transaction: TransactionType): boolean {
   return transaction === 'REVERSAL' || transaction === 'TIMEOUT_REVERSAL';
 }
 export function needsAmount(transaction: TransactionType): boolean {
-  return transaction === 'WITHDRAWAL_APPROVED' || transaction === 'WITHDRAWAL_DECLINED';
+  return (
+    transaction === 'DEPOSIT' ||
+    transaction === 'WITHDRAWAL_APPROVED' ||
+    transaction === 'WITHDRAWAL_DECLINED'
+  );
 }
 
 // Limite tecnico del borrador: 11 digitos enteros y dos decimales.
@@ -170,7 +174,10 @@ export function draftBlockers(
       id: 'AMOUNT_RULES',
       label: 'Reglas financieras del monto',
       description: 'Faltan límites, denominaciones y reglas aprobadas por cuenta y escenario.',
-      document: 'docs/transactions/WITHDRAWAL.md',
+      document:
+        transaction === 'DEPOSIT'
+          ? 'docs/transactions/DEPOSIT.md'
+          : 'docs/transactions/WITHDRAWAL.md',
     });
   return blockers;
 }

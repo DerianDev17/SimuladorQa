@@ -248,7 +248,7 @@ export function TransactionComposer({ preparation }: { preparation: TransactionP
             </small>
           </label>
         )}
-        {monetary && (
+        {monetary && transaction !== 'DEPOSIT' && (
           <details className="composer-extra-options" open={withReversal}>
             <summary>Comprobante y reverso</summary>
             {monetary && (
@@ -361,9 +361,11 @@ export function TransactionComposer({ preparation }: { preparation: TransactionP
           >
             <Icon name="play" size={17} />
             {executingBalance
-              ? requestOperation === 'WITHDRAWAL'
-                ? 'Procesando retiro…'
-                : 'Consultando saldo…'
+              ? requestOperation === 'DEPOSIT'
+                ? 'Procesando depósito…'
+                : requestOperation === 'WITHDRAWAL'
+                  ? 'Procesando retiro…'
+                  : 'Consultando saldo…'
               : 'Ejecutar Transacción'}
           </button>
         </div>

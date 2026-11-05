@@ -43,3 +43,4 @@ Cuando una decisión reemplaza a otra, ambas se conservan para trazabilidad.
 | [035](ADR-035-ISOLATED-DEVELOPMENT-PORT.md) | Puerto local independiente por sesión de desarrollo | Implementado |
 | [036](ADR-036-TRANSACTION-INSPECTION.md) | Preparación e inspección independientes de transacciones | Implementado |
 | [037](ADR-037-QA-SESSION-MESSAGES.md) | Campos completos de QA en memoria temporal | Implementado; excepción solicitada por el operador |
+| [038](ADR-038-QA-DEPOSIT.md) | Depósito de prueba QA con monto vinculado a EMV | Implementado; aceptación host/Core pendiente |
