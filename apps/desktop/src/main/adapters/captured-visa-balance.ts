@@ -3,7 +3,8 @@ import { Buffer } from 'node:buffer';
 import { parseBalanceValues } from './coonecta-balance-rules';
 import type { BalanceValue } from '../../../../../packages/domain/src/balance-inquiry';
 import type { IsoMessage } from '../../../../../packages/domain/src/iso-message';
-import { projectIsoMessage } from './iso-message-projection';
+import { projectIsoMessage, projectSessionIsoMessage } from './iso-message-projection';
+import type { SessionIsoMessage } from '../../../../../packages/shared/src/session-messages';
 
 // ISOBASEI + QA frames 218/224 (balance), 248/254 (withdrawal).
 // Operation selection is explicit; this is not a general ISO codec.
@@ -95,6 +96,14 @@ export class CapturedVisaBalance {
   }
 
   // Main-only views. The caller owns and wipes source; never persist these bytes.
+  sessionMessage(source: Buffer): SessionIsoMessage {
+    return projectSessionIsoMessage(
+      this.inspect(source).mti,
+      this.encodedFields(source),
+      capturedVisaFieldProfile,
+    );
+  }
+
   encodedFields(source: Buffer): Map<number, Buffer> {
     const parsed = this.parse(source);
     return new Map(

@@ -278,6 +278,99 @@ test('formulario compacto: tarjeta física, perfil configurado y opciones', asyn
   );
 });
 
+test('mensajes completos de sesión: valores, máscaras, expiración y fallo de consulta', async () => {
+  test.setTimeout(60000);
+  const window = await prepareBalanceSubmission();
+  const codec = new CapturedVisaBalance();
+  const body = capturedBalanceRequest();
+  const response = balanceResponse(codec.inspect(body));
+  const sample = approvedWithdrawalExecution();
+  delete sample.withdrawal;
+  sample.messages = { request: codec.message(body), response: codec.message(response) };
+  const complete = {
+    requestId: sample.requestId,
+    expiresAt: new Date(Date.now() + 60000).toISOString(),
+    messages: { '0200': codec.sessionMessage(body), '0210': codec.sessionMessage(response) },
+  };
+  await app!.evaluate(
+    ({ ipcMain }, data) => {
+      ipcMain.removeHandler('transaction:balance:history');
+      ipcMain.handle('transaction:balance:history', () => ({ ok: true, value: [data.sample] }));
+      ipcMain.removeHandler('transaction:messages:session');
+      ipcMain.handle('transaction:messages:session', (_event, request) => ({
+        ok: true,
+        value: request.requestId === data.complete.requestId ? data.complete : null,
+      }));
+    },
+    { sample, complete },
+  );
+  await window.getByRole('button', { name: 'Actualizar historial', exact: true }).click();
+  await window.getByRole('button', { name: 'Abrir operación 000123', exact: true }).click();
+  await window.getByRole('tab', { name: 'Mensajes', exact: true }).click();
+  const inspector = window.getByRole('region', {
+    name: 'Mensajería de la transacción',
+    exact: true,
+    includeHidden: true,
+  });
+  const text = inspector.getByLabel('Trama en texto legible');
+  const showAll = inspector.getByRole('checkbox', {
+    name: 'Mostrar todos los valores de esta sesión',
+  });
+  await expect(inspector).toContainText('Valores completos de QA');
+  expect(
+    await text.evaluate((element) => element.textContent!.includes('411111' + '0'.repeat(10))),
+  ).toBe(true);
+  await inspector.getByRole('tab', { name: 'Solicitud (0200)', exact: true }).click();
+  await expect(text).toContainText('F052 · PIN Block = HEX');
+  await inspector.getByRole('button', { name: 'Campos', exact: true }).click();
+  await expect(inspector.getByRole('row').filter({ hasText: 'PIN Block' })).toContainText('HEX');
+  await showAll.uncheck();
+  await expect(inspector.getByRole('row').filter({ hasText: 'PIN Block' })).toContainText(
+    '••••••••',
+  );
+  expect(
+    await inspector.evaluate((element) => element.textContent!.includes('411111' + '0'.repeat(10))),
+  ).toBe(false);
+  await inspector.getByRole('button', { name: 'Texto legible', exact: true }).click();
+  await showAll.check();
+  await expect(inspector).toContainText('Valores completos de QA');
+  await window.getByRole('button', { name: 'Inicio', exact: true }).click();
+  expect(
+    await window.evaluate(() => document.body.textContent!.includes('411111' + '0'.repeat(10))),
+  ).toBe(false);
+  await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
+  await window.getByRole('tab', { name: 'Mensajes', exact: true }).click();
+  await expect(inspector).toContainText('Valores completos de QA');
+  await inspector.getByRole('tab', { name: 'Solicitud (0200)', exact: true }).click();
+  await window.getByRole('tab', { name: 'Flujo', exact: true }).click();
+  expect(
+    await window.evaluate(() => document.body.textContent!.includes('411111' + '0'.repeat(10))),
+  ).toBe(false);
+  await app!.evaluate(({ ipcMain }, value) => {
+    ipcMain.removeHandler('transaction:messages:session');
+    ipcMain.handle('transaction:messages:session', () => ({
+      ok: true,
+      value: { ...value, expiresAt: new Date(Date.now() + 1500).toISOString() },
+    }));
+  }, complete);
+  await window.getByRole('tab', { name: 'Mensajes', exact: true }).click();
+  await expect(inspector).toContainText('Valores completos de QA');
+  await expect(inspector).toContainText('El original sin máscara no está disponible');
+  expect(
+    await text.evaluate((element) => element.textContent!.includes('411111' + '0'.repeat(10))),
+  ).toBe(false);
+  await app!.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('transaction:messages:session');
+    ipcMain.handle('transaction:messages:session', () => ({
+      ok: false,
+      error: { code: 'TIMEOUT', message: 'Consulta de sesión sin respuesta' },
+    }));
+  });
+  await inspector.getByRole('button', { name: 'Actualizar mensajes de sesión' }).click();
+  await expect(inspector).toContainText('Consulta de sesión sin respuesta');
+  await expect(text).toContainText('F052 · PIN Block = ••••••••');
+});
+
 test('mensajería ISO junto al resultado: campos reales, pestañas y pantalla estrecha', async () => {
   test.setTimeout(60000);
   const window = await prepareBalanceSubmission();

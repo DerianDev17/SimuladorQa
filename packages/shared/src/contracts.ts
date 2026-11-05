@@ -60,8 +60,10 @@ import type {
   ReceiptPrintStatus,
   WithdrawalReceiptRequest,
 } from '../../domain/src/withdrawal-receipt';
+import type { SessionMessages } from './session-messages';
 
 export const channels = {
+  sessionMessages: 'transaction:messages:session',
   snapshot: 'app:snapshot',
   switchConnection: 'switch:connection:status',
   connectSwitch: 'switch:connection:connect',
@@ -172,6 +174,10 @@ export interface PreparedSendPlan {
 }
 
 export interface DesktopApi {
+  getSessionMessages(request: {
+    environment: 'QA';
+    requestId: string;
+  }): Promise<Result<SessionMessages | null>>;
   getSnapshot(): Promise<Result<AppSnapshot>>;
   getSwitchConnection(environment: Environment): Promise<Result<SwitchConnectionSnapshot>>;
   connectSwitch(environment: Environment): Promise<Result<SwitchConnectionSnapshot>>;

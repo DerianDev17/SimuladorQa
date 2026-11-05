@@ -2,6 +2,7 @@ import { FinancialExecutionService } from './financial-execution-service';
 import { NewVisaBalance } from './adapters/new-visa-balance';
 import type { BalanceContextProvider, BalanceJournal, BalanceTransport } from './balance-ports';
 import type { RuntimeIdentity } from './ports';
+import type { SessionMessagePort } from './session-message-port';
 
 // Composition facade: preserve the balance API while the shared engine owns execution.
 export class BalanceInquiryService extends FinancialExecutionService {
@@ -11,6 +12,7 @@ export class BalanceInquiryService extends FinancialExecutionService {
     identity: RuntimeIdentity,
     context?: BalanceContextProvider,
     contextDeadlineMs = 5000,
+    sessionMessages?: SessionMessagePort,
   ) {
     super(
       journal,
@@ -20,6 +22,7 @@ export class BalanceInquiryService extends FinancialExecutionService {
       context,
       contextDeadlineMs,
       'BALANCE',
+      sessionMessages,
     );
   }
 }

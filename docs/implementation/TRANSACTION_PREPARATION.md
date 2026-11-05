@@ -1,5 +1,21 @@
 # Preparacion documental de transacciones
 
+## Valores completos de sesión QA — 2026-11-05
+
+Por solicitud del operador, **Mostrar todos los valores de esta sesión** permite
+consultar todos los campos sin máscara en Texto legible y Campos. Se activa por
+defecto para mensajes nuevos de QA capturados con esta versión. Binarios se muestran
+en HEX; PIN Block y criptogramas permanecen cifrados como en la trama original.
+No incluye el PIN ingresado ni claves. Ver [ADR-037](../adr/ADR-037-QA-SESSION-MESSAGES.md).
+
+La copia completa vive solo en memoria: últimas 20 solicitudes, máximo 15 minutos
+desde su captura, hasta cambiar ambiente o cerrar la app. El historial y las
+exportaciones conservan su versión protegida. Desactivar la opción vuelve a esa
+versión. Salir de Mensajes retira los valores completos de la vista; reabrir consulta
+su disponibilidad. Un error permite actualizar sin reenviar la transacción.
+Registros anteriores o vencidos no se pueden desofuscar: se explica la ausencia
+del original en lugar de completar valores con datos ajenos.
+
 ## REQ y RESP en texto legible — 2026-11-05
 
 Mensajes abre por defecto **Texto legible**: identifica REQ/RESP, MTI y cada

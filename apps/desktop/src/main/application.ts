@@ -50,6 +50,8 @@ import type { BalanceTarget } from './balance-ports';
 import { missingBalanceContext, loadExecutionScope } from './financial-execution-context';
 import type { BalanceExecutionContext } from './financial-execution-context';
 import type { FinancialExecutionPort } from './financial-execution-port';
+import type { SessionMessagePort } from './session-message-port';
+import type { SessionMessages } from '../../../../packages/shared/src/session-messages';
 import type { SwitchConnectionPort } from './switch-connection-port';
 import type { SwitchConnectionSnapshot } from '../../../../packages/domain/src/switch-connection';
 import {
@@ -88,6 +90,7 @@ export class DesktopApplication {
     private readonly balanceInquiry?: FinancialExecutionPort,
     private readonly switchConnection?: SwitchConnectionPort,
     private readonly withdrawalService?: FinancialExecutionPort,
+    private readonly sessionMessages?: SessionMessagePort,
   ) {}
 
   private serialize<T>(operation: () => Promise<T>): Promise<T> {
@@ -161,6 +164,7 @@ export class DesktopApplication {
           ].slice(-100),
         };
         await this.store.write(next);
+        this.sessionMessages?.clear();
         this.switchConnection?.disconnect('ENVIRONMENT_CHANGED');
         this.environmentRevision++;
         return { ok: true, value: this.snapshot(next) };
@@ -689,6 +693,30 @@ export class DesktopApplication {
           : failure('SERVICE_UNAVAILABLE', 'El servicio de ejecución no está disponible.');
       } catch {
         return failure('STORAGE_UNAVAILABLE', 'No se pudo recuperar el resultado.');
+      }
+    });
+  }
+
+  getSessionMessages(payload: unknown): Promise<Result<SessionMessages | null>> {
+    return this.serialize(async () => {
+      if (
+        !isRecord(payload) ||
+        Object.keys(payload).length !== 2 ||
+        payload.environment !== 'QA' ||
+        !isUuid(payload.requestId)
+      )
+        return failure('VALIDATION_ERROR', 'Revisa el ambiente QA y la referencia de ejecución.');
+      try {
+        if ((await this.store.read()).environment !== 'QA')
+          return failure(
+            'CONFLICT',
+            'Los mensajes completos de sesión están disponibles solo en QA.',
+          );
+        return this.sessionMessages
+          ? { ok: true, value: this.sessionMessages.read(payload.requestId) }
+          : failure('SERVICE_UNAVAILABLE', 'La vista completa de sesión no está disponible.');
+      } catch {
+        return failure('SERVICE_UNAVAILABLE', 'No se pudieron consultar los mensajes de sesión.');
       }
     });
   }

@@ -8,17 +8,23 @@ import {
 import { Icon } from './Icon';
 import type { InspectionMessage } from './transaction-inspection';
 import { formatIsoMessageText } from './transaction-message-text';
+import type { DesktopClient } from './desktop-client';
+import { useSessionMessages } from './useSessionMessages';
 
 export function TransactionMessageView({
   execution,
   selectedMessage,
   onSelectMessage,
   messageAlternative,
+  client,
+  visible = true,
 }: {
   execution: BalanceExecution;
   selectedMessage?: InspectionMessage | undefined;
   onSelectMessage?: (message: InspectionMessage) => void;
   messageAlternative?: { label: string; open: () => void } | undefined;
+  client?: DesktopClient | undefined;
+  visible?: boolean;
 }) {
   const tabs: {
     key: InspectionMessage;
@@ -68,13 +74,16 @@ export function TransactionMessageView({
   }
   const [expanded, setExpanded] = useState(false);
   const [format, setFormat] = useState<'text' | 'fields'>('text');
+  const [complete, setComplete] = useState(true);
+  const session = useSessionMessages(client, execution, visible && complete);
   const [fieldSelection, setFieldSelection] = useState<{ message: string; number: number }>();
   // Follow progress until the operator explicitly selects a message.
   const active =
     tabs.find((tab) => tab.key === selected) ??
     [...tabs].reverse().find((tab) => tab.message) ??
     tabs[0]!;
-  const { message } = active;
+  const fullMessage = active.message ? session.value?.messages[active.message.mti] : undefined;
+  const message = fullMessage ?? active.message;
   const selectedField =
     fieldSelection?.message === active.key
       ? message?.fields.find((field) => field.number === fieldSelection.number)
@@ -158,6 +167,29 @@ export function TransactionMessageView({
                 Campos
               </button>
             </div>
+            <div className="message-session">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={complete}
+                  onChange={(event) => setComplete(event.target.checked)}
+                />
+                Mostrar todos los valores de esta sesión
+              </label>
+              {complete && (
+                <p role="status">
+                  {fullMessage
+                    ? 'Valores completos de QA · solo en memoria durante 15 minutos. Binarios en HEX; PIN Block y criptogramas conservan su cifrado.'
+                    : (session.error ??
+                      'El original sin máscara no está disponible en esta sesión. Se muestra la versión protegida del diario; las máscaras guardadas no se pueden deshacer.')}
+                </p>
+              )}
+              {complete && !fullMessage && client && (
+                <button className="text-button" onClick={session.refresh}>
+                  Actualizar mensajes de sesión
+                </button>
+              )}
+            </div>
             {format === 'text' && (
               <pre className="message-readable" aria-label="Trama en texto legible" tabIndex={0}>
                 {formatIsoMessageText(message)}
@@ -234,7 +266,10 @@ export function TransactionMessageView({
                         {tags.map((tag) => (
                           <tr key={tag.tag}>
                             <td>{tag.tag}</td>
-                            <td>{publicEmvTags[tag.tag]?.label ?? 'Dato protegido'}</td>
+                            <td>
+                              {publicEmvTags[tag.tag]?.label ??
+                                (fullMessage ? 'Tag EMV' : 'Dato protegido')}
+                            </td>
                             <td className="iso-field-value">{tag.value}</td>
                           </tr>
                         ))}
@@ -303,7 +338,10 @@ export function TransactionMessageView({
         )}
       </div>
       <p className="inspector-footnote">
-        <Icon name="shield" size={14} /> PAN enmascarado · PIN, Track 2 y criptogramas protegidos
+        <Icon name="shield" size={14} />{' '}
+        {fullMessage
+          ? 'Vista completa temporal · el historial conserva la versión protegida'
+          : 'PAN enmascarado · PIN, Track 2 y criptogramas protegidos'}
       </p>
       <p className="message-correlation">
         STAN {execution.correlation?.stan ?? '—'} · RRN {execution.correlation?.rrn ?? '—'}

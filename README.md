@@ -9,6 +9,10 @@ historial local combina saldos y retiros y permite seleccionar una operación
 sin modificar el borrador. Ver [preparación](docs/implementation/TRANSACTION_PREPARATION.md)
 y [ADR-036](docs/adr/ADR-036-TRANSACTION-INSPECTION.md).
 
+Mensajes permite ver todos los campos de nuevas operaciones QA durante la sesión,
+en texto o HEX según su codificación. La copia completa dura hasta 15 minutos y
+el historial conserva las máscaras; ver [ADR-037](docs/adr/ADR-037-QA-SESSION-MESSAGES.md).
+
 Estado documentado: **2026-11-03**. Consultar el [backlog](docs/BACKLOG.md) para
 distinguir desarrollo pendiente de validación con hardware, Switch y Core.
 

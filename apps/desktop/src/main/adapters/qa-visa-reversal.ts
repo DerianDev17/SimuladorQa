@@ -1,7 +1,8 @@
 import { CapturedVisaBalance, capturedVisaFieldProfile } from './captured-visa-balance';
 import { CapturedVisaFraming } from '../infrastructure/captured-visa-framing';
 import { parseCardTlv } from './emv-card-identity';
-import { projectIsoMessage } from './iso-message-projection';
+import { projectIsoMessage, projectSessionIsoMessage } from './iso-message-projection';
+import type { SessionIsoMessage } from '../../../../../packages/shared/src/session-messages';
 import type { DisplayFieldProfile } from './iso-message-projection';
 import type { IsoMessage } from '../../../../../packages/domain/src/iso-message';
 
@@ -234,6 +235,21 @@ export class QaVisaReversal {
   }
 
   requestMessage(wire: Buffer): IsoMessage {
+    return this.projectRequest(wire, projectIsoMessage);
+  }
+
+  requestSessionMessage(wire: Buffer): SessionIsoMessage {
+    return this.projectRequest(wire, projectSessionIsoMessage);
+  }
+
+  private projectRequest<T extends IsoMessage>(
+    wire: Buffer,
+    project: (
+      mti: IsoMessage['mti'],
+      fields: ReadonlyMap<number, Buffer>,
+      profiles: Readonly<Record<number, DisplayFieldProfile>>,
+    ) => T,
+  ): T {
     // build() uses the existing four-byte VISA envelope. Decode it using that
     // framing adapter, never assuming that an arbitrary received body is valid.
     const decoder = new CapturedVisaFraming().decoder();
@@ -241,11 +257,7 @@ export class QaVisaReversal {
     try {
       decoder.finish();
       if (frames.length !== 1) fail();
-      return projectIsoMessage(
-        '0420',
-        this.readFields(frames[0]!.opaqueBody, 0x0420),
-        reversalFieldProfile,
-      );
+      return project('0420', this.readFields(frames[0]!.opaqueBody, 0x0420), reversalFieldProfile);
     } finally {
       for (const frame of frames) {
         frame.opaqueBody.fill(0);
@@ -257,6 +269,11 @@ export class QaVisaReversal {
   responseMessage(body: Buffer): IsoMessage | undefined {
     if (this.response(body) === undefined) return undefined;
     return projectIsoMessage('0430', this.readFields(body, 0x0430), reversalFieldProfile);
+  }
+
+  responseSessionMessage(body: Buffer): SessionIsoMessage | undefined {
+    if (this.response(body) === undefined) return undefined;
+    return projectSessionIsoMessage('0430', this.readFields(body, 0x0430), reversalFieldProfile);
   }
 
   private readFields(body: Buffer, mti: 0x0420 | 0x0430): Map<number, Buffer> {

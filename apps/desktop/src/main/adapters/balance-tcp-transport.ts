@@ -8,6 +8,7 @@ import type {
 import { CapturedVisaFraming } from '../infrastructure/captured-visa-framing';
 import { CapturedVisaBalance } from './captured-visa-balance';
 import { VisaNetworkManagement } from './visa-network-management';
+import { captureSessionMessage, captureSessionRequest } from './session-message-capture';
 
 // Single financial write. No automatic retries, reconnection, 0810 or reversals.
 export class BalanceTcpTransport implements BalanceTransport {
@@ -68,6 +69,7 @@ export class BalanceTcpTransport implements BalanceTransport {
         }
       }
     }
+    captureSessionRequest(request, codec);
     const network = new VisaNetworkManagement();
     return new Promise((resolve) => {
       const socket = new Socket();
@@ -187,6 +189,7 @@ export class BalanceTcpTransport implements BalanceTransport {
             )
               continue;
             responseMessage = codec.message(body);
+            captureSessionMessage(request, () => codec.sessionMessage(body));
             const response = codec.response(body);
             if (this.operation === 'WITHDRAWAL') {
               // 91 is a completed host non-approval (MDT_StandardRetCode).

@@ -32,6 +32,7 @@ import {
 import { balanceContextErrorLabels } from './balance-context-errors';
 import { parseWithdrawalReversal } from '../../../../packages/domain/src/withdrawal-reversal';
 import { parseIsoMessage } from '../../../../packages/domain/src/iso-message';
+import type { SessionMessagePort } from './session-message-port';
 
 function release(lease: BalanceContextLease): void {
   lease.header.fill(0);
@@ -57,6 +58,7 @@ export class FinancialExecutionService implements FinancialExecutionPort {
     private readonly context?: BalanceContextProvider,
     private readonly contextDeadlineMs = 5000,
     private readonly operation: 'BALANCE' | 'WITHDRAWAL' = 'BALANCE',
+    private readonly sessionMessages?: SessionMessagePort,
   ) {}
 
   isBusy(): boolean {
@@ -435,6 +437,12 @@ export class FinancialExecutionService implements FinancialExecutionPort {
       transportStarted = true;
       const result = await measure('transport', async () => {
         const exchange = this.transport.exchange({
+          ...(this.sessionMessages
+            ? {
+                onSessionMessage: (message) =>
+                  this.sessionMessages!.capture(request.requestId, message),
+              }
+            : {}),
           environment: 'QA',
           endpoint: { ...target.endpoint },
           wire: wire!,

@@ -6,6 +6,7 @@ import { TransactionMessageView } from './TransactionMessageView';
 import { TransactionFlowView } from './TransactionFlowView';
 import { TransactionDocumentation } from './TransactionDocumentation';
 import type { InspectionMessage } from './transaction-inspection';
+import type { DesktopClient } from './desktop-client';
 
 const tabs = [
   ['flow', 'Flujo'],
@@ -23,6 +24,8 @@ export function TransactionInspection({
   documentation,
   initialTab,
   messageAlternative,
+  client,
+  visible = true,
 }: {
   execution: BalanceExecution | undefined;
   snapshot: AppSnapshot | undefined;
@@ -33,6 +36,8 @@ export function TransactionInspection({
   documentation: ReactNode;
   initialTab?: 'messages' | undefined;
   messageAlternative?: { label: string; open: () => void } | undefined;
+  client?: DesktopClient | undefined;
+  visible?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>(initialTab ?? 'flow');
   const [message, setMessage] = useState<InspectionMessage>();
@@ -109,6 +114,8 @@ export function TransactionInspection({
             selectedMessage={message}
             onSelectMessage={setMessage}
             messageAlternative={messageAlternative}
+            client={client}
+            visible={visible && tab === 'messages'}
           />
         ) : (
           <p className="inspection-empty">

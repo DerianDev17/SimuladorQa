@@ -4,6 +4,7 @@ import { channels, desktopEvents } from '../../../packages/shared/src/contracts'
 import type { DesktopApi } from '../../../packages/shared/src/contracts';
 
 const api: DesktopApi = Object.freeze<DesktopApi>({
+  getSessionMessages: (request) => ipcRenderer.invoke(channels.sessionMessages, request),
   getSnapshot: () => ipcRenderer.invoke(channels.snapshot),
   getSwitchConnection: (environment) =>
     ipcRenderer.invoke(channels.switchConnection, { environment }),

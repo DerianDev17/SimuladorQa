@@ -86,6 +86,14 @@ Fuentes: [ADR-028](docs/adr/ADR-028-LOAD-PREPARATION-REUSE.md),
 
 ## Seguridad y perfiles
 
+Excepción de visualización QA autorizada el 2026-11-05: el puerto
+`SessionMessagePort` recibe diagnósticos de los adaptadores y conserva hasta 20
+solicitudes/15 minutos solo en memoria de Main. IPC dedicado valida ambiente,
+UUID y emisor antes de entregar campos completos temporalmente a Mensajes.
+No modifica `BalanceExecution`, diarios, logs ni exportaciones. El cierre y el
+cambio de ambiente limpian la copia; Renderer retira datos al ocultar/caducar.
+Ver [ADR-037](docs/adr/ADR-037-QA-SESSION-MESSAGES.md).
+
 Renderer no abre sockets ni accede a secretos. Los valores públicos están
 sanitizados y el PAN enmascarado; no se registran PIN, CVV, PIN Block ni Track 2.
 Producción permanece bloqueada. QA y PREPROD mantienen validación de ambiente.

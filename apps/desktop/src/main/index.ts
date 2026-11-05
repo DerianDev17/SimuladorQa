@@ -31,6 +31,7 @@ import { MediatorObserver } from './adapters/mediator-observer';
 import { FileSendConfigurationStore } from './infrastructure/send-configuration-store';
 import { SendConfigurationService } from './send-configuration-service';
 import { BalanceInquiryService } from './balance-inquiry-service';
+import { SessionMessageStore } from './infrastructure/session-message-store';
 import { WithdrawalService } from './withdrawal-service';
 import { WithdrawalReceiptService } from './withdrawal-receipt-service';
 import { ElectronReceiptPrinter } from './adapters/electron-receipt-printer';
@@ -124,6 +125,7 @@ async function publishReaderSnapshot(): Promise<void> {
 }
 
 app.setName('Coonecta ATM Simulator');
+const sessionMessages = new SessionMessageStore();
 // Solo se permite redirigir datos locales al lanzar tests con una carpeta temporal explícita.
 const dataArgument = process.argv.find((argument) => argument.startsWith('--user-data-dir='));
 if (dataArgument) app.setPath('userData', dataArgument.slice('--user-data-dir='.length));
@@ -305,6 +307,7 @@ void startupReady
       runtime,
       balanceContexts,
       90000,
+      sessionMessages,
     );
     const withdrawalTransport = new WithdrawalReversalTransport();
     const withdrawalJournal = new SqliteBalanceJournal(
@@ -318,6 +321,8 @@ void startupReady
       connection.manageTransport(withdrawalTransport),
       runtime,
       withdrawalContexts,
+      90000,
+      sessionMessages,
     );
     const application = new DesktopApplication(
       preferences,
@@ -333,6 +338,7 @@ void startupReady
       balanceService,
       switchConnection,
       withdrawalService,
+      sessionMessages,
     );
     financialApplication = application;
     loadRunStore = new SqliteLoadRunStore(
@@ -529,6 +535,8 @@ void startupReady
             return application.getBalanceExecution(payload);
           case channels.balanceHistory:
             return application.getBalanceHistory(payload);
+          case channels.sessionMessages:
+            return application.getSessionMessages(payload);
           case channels.observations:
             return application.searchObservations(payload);
           case channels.mediatorLive:
@@ -592,6 +600,7 @@ app.on('before-quit', (event) => {
     } finally {
       try {
         switchConnection?.disconnect('APP_CLOSED');
+        sessionMessages.clear();
         observer?.close();
         cardReader?.close();
         cardIdentity?.close();

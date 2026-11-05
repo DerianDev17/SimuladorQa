@@ -12,6 +12,7 @@ import { CapturedVisaBalance } from './captured-visa-balance';
 import { BalanceTcpTransport } from './balance-tcp-transport';
 import { QaVisaReversal } from './qa-visa-reversal';
 import { VisaNetworkManagement } from './visa-network-management';
+import { captureSessionMessage } from './session-message-capture';
 
 // One connection, exactly one 0200 and at most one 0420. No retries/reconnects.
 export class WithdrawalReversalTransport implements BalanceTransport {
@@ -75,6 +76,7 @@ export class WithdrawalReversalTransport implements BalanceTransport {
         throw Error('REVERSAL_ORIGINAL_INVALID');
       // Fail before the withdrawal when the paired reversal cannot be constructed.
       reversal = new QaVisaReversal(request.wire);
+      captureSessionMessage(request, () => codec.sessionMessage(originals[0]!.opaqueBody));
     } catch {
       return unsent();
     } finally {
@@ -150,6 +152,7 @@ export class WithdrawalReversalTransport implements BalanceTransport {
         try {
           reversalWire = reversal.build(approvedBody!);
           progress.messages = { request: reversal.requestMessage(reversalWire) };
+          captureSessionMessage(request, () => reversal.requestSessionMessage(reversalWire!));
           approvedBody!.fill(0);
           approvedBody = undefined;
           progress.outcome = 'SENDING';
@@ -226,6 +229,7 @@ export class WithdrawalReversalTransport implements BalanceTransport {
               const code = reversal.response(body);
               if (code === undefined) continue;
               const message = reversal.responseMessage(body);
+              captureSessionMessage(request, () => reversal.responseSessionMessage(body));
               if (message && progress.messages) progress.messages.response = message;
               progress.responseCode = code;
               progress.outcome = code === '00' ? 'APPROVED' : 'NOT_APPROVED';
@@ -244,6 +248,7 @@ export class WithdrawalReversalTransport implements BalanceTransport {
             )
               continue;
             responseMessage = codec.message(body);
+            captureSessionMessage(request, () => codec.sessionMessage(body));
             const response = codec.response(body);
             if (metadata.responseCode !== '00' || metadata.amount !== expected.amount) {
               finish(

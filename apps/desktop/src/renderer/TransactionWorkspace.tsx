@@ -212,6 +212,8 @@ export function TransactionWorkspace(props: TransactionPreparationProps) {
             snapshot={snapshot}
             persisted={saved}
             onReceipt={onReceipt}
+            client={client}
+            visible={props.visible}
             initialTab={selection?.context === context ? selection.tab : undefined}
             messageAlternative={
               latestMessages && !inspected?.messages
