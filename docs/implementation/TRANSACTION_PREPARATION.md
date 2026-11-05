@@ -1,5 +1,25 @@
 # Preparacion documental de transacciones
 
+## REQ y RESP en texto legible — 2026-11-05
+
+Mensajes abre por defecto **Texto legible**: identifica REQ/RESP, MTI y cada
+campo ISO con su número, descripción y valor guardado. Incluye los tags EMV
+públicos y mantiene las máscaras de ADR-030. **Campos** conserva la tabla y el
+detalle individual. Las pestañas permiten consultar 0200/0210 y 0420/0430.
+El texto procede de la proyección pública del mensaje real; no representa bytes
+RAW ni reconstruye el wire. No cambia el envío ni el formato del diario.
+
+Una operación histórica sin mensajes explica que no se pueden recuperar del
+diario. Si hay otra operación con mensajes en el historial cargado, ofrece abrir
+la última con REQ/RESP (o la última con REQ si no hay pares). El botón identifica
+su STAN, cambia la operación inspeccionada y abre Mensajes; conserva el borrador
+y no realiza un envío. No rellena tramas antiguas con datos de otras operaciones.
+Timeout o respuesta ajena mantienen únicamente la solicitud realmente guardada.
+
+Validación: formato público, máscaras, ausencia de mensajería, timeout, recuperación
+SQLite tras TCP local, navegación Electron, acceso al registro con mensajes,
+conservación del borrador y presentación estrecha. Datos sintéticos; sin host QA.
+
 ## Inspección interactiva — 2026-11-04
 
 La disposición vigente es preparación compacta y resultado con pestañas

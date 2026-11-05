@@ -43,7 +43,11 @@ export function TransactionWorkspace(props: TransactionPreparationProps) {
     discardDialog,
   } = preparation;
   const [focus, setFocus] = useState(false);
-  const [selection, setSelection] = useState<{ id: string; context: string }>();
+  const [selection, setSelection] = useState<{
+    id: string;
+    context: string;
+    tab?: 'messages';
+  }>();
   const context = `${snapshot?.environment}:${preparation.inspectionGeneration}`;
   useEffect(() => {
     if (balanceExecution?.requestId && balanceExecution.environment === snapshot?.environment)
@@ -76,6 +80,8 @@ export function TransactionWorkspace(props: TransactionPreparationProps) {
       item.requestId ===
       (selection?.context === context ? selection.id : balanceExecution?.requestId),
   );
+  const latestMessages =
+    records.find((item) => item.messages?.response) ?? records.find((item) => item.messages);
   const saved =
     !!inspected &&
     persisted.some(
@@ -90,8 +96,8 @@ export function TransactionWorkspace(props: TransactionPreparationProps) {
     const preview = createWithdrawalReceipt(execution);
     if (preview) preparation.setReceipt(preview);
   }
-  function selectExecution(item: BalanceExecution) {
-    setSelection({ id: item.requestId, context });
+  function selectExecution(item: BalanceExecution, tab?: 'messages') {
+    setSelection({ id: item.requestId, context, ...(tab ? { tab } : {}) });
     reviewHeading.current?.focus({ preventScroll: true });
     reviewHeading.current?.closest('.transaction-result-panel')?.scrollIntoView({
       block: 'start',
@@ -206,6 +212,15 @@ export function TransactionWorkspace(props: TransactionPreparationProps) {
             snapshot={snapshot}
             persisted={saved}
             onReceipt={onReceipt}
+            initialTab={selection?.context === context ? selection.tab : undefined}
+            messageAlternative={
+              latestMessages && !inspected?.messages
+                ? {
+                    label: `Abrir última operación con mensajes · STAN ${latestMessages.correlation?.stan ?? 'no disponible'}`,
+                    open: () => selectExecution(latestMessages, 'messages'),
+                  }
+                : undefined
+            }
             caseVerdict={
               verdict && caseRun ? (
                 <section className="document-note" aria-label="Evaluación del caso">

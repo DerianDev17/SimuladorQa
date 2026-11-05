@@ -22,6 +22,7 @@ import {
   mergeExecutionHistory,
 } from '../../apps/desktop/src/renderer/transaction-inspection';
 import { removeTestDirectory } from '../helpers/temporary-directory';
+import { formatIsoMessageText } from '../../apps/desktop/src/renderer/transaction-message-text';
 
 describe('mensajería real por TCP local, servicio y persistencia', () => {
   it.each(['APPROVED', 'NOT_APPROVED', 'RESPONSE_TIMEOUT', 'UNRELATED', 'WITHDRAWAL'] as const)(
@@ -109,6 +110,16 @@ describe('mensajería real por TCP local, servicio y persistencia', () => {
         journal = new SqliteBalanceJournal(path, legacy, operation);
         const recovered = (await journal.read())[0]!;
         expect(recovered.messages).toEqual(result.value.messages);
+        expect(formatIsoMessageText(recovered.messages!.request)).toContain('REQ · ISO8583');
+        expect(formatIsoMessageText(recovered.messages!.request)).toContain(
+          `F011 · STAN = ${recovered.correlation!.stan}`,
+        );
+        if (recovered.messages?.response) {
+          expect(formatIsoMessageText(recovered.messages.response)).toContain('RESP · ISO8583');
+          expect(formatIsoMessageText(recovered.messages.response)).toContain(
+            `F039 · Código de respuesta = ${recovered.responseCode}`,
+          );
+        }
         const inspected = mergeExecutionHistory([recovered], [result.value])[0]!;
         expect(
           executionStages(inspected, true).find((stage) => stage.id === 'response')?.state,

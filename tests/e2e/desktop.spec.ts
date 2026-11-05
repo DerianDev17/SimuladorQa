@@ -107,6 +107,8 @@ test('inspección interactiva: historial independiente, flujo, evidencia y fallo
   await expect(
     inspector.getByRole('tab', { name: 'Respuesta (0210)', exact: true }),
   ).toHaveAttribute('aria-selected', 'true');
+  await expect(inspector.getByLabel('Trama en texto legible')).toContainText('RESP · ISO8583');
+  await inspector.getByRole('button', { name: 'Campos', exact: true }).click();
   await inspector.getByRole('button', { name: 'Ver detalle del campo 39', exact: true }).click();
   await expect(
     inspector.getByRole('region', { name: 'Detalle del campo seleccionado' }),
@@ -136,6 +138,19 @@ test('inspección interactiva: historial independiente, flujo, evidencia y fallo
   await expect(history.locator('tbody tr')).toHaveCount(1);
   await history.getByRole('button', { name: 'Limpiar filtros', exact: true }).click();
   await expect(history.locator('tbody tr')).toHaveCount(3);
+  await history.getByRole('button', { name: 'Abrir operación 000124', exact: true }).click();
+  await result.getByRole('tab', { name: 'Mensajes', exact: true }).click();
+  await expect(inspector).toContainText('REQ y RESP no se pueden recuperar del diario local');
+  await expect(inspector.getByLabel('Trama en texto legible')).toHaveCount(0);
+  await inspector
+    .getByRole('button', { name: 'Abrir última operación con mensajes · STAN 000123', exact: true })
+    .click();
+  await expect(result.getByRole('tab', { name: 'Mensajes', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(inspector.getByLabel('Trama en texto legible')).toContainText('RESP · ISO8583');
+  await expect(window.getByLabel('Monto de prueba')).toHaveValue('75.25');
   await history.getByRole('button', { name: 'Abrir operación 000123', exact: true }).click();
   await window.evaluate(() => globalThis.window.scrollTo(0, 0));
   await mkdir('artifacts', { recursive: true });
@@ -308,6 +323,18 @@ test('mensajería ISO junto al resultado: campos reales, pestañas y pantalla es
     'aria-selected',
     'true',
   );
+  await expect(inspector.getByLabel('Trama en texto legible')).toContainText('RESP · ISO8583');
+  await expect(inspector.getByLabel('Trama en texto legible')).toContainText(
+    'F039 · Código de respuesta = 00',
+  );
+  await inspector.getByRole('tab', { name: 'Solicitud (0200)' }).click();
+  await expect(inspector.getByLabel('Trama en texto legible')).toContainText('REQ · ISO8583');
+  await expect(inspector.getByLabel('Trama en texto legible')).toContainText('411111XXXXXX0000');
+  await expect(inspector.getByLabel('Trama en texto legible')).toContainText(
+    'PIN Block = ••••••••',
+  );
+  await inspector.getByRole('tab', { name: 'Respuesta (0210)' }).click();
+  await inspector.getByRole('button', { name: 'Campos', exact: true }).click();
   await expect(inspector.getByRole('row').filter({ hasText: 'Código de respuesta' })).toContainText(
     '00',
   );
@@ -361,6 +388,7 @@ test('mensajería ISO junto al resultado: campos reales, pestañas y pantalla es
   await app!.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0]?.setContentSize(1024, 768),
   );
+  await inspector.getByRole('button', { name: 'Texto legible', exact: true }).click();
   expect(await window.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
     true,
   );
@@ -915,6 +943,11 @@ test('retiro con reverso: cuenta regresiva, resultado separado y comprobante', a
     'aria-selected',
     'true',
   );
+  await expect(inspector.getByLabel('Trama en texto legible')).toContainText('MTI = 0430');
+  await inspector.getByRole('tab', { name: 'Reverso (0420)' }).click();
+  await expect(inspector.getByLabel('Trama en texto legible')).toContainText('MTI = 0420');
+  await inspector.getByRole('tab', { name: 'Respuesta reverso (0430)' }).click();
+  await inspector.getByRole('button', { name: 'Campos', exact: true }).click();
   await expect(
     inspector.getByRole('table', { name: 'Campos del mensaje', exact: true }),
   ).toContainText('0430');

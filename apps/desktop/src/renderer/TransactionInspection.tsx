@@ -21,6 +21,8 @@ export function TransactionInspection({
   caseVerdict,
   empty,
   documentation,
+  initialTab,
+  messageAlternative,
 }: {
   execution: BalanceExecution | undefined;
   snapshot: AppSnapshot | undefined;
@@ -29,8 +31,10 @@ export function TransactionInspection({
   caseVerdict?: ReactNode;
   empty: ReactNode;
   documentation: ReactNode;
+  initialTab?: 'messages' | undefined;
+  messageAlternative?: { label: string; open: () => void } | undefined;
 }) {
-  const [tab, setTab] = useState<Tab>('flow');
+  const [tab, setTab] = useState<Tab>(initialTab ?? 'flow');
   const [message, setMessage] = useState<InspectionMessage>();
   const id = useId();
   return (
@@ -104,6 +108,7 @@ export function TransactionInspection({
             execution={execution}
             selectedMessage={message}
             onSelectMessage={setMessage}
+            messageAlternative={messageAlternative}
           />
         ) : (
           <p className="inspection-empty">
