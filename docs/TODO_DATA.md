@@ -9,6 +9,7 @@ La columna `Referencias` apunta a los documentos que explican el alcance.
 
 | ID                                | Referencias                                                                                       |
 | --------------------------------- | ------------------------------------------------------------------------------------------------- |
+| TRANSACTION-REFERENCE-SOURCES | `docs/INPUT_CHECKLIST.md`, `docs/implementation/TRANSACTION_PREPARATION.md`, `docs/adr/ADR-033-TRANSACTION-INSPECTION.md` |
 | LOAD-WITHDRAWAL-QA | `docs/INPUT_CHECKLIST.md`, `docs/implementation/LOAD_TEST.md`, `docs/adr/ADR-031-WITHDRAWAL-LOAD.md` |
 | AMOUNT-RULES                      | `docs/INPUT_CHECKLIST.md`, `docs/transactions/WITHDRAWAL.md`, `docs/adr/ADR-016-QA-WITHDRAWAL-BALANCE-COMPATIBILITY.md` |
 | ATM-IMAGE-ACTIVE-PROFILE          | `docs/INPUT_CHECKLIST.md`, `docs/implementation/BALANCE_EXECUTION.md`, `docs/protocols/ISOBASEI_REVIEW.md` |

@@ -1,5 +1,26 @@
 # UX Specification
 
+## Inspección interactiva — disposición vigente, 2026-11-04
+
+Preparación compacta a la izquierda, resultado a la derecha, historial local
+debajo. Ocultar preparación amplía la inspección sin desmontar el lector.
+Flujo, Mensajes y Evidencia son pestañas accesibles por teclado. Las etapas
+abren el mensaje o la evidencia correspondiente; cada campo ISO tiene detalle
+protegido. El historial permite búsqueda, filtros y selección de una operación
+sin alterar ni ejecutar el formulario. Los fallos parciales se indican junto a
+los últimos registros disponibles.
+
+Los detalles secundarios se despliegan: aplicación/expiración de tarjeta,
+comprobante/reverso e importes/correlaciones del resultado. Código CMS vive en
+Evidencia. Core permanece sin verificar, sin tiempos por etapa inventados.
+Consultar referencia identifica fuente/versión/página y explica que el original
+no está adjunto. Observación conserva el visor remoto de Mediator.
+
+Esta disposición sustituye las descripciones históricas de tres columnas y
+documentación estática siguientes. Criterios y límites en
+[preparación](../implementation/TRANSACTION_PREPARATION.md) y
+[ADR-033](../adr/ADR-033-TRANSACTION-INSPECTION.md).
+
 ## Datos de la transacción — panel compacto
 
 Cajero con entidad, modos Lector físico/Tarjeta configurada, resumen protegido de

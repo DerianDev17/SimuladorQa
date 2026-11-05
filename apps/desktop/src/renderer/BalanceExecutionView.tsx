@@ -21,8 +21,10 @@ export { executionOutcomeLabel } from './transaction-outcome';
 export function BalanceExecutionView({
   execution,
   onReceipt,
+  compact = false,
 }: {
   execution: BalanceExecution;
+  compact?: boolean;
   onReceipt?: (execution: BalanceExecution) => void;
 }) {
   const approved = execution.outcome === 'APPROVED';
@@ -34,6 +36,195 @@ export function BalanceExecutionView({
   }, [execution.reversal?.outcome]);
   const fullyApproved =
     approved && (!execution.reversal || execution.reversal.outcome === 'APPROVED');
+  const hostBalances = approved && (
+    <section className="host-balances" aria-label="Saldos recibidos">
+      <h3>
+        {execution.reversal
+          ? 'Saldos del retiro, anteriores al reverso'
+          : 'Saldos devueltos por el host'}
+      </h3>
+      {execution.balances.length ? (
+        <dl>
+          {execution.balances.map((balance) => (
+            <div key={`${balance.accountCode}/${balance.type}/${balance.currency}`}>
+              <dt>
+                Saldo recibido · tipo {balance.type}
+                <small>Cuenta {balance.accountCode}</small>
+              </dt>
+              <dd>{hostMoney(balance.currency, balance.amount)}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p>{withdrawalFinancialNotes.missingBalance}</p>
+      )}
+      {execution.withdrawal && execution.balances.length > 0 && (
+        <p className="execution-note">{withdrawalFinancialNotes.balance}</p>
+      )}
+    </section>
+  );
+  const details = (
+    <>
+      {execution.withdrawal && (
+        <>
+          <p className="execution-requested">
+            Monto solicitado: USD {execution.withdrawal.amount} · Ahorros
+          </p>
+          <dl className="withdrawal-amounts" aria-label="Importes del retiro">
+            <div className="withdrawal-authorized">
+              <dt>Monto autorizado</dt>
+              <dd>
+                {approved
+                  ? hostMoney(execution.withdrawal.currency, execution.withdrawal.amount)
+                  : 'Sin confirmar'}
+              </dd>
+              <small>
+                {approved ? 'Respuesta aprobada del host' : 'No hay autorización completa'}
+              </small>
+            </div>
+            <div>
+              <dt>Débito total</dt>
+              <dd className="amount-unavailable">No confirmado</dd>
+            </div>
+            <div>
+              <dt>Saldo restante</dt>
+              <dd className="amount-unavailable">
+                {approved
+                  ? execution.balances.length
+                    ? 'Sin identificar'
+                    : 'No informado'
+                  : 'Sin confirmar'}
+              </dd>
+            </div>
+          </dl>
+          {approved && <p className="execution-note">{withdrawalFinancialNotes.debit}</p>}
+        </>
+      )}
+      {execution.outcome === 'REQUIRES_REVIEW' && !withdrawalHostNotApproved(execution) && (
+        <p>
+          La respuesta no confirma una autorización completa por el monto solicitado. Revisa su
+          detalle técnico.
+        </p>
+      )}
+      {withdrawalHostNotApproved(execution) && (
+        <p>
+          El emisor o el switch no está operativo (91). Puedes preparar una nueva operación con otra
+          lectura de tarjeta y PIN.
+        </p>
+      )}
+      {execution.outcome === 'NOT_APPROVED' && !withdrawalHostNotApproved(execution) && (
+        <p>
+          El host respondió sin aprobar {execution.withdrawal ? 'el retiro' : 'la consulta'}. El
+          motivo interno requiere correlación con Switch/Core.
+        </p>
+      )}
+      {(!compact || execution.withdrawal) && hostBalances}
+      {execution.blockers.length > 0 && (
+        <ul>
+          {execution.blockers.map((item) => (
+            <li key={item.id}>{item.label}</li>
+          ))}
+        </ul>
+      )}
+      {balanceDeliveryUncertain(execution) ? (
+        <p>
+          {canStartAfterUnconfirmedWithdrawal(execution)
+            ? 'El retiro terminó con resultado por revisar y conserva su referencia. Puedes iniciar una nueva transacción QA con otra lectura de tarjeta y PIN.'
+            : canStartAfterUnconfirmedBalance(execution)
+              ? 'La consulta terminó sin respuesta confirmada. Conserva la referencia para correlación.'
+              : 'La entrega o el resultado financiero no están confirmados. No repitas el envío; conserva la referencia para correlación.'}
+        </p>
+      ) : !approved ? (
+        <p>
+          {execution.transmissionAttempted
+            ? execution.outcome === 'APPROVED' ||
+              execution.outcome === 'NOT_APPROVED' ||
+              withdrawalHostNotApproved(execution)
+              ? 'Respuesta del host recibida.'
+              : 'Intento registrado.'
+            : execution.withdrawal
+              ? 'No se transmitió el retiro.'
+              : 'No se transmitió la consulta.'}
+        </p>
+      ) : null}
+      {execution.correlation && (
+        <dl className="execution-correlation">
+          <div>
+            <dt>STAN</dt>
+            <dd>{execution.correlation.stan}</dd>
+          </div>
+          <div>
+            <dt>RRN</dt>
+            <dd>{execution.correlation.rrn}</dd>
+          </div>
+          <div>
+            <dt>Tiempo de respuesta</dt>
+            <dd>{execution.elapsedMs} ms</dd>
+          </div>
+        </dl>
+      )}
+      {!compact && onReceipt && createWithdrawalReceipt(execution) && (
+        <button className="secondary receipt-preview-button" onClick={() => onReceipt(execution)}>
+          <Icon name="printer" size={17} /> Ver comprobante
+        </button>
+      )}
+      <details className="inline-details">
+        <summary>Referencia de ejecución</summary>
+        {execution.responseCode && <p>Código de respuesta: {execution.responseCode}</p>}
+        <p>
+          Transacción {execution.transactionId} · ejecución {execution.runId}
+        </p>
+        <p>Referencia de solicitud {execution.requestId}</p>
+        {hasWithdrawalQaContinuation(execution) && execution.qaContinuation && (
+          <p>
+            Decisión QA anterior {execution.qaContinuation.id} ·{' '}
+            {new Date(execution.qaContinuation.createdAt).toLocaleString('es-EC')}
+          </p>
+        )}
+        {execution.correlation && (
+          <p>
+            Terminal {execution.correlation.terminalId} · STAN {execution.correlation.stan} · RRN{' '}
+            {execution.correlation.rrn}
+          </p>
+        )}
+        <p>
+          {new Date(execution.startedAt).toLocaleString('es-EC')} · Transporte:{' '}
+          {execution.elapsedMs} ms
+        </p>
+        {execution.finishedAt && (
+          <p>
+            Duración total, incluida preparación:{' '}
+            {Math.max(0, Date.parse(execution.finishedAt) - Date.parse(execution.startedAt))} ms
+          </p>
+        )}
+        {execution.diagnostics && (
+          <>
+            <p>Fecha ISO enviada (F15): {execution.diagnostics.accountingDate}</p>
+            <p>
+              Versión terminal: {execution.diagnostics.terminalApplicationVersion} · versión chip:{' '}
+              {execution.diagnostics.cardApplicationVersion}
+            </p>
+            <p>
+              TVR: {execution.diagnostics.tvr} · CVM: {execution.diagnostics.cvmResult}
+            </p>
+            {execution.diagnostics.terminalApplicationVersion !==
+              execution.diagnostics.cardApplicationVersion && (
+              <p>Las versiones EMV difieren; validar el perfil aprobado antes de modificarlas.</p>
+            )}
+            {execution.diagnostics.cvmResult.endsWith('01') && (
+              <p>
+                EMV informó verificación del titular no satisfactoria. El ingreso del PIN no
+                sustituye ese resultado.
+              </p>
+            )}
+          </>
+        )}
+        {execution.outcome === 'NOT_APPROVED' && !execution.diagnostics && (
+          <p>Este registro anterior no contiene el diagnóstico EMV de la operación.</p>
+        )}
+      </details>
+    </>
+  );
   return (
     <div
       className={`preparation balance-execution ${fullyApproved ? 'balance-approved' : ''}`}
@@ -97,190 +288,50 @@ export function BalanceExecutionView({
           <small>Referencia del reverso: {execution.reversal.transactionId}</small>
         </section>
       )}
-      {execution.withdrawal && (
-        <>
-          <p className="execution-requested">
-            Monto solicitado: USD {execution.withdrawal.amount} · Ahorros
-          </p>
-          <dl className="withdrawal-amounts" aria-label="Importes del retiro">
-            <div className="withdrawal-authorized">
-              <dt>Monto autorizado</dt>
-              <dd>
-                {approved
-                  ? hostMoney(execution.withdrawal.currency, execution.withdrawal.amount)
-                  : 'Sin confirmar'}
-              </dd>
-              <small>
-                {approved ? 'Respuesta aprobada del host' : 'No hay autorización completa'}
-              </small>
-            </div>
-            <div>
-              <dt>Débito total</dt>
-              <dd className="amount-unavailable">No confirmado</dd>
-            </div>
-            <div>
-              <dt>Saldo restante</dt>
-              <dd className="amount-unavailable">
-                {approved
-                  ? execution.balances.length
-                    ? 'Sin identificar'
-                    : 'No informado'
-                  : 'Sin confirmar'}
-              </dd>
-            </div>
-          </dl>
-          {approved && <p className="execution-note">{withdrawalFinancialNotes.debit}</p>}
-        </>
-      )}
-      {execution.outcome === 'REQUIRES_REVIEW' && !withdrawalHostNotApproved(execution) && (
-        <p>
-          La respuesta no confirma una autorización completa por el monto solicitado. Revisa su
-          detalle técnico.
-        </p>
-      )}
-      {withdrawalHostNotApproved(execution) && (
-        <p>
-          El emisor o el switch no está operativo (91). Puedes preparar una nueva operación con otra
-          lectura de tarjeta y PIN.
-        </p>
-      )}
-      {execution.outcome === 'NOT_APPROVED' && !withdrawalHostNotApproved(execution) && (
-        <p>
-          El host respondió sin aprobar {execution.withdrawal ? 'el retiro' : 'la consulta'}. El
-          motivo interno requiere correlación con Switch/Core.
-        </p>
-      )}
-      {approved && (
-        <section className="host-balances" aria-label="Saldos recibidos">
-          <h3>
-            {execution.reversal
-              ? 'Saldos del retiro, anteriores al reverso'
-              : 'Saldos devueltos por el host'}
-          </h3>
-          {execution.balances.length ? (
-            <dl>
-              {execution.balances.map((balance) => (
-                <div key={`${balance.accountCode}/${balance.type}/${balance.currency}`}>
-                  <dt>
-                    Saldo recibido · tipo {balance.type}
-                    <small>Cuenta {balance.accountCode}</small>
-                  </dt>
-                  <dd>{hostMoney(balance.currency, balance.amount)}</dd>
-                </div>
-              ))}
-            </dl>
-          ) : (
-            <p>{withdrawalFinancialNotes.missingBalance}</p>
+      {compact && (
+        <div className="compact-execution-summary">
+          <div>
+            {execution.withdrawal && (
+              <strong>Monto solicitado: USD {execution.withdrawal.amount}</strong>
+            )}
+            <p>
+              {execution.correlation?.terminalId ?? 'Terminal no disponible'} ·{' '}
+              {execution.elapsedMs} ms de transporte
+            </p>
+          </div>
+          {onReceipt && createWithdrawalReceipt(execution) && (
+            <button
+              className="secondary receipt-preview-button"
+              onClick={() => onReceipt(execution)}
+            >
+              <Icon name="printer" size={17} />
+              Ver comprobante
+            </button>
           )}
-          {execution.withdrawal && execution.balances.length > 0 && (
-            <p className="execution-note">{withdrawalFinancialNotes.balance}</p>
-          )}
-        </section>
+        </div>
       )}
-      {execution.blockers.length > 0 && (
+      {compact && balanceDeliveryUncertain(execution) && (
+        <p className="execution-note">
+          Resultado financiero sin confirmar. Conserva la referencia; inspeccionar el historial no
+          reenvía la operación.
+        </p>
+      )}
+      {compact && !execution.withdrawal && hostBalances}
+      {compact && execution.blockers.length > 0 && (
         <ul>
           {execution.blockers.map((item) => (
             <li key={item.id}>{item.label}</li>
           ))}
         </ul>
       )}
-      {balanceDeliveryUncertain(execution) ? (
-        <p>
-          {canStartAfterUnconfirmedWithdrawal(execution)
-            ? 'El retiro terminó con resultado por revisar y conserva su referencia. Puedes iniciar una nueva transacción QA con otra lectura de tarjeta y PIN.'
-            : canStartAfterUnconfirmedBalance(execution)
-              ? 'La consulta terminó sin respuesta confirmada. Conserva la referencia para correlación.'
-              : 'La entrega o el resultado financiero no están confirmados. No repitas el envío; conserva la referencia para correlación.'}
-        </p>
-      ) : !approved ? (
-        <p>
-          {execution.transmissionAttempted
-            ? execution.outcome === 'APPROVED' ||
-              execution.outcome === 'NOT_APPROVED' ||
-              withdrawalHostNotApproved(execution)
-              ? 'Respuesta del host recibida.'
-              : 'Intento registrado.'
-            : execution.withdrawal
-              ? 'No se transmitió el retiro.'
-              : 'No se transmitió la consulta.'}
-        </p>
-      ) : null}
-      {execution.correlation && (
-        <dl className="execution-correlation">
-          <div>
-            <dt>STAN</dt>
-            <dd>{execution.correlation.stan}</dd>
-          </div>
-          <div>
-            <dt>RRN</dt>
-            <dd>{execution.correlation.rrn}</dd>
-          </div>
-          <div>
-            <dt>Tiempo de respuesta</dt>
-            <dd>{execution.elapsedMs} ms</dd>
-          </div>
-        </dl>
+      {compact ? (
+        <details className="inline-details execution-full-details">
+          <summary>Importes y detalle técnico</summary>
+          {details}
+        </details>
+      ) : (
+        details
       )}
-      {onReceipt && createWithdrawalReceipt(execution) && (
-        <button className="secondary receipt-preview-button" onClick={() => onReceipt(execution)}>
-          <Icon name="printer" size={17} /> Ver comprobante
-        </button>
-      )}
-      <details className="inline-details">
-        <summary>Referencia de ejecución</summary>
-        {execution.responseCode && <p>Código de respuesta: {execution.responseCode}</p>}
-        <p>
-          Transacción {execution.transactionId} · ejecución {execution.runId}
-        </p>
-        <p>Referencia de solicitud {execution.requestId}</p>
-        {hasWithdrawalQaContinuation(execution) && execution.qaContinuation && (
-          <p>
-            Decisión QA anterior {execution.qaContinuation.id} ·{' '}
-            {new Date(execution.qaContinuation.createdAt).toLocaleString('es-EC')}
-          </p>
-        )}
-        {execution.correlation && (
-          <p>
-            Terminal {execution.correlation.terminalId} · STAN {execution.correlation.stan} · RRN{' '}
-            {execution.correlation.rrn}
-          </p>
-        )}
-        <p>
-          {new Date(execution.startedAt).toLocaleString('es-EC')} · Transporte:{' '}
-          {execution.elapsedMs} ms
-        </p>
-        {execution.finishedAt && (
-          <p>
-            Duración total, incluida preparación:{' '}
-            {Math.max(0, Date.parse(execution.finishedAt) - Date.parse(execution.startedAt))} ms
-          </p>
-        )}
-        {execution.diagnostics && (
-          <>
-            <p>Fecha ISO enviada (F15): {execution.diagnostics.accountingDate}</p>
-            <p>
-              Versión terminal: {execution.diagnostics.terminalApplicationVersion} · versión chip:{' '}
-              {execution.diagnostics.cardApplicationVersion}
-            </p>
-            <p>
-              TVR: {execution.diagnostics.tvr} · CVM: {execution.diagnostics.cvmResult}
-            </p>
-            {execution.diagnostics.terminalApplicationVersion !==
-              execution.diagnostics.cardApplicationVersion && (
-              <p>Las versiones EMV difieren; validar el perfil aprobado antes de modificarlas.</p>
-            )}
-            {execution.diagnostics.cvmResult.endsWith('01') && (
-              <p>
-                EMV informó verificación del titular no satisfactoria. El ingreso del PIN no
-                sustituye ese resultado.
-              </p>
-            )}
-          </>
-        )}
-        {execution.outcome === 'NOT_APPROVED' && !execution.diagnostics && (
-          <p>Este registro anterior no contiene el diagnóstico EMV de la operación.</p>
-        )}
-      </details>
     </div>
   );
 }

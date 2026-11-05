@@ -51,6 +51,14 @@ pantalla. Las etiquetas de resultado viven en un módulo puro compartido. Esta
 extracción conserva el flujo de envío, recuperación, lector e IPC existentes;
 los componentes de presentación no incorporan transporte ni persistencia.
 
+La inspección tiene selección propia por `requestId`, independiente del borrador.
+`transaction-inspection` proyecta etapas, filtros y versiones sin efectos.
+`TransactionHistoryStore` recibe un puerto de lectura; el adaptador
+`desktopTransactionHistory` usa el IPC existente con plazo acotado. React se
+suscribe al store y descarta respuestas de generaciones/ambientes anteriores.
+Los errores parciales conservan la última fuente disponible con aviso explícito.
+Ver límites, dependencias y validación en [ADR-033](docs/adr/ADR-033-TRANSACTION-INSPECTION.md).
+
 Sesiones de desarrollo (2026-11-04, ADR-032): Vite obtiene un puerto libre en
 loopback; el lanzador lo entrega a Main como entero, manteniendo la URL exacta
 para IPC y navegación. La CSP habilita WebSocket solo para ese puerto durante

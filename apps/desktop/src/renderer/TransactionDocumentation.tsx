@@ -1,12 +1,22 @@
 import { accountTypes } from '../../../../packages/domain/src/transaction-draft';
 import { CaptureEvidenceView } from './CaptureEvidenceView';
 import { Icon } from './Icon';
-import type { TransactionPreparation } from './useTransactionPreparation';
-export function TransactionDocumentation({ preparation }: { preparation: TransactionPreparation }) {
-  const { original, operation, transaction, snapshot } = preparation;
+import type { AppSnapshot } from '../../../../packages/shared/src/contracts';
+import type { TransactionType } from '../../../../packages/domain/src/index';
+import type { CaptureEvidence } from '../../../../packages/domain/src/capture-evidence';
+export function TransactionDocumentation({
+  original,
+  operation,
+  transaction,
+  captureEvidence,
+}: {
+  original: boolean;
+  operation: AppSnapshot['documentedOperations'][number] | undefined;
+  transaction: TransactionType;
+  captureEvidence: CaptureEvidence | null | undefined;
+}) {
   return (
-    <details className="section-details transaction-documentation-details">
-      <summary>Documentación y capturas</summary>
+    <div className="transaction-documentation-details" aria-label="Documentación y capturas">
       <div className="transaction-support-grid">
         <section
           className="panel transaction-reference-panel"
@@ -36,8 +46,20 @@ export function TransactionDocumentation({ preparation }: { preparation: Transac
                   cuenta p. 17.
                 </p>
                 <small>
-                  Referencia CMS. El formato del mensaje ATM sigue pendiente de validación.
+                  Referencia del catálogo CMS; no sustituye el contrato del mensaje ATM ni acredita
+                  el resultado financiero.
                 </small>
+                <details className="inline-details">
+                  <summary>Consultar referencia</summary>
+                  <p>
+                    {operation.source.title} · versión {operation.source.version}, página{' '}
+                    {operation.source.page}. La cuenta se documenta en la página 17.
+                  </p>
+                  <p>
+                    El documento original no está adjunto a esta vista. Se conserva la referencia
+                    aprobada del catálogo.
+                  </p>
+                </details>
               </>
             ) : (
               <p>
@@ -58,12 +80,12 @@ export function TransactionDocumentation({ preparation }: { preparation: Transac
             </div>
           )}
         </section>
-        {snapshot?.captureEvidence && (
+        {captureEvidence && (
           <section className="panel transaction-captures-panel">
-            <CaptureEvidenceView report={snapshot.captureEvidence} />
+            <CaptureEvidenceView report={captureEvidence} />
           </section>
         )}
       </div>
-    </details>
+    </div>
   );
 }

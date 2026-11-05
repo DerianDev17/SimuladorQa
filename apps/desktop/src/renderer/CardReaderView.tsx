@@ -797,22 +797,25 @@ export function CardReaderView({
               </span>
             )}
             {availableCard && identity?.status === 'READ' && (
-              <dl className="transaction-card-facts">
-                <div>
-                  <dt>Aplicación</dt>
-                  <dd>{identity.applicationLabel ?? 'No informada'}</dd>
-                </div>
-                <div>
-                  <dt>Expiración</dt>
-                  <dd>{identity.expiry ?? 'No informada'}</dd>
-                </div>
-                {selectedSavedProfile && (
+              <details className="transaction-card-facts-details">
+                <summary>Detalles de la tarjeta</summary>
+                <dl className="transaction-card-facts">
                   <div>
-                    <dt>Perfil QA</dt>
-                    <dd>{selectedSavedProfile.alias}</dd>
+                    <dt>Aplicación</dt>
+                    <dd>{identity.applicationLabel ?? 'No informada'}</dd>
                   </div>
-                )}
-              </dl>
+                  <div>
+                    <dt>Expiración</dt>
+                    <dd>{identity.expiry ?? 'No informada'}</dd>
+                  </div>
+                  {selectedSavedProfile && (
+                    <div>
+                      <dt>Perfil QA</dt>
+                      <dd>{selectedSavedProfile.alias}</dd>
+                    </div>
+                  )}
+                </dl>
+              </details>
             )}
           </div>
         </div>

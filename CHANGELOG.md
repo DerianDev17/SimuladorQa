@@ -1,5 +1,20 @@
 # Changelog
 
+Transacciones interactivas (2026-11-04): preparación compacta y ocultable,
+resultado con Flujo/Mensajes/Evidencia, etapas seleccionables y detalle de campos
+protegidos. Historial local de saldo y retiro con búsqueda/filtros, selección
+independiente del borrador y recuperación de fallos parciales. El observador
+remoto pasa a llamarse Observación. Las referencias documentales son contextuales;
+abrir el original requiere el mapeo aprobado registrado en TODO-DATA.
+La arquitectura separa controlador, formulario, inspección, proyecciones puras
+y store de historial con puerto de lectura. No cambian contratos financieros.
+Ver [ADR-033](docs/adr/ADR-033-TRANSACTION-INSPECTION.md).
+Validación final (2026-11-05): `npm run check` aprobado con 1.060 unitarias,
+270 de integración, formato, lint, TypeScript, seguridad y build. Pasaron 20 E2E
+del alcance; se verificaron navegación por teclado, selección independiente,
+ventanas estrechas, errores parciales, lectura, retiro/reverso y recuperación.
+Datos sintéticos y transporte de loopback; sin tráfico financiero hacia QA.
+
 Reducción de deuda técnica (2026-11-04): desarrollo y E2E usan puertos locales
 libres, conservando origen IPC/CSP exactos y la sesión del operador. La política
 restrictiva de la compilación normal vive en el HTML fuente, sin postprocesado

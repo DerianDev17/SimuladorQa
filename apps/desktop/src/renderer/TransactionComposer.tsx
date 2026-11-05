@@ -33,7 +33,6 @@ export function TransactionComposer({ preparation }: { preparation: TransactionP
     setTransaction,
     setWithReversal,
     setAmount,
-    operation,
     account,
     original,
     setAccount,
@@ -156,7 +155,7 @@ export function TransactionComposer({ preparation }: { preparation: TransactionP
         </section>
         <label>
           Tipo de Transacción
-          <span className="composer-select with-caption">
+          <span className="composer-select">
             <Icon name="transaction" size={21} />
             <select
               aria-label="Transacción"
@@ -190,9 +189,6 @@ export function TransactionComposer({ preparation }: { preparation: TransactionP
               ))}
               <option value="WITHDRAWAL_REVERSAL">Retiro aprobado + reverso</option>
             </select>
-            <small>
-              {operation ? `Código CMS: ${operation.code}` : 'Sin referencia documental disponible'}
-            </small>
           </span>
         </label>
         <label>
@@ -253,96 +249,104 @@ export function TransactionComposer({ preparation }: { preparation: TransactionP
           </label>
         )}
         {monetary && (
-          <fieldset
-            className="receipt-options"
-            disabled={fieldsDisabled}
-            aria-describedby="receipt-choice-help"
-          >
-            <legend>Comprobante del simulador</legend>
-            <div className="receipt-choices">
-              {(
-                [
-                  ['WITHOUT_PRINT', 'Sin impresión', 'Solo resultado en pantalla', 'monitor'],
-                  ['WITH_PRINT', 'Con impresión', 'Vista previa al aprobarse', 'printer'],
-                ] as const
-              ).map(([value, label, description, icon]) => (
-                <label key={value}>
-                  <input
-                    type="radio"
-                    name="withdrawal-receipt"
-                    value={value}
-                    checked={receiptPreference === value}
-                    onChange={() => setReceiptPreference(value)}
-                  />
-                  <span>
-                    <Icon name={icon} size={19} />
-                    <span>
-                      <strong>{label}</strong>
-                      <small>{description}</small>
-                    </span>
-                  </span>
-                </label>
-              ))}
-            </div>
-            <p id="receipt-choice-help">Impresión local, sin comisión adicional al host.</p>
-          </fieldset>
-        )}
-        {transaction === 'WITHDRAWAL_APPROVED' && (
-          <fieldset className="receipt-options withdrawal-flow-options" disabled={fieldsDisabled}>
-            <legend>Flujo de la prueba</legend>
-            <div className="receipt-choices">
-              <label>
-                <input
-                  type="radio"
-                  name="withdrawal-flow"
-                  checked={!withReversal}
-                  onChange={() => {
-                    invalidate();
-                    setWithReversal(false);
-                  }}
-                />
-                <span>
-                  <strong>Solo retiro</strong>
-                </span>
-              </label>
-              <label>
-                <input
-                  type="radio"
-                  name="withdrawal-flow"
-                  checked={withReversal}
-                  onChange={() => {
-                    invalidate();
-                    setWithReversal(true);
-                  }}
-                />
-                <span>
-                  <strong>Retiro + reverso</strong>
-                </span>
-              </label>
-            </div>
-            {withReversal && (
-              <>
-                <label>
-                  Espera después de la aprobación
-                  <select
-                    aria-label="Espera para el reverso"
-                    value={reversalDelay}
-                    onChange={(event) => setReversalDelay(Number(event.target.value))}
-                  >
-                    {[1, 3, 5, 10, 20, 30].map((seconds) => (
-                      <option key={seconds} value={seconds}>
-                        {seconds} segundos
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <p>
-                  Tras aprobarse el retiro, el simulador enviará su reverso total. Prueba sin
-                  entrega de efectivo.
-                </p>
-              </>
+          <details className="composer-extra-options" open={withReversal}>
+            <summary>Comprobante y reverso</summary>
+            {monetary && (
+              <fieldset
+                className="receipt-options"
+                disabled={fieldsDisabled}
+                aria-describedby="receipt-choice-help"
+              >
+                <legend>Comprobante del simulador</legend>
+                <div className="receipt-choices">
+                  {(
+                    [
+                      ['WITHOUT_PRINT', 'Sin impresión', 'Solo resultado en pantalla', 'monitor'],
+                      ['WITH_PRINT', 'Con impresión', 'Vista previa al aprobarse', 'printer'],
+                    ] as const
+                  ).map(([value, label, description, icon]) => (
+                    <label key={value}>
+                      <input
+                        type="radio"
+                        name="withdrawal-receipt"
+                        value={value}
+                        checked={receiptPreference === value}
+                        onChange={() => setReceiptPreference(value)}
+                      />
+                      <span>
+                        <Icon name={icon} size={19} />
+                        <span>
+                          <strong>{label}</strong>
+                          <small>{description}</small>
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <p id="receipt-choice-help">Impresión local, sin comisión adicional al host.</p>
+              </fieldset>
             )}
-          </fieldset>
+            {transaction === 'WITHDRAWAL_APPROVED' && (
+              <fieldset
+                className="receipt-options withdrawal-flow-options"
+                disabled={fieldsDisabled}
+              >
+                <legend>Flujo de la prueba</legend>
+                <div className="receipt-choices">
+                  <label>
+                    <input
+                      type="radio"
+                      name="withdrawal-flow"
+                      checked={!withReversal}
+                      onChange={() => {
+                        invalidate();
+                        setWithReversal(false);
+                      }}
+                    />
+                    <span>
+                      <strong>Solo retiro</strong>
+                    </span>
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="withdrawal-flow"
+                      checked={withReversal}
+                      onChange={() => {
+                        invalidate();
+                        setWithReversal(true);
+                      }}
+                    />
+                    <span>
+                      <strong>Retiro + reverso</strong>
+                    </span>
+                  </label>
+                </div>
+                {withReversal && (
+                  <>
+                    <label>
+                      Espera después de la aprobación
+                      <select
+                        aria-label="Espera para el reverso"
+                        value={reversalDelay}
+                        onChange={(event) => setReversalDelay(Number(event.target.value))}
+                      >
+                        {[1, 3, 5, 10, 20, 30].map((seconds) => (
+                          <option key={seconds} value={seconds}>
+                            {seconds} segundos
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <p>
+                      Tras aprobarse el retiro, el simulador enviará su reverso total. Prueba sin
+                      entrega de efectivo.
+                    </p>
+                  </>
+                )}
+              </fieldset>
+            )}
+          </details>
         )}
       </div>
 

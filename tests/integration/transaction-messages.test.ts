@@ -16,6 +16,10 @@ import {
   balanceResponse,
 } from '../helpers/balance-inquiry';
 import { withdrawalResponse } from '../helpers/withdrawal';
+import {
+  executionStages,
+  mergeExecutionHistory,
+} from '../../apps/desktop/src/renderer/transaction-inspection';
 import { removeTestDirectory } from '../helpers/temporary-directory';
 
 describe('mensajería real por TCP local, servicio y persistencia', () => {
@@ -102,7 +106,13 @@ describe('mensajería real por TCP local, servicio y persistencia', () => {
         expect(JSON.stringify(result.value)).not.toContain('411111' + '11110000');
         await journal.close();
         journal = new SqliteBalanceJournal(path, legacy, operation);
-        expect((await journal.read())[0]?.messages).toEqual(result.value.messages);
+        const recovered = (await journal.read())[0]!;
+        expect(recovered.messages).toEqual(result.value.messages);
+        const inspected = mergeExecutionHistory([recovered], [result.value])[0]!;
+        expect(
+          executionStages(inspected, true).find((stage) => stage.id === 'response')?.state,
+        ).toBe(['RESPONSE_TIMEOUT', 'UNRELATED'].includes(mode) ? 'attention' : 'complete');
+        expect(executionStages(inspected, true).at(-1)?.state).toBe('complete');
       } finally {
         for (const peer of peers) peer.destroy();
         await new Promise<void>((resolve) => server.close(() => resolve()));

@@ -91,6 +91,7 @@ export function useTransactionPreparation({
   const [review, setReview] = useState<ReviewedDraft>();
   const [balanceReadiness, setBalanceReadiness] = useState<BalanceReadiness>();
   const [balanceExecution, setBalanceExecution] = useState<BalanceExecution>();
+  const [inspectionGeneration, setInspectionGeneration] = useState(0);
   const [selectedCase, setSelectedCase] = useState<SavedCase>();
   const [caseRun, setCaseRun] = useState<{ saved: SavedCase; requestId: string }>();
   const [executingBalance, setExecutingBalance] = useState(false);
@@ -99,8 +100,6 @@ export function useTransactionPreparation({
   const [balanceRequestId, setBalanceRequestId] = useState<string>();
   const [requestOperation, setRequestOperation] = useState<'BALANCE' | 'WITHDRAWAL'>('BALANCE');
   const [sessionExecutions, setSessionExecutions] = useState<readonly BalanceExecution[]>([]);
-  const [balanceHistory, setBalanceHistory] = useState<readonly BalanceExecution[]>();
-  const [historyAtmId, setHistoryAtmId] = useState('');
   const executionLock = useRef(false);
   useEffect(() => {
     if (!executingBalance || !balanceRequestId || requestOperation !== 'WITHDRAWAL') return;
@@ -144,8 +143,6 @@ export function useTransactionPreparation({
       setSelectedCase(undefined);
       setCaseRun(undefined);
       setBalanceRequestId(undefined);
-      setBalanceHistory(undefined);
-      setHistoryAtmId('');
       setSessionExecutions([]);
       setReceiptPreference('WITHOUT_PRINT');
       setWithReversal(false);
@@ -532,6 +529,7 @@ export function useTransactionPreparation({
 
   async function executeBalance() {
     if (executionLock.current || fieldsDisabled || !balanceContext || balanceRequestId) return;
+    setInspectionGeneration((value) => value + 1);
     const requestId = crypto.randomUUID();
     const currentCase = selectedCase && catalog?.cases.find((item) => item.id === selectedCase.id);
     setCaseRun(
@@ -626,26 +624,6 @@ export function useTransactionPreparation({
       if (active.current) setRecoveringBalance(false);
     }
   }
-  async function loadBalanceHistory() {
-    const result = await client.call(async (api) => {
-      const [balances, withdrawals] = await Promise.all([
-        api.getBalanceHistory('QA'),
-        api.getWithdrawalHistory('QA'),
-      ]);
-      if (!balances.ok) return balances;
-      if (!withdrawals.ok) return withdrawals;
-      return {
-        ok: true as const,
-        value: [...balances.value, ...withdrawals.value].sort((a, b) =>
-          b.startedAt.localeCompare(a.startedAt),
-        ),
-      };
-    });
-    if (!active.current) return;
-    if (result.ok) setBalanceHistory(result.value);
-    else setError({ ...result.error, target: 'review' });
-  }
-
   function recordExecution(execution: BalanceExecution) {
     setSessionExecutions((items) =>
       [execution, ...items.filter((item) => item.requestId !== execution.requestId)].slice(0, 20),
@@ -673,6 +651,7 @@ export function useTransactionPreparation({
   );
   function startNewTransaction() {
     if (!canStartNewTransaction || executionLock.current || fieldsDisabled) return;
+    setInspectionGeneration((value) => value + 1);
     // Keep the original execution and correlation in the journal/session. Only
     // clear the active form, requiring a new card read, request ID and PIN.
     invalidate();
@@ -708,12 +687,10 @@ export function useTransactionPreparation({
                 : monetary && balanceReadiness && !balanceReadiness.ready
                   ? balanceReadiness.blockers[0]?.label
                   : 'El PIN se solicitará en una ventana protegida al enviar.';
-  const atmHistory = balanceHistory?.filter((item) => !historyAtmId || item.atmId === historyAtmId);
   return {
     dataHeading,
     atmInput,
     selectedAtm,
-    disabled,
     fieldsDisabled,
     loading,
     atms,
@@ -722,7 +699,6 @@ export function useTransactionPreparation({
     catalog,
     catalogError,
     onNavigate,
-    active,
     cardHeading,
     visible,
     transaction,
@@ -780,6 +756,7 @@ export function useTransactionPreparation({
     caseWarning,
     selectedCase,
     balanceExecution,
+    inspectionGeneration,
     reviewHeading,
     canStartNewTransaction,
     canStartNewBalance,
@@ -790,10 +767,6 @@ export function useTransactionPreparation({
     recoverBalance,
     sessionExecutions,
     atmId,
-    historyAtmId,
-    setHistoryAtmId,
-    loadBalanceHistory,
-    atmHistory,
     receipt,
     discardDialog,
     closeDiscard,

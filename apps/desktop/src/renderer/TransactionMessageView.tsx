@@ -6,9 +6,24 @@ import {
   publicEmvTags,
 } from '../../../../packages/domain/src/iso-message';
 import { Icon } from './Icon';
+import type { InspectionMessage } from './transaction-inspection';
 
-export function TransactionMessageView({ execution }: { execution: BalanceExecution }) {
-  const tabs = [
+export function TransactionMessageView({
+  execution,
+  selectedMessage,
+  onSelectMessage,
+}: {
+  execution: BalanceExecution;
+  selectedMessage?: InspectionMessage | undefined;
+  onSelectMessage?: (message: InspectionMessage) => void;
+}) {
+  const tabs: {
+    key: InspectionMessage;
+    label: string;
+    message: NonNullable<BalanceExecution['messages']>['response'];
+    attempted: boolean;
+    response: boolean;
+  }[] = [
     {
       key: 'request',
       label: 'Solicitud (0200)',
@@ -26,14 +41,14 @@ export function TransactionMessageView({ execution }: { execution: BalanceExecut
     ...(execution.reversal
       ? [
           {
-            key: 'reversal-request',
+            key: 'reversal-request' as const,
             label: 'Reverso (0420)',
             message: execution.reversal.messages?.request,
             attempted: execution.reversal.transmissionAttempted,
             response: false,
           },
           {
-            key: 'reversal-response',
+            key: 'reversal-response' as const,
             label: 'Respuesta reverso (0430)',
             message: execution.reversal.messages?.response,
             attempted: execution.reversal.transmissionAttempted,
@@ -42,14 +57,24 @@ export function TransactionMessageView({ execution }: { execution: BalanceExecut
         ]
       : []),
   ];
-  const [selected, setSelected] = useState<string>();
+  const [localSelection, setLocalSelection] = useState<InspectionMessage>();
+  const selected = onSelectMessage ? selectedMessage : localSelection;
+  function setSelected(message: InspectionMessage) {
+    if (onSelectMessage) onSelectMessage(message);
+    else setLocalSelection(message);
+  }
   const [expanded, setExpanded] = useState(false);
+  const [fieldSelection, setFieldSelection] = useState<{ message: string; number: number }>();
   // Follow progress until the operator explicitly selects a message.
   const active =
     tabs.find((tab) => tab.key === selected) ??
     [...tabs].reverse().find((tab) => tab.message) ??
     tabs[0]!;
   const { message } = active;
+  const selectedField =
+    fieldSelection?.message === active.key
+      ? message?.fields.find((field) => field.number === fieldSelection.number)
+      : undefined;
   const id = useId();
   const tags = message?.fields.find((field) => field.number === 55)?.tags;
   const reversalTab = active.key.startsWith('reversal-');
@@ -120,6 +145,9 @@ export function TransactionMessageView({ execution }: { execution: BalanceExecut
                     <th>Campo</th>
                     <th>Descripción</th>
                     <th>Valor</th>
+                    <th>
+                      <span className="visually-hidden">Detalle del campo</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -127,6 +155,7 @@ export function TransactionMessageView({ execution }: { execution: BalanceExecut
                     <td>MTI</td>
                     <td>Tipo de mensaje</td>
                     <td className="iso-field-value">{message.mti}</td>
+                    <td />
                   </tr>
                   {message.fields.map((field) => (
                     <tr key={field.number}>
@@ -143,6 +172,22 @@ export function TransactionMessageView({ execution }: { execution: BalanceExecut
                         {field.tags
                           ? `${field.tags.length} tags · desglose debajo`
                           : field.value.trim() || 'Vacío'}
+                      </td>
+                      <td>
+                        <button
+                          className="text-button"
+                          aria-label={`Ver detalle del campo ${field.number}`}
+                          aria-pressed={selectedField?.number === field.number}
+                          onClick={() =>
+                            setFieldSelection(
+                              selectedField?.number === field.number
+                                ? undefined
+                                : { message: active.key, number: field.number },
+                            )
+                          }
+                        >
+                          Detalle
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -172,6 +217,31 @@ export function TransactionMessageView({ execution }: { execution: BalanceExecut
                 </section>
               )}
             </div>
+            {selectedField && (
+              <section
+                className="execution-stage-detail"
+                aria-label="Detalle del campo seleccionado"
+              >
+                <h3>
+                  F{selectedField.number} · {isoFieldLabels[selectedField.number] ?? 'Campo'}
+                </h3>
+                <p>Mensaje {message.mti}</p>
+                <p className="iso-field-value">
+                  {selectedField.tags
+                    ? `${selectedField.tags.length} tags; consulta el desglose EMV.`
+                    : selectedField.value.trim() || 'Vacío'}
+                </p>
+                {selectedField.value === protectedIsoValue && (
+                  <p>
+                    Contenido sensible o privado protegido. No se conserva su valor original en esta
+                    vista.
+                  </p>
+                )}
+                <button className="text-button" onClick={() => setFieldSelection(undefined)}>
+                  Cerrar detalle del campo
+                </button>
+              </section>
+            )}
             <button
               className="text-button message-expand"
               aria-expanded={expanded}

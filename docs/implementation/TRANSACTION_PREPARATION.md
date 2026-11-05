@@ -1,5 +1,37 @@
 # Preparacion documental de transacciones
 
+## Inspección interactiva — 2026-11-04
+
+La disposición vigente es preparación compacta y resultado con pestañas
+**Flujo / Mensajes / Evidencia**, seguida del historial local. Sustituye la
+disposición de tres columnas y el flujo documental descritos en las secciones
+históricas siguientes. Ver [ADR-033](../adr/ADR-033-TRANSACTION-INSPECTION.md).
+
+El historial combina saldos y retiros QA, permite buscar operación/ATM/STAN/RRN
+y filtrar ATM/resultado. Abrir una fila conserva borrador, monto y lectura; no
+reenvía la transacción. Editar el formulario conserva el resultado inspeccionado.
+Ocultar preparación conserva montado el lector. Nueva ejecución o Nueva
+transacción cambia el contexto de inspección; salir de QA retira el historial.
+
+Flujo permite seleccionar etapas y abrir su mensaje o evidencia. Sus estados
+se derivan de la ejecución real disponible, sin simular tráfico ni tiempos.
+Mensajes permite abrir el detalle de cada campo manteniendo su máscara.
+Evidencia muestra la verificación del diario local, el Core sin verificar y la
+referencia documental de la operación inspeccionada. La referencia incluye
+fuente/versión/página; el original requiere TODO-DATA TRANSACTION-REFERENCE-SOURCES.
+
+Aplicación/expiración se consultan en Detalles de la tarjeta; comprobante/reverso
+tienen un desplegable propio. Código CMS queda en Evidencia. El observador remoto
+se denomina Observación. Se eliminan el flujo estático y los botones RAW/HEX
+deshabilitados. El resumen conserva incertidumbre, bloqueo y estado de reverso
+visibles; importes/correlaciones adicionales quedan en detalle técnico.
+
+Las fuentes del historial se leen de forma independiente. Un error conserva la
+última lista disponible con aviso de historial incompleto; Actualizar permite
+reintentar la lectura. El alcance es los últimos 50 registros por operación más
+20 de sesión, no el diario completo. Registros antiguos sin mensajería explican
+la ausencia de campos; no se completan con capturas ni con el borrador.
+
 ## Panel compacto de datos — 2026-10-29
 
 El formulario sigue la referencia visual del operador: Cajero (ATM), Tarjeta,

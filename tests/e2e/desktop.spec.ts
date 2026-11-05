@@ -36,6 +36,141 @@ import { withdrawalResponse } from '../helpers/withdrawal';
 let directory: string;
 let app: ElectronApplication | undefined;
 
+test('inspección interactiva: historial independiente, flujo, evidencia y fallos parciales', async () => {
+  test.setTimeout(90000);
+  const window = await prepareBalanceSubmission();
+  const atmId = await window.getByLabel('Perfil ATM', { exact: true }).inputValue();
+  const codec = new CapturedVisaBalance();
+  const body = capturedBalanceRequest();
+  const metadata = codec.inspect(body);
+  const withdrawal = { ...approvedWithdrawalExecution(), atmId };
+  withdrawal.messages = {
+    request: codec.message(body),
+    response: codec.message(balanceResponse(metadata)),
+  };
+  const balance = { ...approvedWithdrawalExecution(), atmId };
+  delete balance.withdrawal;
+  balance.correlation = { ...balance.correlation!, stan: '000124' };
+  const timeout: BalanceExecution = {
+    ...approvedWithdrawalExecution(),
+    atmId,
+    outcome: 'RESPONSE_TIMEOUT',
+    responseCode: null,
+    messages: { request: codec.message(body) },
+    correlation: { ...withdrawal.correlation!, stan: '000125' },
+  };
+  await app!.evaluate(
+    ({ ipcMain, BrowserWindow }, records) => {
+      BrowserWindow.getAllWindows()[0]?.setContentSize(1536, 1024);
+      const state = globalThis as typeof globalThis & { inspectionSends?: number };
+      state.inspectionSends = 0;
+      for (const operation of ['balance', 'withdrawal']) {
+        ipcMain.removeHandler(`transaction:${operation}:execute`);
+        ipcMain.handle(`transaction:${operation}:execute`, () => {
+          state.inspectionSends!++;
+          throw Error('TEST_UNEXPECTED_SEND');
+        });
+        ipcMain.removeHandler(`transaction:${operation}:history`);
+        ipcMain.handle(`transaction:${operation}:history`, () => ({
+          ok: true,
+          value:
+            operation === 'balance' ? [records.balance] : [records.withdrawal, records.timeout],
+        }));
+      }
+    },
+    { balance, withdrawal, timeout },
+  );
+  await window.getByRole('button', { name: 'Actualizar historial', exact: true }).click();
+  const history = window.getByRole('region', { name: 'Historial local', exact: true });
+  await expect(history.locator('tbody tr')).toHaveCount(3);
+  await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
+  await window.getByLabel('Monto de prueba').fill('75.25');
+  await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  const send = window.getByRole('button', { name: 'Ejecutar Transacción', exact: true });
+  await expect(send).toBeEnabled();
+  await history.getByRole('button', { name: 'Abrir operación 000123', exact: true }).click();
+  const result = window.getByRole('region', { name: 'Resultado', exact: true });
+  await expect(result).toContainText('Monto solicitado: USD 20.00');
+  await expect(window.getByLabel('Monto de prueba')).toHaveValue('75.25');
+  await expect(send).toBeEnabled();
+  await window.getByRole('button', { name: 'Ocultar preparación', exact: true }).click();
+  await expect(window.getByLabel('Monto de prueba')).not.toBeVisible();
+  await window.getByRole('button', { name: 'Mostrar preparación', exact: true }).click();
+  await expect(window.getByLabel('Monto de prueba')).toHaveValue('75.25');
+  await expect(send).toBeEnabled();
+  await result.getByRole('button', { name: 'Respuesta: Con evidencia', exact: true }).click();
+  await result.getByRole('button', { name: 'Abrir mensaje', exact: false }).click();
+  const inspector = window.getByRole('region', {
+    name: 'Mensajería de la transacción',
+    exact: true,
+  });
+  await expect(
+    inspector.getByRole('tab', { name: 'Respuesta (0210)', exact: true }),
+  ).toHaveAttribute('aria-selected', 'true');
+  await inspector.getByRole('button', { name: 'Ver detalle del campo 39', exact: true }).click();
+  await expect(
+    inspector.getByRole('region', { name: 'Detalle del campo seleccionado' }),
+  ).toContainText('00');
+  await inspector.getByRole('tab', { name: 'Solicitud (0200)', exact: true }).click();
+  await inspector.getByRole('button', { name: 'Ver detalle del campo 52', exact: true }).click();
+  await expect(
+    inspector.getByRole('region', { name: 'Detalle del campo seleccionado' }),
+  ).toContainText('protegido');
+  await expect(inspector).not.toContainText('411111' + '11110000');
+  await result.getByRole('tab', { name: 'Evidencia', exact: true }).click();
+  await expect(result).toContainText('Sin verificar');
+  await expect(result.getByLabel('Referencia documental')).toContainText('011000');
+  await result.getByText('Consultar referencia', { exact: true }).click();
+  await expect(result).toContainText('El documento original no está adjunto');
+  await history.getByLabel('Resultado del historial').selectOption('review');
+  await expect(history.locator('tbody tr')).toHaveCount(1);
+  await history.getByRole('button', { name: 'Abrir operación 000125', exact: true }).click();
+  await expect(result.getByRole('region', { name: 'Flujo de la transacción' })).toContainText(
+    'No hay una respuesta válida',
+  );
+  await result.getByRole('button', { name: 'Abrir mensaje', exact: false }).click();
+  await expect(inspector).toContainText('Sin respuesta disponible');
+  await expect(result.getByRole('button', { name: 'Ver comprobante', exact: true })).toHaveCount(0);
+  await history.getByLabel('Resultado del historial').selectOption('all');
+  await history.getByLabel('Buscar operación, ATM o referencia').fill('000124');
+  await expect(history.locator('tbody tr')).toHaveCount(1);
+  await history.getByRole('button', { name: 'Limpiar filtros', exact: true }).click();
+  await expect(history.locator('tbody tr')).toHaveCount(3);
+  await history.getByRole('button', { name: 'Abrir operación 000123', exact: true }).click();
+  await window.evaluate(() => globalThis.window.scrollTo(0, 0));
+  await mkdir('artifacts', { recursive: true });
+  await window.screenshot({
+    path: 'artifacts/transactions-interactive-implemented.png',
+    fullPage: true,
+  });
+  await app!.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('transaction:balance:history');
+    ipcMain.handle('transaction:balance:history', () => ({
+      ok: false,
+      error: { code: 'TIMEOUT', message: 'Historial de saldo sin respuesta' },
+    }));
+  });
+  await history.getByRole('button', { name: 'Actualizar historial', exact: true }).click();
+  await expect(history).toContainText('Historial incompleto');
+  await expect(history.locator('tbody tr')).toHaveCount(3);
+  await app!.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0]?.setContentSize(1040, 800),
+  );
+  expect(await window.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+    true,
+  );
+  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
+  await expect(history).toHaveCount(0);
+  await expect(window.getByRole('region', { name: 'Resultado', exact: true })).not.toContainText(
+    'USD 20.00',
+  );
+  expect(
+    await app!.evaluate(
+      () => (globalThis as typeof globalThis & { inspectionSends: number }).inspectionSends,
+    ),
+  ).toBe(0);
+});
+
 test('formulario compacto: tarjeta física, perfil configurado y opciones', async () => {
   test.setTimeout(60000);
   const window = await prepareBalanceSubmission();
@@ -65,7 +200,9 @@ test('formulario compacto: tarjeta física, perfil configurado y opciones', asyn
     const positions = selectors.map(
       (selector) => document.querySelector(selector)!.getBoundingClientRect().top,
     );
-    return positions.every((top, index) => index === 0 || top > positions[index - 1]!);
+    return positions.every((top, index) =>
+      index === 0 ? true : index === 3 ? top >= positions[index - 1]! : top > positions[index - 1]!,
+    );
   });
   expect(order).toBe(true);
   await mkdir('artifacts', { recursive: true });
@@ -160,10 +297,12 @@ test('mensajería ISO junto al resultado: campos reales, pestañas y pantalla es
   await expect(window.getByLabel('Resultado de consulta de saldo', { exact: true })).toContainText(
     'Consulta aprobada',
   );
+  await expect(window.getByRole('region', { name: 'Saldos recibidos', exact: true })).toBeVisible();
   const inspector = window.getByRole('region', {
     name: 'Mensajería de la transacción',
     exact: true,
   });
+  await window.getByRole('tab', { name: 'Mensajes', exact: true }).click();
   await expect(inspector).toBeVisible();
   await expect(inspector.getByRole('tab', { name: 'Respuesta (0210)' })).toHaveAttribute(
     'aria-selected',
@@ -187,12 +326,12 @@ test('mensajería ISO junto al resultado: campos reales, pestañas y pantalla es
     const result = document.querySelector('.transaction-result-panel')!.getBoundingClientRect();
     const message = document.querySelector('.live-message-inspector')!.getBoundingClientRect();
     return {
-      sideBySide: result.right <= message.left,
-      aligned: result.top === message.top,
+      contained: result.left <= message.left && result.right >= message.right,
+      belowHeader: result.top < message.top,
       overflow: document.documentElement.scrollWidth > innerWidth,
     };
   });
-  expect(alignment).toEqual({ sideBySide: true, aligned: true, overflow: false });
+  expect(alignment).toEqual({ contained: true, belowHeader: true, overflow: false });
   await mkdir('artifacts', { recursive: true });
   await window.screenshot({ path: 'artifacts/transaction-messages-desktop.png', fullPage: true });
   await inspector
@@ -226,6 +365,13 @@ test('mensajería ISO junto al resultado: campos reales, pestañas y pantalla es
     true,
   );
   await window.screenshot({ path: 'artifacts/transaction-messages-narrow.png', fullPage: true });
+  // Editing the next draft must not erase the independently selected result.
+  await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
+  await expect(window.getByLabel('Monto de prueba', { exact: true })).toBeVisible();
+  await expect(window.getByLabel('Resultado de consulta de saldo', { exact: true })).toContainText(
+    'Consulta aprobada',
+  );
+  await expect(inspector).toContainText(metadata.stan);
 });
 
 for (const operation of ['BALANCE', 'WITHDRAWAL'] as const) {
@@ -782,6 +928,7 @@ test('retiro con reverso: cuenta regresiva, resultado separado y comprobante', a
   await expect(flow).toContainText('s para enviar el reverso');
   await expect(send).toBeDisabled();
   await expect(flow).toContainText('Reverso aceptado por el host');
+  await window.getByRole('tab', { name: 'Mensajes', exact: true }).click();
   const inspector = window.getByRole('region', { name: 'Mensajería de la transacción' });
   await expect(inspector.getByRole('tab', { name: 'Respuesta reverso (0430)' })).toHaveAttribute(
     'aria-selected',
@@ -800,7 +947,7 @@ test('retiro con reverso: cuenta regresiva, resultado separado y comprobante', a
   ).toContainText('••••••••');
   await inspector.getByRole('tab', { name: 'Respuesta reverso (0430)' }).click();
   await expect(window.getByRole('region', { name: 'Resultado', exact: true })).toContainText(
-    'Flujo completo',
+    'Reverso aceptado por el host',
   );
   await expect(send).toBeDisabled(); // new card required, no repeat
   await mkdir('artifacts', { recursive: true });
@@ -1036,16 +1183,13 @@ test('interfaz minimalista: acción principal, requisitos y detalles accesibles'
   await expect(
     window.getByRole('button', { name: 'Guardar como caso', exact: true }),
   ).toBeDisabled();
-  const documentation = window.locator('.transaction-documentation-details');
-  await documentation.locator('summary').first().focus();
+  await window.getByRole('tab', { name: 'Evidencia', exact: true }).focus();
   await window.keyboard.press('Enter');
   await expect(window.getByLabel('Referencia documental')).toBeVisible();
-  await documentation.locator('summary').first().press('Enter');
+  await window.getByRole('tab', { name: 'Evidencia', exact: true }).press('Home');
+  await expect(window.getByRole('tab', { name: 'Flujo', exact: true })).toBeFocused();
   await expect(window.getByLabel('Referencia documental')).not.toBeVisible();
-  await window.getByText('Flujo e inspector', { exact: false }).click();
-  await expect(window.getByRole('heading', { name: 'Mensaje ISO8583' })).toBeVisible();
-  await expect(window.getByRole('tab', { name: 'RAW', exact: true })).toBeDisabled();
-  await window.getByText('Flujo e inspector', { exact: false }).click();
+  await expect(window.getByRole('tab', { name: 'RAW', exact: true })).toHaveCount(0);
   await app?.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0]?.setContentSize(1024, 768),
   );
@@ -1061,8 +1205,8 @@ test('interfaz minimalista: acción principal, requisitos y detalles accesibles'
     BrowserWindow.getAllWindows()[0]?.setContentSize(1536, 1024),
   );
   await window.screenshot({ path: 'artifacts/redesign-transaction-desktop.png', scale: 'css' });
-  await window.getByRole('button', { name: 'Ver historial', exact: true }).click();
-  await expect(window.getByRole('heading', { name: 'Historial', exact: true })).toBeVisible();
+  await expect(window.getByRole('region', { name: 'Historial local' })).toBeVisible();
+  await expect(window.getByRole('button', { name: 'Ver historial', exact: true })).toHaveCount(0);
 });
 
 const transactionIdentity: CardIdentityReading = {
@@ -1181,8 +1325,10 @@ test('consulta terminada sin respuesta permite retiro de monto personalizado con
   ).toHaveCount(0);
   await expect(send).toBeDisabled(); // requires a fresh card read
   await expect(window.getByLabel('Monto de prueba')).toHaveValue('75.25');
-  await expect(window.locator('.session-activity tbody tr')).toHaveCount(1);
-  await expect(window.locator('.session-activity')).toContainText('El destino cerró la conexión');
+  await expect(window.locator('.transaction-history tbody tr')).toHaveCount(1);
+  await expect(window.locator('.transaction-history')).toContainText(
+    'El destino cerró la conexión',
+  );
   const nextReadId = randomUUID();
   await installTransactionReader(false, nextReadId);
   await window.getByRole('button', { name: 'Buscar lector', exact: true }).click();
@@ -1191,8 +1337,10 @@ test('consulta terminada sin respuesta permite retiro de monto personalizado con
   await send.click();
   await expect(result).toContainText('Retiro autorizado por el host');
   await expect(result).toContainText('Monto solicitado: USD 75.25');
-  await expect(window.locator('.session-activity tbody tr')).toHaveCount(2);
-  await expect(window.locator('.session-activity')).toContainText('El destino cerró la conexión');
+  await expect(window.locator('.transaction-history tbody tr')).toHaveCount(2);
+  await expect(window.locator('.transaction-history')).toContainText(
+    'El destino cerró la conexión',
+  );
   const sent = await app!.evaluate(
     () =>
       (
@@ -1326,8 +1474,9 @@ test('retiro 91 historico y actual finalizan sin paso de conciliacion y permiten
   expect(requests).toHaveLength(1);
   expect(requests[0]).toMatchObject({ cardReadId: readId });
   expect(requests[0]).not.toMatchObject({ requestId: previous.requestId });
-  await expect(window.locator('.session-activity tbody tr')).toHaveCount(1);
-  await expect(window.locator('.session-activity')).toContainText('Retiro no aprobado');
+  // The unified history includes the persisted record and the new session result.
+  await expect(window.locator('.transaction-history tbody tr')).toHaveCount(2);
+  await expect(window.locator('.transaction-history')).toContainText('Retiro no aprobado');
 });
 
 test('retiro RC 59 histórico no ocupa el formulario y un error nuevo permite otro retiro', async () => {
@@ -1450,7 +1599,7 @@ test('retiro RC 59 histórico no ocupa el formulario y un error nuevo permite ot
   expect(sent[1]).toMatchObject({ cardReadId: nextReadId, amount: '100.00' });
   expect(new Set([previous.requestId, ...sent.map((item) => item.requestId)]).size).toBe(3);
   expect(sent[0]!.cardReadId).not.toBe(sent[1]!.cardReadId);
-  await expect(window.locator('.session-activity tbody tr')).toHaveCount(2);
+  await expect(window.locator('.transaction-history tbody tr')).toHaveCount(3);
   expect(await readWithdrawalJournal()).toEqual([previous]);
   await mkdir('artifacts', { recursive: true });
   await window.screenshot({ path: 'artifacts/withdrawal-after-error.png', fullPage: true });
@@ -1604,6 +1753,7 @@ for (const withPrint of [false, true]) {
     }, approvedWithdrawalExecution());
     await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
     await window.getByLabel('Monto de prueba').fill('20.00');
+    await window.getByText('Comprobante y reverso', { exact: true }).click();
     await expect(window.getByRole('radio', { name: /^Sin impresión/ })).toBeChecked();
     if (withPrint) await window.getByRole('radio', { name: /^Con impresión/ }).check();
     await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
@@ -1692,7 +1842,7 @@ test('consulta de saldo: envío directo, dependencia ausente y resultado mediant
   );
   await window.evaluate(() => globalThis.window.scrollTo(0, 0));
   await window.screenshot({ path: 'artifacts/redesign-prepared-desktop.png', scale: 'css' });
-  await expect(window.getByRole('region', { name: 'Actividad de esta sesión' })).toBeInViewport();
+  await expect(window.getByRole('region', { name: 'Historial local' })).toBeVisible();
   await window.getByRole('combobox', { name: 'Cuenta', exact: true }).selectOption('CURRENT');
   await expect(send).toBeDisabled();
   await window.getByRole('combobox', { name: 'Cuenta', exact: true }).selectOption('SAVINGS');
@@ -1708,8 +1858,8 @@ test('consulta de saldo: envío directo, dependencia ausente y resultado mediant
   await expect(blocked).toContainText('Consulta bloqueada');
   await expect(blocked).toContainText('No se transmitió la consulta.');
   await expect(blocked).toContainText('No está disponible la plantilla ATM20521');
-  await expect(window.locator('.session-activity tbody tr')).toHaveCount(1);
-  await expect(window.locator('.session-activity')).toContainText('Consulta bloqueada');
+  await expect(window.locator('.transaction-history tbody tr')).toHaveCount(1);
+  await expect(window.locator('.transaction-history')).toContainText('Consulta bloqueada');
   // Main's completion event reports its empty simulated hardware, independently
   // of the reader IPC fixture. Restore that fixture before another UI attempt.
   await installTransactionReader();
@@ -1809,14 +1959,16 @@ test('consulta de saldo: envío directo, dependencia ausente y resultado mediant
   ).toHaveCount(0);
   await expect(window.locator('#send-blocked-note')).toContainText('Operación finalizada');
   await expect(result).toContainText('Código de respuesta: 00');
-  await expect(window.locator('.session-activity tbody tr')).toHaveCount(2);
-  await expect(window.locator('.session-activity')).toContainText('Consulta aprobada');
+  await expect(window.locator('.transaction-history tbody tr')).toHaveCount(2);
+  await expect(window.locator('.transaction-history')).toContainText('Consulta aprobada');
   await result.scrollIntoViewIfNeeded();
   await mkdir('artifacts', { recursive: true });
   await window.screenshot({ path: 'artifacts/balance-inquiry-result.png' });
   await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
-  await expect(window.locator('.session-activity')).not.toContainText('Consulta aprobada');
-  await expect(window.locator('.session-empty')).toBeVisible();
+  await expect(window.locator('.transaction-history')).toHaveCount(0);
+  await expect(
+    window.getByText('El historial local de ejecución está disponible en QA.', { exact: false }),
+  ).toBeVisible();
 });
 
 for (const outcome of [
@@ -2016,7 +2168,7 @@ test('formulario directo: lectura selecciona la tarjeta, revisión opcional e in
     window.getByRole('button', { name: 'Ejecutar Transacción', exact: true }),
   ).toBeDisabled();
   await expect(window.locator('.transaction-steps')).toHaveCount(0);
-  await window.getByRole('button', { name: 'Historial', exact: true }).click();
+  await window.getByRole('button', { name: 'Observación', exact: true }).click();
   await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
   await expect(window.getByLabel('Monto de prueba')).toHaveValue('100.50');
   await expect(preview).toContainText(transactionIdentity.panMasked!);
@@ -2111,7 +2263,7 @@ test('revisión documental opcional con lector no disponible', async () => {
 test('muestra evidencia de capturas sin habilitar envío ni RAW', async () => {
   const window = await launch();
   await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
-  await window.getByText('Documentación y capturas', { exact: true }).click();
+  await window.getByRole('tab', { name: 'Evidencia', exact: true }).click();
   const evidence = window.getByLabel('Evidencia de capturas');
   await expect(evidence.getByRole('heading', { name: '10 archivos · 218 mensajes' })).toBeVisible();
   await expect(evidence.getByText('2 bytes, big endian; incluye el prefijo')).toBeVisible();
@@ -2121,11 +2273,10 @@ test('muestra evidencia de capturas sin habilitar envío ni RAW', async () => {
   await expect(
     evidence.getByText('CertificacionMandatoVisa29092026_CRBanred.pcap', { exact: true }),
   ).toBeVisible();
-  await window.getByText('Flujo e inspector', { exact: false }).click();
-  await expect(window.getByRole('tab', { name: 'RAW', exact: true })).toBeDisabled();
+  await expect(window.getByRole('tab', { name: 'RAW', exact: true })).toHaveCount(0);
   await expect(window.getByRole('button', { name: 'Ejecutar Transacción' })).toBeDisabled();
   await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
-  await window.getByText('Documentación y capturas', { exact: true }).click();
+  await window.getByRole('tab', { name: 'Evidencia', exact: true }).click();
   await expect(evidence.getByRole('heading', { name: '10 archivos · 218 mensajes' })).toBeVisible();
   await expect(window.getByRole('button', { name: 'Ejecutar Transacción' })).toBeDisabled();
   await mkdir('artifacts', { recursive: true });
@@ -2177,7 +2328,7 @@ test('evidencia de red corrupta muestra error seguro sin impedir usar el shell',
 
 test('Historial: consulta Mediator validada, QA bloqueado y dependencia no configurada', async () => {
   const window = await launch();
-  await window.getByRole('button', { name: 'Historial', exact: false }).click();
+  await window.getByRole('button', { name: 'Observación', exact: false }).click();
   const observer = window.getByLabel('Consulta de Mediator', { exact: true });
   await expect(
     observer.getByRole('heading', { name: 'Transacciones y mensajes de Mediator' }),
@@ -2240,7 +2391,7 @@ test('Historial muestra mandatorios CMS y variantes sin exponer valores', async 
     }));
   }, decoded.value);
   await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
-  await window.getByRole('button', { name: 'Historial', exact: false }).click();
+  await window.getByRole('button', { name: 'Observación', exact: false }).click();
   const observer = window.getByLabel('Consulta de Mediator', { exact: true });
   await observer.getByRole('button', { name: 'Consultar Mediator' }).click();
   await observer.getByRole('button', { name: `Ver mensajes de ${batch.rows[0]!.traceId}` }).click();
@@ -2305,7 +2456,7 @@ test('dashboard real, aislamiento, navegación y gate transaccional', async () =
     'Tarjetas',
     'Carga y estrés',
     'Monitor',
-    'Historial',
+    'Observación',
     'Configuración',
   ]) {
     await window.getByRole('button', { name, exact: true }).click();
@@ -2326,7 +2477,7 @@ test('dashboard real, aislamiento, navegación y gate transaccional', async () =
 async function openComposerOptions(window: Page) {
   const options = window.locator('.composer-options');
   if ((await options.getAttribute('open')) === null)
-    await options.locator('summary').first().click();
+    await window.getByRole('button', { name: 'Opciones y detalles técnicos', exact: true }).click();
 }
 async function reviewDraft(window: Page) {
   await expect(window.getByLabel('Ambiente', { exact: true })).toBeEnabled();
@@ -2723,8 +2874,7 @@ test('pantalla del mockup: contexto ATM, catálogo CMS, monto y cambio de ambien
   await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
   await expect(window.getByRole('heading', { name: 'Nueva transacción' })).toBeVisible();
   await expect(window.locator('.transaction-steps')).toHaveCount(0);
-  await window.getByText('Documentación y capturas', { exact: true }).click();
-  await window.getByText('Flujo e inspector', { exact: false }).click();
+  await window.getByRole('tab', { name: 'Evidencia', exact: true }).click();
   const reference = window.locator('.documented-operation');
   await expect(reference.getByText('301000', { exact: true })).toBeVisible();
   await expect(reference).toContainText('Extreme Mediator CMS v3.6 · p. 20');
@@ -2737,9 +2887,9 @@ test('pantalla del mockup: contexto ATM, catálogo CMS, monto y cambio de ambien
   await reviewDraft(window);
   await expect(window.getByText('Revisión documental · QA')).toBeVisible();
   await expect(window.getByRole('button', { name: 'Ejecutar Transacción' })).toBeDisabled();
-  await expect(window.getByRole('tab', { name: 'RAW', exact: true })).toBeDisabled();
-  await expect(window.getByRole('tab', { name: 'HEX', exact: true })).toBeDisabled();
-  await expect(window.getByText('Sin mensaje recibido', { exact: true })).toBeVisible();
+  await expect(window.getByRole('tab', { name: 'RAW', exact: true })).toHaveCount(0);
+  await expect(window.getByRole('tab', { name: 'HEX', exact: true })).toHaveCount(0);
+  await expect(window.getByRole('region', { name: 'Flujo de la transacción' })).toHaveCount(0);
   await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
   await expect(window.getByText('Revisión documental · QA')).toHaveCount(0);
   await expect(reference.getByText('012000', { exact: true })).toBeVisible();
@@ -2774,7 +2924,9 @@ test('pantalla del mockup: contexto ATM, catálogo CMS, monto y cambio de ambien
   await expect(window.getByLabel('Perfil ATM', { exact: true })).toBeDisabled();
   await reviewDraft(window);
   await expect(window.getByText('Revisión documental · PREPROD')).toBeVisible();
-  await expect(window.locator('.session-empty')).toContainText('No se han enviado transacciones');
+  await expect(
+    window.getByText('El historial local de ejecución está disponible en QA.', { exact: false }),
+  ).toBeVisible();
   await window.getByLabel('Ambiente', { exact: true }).selectOption('QA');
   await window.getByLabel('Transacción', { exact: true }).selectOption('TIMEOUT_REVERSAL');
   await expect(window.getByRole('combobox', { name: 'Cuenta', exact: true })).toBeDisabled();
@@ -3440,7 +3592,9 @@ test('caso QA permite guardar y editar expectativa sin ejecutar una transacción
   await expect(dialog.getByText('Esperado: No aprobado · RC 05')).toBeVisible();
   await dialog.getByRole('button', { name: 'Cargar Saldo QA esperado' }).click();
   await expect(window.getByText(/Caso cargado: «Saldo QA esperado»/)).toBeVisible();
-  await expect(window.getByLabel('Resultado')).toContainText('Aún no hay resultado');
+  await expect(window.getByRole('region', { name: 'Resultado', exact: true })).toContainText(
+    'Aún no hay resultado',
+  );
 });
 
 test('mejoras UI: revisión ocupada mantiene el ambiente bloqueado al salir del lector', async () => {
@@ -3473,8 +3627,8 @@ test('mejoras UI: revisión ocupada mantiene el ambiente bloqueado al salir del 
   await reviewDraft(window);
   await expect(window.getByRole('button', { name: 'Revisando…', exact: true })).toBeDisabled();
   await expect(window.getByLabel('Ambiente', { exact: true })).toBeDisabled();
-  await window.getByRole('button', { name: 'Historial', exact: true }).click();
-  await expect(window.getByRole('heading', { name: 'Historial', exact: true })).toBeVisible();
+  await window.getByRole('button', { name: 'Observación', exact: true }).click();
+  await expect(window.getByRole('heading', { name: 'Observación', exact: true })).toBeVisible();
   await expect(window.getByLabel('Ambiente', { exact: true })).toBeDisabled();
   await app!.evaluate(() => {
     const state = globalThis as typeof globalThis & { finishUiReview?: () => void };

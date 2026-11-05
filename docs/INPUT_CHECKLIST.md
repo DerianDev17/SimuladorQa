@@ -2,6 +2,13 @@
 
 El índice consolidado de pendientes está en [`TODO_DATA.md`](TODO_DATA.md).
 
+TODO-DATA TRANSACTION-REFERENCE-SOURCES (2026-11-04): falta un mapeo aprobado de
+fuente/versión/página de cada operación CMS a un documento original distribuible
+en el visor de Electron. El catálogo expone metadatos, no una ruta de apertura.
+Bloquea únicamente abrir el original desde Evidencia; la consulta de metadatos,
+capturas y mensajes registrados ya funciona. No crear URLs ni adjuntos ficticios.
+Ver [ADR-033](adr/ADR-033-TRANSACTION-INSPECTION.md).
+
 TODO-DATA LOAD-WITHDRAWAL-QA (2026-11-04): retiros en carga y modos básico/avanzado
 implementados por solicitud del usuario, reutilizando el contrato QA vigente.
 Falta medir una corrida iniciada por el operador y correlacionar sus resultados

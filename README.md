@@ -1,9 +1,11 @@
 # Coonecta ATM Transaction Simulator
 
-Transacciones muestra, después de cada nuevo envío, el resultado junto a los
-campos ISO8583 de la solicitud y respuesta correlacionada. Conserva la mensajería
-protegida en el diario; los registros antiguos sin campos se identifican como
-tales. Ver [mensajería de transacciones](docs/implementation/TRANSACTION_PREPARATION.md).
+Transacciones permite preparar una operación e inspeccionar su resultado en
+**Flujo, Mensajes y Evidencia**. El historial local une saldos y retiros, con
+búsqueda, filtros y selección independiente del formulario. Cada etapa abre
+su evidencia; los campos ISO conservan su protección y los registros antiguos
+identifican la información ausente. Ver [transacciones](docs/implementation/TRANSACTION_PREPARATION.md)
+y [arquitectura de inspección](docs/adr/ADR-033-TRANSACTION-INSPECTION.md).
 
 **Retiro aprobado + reverso** está disponible en Operación: aprobación completa,
 espera de 1–30 segundos y reverso único. El inspector muestra también 0420/0430,
