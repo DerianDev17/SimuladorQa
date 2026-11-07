@@ -380,6 +380,7 @@ export function App() {
 
           {page === 'dashboard' && (
             <DashboardView
+              key={environment ?? 'unavailable'}
               environment={environment}
               connection={link.connection}
               connectionError={link.error}

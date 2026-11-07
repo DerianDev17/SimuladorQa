@@ -22,6 +22,7 @@
 | Consultar lo que falta implementar o validar | [Backlog vigente](BACKLOG.md) |
 | Entender por qué se tomó una decisión | [Índice ADR](adr/README.md) |
 | Consultar entregas anteriores | [Changelog](../CHANGELOG.md) |
+| Deuda técnica, rendimiento y UI | [Revisión 2026-11-07](implementation/TECHNICAL_REVIEW_20261107.md) |
 
 ## Cómo mantener estos documentos
 

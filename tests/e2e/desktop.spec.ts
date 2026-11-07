@@ -621,6 +621,129 @@ test('Inicio muestra el mismo feed Mediator en QA y PREPROD y controla pausa', a
   await expect(feed).toContainText('REF-123456ABCDEF');
 });
 
+test('Inicio descarta datos y filtros del ambiente anterior incluso ante timeout', async () => {
+  const window = await launch();
+  await window.getByRole('button', { name: 'Configuración', exact: true }).click();
+  await app!.evaluate(({ ipcMain }) => {
+    const state = globalThis as typeof globalThis & { finishFeed?: () => void };
+    ipcMain.removeHandler('mediator:live');
+    ipcMain.handle('mediator:live', (_event, query) => {
+      if (query.environment === 'PREPROD')
+        return new Promise((resolveResult) => {
+          state.finishFeed = () =>
+            resolveResult({ ok: false, error: { code: 'TIMEOUT', message: 'Feed agotado.' } });
+        });
+      return {
+        ok: true,
+        value: {
+          rows: [{ traceId: 'QA-ONLY', terminalId: 'ATM-QA' }],
+          hasMore: true,
+          queriedAt: '2026-11-07T12:00:00.000Z',
+        },
+      };
+    });
+  });
+  await window.getByRole('button', { name: 'Inicio', exact: true }).click();
+  const feed = window.getByRole('region', { name: 'Transacciones en vivo', exact: true });
+  await expect(feed).toContainText('QA-ONLY');
+  await feed.getByLabel('Filtrar por terminal').selectOption('ATM-QA');
+  await feed.getByLabel('Buscar transacciones').fill('QA-ONLY');
+  await feed.getByRole('button', { name: 'Pausar', exact: true }).click();
+  await expect(feed.getByRole('button', { name: 'Reanudar' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
+  await expect(feed).toContainText('Consultando Mediator');
+  await expect(feed).not.toContainText('QA-ONLY');
+  await expect(feed).not.toContainText('hay más anteriores');
+  await expect(feed).toContainText('Sin actualizar');
+  await expect(feed.getByLabel('Filtrar por terminal')).toHaveValue('');
+  await expect(feed.getByLabel('Buscar transacciones')).toHaveValue('');
+  await expect(feed.getByRole('button', { name: 'Pausar', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  );
+  await app!.evaluate(() =>
+    (globalThis as typeof globalThis & { finishFeed?: () => void }).finishFeed?.(),
+  );
+  await expect(feed.getByRole('alert')).toContainText('Feed agotado.');
+  await expect(feed).not.toContainText('QA-ONLY');
+  await expect(feed).toContainText('No se pudo consultar Mediator.');
+});
+
+test('Inicio ignora una respuesta tardía de otro ambiente', async () => {
+  const window = await launch();
+  await window.getByRole('button', { name: 'Configuración', exact: true }).click();
+  await app!.evaluate(({ ipcMain }) => {
+    const state = globalThis as typeof globalThis & { finishFeed?: () => void };
+    ipcMain.removeHandler('mediator:live');
+    ipcMain.handle('mediator:live', (_event, query) => {
+      const result = {
+        ok: true,
+        value: {
+          rows: [{ traceId: query.environment === 'QA' ? 'QA-LATE' : 'PREPROD-CURRENT' }],
+          hasMore: false,
+          queriedAt: '2026-11-07T12:00:00.000Z',
+        },
+      };
+      if (query.environment === 'QA')
+        return new Promise((resolveResult) => {
+          state.finishFeed = () => resolveResult(result);
+        });
+      return result;
+    });
+  });
+  await window.getByRole('button', { name: 'Inicio', exact: true }).click();
+  await expect
+    .poll(() =>
+      app!.evaluate(() =>
+        Boolean((globalThis as typeof globalThis & { finishFeed?: () => void }).finishFeed),
+      ),
+    )
+    .toBe(true);
+  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
+  const feed = window.getByRole('region', { name: 'Transacciones en vivo', exact: true });
+  await expect(feed).toContainText('PREPROD-CURRENT');
+  await app!.evaluate(() =>
+    (globalThis as typeof globalThis & { finishFeed?: () => void }).finishFeed?.(),
+  );
+  await expect(feed).not.toContainText('QA-LATE');
+  await expect(feed).toContainText('PREPROD-CURRENT');
+});
+
+test('el sondeo recuperado limpia su error sin ocultar un fallo de conexión manual', async () => {
+  const window = await launch();
+  await window.getByRole('button', { name: 'Configuración', exact: true }).click();
+  await app!.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('switch:connection:status');
+    ipcMain.handle('switch:connection:status', () => ({
+      ok: false,
+      error: { code: 'SERVICE_UNAVAILABLE', message: 'Estado temporalmente no disponible.' },
+    }));
+  });
+  await expect(window.getByRole('alert')).toContainText('Estado temporalmente no disponible.');
+  await app!.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('switch:connection:status');
+    ipcMain.handle('switch:connection:status', () => ({
+      ok: true,
+      value: { state: 'DISCONNECTED', observedAt: new Date().toISOString() },
+    }));
+    ipcMain.removeHandler('switch:connection:connect');
+    ipcMain.handle('switch:connection:connect', () => ({
+      ok: false,
+      error: { code: 'SERVICE_UNAVAILABLE', message: 'Conexión manual rechazada.' },
+    }));
+  });
+  await expect(
+    window.getByText('Estado temporalmente no disponible.', { exact: true }),
+  ).toHaveCount(0);
+  await window.getByRole('button', { name: 'Conectar', exact: true }).click();
+  await expect(window.getByRole('alert')).toContainText('Conexión manual rechazada.');
+  await window.waitForTimeout(1200);
+  await expect(window.getByRole('alert')).toContainText('Conexión manual rechazada.');
+});
+
 async function seedWithdrawalJournal(record: BalanceExecution): Promise<void> {
   const journal = new SqliteBalanceJournal(
     join(directory, 'withdrawal-executions.sqlite'),

@@ -10,6 +10,16 @@ sin solicitudes. Pausar detiene las lecturas; ante error se conserva la última 
 y el siguiente intento espera 15 segundos. Filtro y búsqueda operan en memoria
 sobre la ventana recibida. No hay persistencia local ni envío financiero.
 
+Al cambiar QA/PREPROD se reinicia la vista completa de Inicio: filas, filtros,
+pausa, error y hora de actualización. Mientras llega la nueva consulta se muestra
+el estado de carga; un fallo no conserva filas del ambiente anterior. Las respuestas
+tardías del ambiente abandonado se descartan. La conservación de la última ventana
+ante errores aplica únicamente dentro del mismo ambiente.
+
+La búsqueda se calcula cuando cambian filas o filtros, sin repetirla por cada
+actualización del indicador TCP. La tabla admite foco y desplazamiento con teclado;
+el botón Pausar/Reanudar expone su estado mediante `aria-pressed`.
+
 La consulta usa `TOP 51`, parámetros tipados, timeout y una proyección cerrada.
 No lee XML, cuentas ni PAN al proceso/Renderer. SQL convierte un PAN numérico
 de 12–19 dígitos en `**** 1234`. Para el formato hexadecimal de 32 caracteres

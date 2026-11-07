@@ -20,25 +20,28 @@ export function connectionTitle(connection?: SwitchConnectionSnapshot): string {
 
 export function useSwitchConnection(client: DesktopClient, environment?: Environment) {
   const [connection, setConnection] = useState<SwitchConnectionSnapshot>();
-  const [error, setError] = useState<string>();
+  const [pollError, setPollError] = useState<string>();
+  const [actionError, setActionError] = useState<string>();
   const [pending, setPending] = useState(false);
   const generation = useRef(0);
   useEffect(() => {
     const ticket = ++generation.current;
     let timer: ReturnType<typeof setTimeout> | undefined;
     setConnection(undefined);
-    setError(undefined);
+    setPollError(undefined);
+    setActionError(undefined);
     setPending(false);
     async function poll() {
       const result = await client.call((api) => api.getSwitchConnection('QA'));
       if (ticket !== generation.current) return;
-      if (result.ok)
+      if (result.ok) {
+        setPollError(undefined);
         setConnection((previous) =>
           !previous || result.value.observedAt >= previous.observedAt ? result.value : previous,
         );
-      else {
+      } else {
         setConnection(undefined);
-        setError(result.error.message);
+        setPollError(result.error.message);
       }
       timer = setTimeout(() => void poll(), 1000);
     }
@@ -53,7 +56,7 @@ export function useSwitchConnection(client: DesktopClient, environment?: Environ
     if (environment !== 'QA' || pending) return;
     const ticket = generation.current;
     setPending(true);
-    setError(undefined);
+    setActionError(undefined);
     const result = await client.call((api) =>
       action === 'connect' ? api.connectSwitch('QA') : api.disconnectSwitch('QA'),
     );
@@ -62,10 +65,10 @@ export function useSwitchConnection(client: DesktopClient, environment?: Environ
       setConnection((previous) =>
         !previous || result.value.observedAt >= previous.observedAt ? result.value : previous,
       );
-    else setError(result.error.message);
+    else setActionError(result.error.message);
     setPending(false);
   }
-  return { connection, error, pending, change };
+  return { connection, error: actionError ?? pollError, pending, change };
 }
 
 const reasons: Record<SwitchDisconnectReason, string> = {

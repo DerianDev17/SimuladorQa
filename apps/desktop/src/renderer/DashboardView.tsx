@@ -37,11 +37,6 @@ export function DashboardView({
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    setFeedError(undefined);
-    setPaused(false);
-  }, [environment]);
-
-  useEffect(() => {
     let active = true;
     let eventSeen = false;
     const apply = (result: Result<CardReaderSnapshot>) => {
@@ -112,20 +107,22 @@ export function DashboardView({
     for (const row of mediatorRows) if (row.terminalId) choices.set(row.terminalId, row.terminalId);
     return [...choices].sort((a, b) => a[1].localeCompare(b[1]));
   }, [mediatorRows]);
-  const liveShown = mediatorRows.filter((row) => {
-    if (selectedAtm && row.terminalId !== selectedAtm) return false;
+  const liveShown = useMemo(() => {
     const term = search.trim().toLocaleLowerCase('es-EC');
-    return (
-      !term ||
-      [
-        row.traceId,
-        row.terminalId,
-        row.terminalSequence,
-        row.transactionCode,
-        row.cardReference,
-      ].some((part) => part?.toLocaleLowerCase('es-EC').includes(term))
-    );
-  });
+    return mediatorRows.filter((row) => {
+      if (selectedAtm && row.terminalId !== selectedAtm) return false;
+      return (
+        !term ||
+        [
+          row.traceId,
+          row.terminalId,
+          row.terminalSequence,
+          row.transactionCode,
+          row.cardReference,
+        ].some((part) => part?.toLocaleLowerCase('es-EC').includes(term))
+      );
+    });
+  }, [mediatorRows, selectedAtm, search]);
   const readerAvailable = !!reader?.readers.some((device) => device.state !== 'UNAVAILABLE');
   const switchStatus =
     environment !== 'QA'
@@ -210,7 +207,11 @@ export function DashboardView({
                 placeholder="Buscar tarjeta, código o TraceId"
               />
             </label>
-            <button onClick={() => setPaused((value) => !value)} disabled={!environment}>
+            <button
+              onClick={() => setPaused((value) => !value)}
+              disabled={!environment}
+              aria-pressed={paused}
+            >
               {paused ? 'Reanudar' : 'Pausar'}
             </button>
           </div>
@@ -220,7 +221,12 @@ export function DashboardView({
             {feedError} Se volverá a intentar automáticamente.
           </p>
         )}
-        <div className="dashboard-feed-scroll">
+        <div
+          className="dashboard-feed-scroll"
+          role="region"
+          aria-label="Filas de Mediator"
+          tabIndex={0}
+        >
           <table>
             <thead>
               <tr>

@@ -1,5 +1,12 @@
 # Conexion visible al Switch en QA
 
+## Recuperación del indicador, 2026-11-07
+
+Un sondeo exitoso retira el error de consulta anterior. Los fallos de las acciones
+Conectar/Desconectar se conservan por separado hasta la siguiente acción manual o
+el cambio de ambiente; consultar correctamente el estado no acredita que aquella
+acción haya tenido éxito. Esto no inicia conexiones ni reintentos financieros.
+
 ## Continuidad despues de cada transaccion, 2026-10-19
 
 La desconexion tras una consulta aprobada era local: Main llamaba
