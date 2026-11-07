@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { CardReaderPanel } from '../../apps/desktop/src/renderer/CardReaderView';
+import { CardReaderPanel } from '../../apps/desktop/src/renderer/CardReaderPanel';
 import { decodeReaderStatus } from '../../apps/desktop/src/main/adapters/windows-pcsc-reader';
 import type {
   CardIdentityReading,

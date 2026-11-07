@@ -4,6 +4,12 @@ import type {
   ReaderDevice,
 } from '../../../../packages/domain/src/card-reader';
 
+export const readerStateLabels = {
+  CARD_PRESENT: 'Tarjeta presente',
+  EMPTY: 'Sin tarjeta',
+  UNAVAILABLE: 'Lector no disponible',
+} satisfies Record<ReaderDevice['state'], string>;
+
 export function selectedReader(
   snapshot: CardReaderSnapshot | undefined,
   name: string | undefined,

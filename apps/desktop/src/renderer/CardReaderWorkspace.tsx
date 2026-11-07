@@ -1,4 +1,4 @@
-import type { CardReaderPanelProps } from './CardReaderView';
+import type { CardReaderPanelProps } from './CardReaderPanel';
 import { selectedReader, matchingCardIdentity } from './card-reader-state';
 import { Icon } from './Icon';
 
