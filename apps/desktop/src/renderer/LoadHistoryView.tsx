@@ -1,4 +1,5 @@
 import { LoadExportActions } from './LoadExportActions';
+import { HistoryAtmFilter } from './HistoryAtmFilter';
 import { useEffect, useRef, useState } from 'react';
 import type { AtmProfile } from '../../../../packages/domain/src/catalogs';
 import {
@@ -223,22 +224,11 @@ export function LoadHistoryView({ atms }: { atms: readonly AtmProfile[] }) {
               onChange={(e) => setFilters({ ...filters, to: e.target.value })}
             />
           </label>
-          <label>
-            ATM del historial (UUID)
-            <input
-              list="load-history-atms"
-              value={filters.atmId}
-              onChange={(e) => setFilters({ ...filters, atmId: e.target.value })}
-              placeholder="Todos los ATM"
-            />
-          </label>
-          <datalist id="load-history-atms">
-            {atms.map((atm) => (
-              <option key={atm.id} value={atm.id}>
-                {atm.alias} · {atm.terminalId}
-              </option>
-            ))}
-          </datalist>
+          <HistoryAtmFilter
+            atms={atms}
+            value={filters.atmId}
+            onChange={(atmId) => setFilters({ ...filters, atmId })}
+          />
           <label>
             Operación del historial
             <select

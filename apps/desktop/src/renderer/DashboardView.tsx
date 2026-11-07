@@ -70,6 +70,7 @@ export function DashboardView({
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     async function poll() {
+      setLoading(true);
       const result = await client.call((api) =>
         api.getMediatorLive({
           mode: 'live',
@@ -184,7 +185,9 @@ export function DashboardView({
                 ? 'En pausa'
                 : feedError
                   ? 'Actualización interrumpida'
-                  : 'Actualización cada 5 s'}
+                  : loading
+                    ? 'Consultando…'
+                    : 'Actualización cada 5 s'}
             </span>
           </div>
           <div className="dashboard-feed-controls">
@@ -225,19 +228,26 @@ export function DashboardView({
           className="dashboard-feed-scroll"
           role="region"
           aria-label="Filas de Mediator"
+          aria-busy={loading && !paused}
           tabIndex={0}
         >
           <table>
             <thead>
               <tr>
-                <th>Hora</th>
+                <th>Hora del origen</th>
                 <th>Terminal</th>
                 <th>Referencia de tarjeta</th>
-                <th>TrnCode</th>
+                <th>
+                  Operación <small>TrnCode</small>
+                </th>
                 <th>Valor registrado</th>
-                <th>RetCode</th>
+                <th>
+                  Retorno <small>RetCode</small>
+                </th>
                 <th>Secuencia</th>
-                <th>TraceId</th>
+                <th>
+                  Identificador <small>TraceId</small>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -274,11 +284,11 @@ export function DashboardView({
         </div>
         <div className="dashboard-feed-footer">
           <span>
-            {`${liveShown.length} filas visibles${mediatorHasMore ? ' · hay más anteriores' : ''} · tarjeta protegida`}
+            {`${environment ?? 'Sin ambiente'} · ${liveShown.length} filas visibles${mediatorHasMore ? ' · hay más anteriores' : ''} · tarjeta protegida`}
           </span>
           <span>
             {updatedAt
-              ? `Actualizado ${new Date(updatedAt).toLocaleTimeString('es-EC')}`
+              ? `Actualizado ${new Date(updatedAt).toLocaleString('es-EC')}`
               : 'Sin actualizar'}
           </span>
         </div>

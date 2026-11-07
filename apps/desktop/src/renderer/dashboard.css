@@ -216,6 +216,12 @@
   color: #7a8da5;
   font-size: 11px;
 }
+.dashboard-feed th small {
+  display: block;
+  font-size: 10px;
+  font-weight: 400;
+}
+
 @media (max-width: 1150px) {
   .dashboard-home-overview {
     grid-template-columns: 1fr;

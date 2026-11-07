@@ -4,6 +4,7 @@ import { mkdtemp, readFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { SqliteLoadRunStore } from '../../apps/desktop/src/main/infrastructure/sqlite-load-run-store';
+import { SqliteCatalog } from '../../apps/desktop/src/main/infrastructure/sqlite-catalog';
 import { historyRun } from '../helpers/load-history';
 import { removeTestDirectory } from '../helpers/temporary-directory';
 
@@ -42,6 +43,43 @@ test('historial de carga: paginación, filtros, correlación, recarga y reinicio
     join(directory, 'qa-load-runs.json'),
   );
   const withdrawal = historyRun();
+  const context = { user: 'test', machine: 'test', timestamp: '2026-11-07T12:00:00.000Z' };
+  const catalog = new SqliteCatalog(join(directory, 'catalogs.sqlite'));
+  const entity = catalog.execute(
+    {
+      kind: 'saveEntity',
+      request: {
+        environment: 'QA',
+        id: null,
+        revision: null,
+        values: { code: 'TEST', name: 'Entidad de prueba', networkType: 'COONECTA', active: true },
+      },
+    },
+    context,
+  );
+  if (!entity.ok) throw Error(entity.error.code);
+  const created = catalog.execute(
+    {
+      kind: 'saveAtm',
+      request: {
+        environment: 'QA',
+        id: null,
+        revision: null,
+        values: {
+          alias: 'Cajero Centro',
+          entityId: entity.value.entities[0]!.id,
+          terminalId: 'ATM-TEST',
+          acquirerId: 'TEST',
+          active: true,
+        },
+      },
+    },
+    context,
+  );
+  if (!created.ok) throw Error(created.error.code);
+  const atm = created.value.atms[0]!;
+  catalog.close();
+  withdrawal.draft.atmId = atm.id;
   withdrawal.draft = { ...withdrawal.draft, operation: 'WITHDRAWAL', amount: '25.50' };
   await store.write(withdrawal);
   for (let i = 0; i < 21; i++) await store.write(historyRun());
@@ -50,6 +88,12 @@ test('historial de carga: paginación, filtros, correlación, recarga y reinicio
   let history = window.getByRole('region', { name: 'Historial de carga', exact: true });
   await expect(history.getByRole('button', { name: 'Ver detalle', exact: false })).toHaveCount(0); // accessible names identify the run
   await expect(history.getByRole('button', { name: /^Ver corrida / })).toHaveCount(20);
+  await history
+    .getByRole('combobox', { name: 'ATM del historial', exact: true })
+    .selectOption({ label: 'Cajero Centro · ATM-TEST' });
+  await history.getByRole('button', { name: 'Aplicar filtros', exact: true }).click();
+  await expect(history.getByRole('button', { name: /^Ver corrida / })).toHaveCount(1);
+  await history.getByRole('button', { name: 'Limpiar filtros', exact: true }).click();
   await history.getByRole('button', { name: 'Siguiente', exact: true }).click();
   await expect(history.getByRole('button', { name: /^Ver corrida / })).toHaveCount(2);
   await history
@@ -69,9 +113,24 @@ test('historial de carga: paginación, filtros, correlación, recarga y reinicio
   await expect(history.getByRole('button', { name: /^Ver corrida / })).toHaveCount(20);
   await app!.close();
   app = undefined;
+  const updatedCatalog = new SqliteCatalog(join(directory, 'catalogs.sqlite'));
+  expect(
+    updatedCatalog.execute(
+      { kind: 'deleteAtm', request: { environment: 'QA', id: atm.id, revision: atm.revision } },
+      context,
+    ).ok,
+  ).toBe(true);
+  updatedCatalog.close();
   window = await launch();
   history = window.getByRole('region', { name: 'Historial de carga', exact: true });
+  await history.getByText('Buscar por UUID', { exact: true }).click();
+  await history.getByLabel('ATM del historial (UUID)').fill('invalid');
+  await history.getByRole('button', { name: 'Aplicar filtros', exact: true }).click();
+  await expect(history.getByRole('alert')).toContainText('Revisa el UUID');
   await history.getByLabel('ATM del historial (UUID)').fill(withdrawal.draft.atmId);
+  await expect(
+    history.getByRole('combobox', { name: 'ATM del historial', exact: true }),
+  ).toContainText('ATM fuera del catálogo');
   await history.getByRole('button', { name: 'Aplicar filtros', exact: true }).click();
   await expect(history.getByRole('button', { name: /^Ver corrida / })).toHaveCount(1);
   await history
@@ -85,6 +144,34 @@ test('historial de carga: paginación, filtros, correlación, recarga y reinicio
   expect(await window.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
     true,
   );
+});
+
+test('una corrida cerrada reduce el sondeo a una consulta cada cinco segundos', async () => {
+  const window = await launch();
+  await window.getByRole('button', { name: 'Configuración', exact: true }).click();
+  await app!.evaluate(({ ipcMain }, run) => {
+    const state = globalThis as typeof globalThis & { loadReads: number };
+    state.loadReads = 0;
+    ipcMain.removeHandler('load:run:status');
+    ipcMain.handle('load:run:status', () => {
+      state.loadReads++;
+      return { ok: true, value: run };
+    });
+  }, historyRun());
+  await window.clock.install();
+  try {
+    await window.getByRole('button', { name: 'Carga y estrés', exact: true }).click();
+    await expect(window.getByLabel('Resultado de carga')).toContainText('Completada');
+    const reads = () =>
+      app!.evaluate(() => (globalThis as typeof globalThis & { loadReads: number }).loadReads);
+    expect(await reads()).toBe(1);
+    await window.clock.fastForward(1000);
+    expect(await reads()).toBe(1);
+    await window.clock.fastForward(4500);
+    await expect.poll(reads).toBe(2);
+  } finally {
+    await window.clock.resume();
+  }
 });
 
 test('historial de carga: timeout, recuperación y payload inválido', async () => {

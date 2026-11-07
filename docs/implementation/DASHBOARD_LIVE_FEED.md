@@ -19,6 +19,10 @@ ante errores aplica únicamente dentro del mismo ambiente.
 La búsqueda se calcula cuando cambian filas o filtros, sin repetirla por cada
 actualización del indicador TCP. La tabla admite foco y desplazamiento con teclado;
 el botón Pausar/Reanudar expone su estado mediante `aria-pressed`.
+La tabla presenta Operación, Retorno e Identificador con sus nombres técnicos
+secundarios; no interpreta su resultado financiero. El pie identifica el ambiente
+y la fecha/hora local de la última consulta; la hora del origen SQL sigue literal.
+Durante cada consulta se indica carga y el área de filas expone `aria-busy`.
 
 La consulta usa `TOP 51`, parámetros tipados, timeout y una proyección cerrada.
 No lee XML, cuentas ni PAN al proceso/Renderer. SQL convierte un PAN numérico
