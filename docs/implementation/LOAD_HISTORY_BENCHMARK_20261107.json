@@ -1,0 +1,411 @@
+{
+  "samples": 15,
+  "rows": "synthetic, empty items, warm reads",
+  "results": [
+    {
+      "count": 1000,
+      "adapter": "main-unindexed",
+      "query": "state",
+      "p50Ms": 2.74,
+      "p95Ms": 4.59,
+      "eventLoopP95Ms": 5.05,
+      "rssMiB": 49.1
+    },
+    {
+      "count": 1000,
+      "adapter": "main-unindexed",
+      "query": "operation",
+      "p50Ms": 2.11,
+      "p95Ms": 3.49,
+      "eventLoopP95Ms": 3.52,
+      "rssMiB": 49.2
+    },
+    {
+      "count": 1000,
+      "adapter": "main-unindexed",
+      "query": "date",
+      "p50Ms": 3.11,
+      "p95Ms": 4.27,
+      "eventLoopP95Ms": 4.32,
+      "rssMiB": 49.2
+    },
+    {
+      "count": 1000,
+      "adapter": "main-unindexed",
+      "query": "atm",
+      "p50Ms": 5.83,
+      "p95Ms": 8.75,
+      "eventLoopP95Ms": 8.92,
+      "rssMiB": 49.4
+    },
+    {
+      "count": 1000,
+      "adapter": "main-unindexed",
+      "query": "page",
+      "p50Ms": 1.61,
+      "p95Ms": 5.73,
+      "eventLoopP95Ms": 5.76,
+      "rssMiB": 50.1
+    },
+    {
+      "count": 1000,
+      "adapter": "main-indexed",
+      "query": "state",
+      "p50Ms": 0.52,
+      "p95Ms": 1.59,
+      "eventLoopP95Ms": 16.68,
+      "rssMiB": 50.1
+    },
+    {
+      "count": 1000,
+      "adapter": "main-indexed",
+      "query": "operation",
+      "p50Ms": 0.67,
+      "p95Ms": 1.47,
+      "eventLoopP95Ms": 14.93,
+      "rssMiB": 50.2
+    },
+    {
+      "count": 1000,
+      "adapter": "main-indexed",
+      "query": "date",
+      "p50Ms": 0.53,
+      "p95Ms": 1.39,
+      "eventLoopP95Ms": 16.04,
+      "rssMiB": 50.3
+    },
+    {
+      "count": 1000,
+      "adapter": "main-indexed",
+      "query": "atm",
+      "p50Ms": 2.29,
+      "p95Ms": 2.94,
+      "eventLoopP95Ms": 2.98,
+      "rssMiB": 50.3
+    },
+    {
+      "count": 1000,
+      "adapter": "main-indexed",
+      "query": "page",
+      "p50Ms": 0.85,
+      "p95Ms": 1.61,
+      "eventLoopP95Ms": 12.87,
+      "rssMiB": 50.2
+    },
+    {
+      "count": 1000,
+      "adapter": "worker-indexed",
+      "query": "state",
+      "p50Ms": 0.84,
+      "p95Ms": 2.4,
+      "eventLoopP95Ms": 15.49,
+      "rssMiB": 60.6
+    },
+    {
+      "count": 1000,
+      "adapter": "worker-indexed",
+      "query": "operation",
+      "p50Ms": 1,
+      "p95Ms": 1.57,
+      "eventLoopP95Ms": 9.44,
+      "rssMiB": 60.7
+    },
+    {
+      "count": 1000,
+      "adapter": "worker-indexed",
+      "query": "date",
+      "p50Ms": 1.1,
+      "p95Ms": 1.91,
+      "eventLoopP95Ms": 13.03,
+      "rssMiB": 60.9
+    },
+    {
+      "count": 1000,
+      "adapter": "worker-indexed",
+      "query": "atm",
+      "p50Ms": 3.54,
+      "p95Ms": 5.18,
+      "eventLoopP95Ms": 4.65,
+      "rssMiB": 61.4
+    },
+    {
+      "count": 1000,
+      "adapter": "worker-indexed",
+      "query": "page",
+      "p50Ms": 1.83,
+      "p95Ms": 3.04,
+      "eventLoopP95Ms": 2.6,
+      "rssMiB": 62.8
+    },
+    {
+      "count": 10000,
+      "adapter": "main-unindexed",
+      "query": "state",
+      "p50Ms": 27.93,
+      "p95Ms": 32.92,
+      "eventLoopP95Ms": 32.99,
+      "rssMiB": 54.4
+    },
+    {
+      "count": 10000,
+      "adapter": "main-unindexed",
+      "query": "operation",
+      "p50Ms": 27.6,
+      "p95Ms": 48.45,
+      "eventLoopP95Ms": 48.51,
+      "rssMiB": 54.5
+    },
+    {
+      "count": 10000,
+      "adapter": "main-unindexed",
+      "query": "date",
+      "p50Ms": 27.74,
+      "p95Ms": 43.23,
+      "eventLoopP95Ms": 43.28,
+      "rssMiB": 54.5
+    },
+    {
+      "count": 10000,
+      "adapter": "main-unindexed",
+      "query": "atm",
+      "p50Ms": 31.5,
+      "p95Ms": 35.08,
+      "eventLoopP95Ms": 35.13,
+      "rssMiB": 54.6
+    },
+    {
+      "count": 10000,
+      "adapter": "main-unindexed",
+      "query": "page",
+      "p50Ms": 12.82,
+      "p95Ms": 13.94,
+      "eventLoopP95Ms": 14.18,
+      "rssMiB": 54.3
+    },
+    {
+      "count": 10000,
+      "adapter": "main-indexed",
+      "query": "state",
+      "p50Ms": 0.5,
+      "p95Ms": 1.06,
+      "eventLoopP95Ms": 16.1,
+      "rssMiB": 54.2
+    },
+    {
+      "count": 10000,
+      "adapter": "main-indexed",
+      "query": "operation",
+      "p50Ms": 0.47,
+      "p95Ms": 0.72,
+      "eventLoopP95Ms": 16.55,
+      "rssMiB": 54.3
+    },
+    {
+      "count": 10000,
+      "adapter": "main-indexed",
+      "query": "date",
+      "p50Ms": 0.87,
+      "p95Ms": 2.16,
+      "eventLoopP95Ms": 15.36,
+      "rssMiB": 54.4
+    },
+    {
+      "count": 10000,
+      "adapter": "main-indexed",
+      "query": "atm",
+      "p50Ms": 23.5,
+      "p95Ms": 40.27,
+      "eventLoopP95Ms": 40.33,
+      "rssMiB": 54.6
+    },
+    {
+      "count": 10000,
+      "adapter": "main-indexed",
+      "query": "page",
+      "p50Ms": 0.73,
+      "p95Ms": 1.67,
+      "eventLoopP95Ms": 14.43,
+      "rssMiB": 54.7
+    },
+    {
+      "count": 10000,
+      "adapter": "worker-indexed",
+      "query": "state",
+      "p50Ms": 0.72,
+      "p95Ms": 1.34,
+      "eventLoopP95Ms": 15.32,
+      "rssMiB": 62
+    },
+    {
+      "count": 10000,
+      "adapter": "worker-indexed",
+      "query": "operation",
+      "p50Ms": 0.64,
+      "p95Ms": 1.4,
+      "eventLoopP95Ms": 14.77,
+      "rssMiB": 62
+    },
+    {
+      "count": 10000,
+      "adapter": "worker-indexed",
+      "query": "date",
+      "p50Ms": 0.84,
+      "p95Ms": 1.92,
+      "eventLoopP95Ms": 15.06,
+      "rssMiB": 62
+    },
+    {
+      "count": 10000,
+      "adapter": "worker-indexed",
+      "query": "atm",
+      "p50Ms": 23.99,
+      "p95Ms": 49.63,
+      "eventLoopP95Ms": 14.09,
+      "rssMiB": 63.6
+    },
+    {
+      "count": 10000,
+      "adapter": "worker-indexed",
+      "query": "page",
+      "p50Ms": 1.52,
+      "p95Ms": 2.66,
+      "eventLoopP95Ms": 12.19,
+      "rssMiB": 64.5
+    },
+    {
+      "count": 50000,
+      "adapter": "main-unindexed",
+      "query": "state",
+      "p50Ms": 126.57,
+      "p95Ms": 142.75,
+      "eventLoopP95Ms": 142.8,
+      "rssMiB": 54.3
+    },
+    {
+      "count": 50000,
+      "adapter": "main-unindexed",
+      "query": "operation",
+      "p50Ms": 123.15,
+      "p95Ms": 130.92,
+      "eventLoopP95Ms": 130.97,
+      "rssMiB": 54.4
+    },
+    {
+      "count": 50000,
+      "adapter": "main-unindexed",
+      "query": "date",
+      "p50Ms": 134.4,
+      "p95Ms": 143.2,
+      "eventLoopP95Ms": 143.29,
+      "rssMiB": 54.4
+    },
+    {
+      "count": 50000,
+      "adapter": "main-unindexed",
+      "query": "atm",
+      "p50Ms": 170.41,
+      "p95Ms": 178.16,
+      "eventLoopP95Ms": 178.2,
+      "rssMiB": 54.6
+    },
+    {
+      "count": 50000,
+      "adapter": "main-unindexed",
+      "query": "page",
+      "p50Ms": 63.35,
+      "p95Ms": 68.43,
+      "eventLoopP95Ms": 68.46,
+      "rssMiB": 54.9
+    },
+    {
+      "count": 50000,
+      "adapter": "main-indexed",
+      "query": "state",
+      "p50Ms": 0.47,
+      "p95Ms": 0.61,
+      "eventLoopP95Ms": 16.19,
+      "rssMiB": 55
+    },
+    {
+      "count": 50000,
+      "adapter": "main-indexed",
+      "query": "operation",
+      "p50Ms": 0.56,
+      "p95Ms": 0.82,
+      "eventLoopP95Ms": 16.07,
+      "rssMiB": 55.1
+    },
+    {
+      "count": 50000,
+      "adapter": "main-indexed",
+      "query": "date",
+      "p50Ms": 0.7,
+      "p95Ms": 1.6,
+      "eventLoopP95Ms": 14.67,
+      "rssMiB": 55.2
+    },
+    {
+      "count": 50000,
+      "adapter": "main-indexed",
+      "query": "atm",
+      "p50Ms": 113.07,
+      "p95Ms": 133.22,
+      "eventLoopP95Ms": 133.26,
+      "rssMiB": 55.5
+    },
+    {
+      "count": 50000,
+      "adapter": "main-indexed",
+      "query": "page",
+      "p50Ms": 1.09,
+      "p95Ms": 1.77,
+      "eventLoopP95Ms": 15.51,
+      "rssMiB": 55.1
+    },
+    {
+      "count": 50000,
+      "adapter": "worker-indexed",
+      "query": "state",
+      "p50Ms": 0.96,
+      "p95Ms": 1.78,
+      "eventLoopP95Ms": 15.76,
+      "rssMiB": 61.9
+    },
+    {
+      "count": 50000,
+      "adapter": "worker-indexed",
+      "query": "operation",
+      "p50Ms": 0.94,
+      "p95Ms": 1.53,
+      "eventLoopP95Ms": 11.17,
+      "rssMiB": 62
+    },
+    {
+      "count": 50000,
+      "adapter": "worker-indexed",
+      "query": "date",
+      "p50Ms": 0.87,
+      "p95Ms": 2.21,
+      "eventLoopP95Ms": 12.71,
+      "rssMiB": 62.2
+    },
+    {
+      "count": 50000,
+      "adapter": "worker-indexed",
+      "query": "atm",
+      "p50Ms": 112.25,
+      "p95Ms": 125.98,
+      "eventLoopP95Ms": 16.25,
+      "rssMiB": 64.2
+    },
+    {
+      "count": 50000,
+      "adapter": "worker-indexed",
+      "query": "page",
+      "p50Ms": 1.12,
+      "p95Ms": 2.49,
+      "eventLoopP95Ms": 10.82,
+      "rssMiB": 65.3
+    }
+  ]
+}

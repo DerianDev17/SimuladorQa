@@ -26,6 +26,41 @@ const preferences = {
 const recovered = async () => ({ ok: true as const, value: null });
 
 describe('historial de carga persistente', () => {
+  it('migra esquema 1 sin alterar payloads y usa índices para filtros selectivos', async () => {
+    const run = historyRun();
+    const file = join(directory, 'runs.sqlite');
+    const old = new DatabaseSync(file);
+    old.exec(`
+      CREATE TABLE runs (sequence INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT NOT NULL UNIQUE, request_id TEXT NOT NULL UNIQUE, payload TEXT NOT NULL);
+      CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      INSERT INTO metadata VALUES ('legacy_imported', '1');
+      PRAGMA user_version = 1;
+    `);
+    const payload = JSON.stringify(run);
+    old
+      .prepare('INSERT INTO runs(run_id,request_id,payload) VALUES (?,?,?)')
+      .run(run.runId, run.requestId, payload);
+    old.close();
+    expect((await store.list({ state: 'COMPLETED' })).entries[0]?.runId).toBe(run.runId);
+    await store.close();
+    const migrated = new DatabaseSync(file);
+    try {
+      expect(migrated.prepare('PRAGMA user_version').get()?.user_version).toBe(2);
+      expect(migrated.prepare('SELECT payload FROM runs').get()?.payload).toBe(payload);
+      const plan = migrated
+        .prepare(
+          "EXPLAIN QUERY PLAN SELECT sequence FROM runs WHERE (CASE WHEN json_valid(payload) THEN json_extract(payload, '$.state') END) = ? ORDER BY sequence DESC LIMIT 21",
+        )
+        .all('FAILED');
+      expect(JSON.stringify(plan)).toContain('runs_state');
+      migrated.prepare('UPDATE runs SET payload = ?').run('{private');
+    } finally {
+      migrated.close();
+    }
+    // An index must not hide corruption behind an empty filtered page.
+    await expect(store.list({ state: 'FAILED' })).rejects.toThrow('LOAD_STORE_INVALID');
+  });
+
   it('pagina sin duplicados aunque se agregue una corrida, y recupera detalle tras reiniciar', async () => {
     const runs = Array.from({ length: 25 }, () => historyRun());
     for (const run of runs) await store.write(run);
@@ -68,6 +103,11 @@ describe('historial de carga persistente', () => {
       atmId: secondary,
     };
     expect((await store.list(query)).entries.map((row) => row.runId)).toEqual([first.runId]);
+    expect(
+      (await store.list({ from: first.startedAt, to: latest.startedAt })).entries.map(
+        (row) => row.runId,
+      ),
+    ).toEqual([first.runId]);
     expect((await store.list({ ...query, state: 'COMPLETED' })).entries).toEqual([]);
     expect(await store.read()).toEqual(latest);
     await expect(store.list({ atmId: "' OR 1=1" })).rejects.toThrow('LOAD_HISTORY_INVALID');

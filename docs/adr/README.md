@@ -40,3 +40,4 @@ Cuando una decisión reemplaza a otra, ambas se conservan para trazabilidad.
 | [032](ADR-032-FINANCIAL-EXECUTION-PORTS.md)                 | Motor financiero y contratos independientes      | Implementado                               |
 | [033](ADR-033-LOAD-HISTORY-EXPORT.md) | Historial y exportación de evidencia de carga | Implementado |
 | [034](ADR-034-STRESS-CONFIGURATIONS.md) | Presets de estrés y configuraciones reutilizables | Implementado |
+| [035](ADR-035-LOAD-STORAGE-WORKER.md) | Persistencia de carga en worker e índices | Implementado |

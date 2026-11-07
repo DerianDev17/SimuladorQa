@@ -9,6 +9,7 @@ export async function buildMain() {
       'load-worker': 'apps/desktop/src/main/infrastructure/load-worker.ts',
       preload: 'apps/desktop/src/preload.ts',
       'catalog-worker': 'apps/desktop/src/main/infrastructure/catalog-worker.ts',
+      'load-store-worker': 'apps/desktop/src/main/infrastructure/load-store-worker.ts',
     },
     outdir: 'dist',
     outExtension: { '.js': '.cjs' },

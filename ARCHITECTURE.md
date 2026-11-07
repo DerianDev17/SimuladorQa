@@ -59,6 +59,9 @@ para conservar respuestas fuera de orden.
 Los diarios financieros y de carga usan SQLite; las importaciones desde JSON
 conservan el original como respaldo. Una corrida activa recuperada se marca
 interrumpida y no se reanuda. Un resultado incierto conserva esa clasificación.
+La conexión SQLite de carga y sus consultas de historial se ejecutan en un worker
+dedicado detrás de los mismos puertos. El esquema 2 agrega índices de consulta;
+un timeout del worker no provoca reenvío de escrituras. Ver [ADR-035](docs/adr/ADR-035-LOAD-STORAGE-WORKER.md).
 Los errores históricos de retiro terminados y guardados permiten una nueva
 solicitud explícita; pendientes, reversos activos y fallos de persistencia mantienen
 su bloqueo. Ver [ADR-025](docs/adr/ADR-025-QA-WITHDRAWAL-AFTER-ERROR.md).

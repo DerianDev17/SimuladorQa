@@ -7,7 +7,7 @@ import { LoadHistoryService } from './load-history-service';
 import { LoadPinSession } from './adapters/load-pin-session';
 import { LoadRunService } from './load-run-service';
 import { PhysicalCardLoadDriver } from './physical-card-load-driver';
-import { SqliteLoadRunStore } from './infrastructure/sqlite-load-run-store';
+import { WorkerLoadRunStore } from './infrastructure/worker-load-run-store';
 import { workerLoadScheduler } from './infrastructure/load-scheduler';
 import { app, BrowserWindow, dialog, ipcMain, session } from 'electron';
 import { randomUUID } from 'node:crypto';
@@ -73,7 +73,7 @@ let loadHistory: LoadHistoryService | undefined;
 let loadExporter: LoadExportService | undefined;
 let loadConfigurations: LoadConfigurationService | undefined;
 let loadConfigurationStore: SqliteLoadConfigurations | undefined;
-let loadRunStore: SqliteLoadRunStore | undefined;
+let loadRunStore: WorkerLoadRunStore | undefined;
 let virtualCardGenerator: VirtualCardGeneratorService | undefined;
 let savedCardProfiles: SavedCardProfileService | undefined;
 let financialApplication: DesktopApplication | undefined;
@@ -333,7 +333,8 @@ void startupReady
       withdrawalService,
     );
     financialApplication = application;
-    loadRunStore = new SqliteLoadRunStore(
+    loadRunStore = new WorkerLoadRunStore(
+      join(__dirname, 'load-store-worker.cjs'),
       join(app.getPath('userData'), 'qa-load-runs.sqlite'),
       join(app.getPath('userData'), 'qa-load-runs.json'),
     );

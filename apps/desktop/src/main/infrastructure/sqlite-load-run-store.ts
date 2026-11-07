@@ -22,6 +22,13 @@ interface StoredRun {
   payload: string;
 }
 
+// Guard index expressions so a corrupt payload remains inspectable and is reported on read.
+const stateExpression = "CASE WHEN json_valid(payload) THEN json_extract(payload, '$.state') END";
+const operationExpression =
+  "CASE WHEN json_valid(payload) THEN json_extract(payload, '$.draft.operation') END";
+const startedExpression =
+  "CASE WHEN json_valid(payload) THEN julianday(json_extract(payload, '$.startedAt')) END";
+
 export class SqliteLoadRunStore implements LoadRunStore, LoadHistoryStore {
   private database: DatabaseSync | undefined;
   private pending: Promise<void> = Promise.resolve();
@@ -68,7 +75,7 @@ export class SqliteLoadRunStore implements LoadRunStore, LoadHistoryStore {
           database.exec('ROLLBACK');
           throw error;
         }
-      } else if (version !== 1) throw Error('LOAD_STORE_SCHEMA_UNSUPPORTED');
+      } else if (version !== 1 && version !== 2) throw Error('LOAD_STORE_SCHEMA_UNSUPPORTED');
 
       const migration = database
         .prepare("SELECT value FROM metadata WHERE key = 'legacy_imported'")
@@ -87,6 +94,22 @@ export class SqliteLoadRunStore implements LoadRunStore, LoadHistoryStore {
           database
             .prepare("INSERT INTO metadata (key, value) VALUES ('legacy_imported', '1')")
             .run();
+          database.exec('COMMIT');
+        } catch (error) {
+          database.exec('ROLLBACK');
+          throw error;
+        }
+      }
+      if (version !== 2) {
+        database.exec('BEGIN IMMEDIATE');
+        try {
+          database.exec(`
+            CREATE INDEX runs_state ON runs((${stateExpression}), sequence DESC);
+            CREATE INDEX runs_operation ON runs((${operationExpression}), sequence DESC);
+            CREATE INDEX runs_started ON runs((${startedExpression}), sequence DESC);
+            CREATE INDEX runs_invalid_json ON runs(sequence) WHERE NOT json_valid(payload);
+            PRAGMA user_version = 2;
+          `);
           database.exec('COMMIT');
         } catch (error) {
           database.exec('ROLLBACK');
@@ -145,19 +168,19 @@ export class SqliteLoadRunStore implements LoadRunStore, LoadHistoryStore {
         values.push(query.before);
       }
       if (query.from) {
-        clauses.push("julianday(json_extract(payload, '$.startedAt')) >= julianday(?)");
+        clauses.push(`(${startedExpression}) >= julianday(?)`);
         values.push(query.from);
       }
       if (query.to) {
-        clauses.push("julianday(json_extract(payload, '$.startedAt')) < julianday(?)");
+        clauses.push(`(${startedExpression}) < julianday(?)`);
         values.push(query.to);
       }
       if (query.operation) {
-        clauses.push("json_extract(payload, '$.draft.operation') = ?");
+        clauses.push(`(${operationExpression}) = ?`);
         values.push(query.operation);
       }
       if (query.state) {
-        clauses.push("json_extract(payload, '$.state') = ?");
+        clauses.push(`(${stateExpression}) = ?`);
         values.push(query.state);
       }
       if (query.atmId) {
@@ -166,9 +189,16 @@ export class SqliteLoadRunStore implements LoadRunStore, LoadHistoryStore {
         );
         values.push(query.atmId, query.atmId);
       }
-      const rows = (await this.open())
+      const database = await this.open();
+      if (database.prepare('SELECT 1 FROM runs WHERE NOT json_valid(payload) LIMIT 1').get())
+        throw Error('LOAD_STORE_INVALID');
+      const rows = database
         .prepare(
-          `SELECT sequence, run_id, request_id, payload FROM runs ${clauses.length ? 'WHERE ' + clauses.join(' AND ') : ''} ORDER BY sequence DESC LIMIT ?`,
+          `SELECT sequence, run_id, request_id, payload FROM runs ${
+            (query.from || query.to) && !query.state && !query.operation
+              ? 'INDEXED BY runs_started'
+              : ''
+          } ${clauses.length ? 'WHERE ' + clauses.join(' AND ') : ''} ORDER BY sequence DESC LIMIT ?`,
         )
         .all(...values, LOAD_HISTORY_PAGE_SIZE + 1) as unknown as (StoredRun & {
         sequence: number;
