@@ -6,6 +6,16 @@ estado y parada. Se retiró el preparador virtual legado sin consumidores y su I
 
 ## Preparar e iniciar
 
+La UI consulta el estado cada segundo durante ejecución, cierre, error o inicio
+incierto; en reposo o con corrida cerrada espera cinco segundos entre respuestas.
+Iniciar y detener solicitan actualización inmediata, sin solapar consultas ni
+repetir comandos. El panel `LoadResultsView` separa presentación del control y
+calcula métricas una vez por render de resultados, reutilizando los TPS del resumen.
+
+El historial permite elegir un ATM por alias y Terminal ID. **Buscar por UUID**
+conserva consultas de ATM eliminados o fuera del catálogo. Persistencia e índices
+se describen en [ADR-035](../adr/ADR-035-LOAD-STORAGE-WORKER.md).
+
 1. Abrir **Carga y estrés** en QA y seleccionar uno o varios ATM activos.
 2. Elegir **Operación de carga**: consulta de saldo o retiro. Para retiro indicar
    **Monto por retiro (USD)**, con punto y dos decimales; se aplica a cada operación.
