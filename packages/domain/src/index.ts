@@ -14,6 +14,7 @@ export const scenarios = [
 export type Scenario = (typeof scenarios)[number]['id'];
 
 export const transactions = [
+  { id: 'DEPOSIT', label: 'Depósito', document: 'docs/transactions/DEPOSIT.md' },
   { id: 'BALANCE', label: 'Consulta de saldo', document: 'docs/transactions/BALANCE_INQUIRY.md' },
   {
     id: 'WITHDRAWAL_APPROVED',

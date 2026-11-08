@@ -50,6 +50,8 @@ import type { BalanceTarget } from './balance-ports';
 import { missingBalanceContext, loadExecutionScope } from './financial-execution-context';
 import type { BalanceExecutionContext } from './financial-execution-context';
 import type { FinancialExecutionPort } from './financial-execution-port';
+import type { SessionMessagePort } from './session-message-port';
+import type { SessionMessages } from '../../../../packages/shared/src/session-messages';
 import type { SwitchConnectionPort } from './switch-connection-port';
 import type { SwitchConnectionSnapshot } from '../../../../packages/domain/src/switch-connection';
 import {
@@ -57,6 +59,12 @@ import {
   parseWithdrawalExecutionRequest,
   missingWithdrawalContext,
 } from '../../../../packages/domain/src/withdrawal';
+
+import {
+  parseDepositContextRequest,
+  parseDepositExecutionRequest,
+  missingDepositContext,
+} from '../../../../packages/domain/src/deposit';
 
 export class DesktopApplication {
   private queue: Promise<unknown> = Promise.resolve();
@@ -88,6 +96,8 @@ export class DesktopApplication {
     private readonly balanceInquiry?: FinancialExecutionPort,
     private readonly switchConnection?: SwitchConnectionPort,
     private readonly withdrawalService?: FinancialExecutionPort,
+    private readonly sessionMessages?: SessionMessagePort,
+    private readonly depositService?: FinancialExecutionPort,
   ) {}
 
   private serialize<T>(operation: () => Promise<T>): Promise<T> {
@@ -161,6 +171,7 @@ export class DesktopApplication {
           ].slice(-100),
         };
         await this.store.write(next);
+        this.sessionMessages?.clear();
         this.switchConnection?.disconnect('ENVIRONMENT_CHANGED');
         this.environmentRevision++;
         return { ok: true, value: this.snapshot(next) };
@@ -540,6 +551,18 @@ export class DesktopApplication {
       }
     });
   }
+  getDepositReadiness(payload: unknown): Promise<Result<BalanceReadiness>> {
+    return this.getBalanceReadiness(payload, 'DEPOSIT');
+  }
+  executeDeposit(payload: unknown): Promise<Result<BalanceExecution>> {
+    return this.executeBalance(payload, 'DEPOSIT');
+  }
+  getDepositExecution(payload: unknown): Promise<Result<BalanceExecution | null>> {
+    return this.getBalanceExecution(payload, 'DEPOSIT');
+  }
+  getDepositHistory(payload: unknown): Promise<Result<readonly BalanceExecution[]>> {
+    return this.getBalanceHistory(payload, 'DEPOSIT');
+  }
   getWithdrawalReadiness(payload: unknown): Promise<Result<BalanceReadiness>> {
     return this.getBalanceReadiness(payload, 'WITHDRAWAL');
   }
@@ -554,26 +577,39 @@ export class DesktopApplication {
   }
   async getBalanceReadiness(
     payload: unknown,
-    operation: 'BALANCE' | 'WITHDRAWAL' = 'BALANCE',
+    operation: 'BALANCE' | 'WITHDRAWAL' | 'DEPOSIT' = 'BALANCE',
   ): Promise<Result<BalanceReadiness>> {
     const request =
-      operation === 'WITHDRAWAL'
-        ? parseWithdrawalContextRequest(payload)
-        : parseBalanceContextRequest(payload);
+      operation === 'DEPOSIT'
+        ? parseDepositContextRequest(payload)
+        : operation === 'WITHDRAWAL'
+          ? parseWithdrawalContextRequest(payload)
+          : parseBalanceContextRequest(payload);
     if (!request)
       return failure(
         'VALIDATION_ERROR',
-        operation === 'WITHDRAWAL'
-          ? 'Selecciona ATM, tarjeta y monto positivo para retiro de ahorros local en QA.'
-          : 'Selecciona una tarjeta y un ATM para consulta de ahorros en QA.',
+        operation === 'DEPOSIT'
+          ? 'Selecciona ATM, tarjeta y monto positivo para depósito de ahorros local en QA.'
+          : operation === 'WITHDRAWAL'
+            ? 'Selecciona ATM, tarjeta y monto positivo para retiro de ahorros local en QA.'
+            : 'Selecciona una tarjeta y un ATM para consulta de ahorros en QA.',
       );
     const context = await this.balanceTarget(request);
     if (!context.ok) return context;
-    const service = operation === 'WITHDRAWAL' ? this.withdrawalService : this.balanceInquiry;
+    const service =
+      operation === 'DEPOSIT'
+        ? this.depositService
+        : operation === 'WITHDRAWAL'
+          ? this.withdrawalService
+          : this.balanceInquiry;
     const readiness = service
       ? await service.inspect(context.value.target)
       : structuredClone(
-          operation === 'WITHDRAWAL' ? missingWithdrawalContext : missingBalanceContext,
+          operation === 'DEPOSIT'
+            ? missingDepositContext
+            : operation === 'WITHDRAWAL'
+              ? missingWithdrawalContext
+              : missingBalanceContext,
         );
     const blockers = [...readiness.blockers];
     if (context.value.connect === null || context.value.response === null)
@@ -594,19 +630,23 @@ export class DesktopApplication {
   }
   async executeBalance(
     payload: unknown,
-    operation: 'BALANCE' | 'WITHDRAWAL' = 'BALANCE',
+    operation: 'BALANCE' | 'WITHDRAWAL' | 'DEPOSIT' = 'BALANCE',
     execution?: BalanceExecutionContext,
   ): Promise<Result<BalanceExecution>> {
     const request =
-      operation === 'WITHDRAWAL'
-        ? parseWithdrawalExecutionRequest(payload)
-        : parseBalanceExecutionRequest(payload);
+      operation === 'DEPOSIT'
+        ? parseDepositExecutionRequest(payload)
+        : operation === 'WITHDRAWAL'
+          ? parseWithdrawalExecutionRequest(payload)
+          : parseBalanceExecutionRequest(payload);
     if (!request)
       return failure(
         'VALIDATION_ERROR',
         'Revisa el contexto de ejecución; este canal no acepta tramas ni secretos.',
       );
-    const scope = operation === 'BALANCE' ? loadExecutionScope(execution) : undefined;
+    const loadScope =
+      request.reversalDelaySeconds === undefined ? loadExecutionScope(execution) : undefined;
+    const scope = loadScope ? `${operation}:${loadScope}` : undefined;
     if (
       this.balanceBusy &&
       (!scope || scope !== this.balanceScope || this.balanceCount >= execution!.concurrency!)
@@ -630,7 +670,12 @@ export class DesktopApplication {
         configurationRevision: request.configurationRevision,
       });
       if (!context.ok) return context;
-      const service = operation === 'WITHDRAWAL' ? this.withdrawalService : this.balanceInquiry;
+      const service =
+        operation === 'DEPOSIT'
+          ? this.depositService
+          : operation === 'WITHDRAWAL'
+            ? this.withdrawalService
+            : this.balanceInquiry;
       if (!service)
         return failure('SERVICE_UNAVAILABLE', 'El servicio de ejecución no está configurado.');
       if (context.value.connect === null || context.value.response === null)
@@ -668,7 +713,7 @@ export class DesktopApplication {
   }
   getBalanceExecution(
     payload: unknown,
-    operation: 'BALANCE' | 'WITHDRAWAL' = 'BALANCE',
+    operation: 'BALANCE' | 'WITHDRAWAL' | 'DEPOSIT' = 'BALANCE',
   ): Promise<Result<BalanceExecution | null>> {
     return this.serialize(async () => {
       if (
@@ -681,7 +726,12 @@ export class DesktopApplication {
       try {
         if ((await this.store.read()).environment !== 'QA')
           return failure('CONFLICT', 'Consulta el resultado desde QA.');
-        const service = operation === 'WITHDRAWAL' ? this.withdrawalService : this.balanceInquiry;
+        const service =
+          operation === 'DEPOSIT'
+            ? this.depositService
+            : operation === 'WITHDRAWAL'
+              ? this.withdrawalService
+              : this.balanceInquiry;
         return service
           ? await service.find(payload.requestId)
           : failure('SERVICE_UNAVAILABLE', 'El servicio de ejecución no está disponible.');
@@ -691,9 +741,33 @@ export class DesktopApplication {
     });
   }
 
+  getSessionMessages(payload: unknown): Promise<Result<SessionMessages | null>> {
+    return this.serialize(async () => {
+      if (
+        !isRecord(payload) ||
+        Object.keys(payload).length !== 2 ||
+        payload.environment !== 'QA' ||
+        !isUuid(payload.requestId)
+      )
+        return failure('VALIDATION_ERROR', 'Revisa el ambiente QA y la referencia de ejecución.');
+      try {
+        if ((await this.store.read()).environment !== 'QA')
+          return failure(
+            'CONFLICT',
+            'Los mensajes completos de sesión están disponibles solo en QA.',
+          );
+        return this.sessionMessages
+          ? { ok: true, value: this.sessionMessages.read(payload.requestId) }
+          : failure('SERVICE_UNAVAILABLE', 'La vista completa de sesión no está disponible.');
+      } catch {
+        return failure('SERVICE_UNAVAILABLE', 'No se pudieron consultar los mensajes de sesión.');
+      }
+    });
+  }
+
   getBalanceHistory(
     payload: unknown,
-    operation: 'BALANCE' | 'WITHDRAWAL' = 'BALANCE',
+    operation: 'BALANCE' | 'WITHDRAWAL' | 'DEPOSIT' = 'BALANCE',
   ): Promise<Result<readonly BalanceExecution[]>> {
     return this.serialize(async () => {
       if (parseEnvironmentRequest(payload) !== 'QA')
@@ -701,7 +775,12 @@ export class DesktopApplication {
       try {
         if ((await this.store.read()).environment !== 'QA')
           return failure('CONFLICT', 'Abre el historial desde QA.');
-        const service = operation === 'WITHDRAWAL' ? this.withdrawalService : this.balanceInquiry;
+        const service =
+          operation === 'DEPOSIT'
+            ? this.depositService
+            : operation === 'WITHDRAWAL'
+              ? this.withdrawalService
+              : this.balanceInquiry;
         return service
           ? await service.history()
           : failure('SERVICE_UNAVAILABLE', 'El historial de transacciones no está disponible.');

@@ -4,6 +4,7 @@ import { channels, desktopEvents } from '../../../packages/shared/src/contracts'
 import type { DesktopApi } from '../../../packages/shared/src/contracts';
 
 const api: DesktopApi = Object.freeze<DesktopApi>({
+  getSessionMessages: (request) => ipcRenderer.invoke(channels.sessionMessages, request),
   getSnapshot: () => ipcRenderer.invoke(channels.snapshot),
   getSwitchConnection: (environment) =>
     ipcRenderer.invoke(channels.switchConnection, { environment }),
@@ -17,6 +18,10 @@ const api: DesktopApi = Object.freeze<DesktopApi>({
   executeBalance: (request) => ipcRenderer.invoke(channels.executeBalance, request),
   getBalanceExecution: (request) => ipcRenderer.invoke(channels.balanceExecution, request),
   getBalanceHistory: (environment) => ipcRenderer.invoke(channels.balanceHistory, { environment }),
+  getDepositReadiness: (request) => ipcRenderer.invoke(channels.depositReadiness, request),
+  executeDeposit: (request) => ipcRenderer.invoke(channels.executeDeposit, request),
+  getDepositExecution: (request) => ipcRenderer.invoke(channels.depositExecution, request),
+  getDepositHistory: (environment) => ipcRenderer.invoke(channels.depositHistory, { environment }),
   getWithdrawalReadiness: (request) => ipcRenderer.invoke(channels.withdrawalReadiness, request),
   executeWithdrawal: (request) => ipcRenderer.invoke(channels.executeWithdrawal, request),
   getWithdrawalExecution: (request) => ipcRenderer.invoke(channels.withdrawalExecution, request),

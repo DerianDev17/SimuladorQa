@@ -145,7 +145,7 @@ export class QaAtmTemplate {
 export class QaTemplateContextProvider implements BalanceContextProvider {
   constructor(
     private readonly template: QaAtmTemplate,
-    private readonly operation: 'BALANCE' | 'WITHDRAWAL',
+    private readonly operation: 'BALANCE' | 'WITHDRAWAL' | 'DEPOSIT',
     private readonly cards: Pick<CardIdentityService, 'current' | 'withTransaction'>,
     private readonly pinEntry: QaPinEntry,
     private readonly cipher: QaPinCipherAvailability,
@@ -156,7 +156,7 @@ export class QaTemplateContextProvider implements BalanceContextProvider {
     const resolved = await this.template.resolve(target);
     const { profile, profiles, policies } = resolved;
     const provider =
-      this.operation === 'BALANCE'
+      this.operation === 'DEPOSIT'
         ? new QaBalanceExecutionProvider(
             profile,
             profiles,
@@ -164,16 +164,26 @@ export class QaTemplateContextProvider implements BalanceContextProvider {
             this.pinEntry,
             this.cipher,
             this.clock,
+            { kind: 'DEPOSIT', amount: target.draft.amount!, validate: resolved.validate },
           )
-        : new QaWithdrawalExecutionProvider(
-            profile,
-            profiles,
-            policies,
-            this.cards,
-            this.pinEntry,
-            this.cipher,
-            this.clock,
-          );
+        : this.operation === 'BALANCE'
+          ? new QaBalanceExecutionProvider(
+              profile,
+              profiles,
+              this.cards,
+              this.pinEntry,
+              this.cipher,
+              this.clock,
+            )
+          : new QaWithdrawalExecutionProvider(
+              profile,
+              profiles,
+              policies,
+              this.cards,
+              this.pinEntry,
+              this.cipher,
+              this.clock,
+            );
     const router = new QaBalanceContextRouter(this.operation);
     router.bind({
       atmId: profile.atmId,

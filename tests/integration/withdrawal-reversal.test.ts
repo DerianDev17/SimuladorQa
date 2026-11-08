@@ -18,6 +18,7 @@ import { reversalFixture, reversalResponse } from '../helpers/withdrawal-reversa
 import { withdrawalResponse } from '../helpers/withdrawal';
 import { removeTestDirectory } from '../helpers/temporary-directory';
 import { networkManagementRequest } from '../helpers/visa-network-management';
+import type { SessionIsoMessage } from '../../packages/shared/src/session-messages';
 
 const framing = new CapturedVisaFraming();
 let server: Server | undefined, directory: string | undefined;
@@ -115,7 +116,13 @@ describe('retiro, espera y reverso en TCP loopback', () => {
       }
     });
     const r = request(port);
-    const result = await new WithdrawalReversalTransport().exchange(r);
+    const session: SessionIsoMessage[] = [];
+    const result = await new WithdrawalReversalTransport().exchange({
+      ...r,
+      onSessionMessage: (message) => session.push(message),
+    });
+    expect(session.map((m) => m.mti)).toEqual(['0200', '0210', '0420', '0430']);
+    expect(session.every((m) => m.fields.every((f) => f.value !== '••••••••'))).toBe(true);
     expect(received).toEqual([0x0200, 0x0420]);
     expect(reversedAt - approvedAt).toBeGreaterThanOrEqual(950);
     expect(r.progress.map((p) => p.outcome)).toEqual(['WAITING', 'SENDING']);

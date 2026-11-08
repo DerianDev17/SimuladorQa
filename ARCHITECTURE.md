@@ -28,8 +28,10 @@ flowchart TD
   App --> Port[FinancialExecutionPort]
   Balance[Fachada de saldo] -. implementa .-> Port
   Withdrawal[Fachada de retiro] -. implementa .-> Port
+  Deposit[Fachada de depósito] -. implementa .-> Port
   Balance --> Engine[FinancialExecutionService]
   Withdrawal --> Engine
+  Deposit --> Engine
   Engine --> Financial[Puertos de builder, contexto, transporte y diario]
   Adapters[Adaptadores ISO / TCP / PIN-EMV / persistencia] -. implementan .-> Financial
   Load[LoadRunService] --> LoadPorts[load-ports]
@@ -38,7 +40,7 @@ flowchart TD
   Worker[Scheduler worker y almacenamiento] -. implementan .-> LoadPorts
 ```
 
-Las fachadas de saldo y retiro inyectan su builder y configuración al mismo motor.
+Las fachadas de saldo, retiro y depósito inyectan su builder y configuración al mismo motor.
 Retiro no hereda del servicio de saldo. Los DTO de mensaje pertenecen a contratos
 internos de Main y los adaptadores los consumen. El driver de carga depende de
 interfaces de lector, operaciones financieras y ciclo de vida de sesiones; no
@@ -61,7 +63,7 @@ conservan el original como respaldo. Una corrida activa recuperada se marca
 interrumpida y no se reanuda. Un resultado incierto conserva esa clasificación.
 La conexión SQLite de carga y sus consultas de historial se ejecutan en un worker
 dedicado detrás de los mismos puertos. El esquema 2 agrega índices de consulta;
-un timeout del worker no provoca reenvío de escrituras. Ver [ADR-035](docs/adr/ADR-035-LOAD-STORAGE-WORKER.md).
+un timeout del worker no provoca reenvío de escrituras. Ver [ADR-039](docs/adr/ADR-039-LOAD-STORAGE-WORKER.md).
 Los errores históricos de retiro terminados y guardados permiten una nueva
 solicitud explícita; pendientes, reversos activos y fallos de persistencia mantienen
 su bloqueo. Ver [ADR-025](docs/adr/ADR-025-QA-WITHDRAWAL-AFTER-ERROR.md).
@@ -89,6 +91,14 @@ Fuentes: [ADR-028](docs/adr/ADR-028-LOAD-PREPARATION-REUSE.md),
 
 ## Seguridad y perfiles
 
+Excepción de visualización QA autorizada el 2026-11-05: el puerto
+`SessionMessagePort` recibe diagnósticos de los adaptadores y conserva hasta 20
+solicitudes/15 minutos solo en memoria de Main. IPC dedicado valida ambiente,
+UUID y emisor antes de entregar campos completos temporalmente a Mensajes.
+No modifica `BalanceExecution`, diarios, logs ni exportaciones. El cierre y el
+cambio de ambiente limpian la copia; Renderer retira datos al ocultar/caducar.
+Ver [ADR-037](docs/adr/ADR-037-QA-SESSION-MESSAGES.md).
+
 Renderer no abre sockets ni accede a secretos. Los valores públicos están
 sanitizados y el PAN enmascarado; no se registran PIN, CVV, PIN Block ni Track 2.
 Producción permanece bloqueada. QA y PREPROD mantienen validación de ambiente.
@@ -114,3 +124,16 @@ Historial y exportación usan los registros locales existentes. Dominio proyecta
 campos permitidos; Main valida consulta/ambiente y coordina los puertos de lectura
 y guardado. Adaptadores gestionan SQLite, diálogo nativo y reemplazo de archivos.
 Renderer no proporciona rutas ni contenidos. Ver [ADR-033](docs/adr/ADR-033-LOAD-HISTORY-EXPORT.md).
+
+La pantalla Transacciones separa `useTransactionPreparation` de las vistas de
+preparación e inspección. `transaction-inspection` proyecta etapas y filtros
+sin efectos; `TransactionHistoryStore` lee los diarios mediante un puerto y
+descarta respuestas de generaciones anteriores. La selección del resultado
+se identifica por `requestId` y no modifica el borrador. Ver
+[ADR-036](docs/adr/ADR-036-TRANSACTION-INSPECTION.md). El desarrollo usa un
+puerto loopback libre por sesión según [ADR-035](docs/adr/ADR-035-ISOLATED-DEVELOPMENT-PORT.md).
+
+Depósito usa el motor común, transporte con selección DEPOSIT y diario SQLite
+independiente. La plantilla QA aplica 9C=30/9F02=monto antes de GENERATE AC
+por instrucción del operador; resultados inciertos bloquean otro depósito.
+Ver [ADR-038](docs/adr/ADR-038-QA-DEPOSIT.md).

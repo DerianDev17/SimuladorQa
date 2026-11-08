@@ -9,6 +9,7 @@ import type { NewBalanceInput } from './financial-message-contract';
 import type { CapturedBalanceMetadata } from './financial-message-contract';
 import type { ReversalProgress } from '../../../../packages/domain/src/withdrawal-reversal';
 import type { IsoMessage } from '../../../../packages/domain/src/iso-message';
+import type { SessionIsoMessage } from '../../../../packages/shared/src/session-messages';
 
 export interface BalanceTarget extends BalanceContextRequest {
   terminalId: string;
@@ -32,6 +33,7 @@ export interface BalanceContextProvider {
   acquire(target: BalanceTarget, signal: AbortSignal): Promise<BalanceContextLease>;
 }
 export interface BalanceExchangeRequest {
+  onSessionMessage?: (message: SessionIsoMessage) => void;
   load?: { runId: string; concurrency: number; deadline?: number };
   onConnectionWait?: (elapsedMs: number) => void;
   onInterrupted?: (reason: 'CANCELLED' | 'DURATION') => void;

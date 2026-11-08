@@ -148,7 +148,7 @@ describe('exportación de carga desde Main', () => {
       async () => ({ ok: true, value: run }),
       new FileLoadExportSink({ choose: () => choice }, protectedDirectory),
       now,
-      20,
+      500,
     );
     expect(await service.export({ runId: run.runId, format: 'JSON' })).toMatchObject({
       ok: false,

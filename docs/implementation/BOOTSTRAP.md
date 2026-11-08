@@ -19,6 +19,10 @@ espera rechaza nuevos inicios. Un fallo de compilación conserva la instancia ac
 y se informa en consola. Cambios en el lanzador requieren reiniciar el comando.
 Cerrar Electron normalmente detiene Vite.
 
+Vite usa un puerto libre de loopback por sesión; el lanzador lo entrega a Main
+automáticamente. No hace falta conocer ni configurar un número de puerto. Ver
+[ADR-035](../adr/ADR-035-ISOLATED-DEVELOPMENT-PORT.md).
+
 Main desactiva la caché HTTP en disco solo con `--dev`. La compilación normal
 conserva su política predeterminada. El lanzador usa `windowsHide=false` para
 mostrar la ventana nativa en Windows. No borrar AppData para resolver un aviso

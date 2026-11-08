@@ -3789,6 +3789,9 @@ td {
 .load-step {
   margin: 16px 0;
 }
+.load-step .load-test-form {
+  margin-bottom: 12px;
+}
 .load-step-title {
   display: flex;
   justify-content: space-between;

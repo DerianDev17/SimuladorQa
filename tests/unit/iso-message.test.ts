@@ -13,9 +13,46 @@ import { approvedWithdrawalExecution } from '../helpers/withdrawal';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { TransactionMessageView } from '../../apps/desktop/src/renderer/TransactionMessageView';
+import { formatIsoMessageText } from '../../apps/desktop/src/renderer/transaction-message-text';
 
 describe('mensajería ISO pública', () => {
   const codec = new CapturedVisaBalance();
+  it('presenta REQ y RESP legibles a partir de los campos guardados y conserva las máscaras', () => {
+    const request = codec.message(capturedBalanceRequest());
+    const response = codec.message(balanceResponse(codec.inspect(capturedBalanceRequest())));
+    const text = formatIsoMessageText(request);
+    expect(text).toContain('REQ · ISO8583\nMTI = 0200');
+    expect(text).toContain('F002 · PAN = 411111XXXXXX0000');
+    expect(text).toContain('F003 · Código de procesamiento = 301000');
+    expect(text).toContain(`F052 · PIN Block = ${protectedIsoValue}`);
+    expect(text).not.toContain('411111' + '11110000');
+    expect(formatIsoMessageText(response)).toContain('RESP · ISO8583\nMTI = 0210');
+    expect(formatIsoMessageText(response)).toContain('F039 · Código de respuesta = 00');
+    const rendered = renderToStaticMarkup(
+      createElement(TransactionMessageView, {
+        execution: { ...approvedWithdrawalExecution(), messages: { request, response } },
+      }),
+    );
+    expect(rendered).toContain('aria-label="Trama en texto legible"');
+    expect(rendered).toContain('RESP · ISO8583');
+  });
+  it('identifica el reverso y conserva el desglose EMV público en texto', () => {
+    const fields = [
+      {
+        number: 55,
+        value: protectedIsoValue,
+        tags: [
+          { tag: '95', value: '8000040000' },
+          { tag: '9F26', value: protectedIsoValue },
+        ],
+      },
+    ];
+    const text = formatIsoMessageText({ mti: '0420', fields });
+    expect(text).toContain('REQ · ISO8583\nMTI = 0420');
+    expect(text).toContain('95 · Resultado de verificación (TVR) = 8000040000');
+    expect(text).toContain(`9F26 · Dato protegido = ${protectedIsoValue}`);
+    expect(formatIsoMessageText({ mti: '0430', fields })).toContain('RESP · ISO8583\nMTI = 0430');
+  });
   it('incluye cada campo presente y solo valores públicos, sin conservar buffers', () => {
     const body = capturedBalanceRequest();
     const metadata = codec.inspect(body);
@@ -155,6 +192,8 @@ describe('mensajería ISO pública', () => {
       createElement(TransactionMessageView, { execution: record }),
     );
     expect(historical).toContain('no tiene mensajería guardada');
+    expect(historical).toContain('REQ y RESP no se pueden recuperar del diario local');
+    expect(historical).not.toContain('<pre');
     expect(historical).not.toContain('<table');
     const blocked = renderToStaticMarkup(
       createElement(TransactionMessageView, {
@@ -184,5 +223,19 @@ describe('mensajería ISO pública', () => {
     expect(rendered).toContain('Solicitud del intento de envío');
     expect(rendered).toContain('411111XXXXXX0000');
     expect(rendered).not.toContain('Respuesta recibida del host');
+    const missingResponse = renderToStaticMarkup(
+      createElement(TransactionMessageView, {
+        execution: {
+          ...record,
+          outcome: 'RESPONSE_TIMEOUT',
+          responseCode: null,
+          messages: { request: codec.message(capturedBalanceRequest()) },
+        },
+        selectedMessage: 'response',
+        onSelectMessage: () => undefined,
+      }),
+    );
+    expect(missingResponse).toContain('No se recibió una respuesta ISO8583 válida');
+    expect(missingResponse).not.toContain('<pre');
   });
 });

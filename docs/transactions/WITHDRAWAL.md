@@ -3,6 +3,15 @@
 ## Objetivo
 Simular retiro ATM exitoso.
 
+## Retiros en carga — 2026-11-04
+
+**Carga y estrés** permite seleccionar retiro en modo básico o avanzado, con
+monto USD por operación y uno o varios ATM QA. Reutiliza este contrato de
+QA/LOCAL/ahorros, valida el monto y genera seguridad nueva en cada operación.
+Conserva diarios, resultados e idempotencia; no presume aprobación ni genera
+reversos o comprobantes automáticos. Véanse [la guía](../implementation/LOAD_TEST.md)
+y [ADR-031](../adr/ADR-031-WITHDRAWAL-LOAD.md).
+
 ## Continuar después de errores QA — 2026-10-28
 
 Por instrucción explícita del usuario, un retiro terminado y guardado con error

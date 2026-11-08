@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { BalanceExecution } from '../../../../packages/domain/src/balance-inquiry';
 import {
   balanceDeliveryUncertain,
@@ -6,46 +7,24 @@ import {
   hasWithdrawalQaContinuation,
   withdrawalHostNotApproved,
 } from '../../../../packages/domain/src/balance-inquiry';
-import './balance-execution.css';
 import {
   createWithdrawalReceipt,
   hostMoney,
   withdrawalFinancialNotes,
 } from '../../../../packages/domain/src/withdrawal-receipt';
-import { Icon } from './Icon';
-import { useEffect, useState } from 'react';
 import { reversalOutcomeLabels } from '../../../../packages/domain/src/withdrawal-reversal';
+import './balance-execution.css';
+import { Icon } from './Icon';
 
-export const balanceOutcomeLabels: Record<BalanceExecution['outcome'], string> = {
-  PENDING: 'Resultado pendiente',
-  BLOCKED: 'Consulta bloqueada',
-  APPROVED: 'Consulta aprobada',
-  NOT_APPROVED: 'Consulta no aprobada',
-  REQUIRES_REVIEW: 'Respuesta del host por revisar',
-  INVALID_RESPONSE: 'Respuesta inválida',
-  CONNECT_TIMEOUT: 'Conexión sin respuesta',
-  RESPONSE_TIMEOUT: 'Sin respuesta financiera dentro del plazo',
-  PEER_CLOSED: 'El destino cerró la conexión',
-  TRANSPORT_ERROR: 'Error de comunicación',
-  CONTEXT_ERROR: 'Contexto QA no disponible',
-  STORAGE_ERROR: 'Resultado sin guardar',
-};
-export function executionOutcomeLabel(execution: BalanceExecution): string {
-  if (execution.reversal && execution.outcome === 'APPROVED')
-    return reversalOutcomeLabels[execution.reversal.outcome];
-  if (withdrawalHostNotApproved(execution)) return 'Retiro no aprobado';
-  if (execution.withdrawal) {
-    if (execution.outcome === 'APPROVED') return 'Retiro autorizado por el host';
-    if (execution.outcome === 'BLOCKED') return 'Retiro bloqueado';
-    if (execution.outcome === 'NOT_APPROVED') return 'Retiro no aprobado';
-  }
-  return balanceOutcomeLabels[execution.outcome];
-}
+import { balanceOutcomeLabels, executionOutcomeLabel } from './transaction-outcome';
+export { executionOutcomeLabel } from './transaction-outcome';
 export function BalanceExecutionView({
   execution,
   onReceipt,
+  compact = false,
 }: {
   execution: BalanceExecution;
+  compact?: boolean;
   onReceipt?: (execution: BalanceExecution) => void;
 }) {
   const approved = execution.outcome === 'APPROVED';
@@ -57,68 +36,42 @@ export function BalanceExecutionView({
   }, [execution.reversal?.outcome]);
   const fullyApproved =
     approved && (!execution.reversal || execution.reversal.outcome === 'APPROVED');
-  return (
-    <div
-      className={`preparation balance-execution ${fullyApproved ? 'balance-approved' : ''}`}
-      role="status"
-      aria-label={execution.withdrawal ? 'Resultado de retiro' : 'Resultado de consulta de saldo'}
-    >
-      <div className={`execution-status ${fullyApproved ? 'is-approved' : ''}`}>
-        <span className="execution-status-icon">
-          <Icon name={fullyApproved ? 'check' : 'clock'} size={23} />
-        </span>
-        <div>
-          <strong>{executionOutcomeLabel(execution)}</strong>
-          <span>{execution.withdrawal ? 'Retiro · Ahorros' : 'Consulta de saldo'} · QA</span>
-        </div>
-        {(execution.reversal?.responseCode ?? execution.responseCode) && (
-          <span className="execution-response-code">
-            {execution.reversal?.responseCode
-              ? 'RC reverso'
-              : execution.reversal
-                ? 'RC retiro'
-                : 'RC'}{' '}
-            {execution.reversal?.responseCode ?? execution.responseCode}
-          </span>
-        )}
-      </div>
-      {execution.reversal && (
-        <section className="reversal-progress" aria-label="Flujo de retiro y reverso">
-          <ol>
-            <li>
-              <strong>1. Retiro</strong>
-              <span>{approved ? 'Aprobado · 00' : balanceOutcomeLabels[execution.outcome]}</span>
-            </li>
-            <li>
-              <strong>2. Espera</strong>
-              <span>
-                {execution.reversal.outcome === 'WAITING' && execution.reversal.dueAt
-                  ? `${Math.max(0, Math.ceil((Date.parse(execution.reversal.dueAt) - now) / 1000))} s para enviar el reverso`
-                  : `${execution.reversal.delaySeconds} s después de la aprobación`}
-              </span>
-            </li>
-            <li>
-              <strong>3. Reverso</strong>
-              <span>
-                {reversalOutcomeLabels[execution.reversal.outcome]}
-                {execution.reversal.responseCode ? ` · ${execution.reversal.responseCode}` : ''}
-              </span>
-            </li>
-          </ol>
-          {execution.reversal.outcome === 'APPROVED' && (
-            <p>
-              El host aceptó el reverso. El saldo final debe verificarse con una nueva consulta.
-            </p>
-          )}
-          {['NOT_SENT', 'NOT_APPROVED', 'UNCONFIRMED'].includes(execution.reversal.outcome) &&
-            approved && (
-              <p>
-                El retiro fue aprobado y el reverso no está confirmado. Conserva ambas referencias
-                para revisar en el host.
-              </p>
-            )}
-          <small>Referencia del reverso: {execution.reversal.transactionId}</small>
-        </section>
+  const hostBalances = approved && (
+    <section className="host-balances" aria-label="Saldos recibidos">
+      <h3>
+        {execution.reversal
+          ? 'Saldos del retiro, anteriores al reverso'
+          : 'Saldos devueltos por el host'}
+      </h3>
+      {execution.balances.length ? (
+        <dl>
+          {execution.balances.map((balance) => (
+            <div key={`${balance.accountCode}/${balance.type}/${balance.currency}`}>
+              <dt>
+                Saldo recibido · tipo {balance.type}
+                <small>Cuenta {balance.accountCode}</small>
+              </dt>
+              <dd>{hostMoney(balance.currency, balance.amount)}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p>{withdrawalFinancialNotes.missingBalance}</p>
+      )}
+      {execution.withdrawal && execution.balances.length > 0 && (
+        <p className="execution-note">{withdrawalFinancialNotes.balance}</p>
+      )}
+    </section>
+  );
+  const details = (
+    <>
+      {execution.deposit && (
+        <p>
+          Monto solicitado: USD {execution.deposit.amount} · Ahorros.{' '}
+          {approved
+            ? 'Autorizado por el host; acreditación en Core sin verificar.'
+            : 'Acreditación sin confirmar.'}
+        </p>
       )}
       {execution.withdrawal && (
         <>
@@ -169,37 +122,12 @@ export function BalanceExecutionView({
       )}
       {execution.outcome === 'NOT_APPROVED' && !withdrawalHostNotApproved(execution) && (
         <p>
-          El host respondió sin aprobar {execution.withdrawal ? 'el retiro' : 'la consulta'}. El
-          motivo interno requiere correlación con Switch/Core.
+          El host respondió sin aprobar{' '}
+          {execution.deposit ? 'el depósito' : execution.withdrawal ? 'el retiro' : 'la consulta'}.
+          El motivo interno requiere correlación con Switch/Core.
         </p>
       )}
-      {approved && (
-        <section className="host-balances" aria-label="Saldos recibidos">
-          <h3>
-            {execution.reversal
-              ? 'Saldos del retiro, anteriores al reverso'
-              : 'Saldos devueltos por el host'}
-          </h3>
-          {execution.balances.length ? (
-            <dl>
-              {execution.balances.map((balance) => (
-                <div key={`${balance.accountCode}/${balance.type}/${balance.currency}`}>
-                  <dt>
-                    Saldo recibido · tipo {balance.type}
-                    <small>Cuenta {balance.accountCode}</small>
-                  </dt>
-                  <dd>{hostMoney(balance.currency, balance.amount)}</dd>
-                </div>
-              ))}
-            </dl>
-          ) : (
-            <p>{withdrawalFinancialNotes.missingBalance}</p>
-          )}
-          {execution.withdrawal && execution.balances.length > 0 && (
-            <p className="execution-note">{withdrawalFinancialNotes.balance}</p>
-          )}
-        </section>
-      )}
+      {(!compact || execution.withdrawal) && hostBalances}
       {execution.blockers.length > 0 && (
         <ul>
           {execution.blockers.map((item) => (
@@ -223,9 +151,11 @@ export function BalanceExecutionView({
               withdrawalHostNotApproved(execution)
               ? 'Respuesta del host recibida.'
               : 'Intento registrado.'
-            : execution.withdrawal
-              ? 'No se transmitió el retiro.'
-              : 'No se transmitió la consulta.'}
+            : execution.deposit
+              ? 'No se transmitió el depósito.'
+              : execution.withdrawal
+                ? 'No se transmitió el retiro.'
+                : 'No se transmitió la consulta.'}
         </p>
       ) : null}
       {execution.correlation && (
@@ -244,7 +174,7 @@ export function BalanceExecutionView({
           </div>
         </dl>
       )}
-      {onReceipt && createWithdrawalReceipt(execution) && (
+      {!compact && onReceipt && createWithdrawalReceipt(execution) && (
         <button className="secondary receipt-preview-button" onClick={() => onReceipt(execution)}>
           <Icon name="printer" size={17} /> Ver comprobante
         </button>
@@ -304,6 +234,136 @@ export function BalanceExecutionView({
           <p>Este registro anterior no contiene el diagnóstico EMV de la operación.</p>
         )}
       </details>
+    </>
+  );
+  return (
+    <div
+      className={`preparation balance-execution ${fullyApproved ? 'balance-approved' : ''}`}
+      role="status"
+      aria-label={
+        execution.deposit
+          ? 'Resultado de depósito'
+          : execution.withdrawal
+            ? 'Resultado de retiro'
+            : 'Resultado de consulta de saldo'
+      }
+    >
+      <div className={`execution-status ${fullyApproved ? 'is-approved' : ''}`}>
+        <span className="execution-status-icon">
+          <Icon name={fullyApproved ? 'check' : 'clock'} size={23} />
+        </span>
+        <div>
+          <strong>{executionOutcomeLabel(execution)}</strong>
+          <span>
+            {execution.deposit
+              ? 'Depósito · Ahorros'
+              : execution.withdrawal
+                ? 'Retiro · Ahorros'
+                : 'Consulta de saldo'}{' '}
+            · QA
+          </span>
+        </div>
+        {(execution.reversal?.responseCode ?? execution.responseCode) && (
+          <span className="execution-response-code">
+            {execution.reversal?.responseCode
+              ? 'RC reverso'
+              : execution.reversal
+                ? 'RC retiro'
+                : 'RC'}{' '}
+            {execution.reversal?.responseCode ?? execution.responseCode}
+          </span>
+        )}
+      </div>
+      {execution.reversal && (
+        <section className="reversal-progress" aria-label="Flujo de retiro y reverso">
+          <ol>
+            <li>
+              <strong>1. Retiro</strong>
+              <span>{approved ? 'Aprobado · 00' : balanceOutcomeLabels[execution.outcome]}</span>
+            </li>
+            <li>
+              <strong>2. Espera</strong>
+              <span>
+                {execution.reversal.outcome === 'WAITING' && execution.reversal.dueAt
+                  ? `${Math.max(0, Math.ceil((Date.parse(execution.reversal.dueAt) - now) / 1000))} s para enviar el reverso`
+                  : `${execution.reversal.delaySeconds} s después de la aprobación`}
+              </span>
+            </li>
+            <li>
+              <strong>3. Reverso</strong>
+              <span>
+                {reversalOutcomeLabels[execution.reversal.outcome]}
+                {execution.reversal.responseCode ? ` · ${execution.reversal.responseCode}` : ''}
+              </span>
+            </li>
+          </ol>
+          {execution.reversal.outcome === 'APPROVED' && (
+            <p>
+              El host aceptó el reverso. El saldo final debe verificarse con una nueva consulta.
+            </p>
+          )}
+          {['NOT_SENT', 'NOT_APPROVED', 'UNCONFIRMED'].includes(execution.reversal.outcome) &&
+            approved && (
+              <p>
+                El retiro fue aprobado y el reverso no está confirmado. Conserva ambas referencias
+                para revisar en el host.
+              </p>
+            )}
+          <small>Referencia del reverso: {execution.reversal.transactionId}</small>
+        </section>
+      )}
+      {compact && (
+        <div className="compact-execution-summary">
+          <div>
+            {execution.deposit && (
+              <p>
+                Monto solicitado: USD {execution.deposit.amount} · Ahorros.{' '}
+                {approved
+                  ? 'Autorizado por el host; acreditación en Core sin verificar.'
+                  : 'Acreditación sin confirmar.'}
+              </p>
+            )}
+            {execution.withdrawal && (
+              <strong>Monto solicitado: USD {execution.withdrawal.amount}</strong>
+            )}
+            <p>
+              {execution.correlation?.terminalId ?? 'Terminal no disponible'} ·{' '}
+              {execution.elapsedMs} ms de transporte
+            </p>
+          </div>
+          {onReceipt && createWithdrawalReceipt(execution) && (
+            <button
+              className="secondary receipt-preview-button"
+              onClick={() => onReceipt(execution)}
+            >
+              <Icon name="printer" size={17} />
+              Ver comprobante
+            </button>
+          )}
+        </div>
+      )}
+      {compact && balanceDeliveryUncertain(execution) && (
+        <p className="execution-note">
+          Resultado financiero sin confirmar. Conserva la referencia; inspeccionar el historial no
+          reenvía la operación.
+        </p>
+      )}
+      {compact && !execution.withdrawal && hostBalances}
+      {compact && execution.blockers.length > 0 && (
+        <ul>
+          {execution.blockers.map((item) => (
+            <li key={item.id}>{item.label}</li>
+          ))}
+        </ul>
+      )}
+      {compact ? (
+        <details className="inline-details execution-full-details">
+          <summary>Importes y detalle técnico</summary>
+          {details}
+        </details>
+      ) : (
+        details
+      )}
     </div>
   );
 }

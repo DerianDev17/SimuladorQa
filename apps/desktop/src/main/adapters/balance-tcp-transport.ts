@@ -8,10 +8,11 @@ import type {
 import { CapturedVisaFraming } from '../infrastructure/captured-visa-framing';
 import { CapturedVisaBalance } from './captured-visa-balance';
 import { VisaNetworkManagement } from './visa-network-management';
+import { captureSessionMessage, captureSessionRequest } from './session-message-capture';
 
 // Single financial write. No automatic retries, reconnection, 0810 or reversals.
 export class BalanceTcpTransport implements BalanceTransport {
-  constructor(private readonly operation: 'BALANCE' | 'WITHDRAWAL' = 'BALANCE') {}
+  constructor(private readonly operation: 'BALANCE' | 'WITHDRAWAL' | 'DEPOSIT' = 'BALANCE') {}
   async exchange(request: BalanceExchangeRequest): Promise<BalanceExchangeResult> {
     const started = performance.now();
     let writeGateMs = 0;
@@ -42,7 +43,7 @@ export class BalanceTcpTransport implements BalanceTransport {
     const expected = structuredClone(request.expected);
     const decoder = new CapturedVisaFraming().decoder();
     const codec = new CapturedVisaBalance(this.operation);
-    if (this.operation === 'WITHDRAWAL') {
+    if (this.operation !== 'BALANCE') {
       const check = new CapturedVisaFraming().decoder();
       let frames: ReturnType<typeof check.push> = [];
       try {
@@ -52,7 +53,7 @@ export class BalanceTcpTransport implements BalanceTransport {
         const actual = codec.inspect(frames[0]!.opaqueBody);
         if (
           actual.mti !== '0200' ||
-          actual.processingCode !== '011000' ||
+          actual.processingCode !== (this.operation === 'DEPOSIT' ? '211000' : '011000') ||
           ['stan', 'rrn', 'terminalId', 'currency', 'processingCode', 'amount'].some(
             (key) => actual[key as keyof typeof actual] !== expected[key as keyof typeof expected],
           )
@@ -68,6 +69,7 @@ export class BalanceTcpTransport implements BalanceTransport {
         }
       }
     }
+    captureSessionRequest(request, codec);
     const network = new VisaNetworkManagement();
     return new Promise((resolve) => {
       const socket = new Socket();
@@ -187,8 +189,9 @@ export class BalanceTcpTransport implements BalanceTransport {
             )
               continue;
             responseMessage = codec.message(body);
+            captureSessionMessage(request, () => codec.sessionMessage(body));
             const response = codec.response(body);
-            if (this.operation === 'WITHDRAWAL') {
+            if (this.operation !== 'BALANCE') {
               // 91 is a completed host non-approval (MDT_StandardRetCode).
               // Partial/unknown responses and a mismatched approval need review.
               const approved =
@@ -198,7 +201,11 @@ export class BalanceTcpTransport implements BalanceTransport {
               finish(
                 approved
                   ? 'APPROVED'
-                  : metadata.responseCode === '91'
+                  : (
+                        this.operation === 'DEPOSIT'
+                          ? metadata.responseCode === '12'
+                          : metadata.responseCode === '91'
+                      )
                     ? 'NOT_APPROVED'
                     : 'REQUIRES_REVIEW',
                 metadata.responseCode!,

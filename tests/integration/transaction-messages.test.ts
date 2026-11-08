@@ -17,7 +17,13 @@ import {
   balanceResponse,
 } from '../helpers/balance-inquiry';
 import { withdrawalResponse } from '../helpers/withdrawal';
+import {
+  executionStages,
+  mergeExecutionHistory,
+} from '../../apps/desktop/src/renderer/transaction-inspection';
 import { removeTestDirectory } from '../helpers/temporary-directory';
+import { formatIsoMessageText } from '../../apps/desktop/src/renderer/transaction-message-text';
+import { SessionMessageStore } from '../../apps/desktop/src/main/infrastructure/session-message-store';
 
 describe('mensajería real por TCP local, servicio y persistencia', () => {
   it.each(['APPROVED', 'NOT_APPROVED', 'RESPONSE_TIMEOUT', 'UNRELATED', 'WITHDRAWAL'] as const)(
@@ -55,6 +61,7 @@ describe('mensajería real por TCP local, servicio y persistencia', () => {
       const path = join(directory, 'journal.sqlite');
       const legacy = join(directory, 'legacy.json');
       let journal = new SqliteBalanceJournal(path, legacy, operation);
+      const session = new SessionMessageStore();
       try {
         await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
         const address = server.address();
@@ -84,6 +91,7 @@ describe('mensajería real por TCP local, servicio y persistencia', () => {
             }),
           },
           5000,
+          session,
         );
         const result = await service.execute(
           request,
@@ -101,10 +109,34 @@ describe('mensajería real por TCP local, servicio y persistencia', () => {
           ['RESPONSE_TIMEOUT', 'UNRELATED'].includes(mode) ? undefined : sentResponse,
         );
         expect(JSON.stringify(result.value)).not.toContain('411111' + '11110000');
+        const complete = session.read(request.requestId)!;
+        expect(
+          complete.messages['0200']?.fields.find((f) => f.number === 2)?.value ===
+            '411111' + '0'.repeat(10),
+        ).toBe(true);
+        expect(!!complete.messages['0210']).toBe(!['RESPONSE_TIMEOUT', 'UNRELATED'].includes(mode));
         await journal.close();
         journal = new SqliteBalanceJournal(path, legacy, operation);
-        expect((await journal.read())[0]?.messages).toEqual(result.value.messages);
+        const recovered = (await journal.read())[0]!;
+        expect(JSON.stringify(recovered).includes('411111' + '0'.repeat(10))).toBe(false);
+        expect(recovered.messages).toEqual(result.value.messages);
+        expect(formatIsoMessageText(recovered.messages!.request)).toContain('REQ · ISO8583');
+        expect(formatIsoMessageText(recovered.messages!.request)).toContain(
+          `F011 · STAN = ${recovered.correlation!.stan}`,
+        );
+        if (recovered.messages?.response) {
+          expect(formatIsoMessageText(recovered.messages.response)).toContain('RESP · ISO8583');
+          expect(formatIsoMessageText(recovered.messages.response)).toContain(
+            `F039 · Código de respuesta = ${recovered.responseCode}`,
+          );
+        }
+        const inspected = mergeExecutionHistory([recovered], [result.value])[0]!;
+        expect(
+          executionStages(inspected, true).find((stage) => stage.id === 'response')?.state,
+        ).toBe(['RESPONSE_TIMEOUT', 'UNRELATED'].includes(mode) ? 'attention' : 'complete');
+        expect(executionStages(inspected, true).at(-1)?.state).toBe('complete');
       } finally {
+        session.clear();
         for (const peer of peers) peer.destroy();
         await new Promise<void>((resolve) => server.close(() => resolve()));
         await journal.close();

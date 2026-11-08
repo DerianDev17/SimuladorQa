@@ -3,7 +3,8 @@ import { Buffer } from 'node:buffer';
 import { parseBalanceValues } from './coonecta-balance-rules';
 import type { BalanceValue } from '../../../../../packages/domain/src/balance-inquiry';
 import type { IsoMessage } from '../../../../../packages/domain/src/iso-message';
-import { projectIsoMessage } from './iso-message-projection';
+import { projectIsoMessage, projectSessionIsoMessage } from './iso-message-projection';
+import type { SessionIsoMessage } from '../../../../../packages/shared/src/session-messages';
 
 // ISOBASEI + QA frames 218/224 (balance), 248/254 (withdrawal).
 // Operation selection is explicit; this is not a general ISO codec.
@@ -73,7 +74,7 @@ function ebcdic(bytes: Buffer): string {
 }
 
 export class CapturedVisaBalance {
-  constructor(private readonly operation: 'BALANCE' | 'WITHDRAWAL' = 'BALANCE') {}
+  constructor(private readonly operation: 'BALANCE' | 'WITHDRAWAL' | 'DEPOSIT' = 'BALANCE') {}
   inspect(source: Uint8Array): CapturedBalanceMetadata {
     return this.parse(source).metadata;
   }
@@ -95,6 +96,14 @@ export class CapturedVisaBalance {
   }
 
   // Main-only views. The caller owns and wipes source; never persist these bytes.
+  sessionMessage(source: Buffer): SessionIsoMessage {
+    return projectSessionIsoMessage(
+      this.inspect(source).mti,
+      this.encodedFields(source),
+      capturedVisaFieldProfile,
+    );
+  }
+
   encodedFields(source: Buffer): Map<number, Buffer> {
     const parsed = this.parse(source);
     return new Map(
@@ -116,7 +125,7 @@ export class CapturedVisaBalance {
     // CB frame 254 carries the same F54 layout as balance frame 224. Preserve
     // source types without inferring available balance or a Core debit. Unlike
     // a balance inquiry, an authorized withdrawal may omit F54 altogether.
-    if (position < 0 && this.operation === 'WITHDRAWAL')
+    if (position < 0 && this.operation !== 'BALANCE')
       return { metadata: parsed.metadata, balances: [] };
     if (position < 0) throw new Error('BALANCE_VALUES_MISSING');
     const span = parsed.spans[position]!;
@@ -167,8 +176,8 @@ export class CapturedVisaBalance {
     const allowed =
       mti === '0200'
         ? requestFields
-        : this.operation === 'WITHDRAWAL'
-          ? [...responseFields, 4, 38]
+        : this.operation !== 'BALANCE'
+          ? [...responseFields, 4, 38, ...(this.operation === 'DEPOSIT' ? [23] : [])]
           : responseFields;
     if (
       mti === '0200'
@@ -178,6 +187,7 @@ export class CapturedVisaBalance {
     )
       invalid();
     let cursor = 32;
+    let panLength = 16;
     const values = new Map<number, Buffer>(),
       spans: [number, number][] = [];
     for (const field of fields) {
@@ -189,23 +199,34 @@ export class CapturedVisaBalance {
       const size = item.encoding === 'BCD' ? Math.ceil(length / 2) : length,
         end = cursor + size;
       if (end > body.length) invalid();
-      if (field === 2 && length !== 16) invalid();
+      if (
+        field === 2 &&
+        length !== 16 &&
+        !(this.operation === 'DEPOSIT' && mti === '0210' && length === 19)
+      )
+        invalid();
+      if (field === 2) panLength = length;
       values.set(field, body.subarray(cursor, end));
       spans.push([start, end]);
       cursor = end;
     }
     if (cursor !== body.length) invalid();
-    const pan = digits(values.get(2)!, 16),
+    const pan = digits(values.get(2)!, panLength),
       processingCode = digits(values.get(3)!, 6);
     const currency = digits(values.get(49)!, 3);
     if (
-      processingCode !== (this.operation === 'WITHDRAWAL' ? '011000' : '301000') ||
+      processingCode !==
+        (this.operation === 'DEPOSIT'
+          ? '211000'
+          : this.operation === 'WITHDRAWAL'
+            ? '011000'
+            : '301000') ||
       currency !== '840'
     )
       invalid();
     const amount = values.has(4) ? digits(values.get(4)!, 12) : undefined;
     if (this.operation === 'BALANCE' && mti === '0200' && amount !== '0'.repeat(12)) invalid();
-    if (this.operation === 'WITHDRAWAL' && mti === '0200' && (!amount || /^0+$/.test(amount)))
+    if (this.operation !== 'BALANCE' && mti === '0200' && (!amount || /^0+$/.test(amount)))
       invalid();
     const stan = digits(values.get(11)!, 6),
       rrn = ebcdic(values.get(37)!);
@@ -222,11 +243,11 @@ export class CapturedVisaBalance {
         rrn,
         terminalId,
         currency,
-        panMask: pan.slice(0, 6) + 'X'.repeat(6) + pan.slice(-4),
+        panMask: pan.slice(0, 6) + 'X'.repeat(pan.length - 10) + pan.slice(-4),
         bodyBytes: body.length,
         fields,
         ...(responseCode !== undefined ? { responseCode } : {}),
-        ...(this.operation === 'WITHDRAWAL'
+        ...(this.operation !== 'BALANCE'
           ? amount
             ? { amount }
             : {}

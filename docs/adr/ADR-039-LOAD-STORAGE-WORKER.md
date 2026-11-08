@@ -1,4 +1,4 @@
-# ADR-035: persistencia de carga en worker e índices de historial
+# ADR-039: persistencia de carga en worker e índices de historial
 
 Fecha: 2026-11-07. Estado: implementado. Amplía ADR-033.
 

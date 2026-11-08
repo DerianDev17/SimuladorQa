@@ -13,6 +13,8 @@ import { parseWithdrawalDetails } from '../../../../../packages/domain/src/withd
 import { parseWithdrawalReversal } from '../../../../../packages/domain/src/withdrawal-reversal';
 import { parseTransactionMessages } from '../../../../../packages/domain/src/iso-message';
 
+import { parseDepositDetails } from '../../../../../packages/domain/src/deposit';
+
 const outcomes = [
   'PENDING',
   'BLOCKED',
@@ -72,12 +74,18 @@ export function parseBalanceJournal(value: unknown): BalanceExecution[] | undefi
         ...(isRecord(item) && Object.hasOwn(item, 'messages') ? ['messages'] : []),
         ...(isRecord(item) && Object.hasOwn(item, 'diagnostics') ? ['diagnostics'] : []),
         ...(isRecord(item) && Object.hasOwn(item, 'withdrawal') ? ['withdrawal'] : []),
+        ...(isRecord(item) && Object.hasOwn(item, 'deposit') ? ['deposit'] : []),
         ...(isRecord(item) && Object.hasOwn(item, 'reversal') ? ['reversal'] : []),
         ...(isRecord(item) && Object.hasOwn(item, 'qaContinuation') ? ['qaContinuation'] : []),
       ]) ||
       (item.diagnostics !== undefined && !parseBalanceDiagnostics(item.diagnostics)) ||
       (Object.hasOwn(item, 'messages') && !parseTransactionMessages(item.messages)) ||
       (Object.hasOwn(item, 'withdrawal') && !parseWithdrawalDetails(item.withdrawal)) ||
+      (Object.hasOwn(item, 'deposit') &&
+        (!parseDepositDetails(item.deposit) ||
+          item.withdrawal !== undefined ||
+          item.reversal !== undefined ||
+          item.qaContinuation !== undefined)) ||
       (Object.hasOwn(item, 'reversal') &&
         (!item.withdrawal || !parseWithdrawalReversal(item.reversal))) ||
       !['requestId', 'runId', 'transactionId', 'atmId', 'cardReadId'].every((key) =>
@@ -115,6 +123,19 @@ export function parseBalanceJournal(value: unknown): BalanceExecution[] | undefi
           String(item.reversal.outcome),
         ) &&
           item.outcome !== 'APPROVED'))
+    )
+      return undefined;
+    if (
+      item.deposit !== undefined &&
+      (item.scenario !== 'LOCAL' ||
+        (item.outcome !== 'APPROVED' && item.balances.length !== 0) ||
+        (item.outcome === 'APPROVED' && item.responseCode !== '00') ||
+        (item.outcome === 'NOT_APPROVED' &&
+          (item.responseCode !== '12' ||
+            item.finishedAt === null ||
+            item.correlation === null ||
+            !item.transmissionAttempted ||
+            item.bytesQueued === 0)))
     )
       return undefined;
     if (
@@ -186,11 +207,15 @@ export class FileBalanceJournal implements BalanceJournal {
   }
   constructor(
     private readonly path: string,
-    private readonly operation: 'BALANCE' | 'WITHDRAWAL' = 'BALANCE',
+    private readonly operation: 'BALANCE' | 'WITHDRAWAL' | 'DEPOSIT' = 'BALANCE',
   ) {}
   private accepts(executions: readonly BalanceExecution[]): boolean {
     return executions.every((item) =>
-      this.operation === 'WITHDRAWAL' ? !!item.withdrawal : !item.withdrawal,
+      this.operation === 'DEPOSIT'
+        ? !!item.deposit
+        : this.operation === 'WITHDRAWAL'
+          ? !!item.withdrawal
+          : !item.withdrawal && !item.deposit,
     );
   }
   async read(): Promise<BalanceExecution[]> {

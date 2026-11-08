@@ -28,7 +28,7 @@ function ebcdic(text: string): Buffer {
   );
 }
 export class NewVisaBalance implements FinancialMessageBuilder {
-  constructor(private readonly operation: 'BALANCE' | 'WITHDRAWAL' = 'BALANCE') {}
+  constructor(private readonly operation: 'BALANCE' | 'WITHDRAWAL' | 'DEPOSIT' = 'BALANCE') {}
   build(input: NewBalanceInput): {
     wire: Buffer;
     metadata: CapturedBalanceMetadata;
@@ -44,14 +44,12 @@ export class NewVisaBalance implements FinancialMessageBuilder {
     )
       throw new Error('BALANCE_PROFILE_INVALID');
     if (
-      this.operation === 'WITHDRAWAL'
-        ? !isWithdrawalAmount(input.amount)
-        : input.amount !== undefined
+      this.operation !== 'BALANCE' ? !isWithdrawalAmount(input.amount) : input.amount !== undefined
     )
       throw Error('WITHDRAWAL_AMOUNT_INVALID');
     const generated = new Map(balanceDynamicFields(input));
-    if (this.operation === 'WITHDRAWAL') {
-      generated.set(3, '011000');
+    if (this.operation !== 'BALANCE') {
+      generated.set(3, this.operation === 'DEPOSIT' ? '211000' : '011000');
       generated.set(4, input.amount!.replace('.', '').padStart(12, '0'));
     }
     const encoded = new Map<number, Buffer>();

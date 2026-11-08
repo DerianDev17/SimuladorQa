@@ -1,6 +1,6 @@
 import { build as buildElectron } from 'esbuild';
 import { build as buildRenderer } from 'vite';
-import { copyFile, readFile, writeFile } from 'node:fs/promises';
+import { copyFile, readFile } from 'node:fs/promises';
 
 export async function buildMain() {
   await buildElectron({
@@ -49,13 +49,4 @@ export async function buildMain() {
 if (process.argv[1]?.endsWith('build.mjs')) {
   await buildMain();
   await buildRenderer();
-  const path = 'dist/renderer/index.html';
-  const html = await readFile(path, 'utf8');
-  await writeFile(
-    path,
-    html
-      .replace("connect-src 'self' ws://127.0.0.1:5173", "connect-src 'none'")
-      .replace("style-src 'self' 'unsafe-inline'", "style-src 'self'")
-      .replace("script-src 'self' 'unsafe-inline'", "script-src 'self'"),
-  );
 }

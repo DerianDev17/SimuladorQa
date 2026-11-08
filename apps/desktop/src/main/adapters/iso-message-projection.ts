@@ -7,6 +7,7 @@ import {
   type IsoMessage,
 } from '../../../../../packages/domain/src/iso-message';
 import { parseCardTlv } from './emv-card-identity';
+import type { SessionIsoMessage } from '../../../../../packages/shared/src/session-messages';
 
 export interface DisplayFieldProfile {
   encoding: 'BCD' | 'EBCDIC' | 'BINARY';
@@ -48,7 +49,7 @@ function displayText(bytes: Buffer): string {
     })
     .join('');
 }
-function emvDisplay(encoded: Buffer): IsoMessage['fields'][number]['tags'] {
+function emvDisplay(encoded: Buffer, complete = false): IsoMessage['fields'][number]['tags'] {
   // Reuse the existing validated VISA 01/00/length envelope and BER-TLV parser.
   if (
     encoded[0] !== encoded.length - 1 ||
@@ -65,8 +66,9 @@ function emvDisplay(encoded: Buffer): IsoMessage['fields'][number]['tags'] {
         else
           tags.push({
             tag: node.tag,
-            value:
-              publicEmvTags[node.tag]?.length === node.value.length
+            value: complete
+              ? Buffer.from(node.value).toString('hex').toUpperCase()
+              : publicEmvTags[node.tag]?.length === node.value.length
                 ? publicEmvValue(
                     node.tag,
                     Buffer.from(node.value.buffer, node.value.byteOffset, node.value.byteLength)
@@ -86,6 +88,40 @@ function emvDisplay(encoded: Buffer): IsoMessage['fields'][number]['tags'] {
   } catch {
     return undefined;
   }
+}
+
+// Operator-requested session view (ADR-037). Decode known encodings; preserve
+// binary/unsupported text as HEX without interpreting undocumented subfields.
+export function projectSessionIsoMessage(
+  mti: IsoMessage['mti'],
+  fields: ReadonlyMap<number, Buffer>,
+  profiles: Readonly<Record<number, DisplayFieldProfile>>,
+): SessionIsoMessage {
+  return {
+    visibility: 'UNMASKED_QA_SESSION',
+    mti,
+    fields: [...fields]
+      .sort(([a], [b]) => a - b)
+      .map(([number, encoded]) => {
+        const profile = profiles[number];
+        const bytes = encoded.subarray(profile?.variable ? 1 : 0);
+        let value = `HEX ${bytes.toString('hex').toUpperCase()}`;
+        if (profile?.encoding === 'BCD')
+          value = bytes
+            .toString('hex')
+            .toUpperCase()
+            .slice(-(profile.variable ? encoded[0]! : profile.length));
+        else if (profile?.encoding === 'EBCDIC') {
+          try {
+            value = displayText(bytes);
+          } catch {
+            /* Preserve exact bytes as HEX. */
+          }
+        }
+        const tags = number === 55 ? emvDisplay(encoded, true) : undefined;
+        return { number, value, ...(tags ? { tags } : {}) };
+      }),
+  };
 }
 export function projectIsoMessage(
   mti: IsoMessage['mti'],

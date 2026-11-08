@@ -1,765 +1,144 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { scenarios, transactions } from '../../../../packages/domain/src/index';
-import type { Scenario, TransactionType } from '../../../../packages/domain/src/index';
-import { selectableAtms } from '../../../../packages/domain/src/catalogs';
-import type { CatalogSnapshot } from '../../../../packages/domain/src/catalogs';
-import {
-  accountTypes,
-  draftBlockers,
-  isDraftAmount,
-  needsAmount,
-  needsOriginal,
-} from '../../../../packages/domain/src/transaction-draft';
-import type { AccountType, DraftRequest } from '../../../../packages/domain/src/transaction-draft';
-import { parseDraftRequest } from '../../../../packages/domain/src/transaction-draft';
-import type {
-  AppSnapshot,
-  ErrorCode,
-  ReviewedDraft,
-  Result,
-} from '../../../../packages/shared/src/contracts';
-import type { DesktopClient } from './desktop-client';
-import { Icon } from './Icon';
-import { localDraftChecks } from './draft-feedback';
-import { DraftSummary } from './DraftSummary';
-import { DestinationCompatibilityView } from './DestinationCompatibilityView';
-import { TransactionReferenceView } from './TransactionReferenceView';
-import { CaseLibrary } from './CaseLibrary';
+import { useEffect, useState } from 'react';
+import type { BalanceExecution } from '../../../../packages/domain/src/balance-inquiry';
 import { caseMatchesDraft, evaluateCase } from '../../../../packages/domain/src/saved-cases';
-import type { SavedCase } from '../../../../packages/domain/src/saved-cases';
-import { CardReaderView } from './CardReaderView';
-import type { TransactionCard } from './transaction-card';
-import { resolveAtmSelection } from './transaction-setup';
-import type { AtmSelection } from './transaction-setup';
-import type { SendConfigurationSnapshot } from '../../../../packages/domain/src/send-configuration';
-import type { PreparedSendPlan } from '../../../../packages/shared/src/contracts';
-import type {
-  BalanceReadiness,
-  BalanceExecution,
-} from '../../../../packages/domain/src/balance-inquiry';
+import { parseDraftRequest } from '../../../../packages/domain/src/transaction-draft';
+import { createWithdrawalReceipt } from '../../../../packages/domain/src/withdrawal-receipt';
+import { CaseLibrary } from './CaseLibrary';
+import { Icon } from './Icon';
+import { TransactionComposer } from './TransactionComposer';
+import { TransactionDocumentation } from './TransactionDocumentation';
+import { TransactionError } from './TransactionError';
+import { TransactionHistoryView } from './TransactionHistoryView';
+import { TransactionInspection } from './TransactionInspection';
+import { mergeExecutionHistory } from './transaction-inspection';
+import { useTransactionHistory } from './useTransactionHistory';
 import {
-  balanceDeliveryUncertain,
-  balanceNotTransmitted,
-  balanceResponseConfirmed,
-  canStartAfterUnconfirmedBalance,
-  canStartAfterUnconfirmedWithdrawal,
-  canStartBalanceAfterUnconfirmedWithdrawal,
-  withdrawalBlocksNewExecution,
-  parseBalanceContextRequest,
-} from '../../../../packages/domain/src/balance-inquiry';
-import { BalanceExecutionView, executionOutcomeLabel } from './BalanceExecutionView';
-import { TransactionMessageView } from './TransactionMessageView';
-import {
-  createWithdrawalReceipt,
-  type ReceiptPreference,
-  type WithdrawalReceipt,
-} from '../../../../packages/domain/src/withdrawal-receipt';
+  useTransactionPreparation,
+  type TransactionPreparationProps,
+} from './useTransactionPreparation';
 import { WithdrawalReceiptDialog } from './WithdrawalReceiptDialog';
-import {
-  isWithdrawalAmount,
-  parseWithdrawalContextRequest,
-} from '../../../../packages/domain/src/withdrawal';
 
-interface Props {
-  visible: boolean;
-  snapshot: AppSnapshot | undefined;
-  catalog: CatalogSnapshot | undefined;
-  catalogError: { code: ErrorCode; message: string } | undefined;
-  loading: boolean;
-  disabled: boolean;
-  client: DesktopClient;
-  onRefresh: () => Promise<void>;
-  onReviewingChange: (reviewing: boolean) => void;
-  onNavigate: (page: 'entities' | 'atms' | 'settings' | 'history') => void;
-  onCatalogChange: (catalog: CatalogSnapshot) => void;
-  pendingAtmSelection: AtmSelection | undefined;
-  onAtmSelectionApplied: () => void;
-}
-export function TransactionWorkspace({
-  visible,
-  snapshot,
-  catalog,
-  catalogError,
-  loading,
-  disabled,
-  client,
-  onRefresh,
-  onReviewingChange,
-  onNavigate,
-  onCatalogChange,
-  pendingAtmSelection,
-  onAtmSelectionApplied,
-}: Props) {
-  const [transaction, setTransaction] = useState<TransactionType>('BALANCE');
-  const [optionsOpen, setOptionsOpen] = useState(false);
-  const [scenario, setScenario] = useState<Scenario>('LOCAL');
-  const [account, setAccount] = useState<AccountType>('SAVINGS');
-  const [amount, setAmount] = useState('');
-  const [withReversal, setWithReversal] = useState(false);
-  const [reversalDelay, setReversalDelay] = useState(5);
-  const [receiptPreference, setReceiptPreference] = useState<ReceiptPreference>('WITHOUT_PRINT');
-  const [receipt, setReceipt] = useState<WithdrawalReceipt>();
-  const receiptRequest = useRef<string | undefined>(undefined);
-  const [atmId, setAtmId] = useState('');
-  const [review, setReview] = useState<ReviewedDraft>();
-  const [balanceReadiness, setBalanceReadiness] = useState<BalanceReadiness>();
-  const [balanceExecution, setBalanceExecution] = useState<BalanceExecution>();
-  const [selectedCase, setSelectedCase] = useState<SavedCase>();
-  const [caseRun, setCaseRun] = useState<{ saved: SavedCase; requestId: string }>();
-  const [executingBalance, setExecutingBalance] = useState(false);
-  const [recoveringBalance, setRecoveringBalance] = useState(false);
-  const [checkingBalance, setCheckingBalance] = useState(false);
-  const [balanceRequestId, setBalanceRequestId] = useState<string>();
-  const [requestOperation, setRequestOperation] = useState<'BALANCE' | 'WITHDRAWAL'>('BALANCE');
-  const [sessionExecutions, setSessionExecutions] = useState<readonly BalanceExecution[]>([]);
-  const [balanceHistory, setBalanceHistory] = useState<readonly BalanceExecution[]>();
-  const [historyAtmId, setHistoryAtmId] = useState('');
-  const executionLock = useRef(false);
-  useEffect(() => {
-    if (!executingBalance || !balanceRequestId || requestOperation !== 'WITHDRAWAL') return;
-    let cancelled = false;
-    let polling = false;
-    const timer = setInterval(() => {
-      if (polling) return;
-      polling = true;
-      void client
-        .call((api) =>
-          api.getWithdrawalExecution({ environment: 'QA', requestId: balanceRequestId }),
-        )
-        .then((result) => {
-          if (!cancelled && executionLock.current && result.ok && result.value)
-            setBalanceExecution((previous) =>
-              previous?.requestId === result.value!.requestId && previous.finishedAt
-                ? previous
-                : result.value!,
-            );
-        })
-        .finally(() => {
-          polling = false;
-        });
-    }, 500);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [executingBalance, balanceRequestId, requestOperation, client]);
-  useEffect(() => {
-    if (!balanceExecution || receiptRequest.current !== balanceExecution.requestId) return;
-    const preview = createWithdrawalReceipt(balanceExecution);
-    if (preview) {
-      receiptRequest.current = undefined;
-      setReceipt(preview);
-    }
-  }, [balanceExecution]);
-  useEffect(() => {
-    if (!executionLock.current) {
-      setBalanceExecution(undefined);
-      setSelectedCase(undefined);
-      setCaseRun(undefined);
-      setBalanceRequestId(undefined);
-      setBalanceHistory(undefined);
-      setHistoryAtmId('');
-      setSessionExecutions([]);
-      setReceiptPreference('WITHOUT_PRINT');
-      setWithReversal(false);
-      setReversalDelay(5);
-      setReceipt(undefined);
-      receiptRequest.current = undefined;
-    }
-  }, [snapshot?.environment]);
-  const [sendSetup, setSendSetup] = useState<SendConfigurationSnapshot>();
-  const [sendPlan, setSendPlan] = useState<PreparedSendPlan>();
-  const [sendSetupError, setSendSetupError] = useState('');
-  const [sendSetupLoading, setSendSetupLoading] = useState(true);
-  const [error, setError] = useState<{ code: string; message: string; target?: 'review' }>();
-  useEffect(() => {
-    let active = true;
-    if (!visible || !snapshot) return;
-    setSendSetup(undefined);
-    setSendSetupLoading(true);
-    setSendSetupError('');
-    void client
-      .call((api) => api.getSendConfiguration(snapshot.environment))
-      .then((result) => {
-        if (!active) return;
-        setSendSetupLoading(false);
-        if (result.ok) setSendSetup(result.value);
-        else setSendSetupError(result.error.message);
-      });
-    return () => {
-      active = false;
-    };
-  }, [visible, snapshot?.environment, client]);
-  useEffect(() => {
-    setSendPlan(undefined);
-  }, [
-    sendSetup?.configuration?.id,
-    sendSetup?.configuration?.revision,
-    sendSetup?.status,
-    sendSetup?.documentedEndpoint?.evidenceId,
-    sendSetup?.documentedEndpoint?.host,
-    sendSetup?.documentedEndpoint?.port,
-  ]);
-  const [reviewing, setReviewing] = useState(false);
-  const [casesOpen, setCasesOpen] = useState(false);
-  const [caseWarning, setCaseWarning] = useState<string>();
-  const [selectedCard, setSelectedCard] = useState<TransactionCard>();
-  const [cardReading, setCardReading] = useState(false);
-  const [discardOpen, setDiscardOpen] = useState(false);
-  const discardDialog = useRef<HTMLDialogElement>(null);
-  const selectedCardRef = useRef<TransactionCard | undefined>(undefined);
-  const dataHeading = useRef<HTMLHeadingElement>(null);
-  const cardHeading = useRef<HTMLHeadingElement>(null);
-  const reviewHeading = useRef<HTMLHeadingElement>(null);
-  const atmInput = useRef<HTMLSelectElement>(null);
-  const onCasesOpenChange = useCallback((open: boolean) => setCasesOpen(open), []);
-  const workflowBusy =
-    reviewing ||
-    executingBalance ||
-    recoveringBalance ||
-    casesOpen ||
-    cardReading ||
-    discardOpen ||
-    !!receipt;
-  useEffect(() => {
-    onReviewingChange(workflowBusy);
-    return () => onReviewingChange(false);
-  }, [workflowBusy, onReviewingChange]);
-  useEffect(() => {
-    if (discardOpen) discardDialog.current?.showModal();
-    else discardDialog.current?.close();
-  }, [discardOpen]);
-  const generation = useRef(0);
-  const active = useRef(true);
-  const amountInput = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    active.current = true;
-    return () => {
-      active.current = false;
-      generation.current++;
-    };
-  }, []);
-  useEffect(() => {
-    generation.current++;
-    setReview(undefined);
-    setSendPlan(undefined);
-    setError(undefined);
-    if (!catalog || !selectableAtms(catalog).some((atm) => atm.id === atmId)) setAtmId('');
-  }, [catalog, atmId]);
-
-  useEffect(() => {
-    if (!pendingAtmSelection || !catalog || !snapshot) return;
-    const atm =
-      snapshot.environment === pendingAtmSelection.environment
-        ? resolveAtmSelection(pendingAtmSelection, catalog)
-        : undefined;
-    generation.current++;
-    setReview(undefined);
-    setSendPlan(undefined);
-    setError(undefined);
-    if (atm) {
-      setAtmId(atm.id);
-      setCaseWarning(undefined);
-    } else
-      setCaseWarning(
-        'El ATM configurado cambió o no está disponible. Recarga los perfiles para seleccionarlo.',
-      );
-    onAtmSelectionApplied();
-  }, [pendingAtmSelection, catalog, snapshot, onAtmSelectionApplied]);
-
-  const atms =
-    catalog && catalog.environment === snapshot?.environment ? selectableAtms(catalog) : [];
-  const selectedAtm = atms.find((atm) => atm.id === atmId);
-  const original = needsOriginal(transaction);
-  const monetary = needsAmount(transaction);
-  const operation = original
-    ? undefined
-    : snapshot?.documentedOperations.find(
-        (item) => item.transaction === transaction && item.account === account,
-      );
-  const fieldsDisabled = disabled || workflowBusy;
-  const draft: DraftRequest | undefined = snapshot
-    ? {
-        environment: snapshot.environment,
-        transaction,
-        scenario,
-        atmId: selectedAtm?.id ?? null,
-        atmRevision: selectedAtm?.revision ?? null,
-        account: original ? null : account,
-        amount: monetary ? amount : null,
-      }
-    : undefined;
-  const blockers = review?.blockers ?? draftBlockers(transaction, !!operation);
-  // Main validates the current profile, key, card and deadlines on every request.
-  // A separate manual review/readiness round trip is not required to submit it.
-  const balanceContext =
-    !loading &&
-    !catalogError &&
-    !sendSetupLoading &&
-    sendSetup?.configuration &&
-    selectedAtm &&
-    scenario === 'LOCAL'
-      ? (monetary ? parseWithdrawalContextRequest : parseBalanceContextRequest)({
-          draft,
-          cardReadId: selectedCard?.readId,
-          configurationRevision: sendSetup.configuration.revision,
-        })
-      : undefined;
-  useEffect(() => {
-    let current = true;
-    if (
-      !visible ||
-      !monetary ||
-      snapshot?.environment !== 'QA' ||
-      balanceRequestId ||
-      balanceExecution ||
-      executionLock.current
-    )
-      return;
-    void client
-      .call((api) => api.getWithdrawalHistory('QA'))
-      .then((result) => {
-        if (!current || executionLock.current) return;
-        if (!result.ok) {
-          setError({ ...result.error, target: 'review' });
-          return;
-        }
-        // Completed errors belong to history, not to a newly opened form.
-        const previous = result.value.find(withdrawalBlocksNewExecution);
-        if (previous) {
-          setBalanceExecution(previous);
-          if (withdrawalBlocksNewExecution(previous)) setBalanceRequestId(previous.requestId);
-          setRequestOperation('WITHDRAWAL');
-          recordExecution(previous);
-        }
-      });
-    return () => {
-      current = false;
-    };
-  }, [visible, monetary, snapshot?.environment, balanceRequestId, balanceExecution, client]);
-  useEffect(() => {
-    let current = true;
-    setBalanceReadiness(undefined);
-    setCheckingBalance(false);
-    if (
-      !visible ||
-      !balanceContext ||
-      (!monetary && transaction !== 'BALANCE') ||
-      account !== 'SAVINGS' ||
-      scenario !== 'LOCAL' ||
-      snapshot?.environment !== 'QA'
-    )
-      return;
-    setCheckingBalance(true);
-    void client
-      .call(
-        (api) =>
-          monetary
-            ? api.getWithdrawalReadiness(balanceContext)
-            : api.getBalanceReadiness(balanceContext),
-        10000,
-      )
-      .then((result) => {
-        if (!current) return;
-        setCheckingBalance(false);
-        if (result.ok) setBalanceReadiness(result.value);
-        else setError({ ...result.error, target: 'review' });
-      });
-    return () => {
-      current = false;
-    };
-  }, [
-    visible,
-    selectedAtm?.id,
-    selectedAtm?.revision,
-    scenario,
-    selectedCard?.readId,
-    sendSetup?.configuration?.revision,
-    transaction,
-    amount,
-    account,
-    snapshot?.environment,
+export function TransactionWorkspace(props: TransactionPreparationProps) {
+  const preparation = useTransactionPreparation(props);
+  const {
+    snapshot,
+    balanceExecution,
+    balanceRequestId,
+    sessionExecutions,
+    catalog,
     client,
-  ]);
-  const amountInvalid = monetary && amount.length > 0 && !isWithdrawalAmount(amount);
-  const checks = localDraftChecks({
-    transaction,
-    amount,
-    environmentVerified: !!snapshot,
-    atmSelected: !!selectedAtm,
-    catalogAvailable: !!catalog && !loading && !catalogError,
-    operationAvailable: !!operation,
-    original,
-  });
-
-  const errorFeedback = error && (
-    <div className="inline-error" role="alert">
-      <strong>{error.message}</strong>
-      <details>
-        <summary>Detalle técnico</summary>
-        <code>{error.code}</code>
-      </details>
-    </div>
+    fieldsDisabled,
+    loading,
+    catalogError,
+    draft,
+    selectedAtm,
+    selectedCase,
+    caseRun,
+    error,
+    executingBalance,
+    recoveringBalance,
+    requestOperation,
+    reviewHeading,
+    receipt,
+    discardDialog,
+  } = preparation;
+  const [focus, setFocus] = useState(false);
+  const [selection, setSelection] = useState<{
+    id: string;
+    context: string;
+    tab?: 'messages';
+  }>();
+  const context = `${snapshot?.environment}:${preparation.inspectionGeneration}`;
+  useEffect(() => {
+    if (balanceExecution?.requestId && balanceExecution.environment === snapshot?.environment)
+      setSelection({ id: balanceExecution.requestId, context });
+  }, [balanceExecution?.requestId, context, snapshot?.environment]);
+  const history = useTransactionHistory(
+    client,
+    props.visible && snapshot?.environment === 'QA',
+    balanceExecution
+      ? [
+          balanceExecution.requestId,
+          balanceExecution.outcome,
+          balanceExecution.finishedAt,
+          balanceExecution.reversal?.outcome,
+          balanceExecution.reversal?.finishedAt,
+        ].join(':')
+      : undefined,
   );
-  const onCardAvailable = useCallback((card: TransactionCard | undefined) => {
-    const selected = selectedCardRef.current;
-    if (
-      !selected ||
-      (selected.readId === card?.readId &&
-        selected.readerName === card.readerName &&
-        selected.panMasked === card.panMasked &&
-        selected.applicationLabel === card.applicationLabel &&
-        selected.applicationId === card.applicationId)
-    )
-      return;
-    selectedCardRef.current = undefined;
-    setSelectedCard(undefined);
-    generation.current++;
-    setReview(undefined);
-    setSendPlan(undefined);
-  }, []);
-  const onCardReading = useCallback((reading: boolean) => setCardReading(reading), []);
-  function focusStep(index: number) {
-    const heading = [dataHeading, cardHeading, reviewHeading][index]?.current;
-    heading?.focus({ preventScroll: true });
-    (index === 2 ? heading?.closest('.transaction-columns') : heading)?.scrollIntoView({
-      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+  const persisted = mergeExecutionHistory(history.balances, history.withdrawals, history.deposits);
+  const records =
+    snapshot?.environment === 'QA'
+      ? mergeExecutionHistory(
+          persisted,
+          sessionExecutions,
+          balanceExecution ? [balanceExecution] : [],
+        )
+      : [];
+  const inspected = records.find(
+    (item) =>
+      item.requestId ===
+      (selection?.context === context ? selection.id : balanceExecution?.requestId),
+  );
+  const latestMessages =
+    records.find((item) => item.messages?.response) ?? records.find((item) => item.messages);
+  const saved =
+    !!inspected &&
+    persisted.some(
+      (item) =>
+        item.requestId === inspected.requestId &&
+        item.outcome === inspected.outcome &&
+        item.finishedAt === inspected.finishedAt &&
+        item.reversal?.outcome === inspected.reversal?.outcome &&
+        item.reversal?.finishedAt === inspected.reversal?.finishedAt,
+    );
+  function onReceipt(execution: BalanceExecution) {
+    const preview = createWithdrawalReceipt(execution);
+    if (preview) preparation.setReceipt(preview);
+  }
+  function selectExecution(item: BalanceExecution, tab?: 'messages') {
+    setSelection({ id: item.requestId, context, ...(tab ? { tab } : {}) });
+    reviewHeading.current?.focus({ preventScroll: true });
+    reviewHeading.current?.closest('.transaction-result-panel')?.scrollIntoView({
       block: 'start',
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
     });
   }
-  function chooseCard(card: TransactionCard) {
-    invalidate();
-    selectedCardRef.current = card;
-    setSelectedCard(card);
-  }
-  const applySavedCardAccount = useCallback(
-    (preferred: AccountType | null) => {
-      if (!preferred || preferred === account) return;
-      invalidate();
-      setAccount(preferred);
-    },
-    [account],
-  );
-  const hasDraftData =
-    transaction !== 'BALANCE' ||
-    scenario !== 'LOCAL' ||
-    account !== 'SAVINGS' ||
-    !!amount ||
-    !!atmId ||
-    !!selectedCard ||
-    !!review;
-  function requestReset() {
-    if (hasDraftData) setDiscardOpen(true);
-    else reset();
-  }
-  function closeDiscard() {
-    discardDialog.current?.close();
-    setDiscardOpen(false);
-  }
-  function reset() {
-    invalidate();
-    setSelectedCase(undefined);
-    setCaseWarning(undefined);
-    selectedCardRef.current = undefined;
-    setSelectedCard(undefined);
-    focusStep(0);
-    setTransaction('BALANCE');
-    setScenario('LOCAL');
-    setAccount('SAVINGS');
-    setAmount('');
-    setReceiptPreference('WITHOUT_PRINT');
-    setWithReversal(false);
-    setReversalDelay(5);
-    setAtmId('');
-  }
-
-  function invalidate() {
-    generation.current++;
-    setReview(undefined);
-    setSendPlan(undefined);
-    setError(undefined);
-    setCaseWarning(undefined);
-    setBalanceReadiness(undefined);
-    if (
-      !executionLock.current &&
-      (!balanceExecution || !balanceDeliveryUncertain(balanceExecution))
-    ) {
-      setBalanceExecution(undefined);
-      // An IPC timeout without a recovered record must keep its execution reference.
-      if (balanceExecution) setBalanceRequestId(undefined);
-    }
-  }
-  function loadCase(saved: DraftRequest, warning: string | undefined, testCase: SavedCase) {
-    invalidate();
-    setSelectedCase(warning ? undefined : testCase);
-    selectedCardRef.current = undefined;
-    setSelectedCard(undefined);
-    setTransaction(saved.transaction);
-    setScenario(saved.scenario);
-    setAccount(saved.account ?? 'SAVINGS');
-    setAmount(saved.amount ?? '');
-    setReceiptPreference('WITHOUT_PRINT');
-    setWithReversal(false);
-    setReversalDelay(5);
-    setAtmId(saved.atmId ?? '');
-    setCaseWarning(warning);
-  }
-  async function prepare() {
-    invalidate();
-    if (!snapshot || !catalog || loading) return;
-    if (monetary && !isDraftAmount(amount)) {
-      amountInput.current?.focus();
-      setError({
-        code: 'VALIDATION_ERROR',
-        message: 'Escribe el monto con punto y dos decimales, por ejemplo 100.50.',
-      });
-      return;
-    }
-    const revision = generation.current;
-    setReviewing(true);
-    const result = await client.call((api) =>
-      api.reviewDraft({
-        environment: snapshot.environment,
-        transaction,
-        scenario,
-        atmId: selectedAtm?.id ?? null,
-        atmRevision: selectedAtm?.revision ?? null,
-        account: original ? null : account,
-        amount: monetary ? amount : null,
-      }),
-    );
-    if (!active.current) return;
-    if (revision === generation.current) {
-      if (result.ok) {
-        setReview(result.value);
-        if (sendSetup?.configuration && draft) {
-          const plan = await client.call((api) =>
-            api.prepareSendPlan({
-              draft,
-              configurationRevision: sendSetup.configuration!.revision,
-            }),
-          );
-          if (!active.current) return;
-          if (revision === generation.current) {
-            if (plan.ok) {
-              setSendPlan(plan.value);
-              setReview(plan.value.review);
-            } else setError({ ...plan.error, target: 'review' });
-          }
-        }
-      } else setError({ ...result.error, target: 'review' });
-    }
-    setReviewing(false);
-  }
-
-  async function executeBalance() {
-    if (executionLock.current || fieldsDisabled || !balanceContext || balanceRequestId) return;
-    const requestId = crypto.randomUUID();
-    const currentCase = selectedCase && catalog?.cases.find((item) => item.id === selectedCase.id);
-    setCaseRun(
-      currentCase &&
-        currentCase.revision === selectedCase?.revision &&
-        draft &&
-        caseMatchesDraft(currentCase, draft)
-        ? { saved: currentCase, requestId }
-        : undefined,
-    );
-    receiptRequest.current = monetary && receiptPreference === 'WITH_PRINT' ? requestId : undefined;
-    executionLock.current = true;
-    setExecutingBalance(true);
-    setBalanceRequestId(requestId);
-    setRequestOperation(monetary ? 'WITHDRAWAL' : 'BALANCE');
-    setBalanceExecution(undefined);
-    setBalanceReadiness(undefined);
-    setSendPlan(undefined);
-    setError(undefined);
-    let backendResult: Result<BalanceExecution> | undefined;
-    try {
-      const result = await client.call(
-        async (api) => {
-          const request = {
-            ...balanceContext,
-            requestId,
-            ...(monetary && transaction === 'WITHDRAWAL_APPROVED' && withReversal
-              ? { reversalDelaySeconds: reversalDelay }
-              : {}),
-          };
-          backendResult = await (monetary
-            ? api.executeWithdrawal(request)
-            : api.executeBalance(request));
-          return backendResult;
-        },
-        180000,
-        'No se conoce el resultado. Consulta la referencia antes de realizar otro envío.',
-      );
-      if (!active.current) return;
-      if (result.ok) {
-        setBalanceExecution(result.value);
-        recordExecution(result.value);
-        if (balanceNotTransmitted(result.value)) setBalanceRequestId(undefined);
-        if (balanceResponseConfirmed(result.value)) {
-          setBalanceRequestId(undefined);
-          selectedCardRef.current = undefined;
-          setSelectedCard(undefined);
-        }
-      } else {
-        setError({ ...result.error, target: 'review' });
-        // Main returns failures only before execution; financial outcomes are
-        // BalanceExecution records. A locally synthesized timeout/IPC rejection
-        // is a different object and must retain the unresolved reference.
-        if (result === backendResult) setBalanceRequestId(undefined);
-      }
-    } finally {
-      executionLock.current = false;
-      if (active.current) setExecutingBalance(false);
-    }
-  }
-  async function recoverBalance() {
-    if (!balanceRequestId || executionLock.current) return;
-    executionLock.current = true;
-    setRecoveringBalance(true);
-    try {
-      const result = await client.call((api) =>
-        requestOperation === 'WITHDRAWAL'
-          ? api.getWithdrawalExecution({ environment: 'QA', requestId: balanceRequestId })
-          : api.getBalanceExecution({ environment: 'QA', requestId: balanceRequestId }),
-      );
-      if (!active.current) return;
-      if (result.ok && result.value) {
-        setBalanceExecution(result.value);
-        recordExecution(result.value);
-        setError(undefined);
-        if (balanceNotTransmitted(result.value)) setBalanceRequestId(undefined);
-        if (balanceResponseConfirmed(result.value)) {
-          setBalanceRequestId(undefined);
-          selectedCardRef.current = undefined;
-          setSelectedCard(undefined);
-        }
-      } else
-        setError({
-          code: result.ok ? 'NOT_FOUND' : result.error.code,
-          message: result.ok
-            ? 'Aún no hay un registro recuperable. Conserva la referencia y verifica la ejecución antes de otro envío.'
-            : result.error.message,
-          target: 'review',
-        });
-    } finally {
-      executionLock.current = false;
-      if (active.current) setRecoveringBalance(false);
-    }
-  }
-  async function loadBalanceHistory() {
-    const result = await client.call(async (api) => {
-      const [balances, withdrawals] = await Promise.all([
-        api.getBalanceHistory('QA'),
-        api.getWithdrawalHistory('QA'),
-      ]);
-      if (!balances.ok) return balances;
-      if (!withdrawals.ok) return withdrawals;
-      return {
-        ok: true as const,
-        value: [...balances.value, ...withdrawals.value].sort((a, b) =>
-          b.startedAt.localeCompare(a.startedAt),
-        ),
-      };
-    });
-    if (!active.current) return;
-    if (result.ok) setBalanceHistory(result.value);
-    else setError({ ...result.error, target: 'review' });
-  }
-
-  function recordExecution(execution: BalanceExecution) {
-    setSessionExecutions((items) =>
-      [execution, ...items.filter((item) => item.requestId !== execution.requestId)].slice(0, 20),
-    );
-  }
-  function clearCard() {
-    invalidate();
-    selectedCardRef.current = undefined;
-    setSelectedCard(undefined);
-    cardHeading.current?.focus();
-  }
-  const canStartNewBalance = !!(
-    balanceRequestId &&
-    requestOperation === 'WITHDRAWAL' &&
-    transaction === 'BALANCE' &&
-    balanceExecution &&
-    canStartBalanceAfterUnconfirmedWithdrawal(balanceExecution)
-  );
-  const canStartNewTransaction = !!(
-    balanceRequestId &&
-    balanceExecution &&
-    ((requestOperation === 'BALANCE' && canStartAfterUnconfirmedBalance(balanceExecution)) ||
-      (requestOperation === 'WITHDRAWAL' && canStartAfterUnconfirmedWithdrawal(balanceExecution)) ||
-      canStartNewBalance)
-  );
-  function startNewTransaction() {
-    if (!canStartNewTransaction || executionLock.current || fieldsDisabled) return;
-    // Keep the original execution and correlation in the journal/session. Only
-    // clear the active form, requiring a new card read, request ID and PIN.
-    invalidate();
-    setBalanceExecution(undefined);
-    setBalanceRequestId(undefined);
-    selectedCardRef.current = undefined;
-    setSelectedCard(undefined);
-    cardHeading.current?.focus();
-  }
-  const sendHint = balanceRequestId
-    ? canStartNewTransaction
-      ? canStartNewBalance
-        ? 'Selecciona Nueva consulta de saldo para continuar. El retiro anterior conserva su referencia en el historial.'
-        : 'Selecciona Nueva transacción para continuar. El intento anterior conserva su resultado en el historial.'
-      : 'Consulta el resultado del intento anterior antes de volver a enviar.'
-    : loading || sendSetupLoading
-      ? 'Cargando configuración…'
-      : !selectedAtm
-        ? 'Selecciona un perfil ATM.'
-        : snapshot?.environment !== 'QA' ||
-            (!monetary && transaction !== 'BALANCE') ||
-            account !== 'SAVINGS' ||
-            scenario !== 'LOCAL'
-          ? 'Ejecución disponible para saldo o retiro · Ahorros · ATM Local · QA.'
-          : monetary && !isWithdrawalAmount(amount)
-            ? 'Escribe un monto positivo con punto y dos decimales (máximo 10 dígitos enteros).'
-            : !selectedCard
-              ? balanceExecution && balanceResponseConfirmed(balanceExecution)
-                ? 'Operación finalizada. Lee la tarjeta para iniciar una nueva transacción.'
-                : 'Lee la tarjeta para preparar el envío.'
-              : !sendSetup?.configuration
-                ? 'Configura el destino de envío en Configuración.'
-                : monetary && balanceReadiness && !balanceReadiness.ready
-                  ? balanceReadiness.blockers[0]?.label
-                  : 'El PIN se solicitará en una ventana protegida al enviar.';
-  const atmHistory = balanceHistory?.filter((item) => !historyAtmId || item.atmId === historyAtmId);
-
+  const verdict =
+    inspected && caseRun?.requestId === inspected.requestId
+      ? evaluateCase(caseRun.saved, inspected)
+      : undefined;
   return (
-    <div className="transaction-workspace">
+    <div className="transaction-workspace interactive-transactions">
       <div className="transaction-heading">
         <div>
           <h1>Nueva transacción</h1>
-          <p>
-            {monetary
-              ? 'Prepara el retiro, revisa los importes y elige tu comprobante.'
-              : 'Configura la operación y consulta la respuesta del host.'}
-          </p>
+          <p>Prepara una operación o explora su evidencia en el historial local.</p>
         </div>
         <div className="transaction-toolbar">
+          <button
+            className="secondary preparation-toggle"
+            aria-expanded={!focus}
+            aria-controls="transaction-preparation"
+            onClick={() => setFocus(!focus)}
+          >
+            {focus ? 'Mostrar preparación' : 'Ocultar preparación'}
+          </button>
           <CaseLibrary
             draft={draft}
             catalog={catalog}
             client={client}
             disabled={fieldsDisabled || loading || !!catalogError}
             canSave={!!selectedAtm && !!parseDraftRequest(draft)}
-            onCatalogChange={onCatalogChange}
-            onLoad={loadCase}
-            onOpenChange={onCasesOpenChange}
+            onCatalogChange={preparation.onCatalogChange}
+            onLoad={preparation.loadCase}
+            onOpenChange={preparation.onCasesOpenChange}
           />
         </div>
       </div>
-      {caseWarning && (
+      {preparation.caseWarning && (
         <div className="document-note" role="status">
-          {caseWarning}
+          {preparation.caseWarning}
         </div>
       )}
       {selectedCase && (
@@ -776,649 +155,101 @@ export function TransactionWorkspace({
         </div>
       )}
       <div
-        className={`transaction-columns direct-transaction-columns${balanceExecution ? ' with-message-inspector' : ''}`}
+        className={`transaction-columns direct-transaction-columns inspection-columns${focus ? ' inspection-focus' : ''}`}
       >
-        <section
-          className="panel transaction-context transaction-composer"
-          aria-labelledby="transaction-context-title"
+        <div
+          id="transaction-preparation"
+          className="transaction-preparation-container"
+          hidden={focus}
         >
-          <div className="panel-heading">
-            <h2 id="transaction-context-title" ref={dataHeading} tabIndex={-1}>
-              Datos de la transacción
-            </h2>
-          </div>
-          <div className="transaction-fields">
-            <div className="transaction-context-selectors">
-              <label>
-                Cajero (ATM)
-                <span className="composer-select with-caption">
-                  <Icon name="atm" size={21} />
-                  <select
-                    ref={atmInput}
-                    aria-label="Perfil ATM"
-                    value={selectedAtm?.id ?? ''}
-                    disabled={fieldsDisabled || loading || !atms.length}
-                    onChange={(event) => {
-                      invalidate();
-                      setAtmId(event.target.value);
-                    }}
-                  >
-                    <option value="">
-                      {loading
-                        ? 'Cargando perfiles…'
-                        : atms.length
-                          ? 'Selecciona un ATM'
-                          : 'Sin ATM activos en este ambiente'}
-                    </option>
-                    {atms.map((atm) => (
-                      <option key={atm.id} value={atm.id}>
-                        {atm.alias}
-                      </option>
-                    ))}
-                  </select>
-                  <small>
-                    {catalog?.entities.find((entity) => entity.id === selectedAtm?.entityId)
-                      ?.name ?? 'Selecciona un cajero'}
-                  </small>
-                </span>
-              </label>
-            </div>
-            {!atms.length && !loading && (
-              <div className="empty-profile-action">
-                <button
-                  className="text-button"
-                  disabled={fieldsDisabled || !catalog || !!catalogError}
-                  onClick={() =>
-                    onNavigate(
-                      catalog?.entities.some((entity) => entity.active) ? 'atms' : 'entities',
-                    )
-                  }
-                >
-                  {catalog?.entities.some((entity) => entity.active)
-                    ? 'Crear ATM'
-                    : 'Crear entidad'}
-                </button>
-              </div>
-            )}
-            {catalogError && (
-              <div className="inline-error" role="alert">
-                <strong>{catalogError.message}</strong>
-                <small>{catalogError.code}</small>
-              </div>
-            )}
-            <section className="transaction-card-section" aria-labelledby="transaction-card-title">
-              <div className="panel-heading">
-                <h2 id="transaction-card-title" ref={cardHeading} tabIndex={-1}>
-                  Tarjeta
-                </h2>
-              </div>
-              {visible && (
-                <CardReaderView
-                  transaction
-                  {...(snapshot ? { environment: snapshot.environment } : {})}
-                  disabled={fieldsDisabled}
-                  selectedReadId={selectedCard?.readId}
-                  onUseCard={chooseCard}
-                  onSavedProfileAccount={applySavedCardAccount}
-                  onClearCard={clearCard}
-                  onAvailableCardChange={onCardAvailable}
-                  onReadingChange={onCardReading}
-                />
-              )}
-            </section>
-            <label>
-              Tipo de Transacción
-              <span className="composer-select with-caption">
-                <Icon name="transaction" size={21} />
-                <select
-                  aria-label="Transacción"
-                  value={
-                    transaction === 'WITHDRAWAL_APPROVED' && withReversal
-                      ? 'WITHDRAWAL_REVERSAL'
-                      : transaction
-                  }
-                  disabled={fieldsDisabled}
-                  onChange={(event) => {
-                    if (event.target.value === 'WITHDRAWAL_REVERSAL') {
-                      invalidate();
-                      setTransaction('WITHDRAWAL_APPROVED');
-                      setWithReversal(true);
-                      setAmount('');
-                      return;
-                    }
-                    const selected = transactions.find((item) => item.id === event.target.value);
-                    if (selected) {
-                      invalidate();
-                      setTransaction(selected.id);
-                      setWithReversal(false);
-                      setAmount('');
-                    }
-                  }}
-                >
-                  {transactions.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.label}
-                    </option>
-                  ))}
-                  <option value="WITHDRAWAL_REVERSAL">Retiro aprobado + reverso</option>
-                </select>
-                <small>
-                  {operation
-                    ? `Código CMS: ${operation.code}`
-                    : 'Sin referencia documental disponible'}
-                </small>
-              </span>
-            </label>
-            <label>
-              Cuenta
-              <span className="composer-select">
-                <Icon name="entity" size={21} />
-                <select
-                  aria-label="Cuenta"
-                  value={account}
-                  disabled={fieldsDisabled || original}
-                  onChange={(event) => {
-                    const selected = accountTypes.find((item) => item.id === event.target.value);
-                    if (selected) {
-                      invalidate();
-                      setAccount(selected.id);
-                    }
-                  }}
-                >
-                  {accountTypes.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-              </span>
-              {original && (
-                <small className="field-feedback">Pendiente de transacción original</small>
-              )}
-            </label>
-            {monetary && (
-              <label className="withdrawal-amount-input">
-                Monto de prueba
-                <span className="money-input">
-                  <span aria-hidden="true">USD</span>
-                  <input
-                    ref={amountInput}
-                    aria-label="Monto de prueba"
-                    aria-invalid={amountInvalid}
-                    aria-describedby="draft-amount-help"
-                    inputMode="decimal"
-                    value={amount}
-                    maxLength={14}
-                    placeholder="0.00"
-                    disabled={fieldsDisabled}
-                    onChange={(event) => {
-                      invalidate();
-                      setAmount(event.target.value);
-                    }}
-                  />
-                </span>
-                <small
-                  id="draft-amount-help"
-                  className={amountInvalid ? 'field-feedback invalid' : 'field-feedback'}
-                  aria-live="polite"
-                >
-                  {amountInvalid
-                    ? 'Usa un monto positivo, punto y dos decimales; hasta 10 dígitos enteros.'
-                    : 'Escribe el monto que deseas probar, con punto y dos decimales (ej. 75.25).'}
-                </small>
-              </label>
-            )}
-            {monetary && (
-              <fieldset
-                className="receipt-options"
-                disabled={fieldsDisabled}
-                aria-describedby="receipt-choice-help"
-              >
-                <legend>Comprobante del simulador</legend>
-                <div className="receipt-choices">
-                  {(
-                    [
-                      ['WITHOUT_PRINT', 'Sin impresión', 'Solo resultado en pantalla', 'monitor'],
-                      ['WITH_PRINT', 'Con impresión', 'Vista previa al aprobarse', 'printer'],
-                    ] as const
-                  ).map(([value, label, description, icon]) => (
-                    <label key={value}>
-                      <input
-                        type="radio"
-                        name="withdrawal-receipt"
-                        value={value}
-                        checked={receiptPreference === value}
-                        onChange={() => setReceiptPreference(value)}
-                      />
-                      <span>
-                        <Icon name={icon} size={19} />
-                        <span>
-                          <strong>{label}</strong>
-                          <small>{description}</small>
-                        </span>
-                      </span>
-                    </label>
-                  ))}
-                </div>
-                <p id="receipt-choice-help">Impresión local, sin comisión adicional al host.</p>
-              </fieldset>
-            )}
-            {transaction === 'WITHDRAWAL_APPROVED' && (
-              <fieldset
-                className="receipt-options withdrawal-flow-options"
-                disabled={fieldsDisabled}
-              >
-                <legend>Flujo de la prueba</legend>
-                <div className="receipt-choices">
-                  <label>
-                    <input
-                      type="radio"
-                      name="withdrawal-flow"
-                      checked={!withReversal}
-                      onChange={() => {
-                        invalidate();
-                        setWithReversal(false);
-                      }}
-                    />
-                    <span>
-                      <strong>Solo retiro</strong>
-                    </span>
-                  </label>
-                  <label>
-                    <input
-                      type="radio"
-                      name="withdrawal-flow"
-                      checked={withReversal}
-                      onChange={() => {
-                        invalidate();
-                        setWithReversal(true);
-                      }}
-                    />
-                    <span>
-                      <strong>Retiro + reverso</strong>
-                    </span>
-                  </label>
-                </div>
-                {withReversal && (
-                  <>
-                    <label>
-                      Espera después de la aprobación
-                      <select
-                        aria-label="Espera para el reverso"
-                        value={reversalDelay}
-                        onChange={(event) => setReversalDelay(Number(event.target.value))}
-                      >
-                        {[1, 3, 5, 10, 20, 30].map((seconds) => (
-                          <option key={seconds} value={seconds}>
-                            {seconds} segundos
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <p>
-                      Tras aprobarse el retiro, el simulador enviará su reverso total. Prueba sin
-                      entrega de efectivo.
-                    </p>
-                  </>
-                )}
-              </fieldset>
-            )}
-          </div>
-
-          {error?.target !== 'review' && errorFeedback}
-          <div className="composer-footer">
-            <div className="transaction-send-actions">
-              <button
-                className="primary"
-                disabled={fieldsDisabled || !balanceContext || !!balanceRequestId}
-                onClick={() => void executeBalance()}
-                aria-describedby="send-blocked-note"
-              >
-                <Icon name="play" size={17} />
-                {executingBalance
-                  ? requestOperation === 'WITHDRAWAL'
-                    ? 'Procesando retiro…'
-                    : 'Consultando saldo…'
-                  : 'Ejecutar Transacción'}
-              </button>
-            </div>
-            <button
-              className="composer-settings"
-              aria-label="Opciones y detalles técnicos"
-              aria-controls="transaction-options"
-              aria-expanded={optionsOpen}
-              onClick={() => setOptionsOpen((open) => !open)}
-              title="Opciones y detalles técnicos"
-            >
-              <Icon name="settings" size={19} />
-            </button>
-          </div>
-          <p id="send-blocked-note" className="send-status-note" aria-live="polite">
-            {sendHint}
-          </p>
-          <details
-            className="composer-options"
-            id="transaction-options"
-            open={optionsOpen}
-            onToggle={(event) => setOptionsOpen(event.currentTarget.open)}
-            aria-label="Opciones y detalles técnicos"
-          >
-            <summary>Opciones y detalles técnicos</summary>
-            <div className="composer-options-content">
-              <button
-                className="text-button"
-                aria-label="Limpiar borrador"
-                disabled={fieldsDisabled}
-                onClick={requestReset}
-              >
-                <Icon name="trash" size={16} />
-                Limpiar
-              </button>
-
-              <label>
-                Escenario
-                <select
-                  aria-label="Escenario"
-                  value={scenario}
-                  disabled={fieldsDisabled}
-                  onChange={(event) => {
-                    const selected = scenarios.find((item) => item.id === event.target.value);
-                    if (selected) {
-                      invalidate();
-                      setScenario(selected.id);
-                    }
-                  }}
-                >
-                  {scenarios.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="profile-tools">
-                <button
-                  className="text-button"
-                  disabled={fieldsDisabled}
-                  onClick={() => onNavigate('atms')}
-                >
-                  Administrar perfiles
-                </button>
-                <button
-                  className="text-button"
-                  aria-label="Recargar perfiles"
-                  title="Recargar perfiles"
-                  disabled={loading || fieldsDisabled || !snapshot}
-                  onClick={() => {
-                    invalidate();
-                    void onRefresh();
-                  }}
-                >
-                  <Icon name="history" size={16} />
-                </button>
-              </div>
-              {balanceReadiness?.sequencesRemaining !== undefined && (
-                <p className="form-note">
-                  Secuencias QA reservadas disponibles: {balanceReadiness.sequencesRemaining}.
-                  {balanceReadiness.sequencesRemaining <= 1 &&
-                    ' Solicita un nuevo pool aprobado antes de agotarlas; no se reutilizan secuencias consumidas.'}
-                </p>
-              )}
-              <details className="inline-details">
-                <summary>Sobre este escenario</summary>
-                <p>{scenarios.find((item) => item.id === scenario)?.description}</p>
-              </details>
-              <label>
-                <span className="visually-hidden">Plantilla documental</span>
-                <select
-                  aria-label="Plantilla documental"
-                  value=""
-                  disabled={fieldsDisabled || !snapshot?.documentedOperations.length}
-                  onChange={(event) => {
-                    const selected = snapshot?.documentedOperations.find(
-                      (item) => `${item.transaction}:${item.account}` === event.target.value,
-                    );
-                    if (!selected) return;
-                    invalidate();
-                    setTransaction(selected.transaction);
-                    setWithReversal(false);
-                    setAccount(selected.account);
-                    setAmount('');
-                  }}
-                >
-                  <option value="">Plantillas documentales</option>
-                  {snapshot?.documentedOperations.map((item) => (
-                    <option
-                      key={`${item.transaction}:${item.account}`}
-                      value={`${item.transaction}:${item.account}`}
-                    >
-                      {transactions.find((entry) => entry.id === item.transaction)?.label} ·{' '}
-                      {accountTypes.find((entry) => entry.id === item.account)?.label} · {item.code}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <button
-                className="secondary"
-                disabled={
-                  fieldsDisabled ||
-                  sendSetupLoading ||
-                  loading ||
-                  !snapshot ||
-                  !catalog ||
-                  !!catalogError
-                }
-                onClick={() => void prepare()}
-              >
-                {reviewing ? 'Revisando…' : 'Revisar transacción'} <Icon name="check" size={16} />
-              </button>
-              <p className="form-note">
-                Revisión documental opcional. No es un requisito para enviar.
-              </p>
-              <dl className="transaction-preview" aria-label="Resumen de la transacción">
-                {[
-                  ['Ambiente', snapshot?.environment ?? 'Sin verificar'],
-                  ['ATM', selectedAtm?.alias ?? 'Selecciona un ATM'],
-                  [
-                    'Escenario',
-                    scenarios.find((item) => item.id === scenario)?.label ?? 'Sin verificar',
-                  ],
-                  [
-                    'Transacción',
-                    transactions.find((item) => item.id === transaction)?.label ?? 'Sin verificar',
-                  ],
-                  [
-                    'Cuenta',
-                    original
-                      ? 'Pendiente del original'
-                      : (accountTypes.find((item) => item.id === account)?.label ??
-                        'Sin verificar'),
-                  ],
-                  ...(monetary ? [['Monto de prueba', amount || 'Escribe el monto']] : []),
-                  [
-                    'Tarjeta',
-                    selectedCard?.panMasked ??
-                      (selectedCard
-                        ? 'Número no disponible en el chip'
-                        : 'Pendiente de seleccionar'),
-                  ],
-                ].map(([label, value]) => (
-                  <div key={label}>
-                    <dt>{label}</dt>
-                    <dd>{value}</dd>
-                  </div>
-                ))}
-              </dl>
-
-              {checkingBalance && <p role="status">Comprobando disponibilidad…</p>}
-              {balanceReadiness && !balanceReadiness.ready && (
-                <div role="status" aria-label="Disponibilidad de la transacción">
-                  <strong>Dependencias de esta transacción</strong>
-                  <ul>
-                    {balanceReadiness.blockers.map((item) => (
-                      <li key={item.id}>{item.label}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {sendPlan && (
-                <div className="send-plan-status" role="status" aria-label="Plan de envío">
-                  <strong>Configuración de envío</strong>
-                  <span>
-                    {sendPlan.endpoint.host}:{sendPlan.endpoint.port}
-                  </span>
-                  <small>
-                    Modo documental:{' '}
-                    {sendPlan.trigger === 'ON_CLICK' ? 'Al pulsar Enviar' : 'Después de revisar'}
-                  </small>
-                  <small>Plan documental · sin transmisión.</small>
-                </div>
-              )}
-              {review && (
-                <>
-                  <p role="status">Revisión documental · {review.environment}</p>
-                  <DraftSummary review={review} compact />
-                </>
-              )}
-              {review?.destinationCompatibility && (
-                <DestinationCompatibilityView report={review.destinationCompatibility} />
-              )}
-              <details className="inline-details preparation-details">
-                <summary>Preparación y pendientes documentales</summary>
-                <div className="transaction-readiness">
-                  <div className="local-draft-checks" aria-label="Preparación local">
-                    <h3>Datos del borrador</h3>
-                    <ul>
-                      {checks.map((check) => (
-                        <li key={check.key}>
-                          <span
-                            className={check.complete ? 'local-check complete' : 'local-check'}
-                            aria-label={check.complete ? 'Completado' : 'Pendiente'}
-                          >
-                            {check.complete ? '✓' : '○'}
-                          </span>
-                          <div>
-                            <strong>{check.label}</strong>
-                            {!check.complete && <p>{check.detail}</p>}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div className="send-requirements">
-                    <h3>Referencias documentales</h3>
-                    <ul>
-                      {blockers.map((blocker) => (
-                        <li key={blocker.id}>
-                          <details className="inline-details">
-                            <summary>{blocker.label}</summary>
-                            <p>{blocker.description}</p>
-                          </details>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </details>
-              <button
-                className="text-button"
-                disabled={fieldsDisabled}
-                onClick={() => onNavigate('settings')}
-              >
-                Configurar envío <Icon name="arrow" size={14} />
-              </button>
-            </div>
-          </details>
-          {sendSetupError && (
-            <p className="inline-error" role="alert">
-              {sendSetupError}
-            </p>
-          )}
-          {balanceReadiness?.sequencesRemaining !== undefined &&
-            balanceReadiness.sequencesRemaining <= 1 && (
-              <p className="form-note" role="status">
-                {balanceReadiness.sequencesRemaining === 1
-                  ? 'Queda una secuencia QA reservada.'
-                  : 'No quedan secuencias QA reservadas.'}{' '}
-                Se necesita un nuevo pool aprobado para continuar cuando se agote.
-              </p>
-            )}
-        </section>
-        <section className="panel transaction-result-panel" aria-label="Resultado">
+          <TransactionComposer preparation={preparation} />
+        </div>
+        <section className="panel transaction-result-panel inspection-panel" aria-label="Resultado">
           <div className="panel-heading">
             <h2 ref={reviewHeading} tabIndex={-1}>
               Resultado
             </h2>
-            <span
-              className={`pill ${balanceExecution?.outcome === 'APPROVED' && !balanceDeliveryUncertain(balanceExecution) ? 'result-success-pill' : 'neutral'}`}
-            >
-              {executingBalance
-                ? 'En curso'
-                : balanceExecution
-                  ? balanceExecution.outcome === 'APPROVED' &&
-                    !balanceDeliveryUncertain(balanceExecution)
-                    ? balanceExecution.reversal
-                      ? 'Flujo completo'
-                      : 'Aprobado'
-                    : 'Intento registrado'
-                  : balanceRequestId
-                    ? 'Por confirmar'
-                    : 'Sin ejecutar'}
-            </span>
+            {executingBalance && <span className="pill neutral">Operación en curso</span>}
           </div>
-          {error?.target === 'review' && errorFeedback}
-          {canStartNewTransaction && !executingBalance && (
+          {error?.target === 'review' && <TransactionError error={error} />}
+          {preparation.canStartNewTransaction && !executingBalance && (
             <div className="recover-result">
               <p>
-                {canStartNewBalance
+                {preparation.canStartNewBalance
                   ? 'El retiro anterior permanece por revisar en el historial. Puedes iniciar una consulta de saldo con una nueva lectura de tarjeta y PIN.'
                   : 'El intento anterior conserva su resultado en el historial. Puedes iniciar otra operación con una nueva lectura de tarjeta y PIN.'}
               </p>
               <button
                 className="primary"
                 disabled={fieldsDisabled || recoveringBalance}
-                onClick={startNewTransaction}
+                onClick={() => {
+                  setFocus(false);
+                  preparation.startNewTransaction();
+                }}
               >
-                {canStartNewBalance ? 'Nueva consulta de saldo' : 'Nueva transacción'}
+                {preparation.canStartNewBalance ? 'Nueva consulta de saldo' : 'Nueva transacción'}
               </button>
             </div>
           )}
-          {balanceExecution ? (
-            <>
-              <BalanceExecutionView
-                execution={balanceExecution}
-                onReceipt={(execution) => {
-                  const preview = createWithdrawalReceipt(execution);
-                  if (preview) setReceipt(preview);
-                }}
-              />
-              {caseRun?.requestId === balanceExecution.requestId &&
-                (() => {
-                  const verdict = evaluateCase(caseRun.saved, balanceExecution);
-                  return (
-                    <section className="document-note" aria-label="Evaluación del caso">
-                      <strong>
-                        Prueba «{caseRun.saved.name}»: {verdict.status}
-                      </strong>
-                      <p>{verdict.reason}</p>
-                      {caseRun.saved.expectation && (
-                        <small>Fuente declarada: {caseRun.saved.expectation.source}</small>
-                      )}
-                      {verdict.checks.map((check) => (
-                        <p key={check.field}>
-                          {check.field}: esperado {check.expected} · recibido {check.actual}{' '}
-                          {check.pass ? '✓' : '✕'}
-                        </p>
-                      ))}
-                    </section>
-                  );
-                })()}
-            </>
-          ) : (
-            <>
+          {balanceRequestId && !executingBalance && (
+            <button
+              className="secondary recover-result"
+              disabled={recoveringBalance}
+              onClick={() => void preparation.recoverBalance()}
+            >
+              Consultar resultado de{' '}
+              {requestOperation === 'DEPOSIT'
+                ? 'depósito'
+                : requestOperation === 'WITHDRAWAL'
+                  ? 'retiro'
+                  : 'saldo'}
+            </button>
+          )}
+          {balanceRequestId && (
+            <details className="inline-details result-reference">
+              <summary>Referencia del intento actual</summary>
+              <p className="technical-reference">Referencia de solicitud {balanceRequestId}</p>
+            </details>
+          )}
+          <TransactionInspection
+            key={inspected?.requestId ?? `empty-${snapshot?.environment}`}
+            execution={inspected}
+            snapshot={snapshot}
+            persisted={saved}
+            onReceipt={onReceipt}
+            client={client}
+            visible={props.visible}
+            initialTab={selection?.context === context ? selection.tab : undefined}
+            messageAlternative={
+              latestMessages && !inspected?.messages
+                ? {
+                    label: `Abrir última operación con mensajes · STAN ${latestMessages.correlation?.stan ?? 'no disponible'}`,
+                    open: () => selectExecution(latestMessages, 'messages'),
+                  }
+                : undefined
+            }
+            caseVerdict={
+              verdict && caseRun ? (
+                <section className="document-note" aria-label="Evaluación del caso">
+                  <strong>
+                    Prueba «{caseRun.saved.name}»: {verdict.status}
+                  </strong>
+                  <p>{verdict.reason}</p>
+                  {caseRun.saved.expectation && (
+                    <small>Fuente declarada: {caseRun.saved.expectation.source}</small>
+                  )}
+                  {verdict.checks.map((check) => (
+                    <p key={check.field}>
+                      {check.field}: esperado {check.expected} · recibido {check.actual}{' '}
+                      {check.pass ? '✓' : '✕'}
+                    </p>
+                  ))}
+                </section>
+              ) : undefined
+            }
+            empty={
               <div className="result-empty" role="status">
-                <Icon name={executingBalance || balanceRequestId ? 'clock' : 'file'} size={48} />
+                <Icon name={executingBalance || balanceRequestId ? 'clock' : 'file'} size={30} />
                 <h3>
                   {executingBalance
                     ? 'Esperando respuesta'
@@ -1431,163 +262,65 @@ export function TransactionWorkspace({
                     ? 'La transacción está en curso. Conserva esta ventana abierta.'
                     : balanceRequestId
                       ? 'Recupera el resultado del intento antes de volver a enviar.'
-                      : 'La respuesta aparecerá aquí después del envío.'}
+                      : 'Ejecuta una operación o selecciona una del historial.'}
                 </p>
               </div>
-              <dl className="result-metadata">
-                {['Respuesta', 'Tiempo', 'STAN', 'RRN'].map((label) => (
-                  <div key={label}>
-                    <dt>{label}</dt>
-                    <dd>—</dd>
-                  </div>
-                ))}
-              </dl>
-            </>
-          )}
-          {balanceRequestId && !executingBalance && (
-            <button
-              className="secondary recover-result"
-              disabled={recoveringBalance}
-              onClick={() => void recoverBalance()}
-            >
-              Consultar resultado de {requestOperation === 'WITHDRAWAL' ? 'retiro' : 'saldo'}
-            </button>
-          )}
-          {balanceRequestId && (
-            <details className="inline-details result-reference">
-              <summary>Ver detalle técnico</summary>
-              <p className="technical-reference">Referencia de solicitud {balanceRequestId}</p>
-            </details>
-          )}
+            }
+            documentation={
+              <TransactionDocumentation
+                operation={preparation.operation}
+                transaction={preparation.transaction}
+                original={preparation.original}
+                captureEvidence={snapshot?.captureEvidence}
+              />
+            }
+          />
         </section>
-        {balanceExecution && (
-          <TransactionMessageView key={balanceExecution.requestId} execution={balanceExecution} />
-        )}
       </div>
-      <section className="panel session-activity" aria-label="Actividad de esta sesión">
-        <div className="panel-heading">
-          <h2>Actividad de esta sesión</h2>
-          <button className="text-button" onClick={() => onNavigate('history')}>
-            Ver historial <Icon name="arrow" size={14} />
-          </button>
-        </div>
-        <div className="activity-table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Hora</th>
-                <th>Operación</th>
-                <th>ATM</th>
-                <th>Estado</th>
-                <th>Tiempo</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sessionExecutions.length ? (
-                sessionExecutions.map((item) => (
-                  <tr key={item.requestId}>
-                    <td>{new Date(item.startedAt).toLocaleTimeString('es-EC')}</td>
-                    <td>
-                      {item.withdrawal
-                        ? `Retiro · USD ${item.withdrawal.amount}`
-                        : 'Consulta de saldo'}
-                    </td>
-                    <td>
-                      {item.correlation?.terminalId ??
-                        catalog?.atms.find((atm) => atm.id === item.atmId)?.alias ??
-                        'ATM no disponible'}
-                    </td>
-                    <td>
-                      <span>{executionOutcomeLabel(item)}</span>
-                    </td>
-                    <td>{item.elapsedMs} ms</td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={5} className="session-empty">
-                    <Icon name="clock" size={19} /> No se han enviado transacciones en esta sesión.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-      {snapshot?.environment === 'QA' && (
-        <details className="section-details balance-history-details">
-          <summary>Historial de transacciones QA</summary>
-          <label>
-            ATM del historial
-            <select value={historyAtmId} onChange={(event) => setHistoryAtmId(event.target.value)}>
-              <option value="">Todos los ATM</option>
-              {catalog?.atms.map((atm) => (
-                <option key={atm.id} value={atm.id}>
-                  {atm.alias} · {atm.terminalId}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            className="text-button"
-            disabled={fieldsDisabled}
-            onClick={() => void loadBalanceHistory()}
-          >
-            Actualizar historial
-          </button>
-          {atmHistory &&
-            (atmHistory.length ? (
-              atmHistory.map((execution) => (
-                <BalanceExecutionView
-                  key={execution.requestId}
-                  execution={execution}
-                  onReceipt={(item) => {
-                    const preview = createWithdrawalReceipt(item);
-                    if (preview) setReceipt(preview);
-                  }}
-                />
-              ))
-            ) : (
-              <p>No hay transacciones registradas para este ATM en el historial disponible.</p>
-            ))}
-        </details>
+      {snapshot?.environment === 'QA' ? (
+        <TransactionHistoryView
+          key={snapshot.environment}
+          items={records}
+          selectedId={inspected?.requestId}
+          catalog={catalog}
+          history={history}
+          onRefresh={() => void history.refresh()}
+          onSelect={selectExecution}
+        />
+      ) : (
+        <p className="form-note">
+          El historial local de ejecución está disponible en QA. La observación de Mediator se
+          consulta por separado.
+        </p>
       )}
       {receipt && (
         <WithdrawalReceiptDialog
           key={receipt.requestId}
           receipt={receipt}
           client={client}
-          onClose={() => setReceipt(undefined)}
+          onClose={() => preparation.setReceipt(undefined)}
         />
       )}
-      <TransactionReferenceView
-        hasExecution={!!balanceExecution}
-        hasAtm={!!selectedAtm}
-        original={original}
-        transaction={transaction}
-        operation={operation}
-        captureEvidence={snapshot?.captureEvidence}
-      />
       <dialog
         ref={discardDialog}
         className="catalog-dialog discard-draft-dialog"
         aria-labelledby="discard-draft-title"
         onCancel={(event) => {
           event.preventDefault();
-          closeDiscard();
+          preparation.closeDiscard();
         }}
       >
         <h2 id="discard-draft-title">¿Limpiar este borrador?</h2>
         <p>Se quitarán los datos y la tarjeta de esta sesión. Los casos guardados se conservan.</p>
         <div className="catalog-actions">
-          <button autoFocus onClick={closeDiscard}>
+          <button autoFocus onClick={preparation.closeDiscard}>
             Conservar borrador
           </button>
           <button
             className="danger"
             onClick={() => {
-              closeDiscard();
-              reset();
+              preparation.closeDiscard();
+              preparation.reset();
             }}
           >
             Confirmar limpieza

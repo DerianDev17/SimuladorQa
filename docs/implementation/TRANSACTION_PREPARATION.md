@@ -1,5 +1,81 @@
 # Preparacion documental de transacciones
 
+## Depósito QA — 2026-11-05
+
+El selector incluye **Depósito** con monto USD positivo, ahorros y ATM Local.
+Usa canal y diario propios, comparte exclusión financiera y aparece en Flujo,
+Mensajes, Evidencia e historial con su monto. No ofrece opciones de comprobante
+o reverso de retiro. Fuente: trama e instrucción explícita del operador,
+no catálogo CMS. Ver [depósito](../transactions/DEPOSIT.md) y ADR-038.
+
+## Valores completos de sesión QA — 2026-11-05
+
+Por solicitud del operador, **Mostrar todos los valores de esta sesión** permite
+consultar todos los campos sin máscara en Texto legible y Campos. Se activa por
+defecto para mensajes nuevos de QA capturados con esta versión. Binarios se muestran
+en HEX; PIN Block y criptogramas permanecen cifrados como en la trama original.
+No incluye el PIN ingresado ni claves. Ver [ADR-037](../adr/ADR-037-QA-SESSION-MESSAGES.md).
+
+La copia completa vive solo en memoria: últimas 20 solicitudes, máximo 15 minutos
+desde su captura, hasta cambiar ambiente o cerrar la app. El historial y las
+exportaciones conservan su versión protegida. Desactivar la opción vuelve a esa
+versión. Salir de Mensajes retira los valores completos de la vista; reabrir consulta
+su disponibilidad. Un error permite actualizar sin reenviar la transacción.
+Registros anteriores o vencidos no se pueden desofuscar: se explica la ausencia
+del original en lugar de completar valores con datos ajenos.
+
+## REQ y RESP en texto legible — 2026-11-05
+
+Mensajes abre por defecto **Texto legible**: identifica REQ/RESP, MTI y cada
+campo ISO con su número, descripción y valor guardado. Incluye los tags EMV
+públicos y mantiene las máscaras de ADR-030. **Campos** conserva la tabla y el
+detalle individual. Las pestañas permiten consultar 0200/0210 y 0420/0430.
+El texto procede de la proyección pública del mensaje real; no representa bytes
+RAW ni reconstruye el wire. No cambia el envío ni el formato del diario.
+
+Una operación histórica sin mensajes explica que no se pueden recuperar del
+diario. Si hay otra operación con mensajes en el historial cargado, ofrece abrir
+la última con REQ/RESP (o la última con REQ si no hay pares). El botón identifica
+su STAN, cambia la operación inspeccionada y abre Mensajes; conserva el borrador
+y no realiza un envío. No rellena tramas antiguas con datos de otras operaciones.
+Timeout o respuesta ajena mantienen únicamente la solicitud realmente guardada.
+
+Validación: formato público, máscaras, ausencia de mensajería, timeout, recuperación
+SQLite tras TCP local, navegación Electron, acceso al registro con mensajes,
+conservación del borrador y presentación estrecha. Datos sintéticos; sin host QA.
+
+## Inspección interactiva — 2026-11-04
+
+La disposición vigente es preparación compacta y resultado con pestañas
+**Flujo / Mensajes / Evidencia**, seguida del historial local. Sustituye la
+disposición de tres columnas y el flujo documental descritos en las secciones
+históricas siguientes. Ver [ADR-036](../adr/ADR-036-TRANSACTION-INSPECTION.md).
+
+El historial combina saldos y retiros QA, permite buscar operación/ATM/STAN/RRN
+y filtrar ATM/resultado. Abrir una fila conserva borrador, monto y lectura; no
+reenvía la transacción. Editar el formulario conserva el resultado inspeccionado.
+Ocultar preparación conserva montado el lector. Nueva ejecución o Nueva
+transacción cambia el contexto de inspección; salir de QA retira el historial.
+
+Flujo permite seleccionar etapas y abrir su mensaje o evidencia. Sus estados
+se derivan de la ejecución real disponible, sin simular tráfico ni tiempos.
+Mensajes permite abrir el detalle de cada campo manteniendo su máscara.
+Evidencia muestra la verificación del diario local, el Core sin verificar y la
+referencia documental de la operación inspeccionada. La referencia incluye
+fuente/versión/página; el original requiere TODO-DATA TRANSACTION-REFERENCE-SOURCES.
+
+Aplicación/expiración se consultan en Detalles de la tarjeta; comprobante/reverso
+tienen un desplegable propio. Código CMS queda en Evidencia. El observador remoto
+se denomina Observación. Se eliminan el flujo estático y los botones RAW/HEX
+deshabilitados. El resumen conserva incertidumbre, bloqueo y estado de reverso
+visibles; importes/correlaciones adicionales quedan en detalle técnico.
+
+Las fuentes del historial se leen de forma independiente. Un error conserva la
+última lista disponible con aviso de historial incompleto; Actualizar permite
+reintentar la lectura. El alcance es los últimos 50 registros por operación más
+20 de sesión, no el diario completo. Registros antiguos sin mensajería explican
+la ausencia de campos; no se completan con capturas ni con el borrador.
+
 ## Panel compacto de datos — 2026-10-29
 
 El formulario sigue la referencia visual del operador: Cajero (ATM), Tarjeta,

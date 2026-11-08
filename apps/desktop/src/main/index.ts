@@ -22,15 +22,17 @@ import type {
 } from '../../../../packages/domain/src/card-reader';
 import { DesktopApplication } from './application';
 import { FilePreferencesStore } from './infrastructure/preferences-store';
-import { isTrustedSender } from './security';
+import { developmentRendererUrl, isTrustedSender } from './security';
 import { WorkerCatalogStore } from './infrastructure/worker-catalog-store';
-import { CmsV36Catalog } from './adapters/cms-v36-catalog';
+import { QaOperationCatalog } from './adapters/qa-operation-catalog';
 import { MediatorSchemaInspector } from './adapters/mediator-schema-inspector';
 import { CapturedEvidenceCatalog } from './adapters/captured-evidence-catalog';
 import { MediatorObserver } from './adapters/mediator-observer';
 import { FileSendConfigurationStore } from './infrastructure/send-configuration-store';
 import { SendConfigurationService } from './send-configuration-service';
 import { BalanceInquiryService } from './balance-inquiry-service';
+import { SessionMessageStore } from './infrastructure/session-message-store';
+import { DepositService } from './deposit-service';
 import { WithdrawalService } from './withdrawal-service';
 import { WithdrawalReceiptService } from './withdrawal-receipt-service';
 import { ElectronReceiptPrinter } from './adapters/electron-receipt-printer';
@@ -58,7 +60,9 @@ const development = process.argv.includes('--dev');
 // Vite serves development assets directly; avoid reusing a corrupt HTTP disk cache.
 if (development) app.commandLine.appendSwitch('disable-http-cache');
 const rendererFile = join(__dirname, 'renderer', 'index.html');
-const rendererUrl = development ? 'http://127.0.0.1:5173/' : pathToFileURL(rendererFile).href;
+const rendererUrl = development
+  ? developmentRendererUrl(process.argv)
+  : pathToFileURL(rendererFile).href;
 let window: BrowserWindow | null = null;
 let catalogs: WorkerCatalogStore | undefined;
 let observer: MediatorObserver | undefined;
@@ -66,6 +70,7 @@ let cardReader: CardReaderMonitor | undefined;
 let switchConnection: QaSwitchConnection | undefined;
 let cardIdentity: CardIdentityService | undefined;
 let balanceService: BalanceInquiryService | undefined;
+let depositService: DepositService | undefined;
 let withdrawalService: WithdrawalService | undefined;
 let withdrawalReceipts: WithdrawalReceiptService | undefined;
 let loadRun: LoadRunService | undefined;
@@ -89,6 +94,7 @@ function reloadDevelopmentWhenIdle(): void {
     loadRun?.isBusy() ||
     balanceService?.isBusy() ||
     withdrawalService?.isBusy() ||
+    depositService?.isBusy() ||
     cardIdentity?.isBusy() ||
     withdrawalReceipts?.isBusy()
   ) {
@@ -122,6 +128,7 @@ async function publishReaderSnapshot(): Promise<void> {
 }
 
 app.setName('Coonecta ATM Simulator');
+const sessionMessages = new SessionMessageStore();
 // Solo se permite redirigir datos locales al lanzar tests con una carpeta temporal explícita.
 const dataArgument = process.argv.find((argument) => argument.startsWith('--user-data-dir='));
 if (dataArgument) app.setPath('userData', dataArgument.slice('--user-data-dir='.length));
@@ -303,6 +310,7 @@ void startupReady
       runtime,
       balanceContexts,
       90000,
+      sessionMessages,
     );
     const withdrawalTransport = new WithdrawalReversalTransport();
     const withdrawalJournal = new SqliteBalanceJournal(
@@ -310,18 +318,33 @@ void startupReady
       join(app.getPath('userData'), 'withdrawal-executions.json'),
       'WITHDRAWAL',
     );
-    financialJournals = [balanceJournal, withdrawalJournal];
+    const depositJournal = new SqliteBalanceJournal(
+      join(app.getPath('userData'), 'deposit-executions.sqlite'),
+      join(app.getPath('userData'), 'deposit-executions.json'),
+      'DEPOSIT',
+    );
+    depositService = new DepositService(
+      depositJournal,
+      connection.manageTransport(new BalanceTcpTransport('DEPOSIT')),
+      runtime,
+      new QaTemplateContextProvider(template, 'DEPOSIT', cardIdentity, pinEntry, pinCipher),
+      90000,
+      sessionMessages,
+    );
+    financialJournals = [balanceJournal, withdrawalJournal, depositJournal];
     withdrawalService = new WithdrawalService(
       withdrawalJournal,
       connection.manageTransport(withdrawalTransport),
       runtime,
       withdrawalContexts,
+      90000,
+      sessionMessages,
     );
     const application = new DesktopApplication(
       preferences,
       runtime,
       catalogs,
-      new CmsV36Catalog(),
+      new QaOperationCatalog(),
       new MediatorSchemaInspector(),
       new CapturedEvidenceCatalog(),
       observer,
@@ -331,6 +354,8 @@ void startupReady
       balanceService,
       switchConnection,
       withdrawalService,
+      sessionMessages,
+      depositService,
     );
     financialApplication = application;
     loadRunStore = new WorkerLoadRunStore(
@@ -416,6 +441,7 @@ void startupReady
               application.isFinancialBusy() ||
               balanceService?.isBusy() ||
               withdrawalService?.isBusy() ||
+              depositService?.isBusy() ||
               cardIdentity?.isBusy()
             )
               return failure('CONFLICT', 'Espera a que termine la operación actual.');
@@ -498,6 +524,21 @@ void startupReady
             return application.prepareSendPlan(payload);
           case channels.balanceReadiness:
             return application.getBalanceReadiness(payload);
+          case channels.depositReadiness:
+            return application.getDepositReadiness(payload);
+          case channels.depositExecution:
+            return application.getDepositExecution(payload);
+          case channels.depositHistory:
+            return application.getDepositHistory(payload);
+          case channels.executeDeposit:
+            if (developmentReload)
+              return failure(
+                'IN_USE',
+                'Actualizando la aplicación. Espera a que termine el reinicio.',
+              );
+            return application.executeDeposit(payload).finally(() => {
+              void publishReaderSnapshot();
+            });
           case channels.withdrawalReadiness:
             return application.getWithdrawalReadiness(payload);
           case channels.executeWithdrawal:
@@ -528,6 +569,8 @@ void startupReady
             return application.getBalanceExecution(payload);
           case channels.balanceHistory:
             return application.getBalanceHistory(payload);
+          case channels.sessionMessages:
+            return application.getSessionMessages(payload);
           case channels.observations:
             return application.searchObservations(payload);
           case channels.mediatorLive:
@@ -591,6 +634,7 @@ app.on('before-quit', (event) => {
     } finally {
       try {
         switchConnection?.disconnect('APP_CLOSED');
+        sessionMessages.clear();
         observer?.close();
         cardReader?.close();
         cardIdentity?.close();

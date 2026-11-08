@@ -108,9 +108,14 @@ export function evaluateCase(saved: SavedCase, execution: BalanceExecution): Cas
     (draft.transaction === 'BALANCE' && draft.account !== 'SAVINGS') ||
     (draft.transaction !== 'BALANCE' &&
       draft.transaction !== 'WITHDRAWAL_APPROVED' &&
-      draft.transaction !== 'WITHDRAWAL_DECLINED') ||
-    (draft.transaction === 'BALANCE' && !!execution.withdrawal) ||
+      draft.transaction !== 'WITHDRAWAL_DECLINED' &&
+      draft.transaction !== 'DEPOSIT') ||
+    (draft.transaction === 'BALANCE' && (!!execution.withdrawal || !!execution.deposit)) ||
+    (draft.transaction === 'DEPOSIT' &&
+      (execution.deposit?.amount !== draft.amount ||
+        execution.deposit.account !== draft.account)) ||
     (draft.transaction !== 'BALANCE' &&
+      draft.transaction !== 'DEPOSIT' &&
       (execution.withdrawal?.transaction !== draft.transaction ||
         execution.withdrawal.amount !== draft.amount ||
         execution.withdrawal.account !== draft.account)) ||
@@ -190,7 +195,9 @@ export function caseEvidenceDocuments(draft: DraftRequest): readonly string[] {
   return [
     specification,
     'docs/INPUT_CHECKLIST.md',
-    ...(needsOriginal(draft.transaction) ? [] : ['docs/protocols/EXTREME_MEDIATOR_CMS_REVIEW.md']),
+    ...(needsOriginal(draft.transaction) || draft.transaction === 'DEPOSIT'
+      ? []
+      : ['docs/protocols/EXTREME_MEDIATOR_CMS_REVIEW.md']),
     'docs/protocols/PCAP_REVIEW.md',
   ];
 }

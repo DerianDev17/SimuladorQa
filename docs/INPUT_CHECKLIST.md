@@ -1,6 +1,18 @@
 # Checklist de informacion por subir
 
+Depósito QA (2026-11-05): el operador aporta 0200/211000 y 0210/12 y confirma
+ahorros/USD, PIN/AC nuevos, 9C=30 y 9F02 igual al monto para esta prueba.
+Implementado según ADR-038. TODO-DATA QA-DEPOSIT-HOST-ACCEPTANCE,
+QA-DEPOSIT-PRIVATE-FIELDS, QA-DEPOSIT-F55-ENVELOPE y QA-DEPOSIT-RESULT-RULES
+conservan validación remota, variantes privadas y conciliación pendientes.
+Ver [contrato y límites](transactions/DEPOSIT.md); no volver a pedir esta trama.
+
 El índice consolidado de pendientes está en [`TODO_DATA.md`](TODO_DATA.md).
+
+TODO-DATA TRANSACTION-REFERENCE-SOURCES (2026-11-04): falta un mapeo aprobado de
+fuente/versión/página de cada operación CMS a un documento original distribuible
+en el visor de Electron. La vista muestra metadatos y capturas; solo la apertura
+del original depende de esta fuente. Ver [ADR-036](adr/ADR-036-TRANSACTION-INSPECTION.md).
 
 Carga de retiros (2026-11-02): por solicitud del usuario se reutiliza el flujo
 QA/LOCAL/ahorros/USD con monto explícito por operación, una tarjeta y varios ATM

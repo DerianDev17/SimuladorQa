@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-11-08 — Integración y entrega completa de depósito
+
+- Completa los módulos de dominio, servicio, builder, catálogo QA y fixtures
+  omitidos en la entrega de depósito; reconstruye su documentación desde el
+  alcance registrado, conservando los TODO-DATA de validación host/Core.
+- Bloquea nuevos depósitos ante entrega incierta o fallo de persistencia, sin
+  heredar la excepción de continuación de retiros ni retransmitir solicitudes.
+- Integra las mejoras locales de UI y almacenamiento con la inspección remota
+  de transacciones; renumera la decisión del worker como ADR-039.
+- Agrega pruebas de validación, PIN/EMV nuevos, dependencias ausentes, TCP local,
+  idempotencia y recuperación en SQLite.
+
+## 2026-11-05 — Depósito QA
+
+- Agrega depósito manual QA/LOCAL/ahorros/USD, F3 211000, monto vinculado
+  a CDOL1/F55 (9C=30, 9F02=monto) y seguridad nueva por operación.
+- Admite F23/PAN19 en la respuesta, conserva RC12, correlación, diario propio
+  e idempotencia; integra resultado, mensajería e historial en Electron.
+- Documenta validaciones host/Core y variantes privadas pendientes en ADR-038.
+
+Transacciones interactivas (2026-11-05): preparación compacta y ocultable,
+Flujo/Mensajes/Evidencia navegables, detalle ISO protegido e historial local
+unificado de saldos y retiros. La selección del historial no modifica el
+borrador. El controlador, la inspección y el puerto de lectura se separaron;
+ver [ADR-036](docs/adr/ADR-036-TRANSACTION-INSPECTION.md). Los originales CMS
+requieren la fuente aprobada registrada como TODO-DATA.
+
+Desarrollo aislado (2026-11-04): Vite usa un puerto libre por sesión y lo entrega
+a Electron sin configuración manual; ver [ADR-035](docs/adr/ADR-035-ISOLATED-DEVELOPMENT-PORT.md).
+
 Estrés y configuraciones (2026-11-03): presets de rampa hacia 3/5 TPS y biblioteca
 QA para crear, editar, cargar y eliminar hasta 50 planes. Validación común con
 ejecución, SQLite con revisión/auditoría y recarga obligatoria tras errores de

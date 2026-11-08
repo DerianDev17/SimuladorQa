@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DesktopApplication } from '../../apps/desktop/src/main/application';
 import { BalanceInquiryService } from '../../apps/desktop/src/main/balance-inquiry-service';
+import { DepositService } from '../../apps/desktop/src/main/deposit-service';
 import { WithdrawalService } from '../../apps/desktop/src/main/withdrawal-service';
 import {
   FileBalanceJournal,
@@ -44,6 +45,7 @@ describe('Main, proveedor y diario de saldo real en archivo', () => {
       acquire: async (target) => balanceLease(target),
     },
     withdrawalContext?: BalanceContextProvider,
+    depositContext?: BalanceContextProvider,
   ) {
     const target = balanceTarget();
     const request = balanceRequest(target);
@@ -151,6 +153,13 @@ describe('Main, proveedor y diario de saldo real en archivo', () => {
       service,
       undefined,
       withdrawal,
+      undefined,
+      new DepositService(
+        new FileBalanceJournal(join(directory, 'deposit-executions.json'), 'DEPOSIT'),
+        transport,
+        runtime,
+        depositContext,
+      ),
     );
     return {
       app,
@@ -168,57 +177,121 @@ describe('Main, proveedor y diario de saldo real en archivo', () => {
       },
     };
   }
-  it('Main admite slots del mismo run y mantiene la exclusión manual hasta el último resultado', async () => {
-    const f = await fixture();
-    const execution = { runId: randomUUID(), signal: new AbortController().signal, concurrency: 2 };
-    const releases: (() => void)[] = [];
-    vi.mocked(f.transport.exchange).mockImplementation(
-      () =>
-        new Promise((resolve) =>
-          releases.push(() =>
-            resolve({
-              outcome: 'APPROVED',
-              transmissionAttempted: true,
-              bytesQueued: 451,
-              elapsedMs: 20,
-              responseCode: '00',
-              balances: [],
-            }),
+  it.each(['BALANCE', 'WITHDRAWAL'] as const)(
+    'Main mantiene la exclusión de %s hasta confirmar el último resultado',
+    async (operation) => {
+      const f = await fixture(undefined, {
+        inspect: async () => ({ ready: true, blockers: [] }),
+        acquire: async (target) => ({ ...balanceLease(target), amount: target.draft.amount! }),
+      });
+      const request =
+        operation === 'WITHDRAWAL'
+          ? {
+              ...f.request,
+              draft: {
+                ...f.request.draft,
+                transaction: 'WITHDRAWAL_APPROVED' as const,
+                amount: '75.25',
+              },
+            }
+          : f.request;
+      const execution = {
+        runId: randomUUID(),
+        signal: new AbortController().signal,
+        concurrency: 2,
+      };
+      const releases: (() => void)[] = [];
+      vi.mocked(f.transport.exchange).mockImplementation(
+        () =>
+          new Promise((resolve) =>
+            releases.push(() =>
+              resolve({
+                outcome: 'APPROVED',
+                transmissionAttempted: true,
+                bytesQueued: 451,
+                elapsedMs: 20,
+                responseCode: '00',
+                balances: [],
+              }),
+            ),
           ),
-        ),
-    );
-    const first = f.app.executeBalance(f.request, 'BALANCE', execution);
-    const second = f.app.executeBalance(
-      { ...f.request, requestId: randomUUID() },
-      'BALANCE',
-      execution,
-    );
-    await vi.waitFor(() => expect(releases).toHaveLength(2));
-    const extra = { ...f.request, requestId: randomUUID() };
-    expect(await f.app.executeBalance(extra, 'BALANCE', execution)).toMatchObject({ ok: false });
-    let idle = false;
-    void f.app.whenFinancialIdle().then(() => {
-      idle = true;
-    });
-    releases[1]!();
-    await second;
-    expect(idle).toBe(false);
-    expect(f.app.isFinancialBusy()).toBe(true);
-    expect(await f.app.executeBalance(extra)).toMatchObject({ ok: false });
-    expect(
-      await f.app.executeBalance(extra, 'BALANCE', { ...execution, runId: randomUUID() }),
-    ).toMatchObject({ ok: false });
-    expect(await f.app.catalog('saveAtm', {})).toMatchObject({
-      ok: false,
-      error: { code: 'CONFLICT' },
-    });
-    releases[0]!();
-    await first;
-    await f.app.whenFinancialIdle();
-    expect(f.app.isFinancialBusy()).toBe(false);
-    expect(idle).toBe(true);
-    expect((await f.journal.read()).filter((item) => item.outcome === 'APPROVED')).toHaveLength(2);
-  });
+      );
+      const first = f.app.executeBalance(request, operation, execution);
+      // Start the second after the first has persisted PENDING.
+      await vi.waitFor(() => expect(releases).toHaveLength(1));
+      if (operation === 'WITHDRAWAL') {
+        // The current load contract executes financial withdrawals sequentially.
+        expect(
+          await f.app.executeBalance({ ...request, requestId: randomUUID() }, operation, {
+            ...execution,
+            concurrency: 1,
+          }),
+        ).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+        expect(f.app.isFinancialBusy()).toBe(true);
+        releases[0]!();
+        await first;
+        await f.app.whenFinancialIdle();
+        expect(f.app.isFinancialBusy()).toBe(false);
+        return;
+      }
+      const second = f.app.executeBalance(
+        { ...request, requestId: randomUUID() },
+        operation,
+        execution,
+      );
+      await vi.waitFor(() => expect(releases).toHaveLength(2));
+      const extra = { ...request, requestId: randomUUID() };
+      expect(await f.app.executeBalance(extra, operation, execution)).toMatchObject({ ok: false });
+      let idle = false;
+      void f.app.whenFinancialIdle().then(() => {
+        idle = true;
+      });
+      releases[1]!();
+      await second;
+      expect(idle).toBe(false);
+      expect(f.app.isFinancialBusy()).toBe(true);
+      expect(await f.app.executeBalance(extra, operation)).toMatchObject({
+        ok: false,
+        error: { code: 'CONFLICT' },
+      });
+      const otherOperation = 'WITHDRAWAL';
+      const otherRequest = {
+        ...extra,
+        draft: {
+          ...extra.draft,
+          transaction: 'WITHDRAWAL_APPROVED',
+          amount: '20.00',
+        },
+      };
+      expect(await f.app.executeBalance(otherRequest, otherOperation, execution)).toMatchObject({
+        ok: false,
+        error: { code: 'CONFLICT' },
+      });
+      expect(
+        await f.app.executeBalance({ ...extra, reversalDelaySeconds: 1 }, 'WITHDRAWAL', execution),
+      ).toMatchObject({ ok: false });
+      expect(
+        await f.app.executeBalance(extra, operation, { ...execution, runId: randomUUID() }),
+      ).toMatchObject({ ok: false });
+      expect(await f.app.catalog('saveAtm', {})).toMatchObject({
+        ok: false,
+        error: { code: 'CONFLICT' },
+      });
+      releases[0]!();
+      await first;
+      await f.app.whenFinancialIdle();
+      expect(f.app.isFinancialBusy()).toBe(false);
+      expect(idle).toBe(true);
+      const history = await f.app.getBalanceHistory({ environment: 'QA' }, operation);
+      expect(history).toMatchObject({
+        ok: true,
+        value: [
+          expect.objectContaining({ outcome: 'APPROVED' }),
+          expect.objectContaining({ outcome: 'APPROVED' }),
+        ],
+      });
+    },
+  );
   it('revalida contexto, devuelve saldo y conserva correlación tras reiniciar sin nuevo envío', async () => {
     const f = await fixture();
     expect(
@@ -436,6 +509,97 @@ describe('Main, proveedor y diario de saldo real en archivo', () => {
       value: [],
     });
     expect(f.transport.exchange).not.toHaveBeenCalled();
+  });
+  it('Main enruta depósito por su canal, comparte exclusión y conserva historial propio', async () => {
+    const context = {
+      inspect: async () => ({ ready: true, blockers: [] }),
+      acquire: vi.fn(async (target: ReturnType<typeof balanceTarget>) => ({
+        ...balanceLease(target),
+        amount: target.draft.amount!,
+      })),
+    };
+    const f = await fixture(undefined, undefined, context);
+    const request = {
+      ...f.request,
+      draft: { ...f.request.draft, transaction: 'DEPOSIT' as const, amount: '10.00' },
+    };
+    expect(await f.app.executeBalance(request)).toMatchObject({
+      ok: false,
+      error: { code: 'VALIDATION_ERROR' },
+    });
+    expect(await f.app.executeWithdrawal(request)).toMatchObject({
+      ok: false,
+      error: { code: 'VALIDATION_ERROR' },
+    });
+    expect(await f.app.executeDeposit(f.request)).toMatchObject({
+      ok: false,
+      error: { code: 'VALIDATION_ERROR' },
+    });
+    expect(await f.app.executeDeposit({ ...request, reversalDelaySeconds: 1 })).toMatchObject({
+      ok: false,
+      error: { code: 'VALIDATION_ERROR' },
+    });
+    expect(
+      await f.app.getDepositReadiness({
+        draft: request.draft,
+        cardReadId: request.cardReadId,
+        configurationRevision: request.configurationRevision,
+      }),
+    ).toMatchObject({ ok: true, value: { ready: true } });
+    let release!: () => void;
+    vi.mocked(f.transport.exchange).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () =>
+            resolve({
+              outcome: 'NOT_APPROVED',
+              transmissionAttempted: true,
+              bytesQueued: 500,
+              elapsedMs: 1,
+              responseCode: '12',
+              balances: [],
+            });
+        }),
+    );
+    const pending = f.app.executeDeposit(request);
+    await vi.waitFor(() => expect(f.transport.exchange).toHaveBeenCalledTimes(1));
+    expect(await f.app.executeBalance(f.request)).toMatchObject({
+      ok: false,
+      error: { code: 'CONFLICT' },
+    });
+    expect(await f.app.setEnvironment({ environment: 'PREPROD' })).toMatchObject({
+      ok: false,
+      error: { code: 'CONFLICT' },
+    });
+    release();
+    const result = await pending;
+    expect(result).toMatchObject({
+      ok: true,
+      value: { outcome: 'NOT_APPROVED', deposit: { amount: '10.00' }, responseCode: '12' },
+    });
+    expect(
+      await f.app.getDepositExecution({ environment: 'QA', requestId: request.requestId }),
+    ).toEqual(result);
+    expect(await f.app.getDepositHistory({ environment: 'QA' })).toMatchObject({
+      ok: true,
+      value: [{ deposit: { amount: '10.00' } }],
+    });
+    expect(await f.app.getBalanceHistory({ environment: 'QA' })).toEqual({ ok: true, value: [] });
+    expect(await f.app.getWithdrawalHistory({ environment: 'QA' })).toEqual({
+      ok: true,
+      value: [],
+    });
+    expect(await f.app.executeDeposit(request)).toEqual(result);
+    expect(context.acquire).toHaveBeenCalledTimes(1);
+    f.setEnvironment('PREPROD');
+    expect(await f.app.executeDeposit(request)).toMatchObject({
+      ok: false,
+      error: { code: 'CONFLICT' },
+    });
+    expect(await f.app.getDepositHistory({ environment: 'QA' })).toMatchObject({
+      ok: false,
+      error: { code: 'CONFLICT' },
+    });
   });
   it('termina el retiro 91 en Main y permite otra solicitud con lectura nueva', async () => {
     const acquire = vi.fn(async (target: ReturnType<typeof balanceTarget>) => ({

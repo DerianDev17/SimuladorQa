@@ -5,7 +5,7 @@
 Aplicadas por solicitud del usuario:
 
 - Persistencia de carga en worker, cierre ordenado y fallo sin reenvío; migración
-  transaccional a índices de estado, operación y fecha. Ver [ADR-035](../adr/ADR-035-LOAD-STORAGE-WORKER.md).
+  transaccional a índices de estado, operación y fecha. Ver [ADR-039](../adr/ADR-039-LOAD-STORAGE-WORKER.md).
 - Presentación separada en `CardReaderPanel`, `TransactionReferenceView` y
   `LoadResultsView`. Los componentes originales pasan de 926→583, 1.764→1.599 y
   916→655 líneas respectivamente. Los bloqueos financieros siguen en sus responsables

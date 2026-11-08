@@ -27,7 +27,7 @@ const navigation: { id: string; label: string; icon: IconName; group: string }[]
   { id: 'cards', label: 'Tarjetas', icon: 'card', group: '' },
   { id: 'entities', label: 'Entidades', icon: 'entity', group: '' },
   { id: 'monitor', label: 'Monitor', icon: 'monitor', group: 'OBSERVABILIDAD' },
-  { id: 'history', label: 'Historial', icon: 'history', group: '' },
+  { id: 'history', label: 'Observación', icon: 'history', group: '' },
   { id: 'settings', label: 'Configuración', icon: 'settings', group: '' },
 ];
 const client = new DesktopClient(window.desktop);
