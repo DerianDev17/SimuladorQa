@@ -30,6 +30,8 @@ async function launch(documented = true) {
     env,
   });
   const window = await app.firstWindow();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toHaveValue('QA');
+  await expect(window.getByLabel('Ambiente', { exact: true })).toBeEnabled();
   await window.getByRole('button', { name: 'Configuración', exact: true }).click();
   await expect(window.getByRole('heading', { name: 'Configuración', exact: true })).toBeVisible();
   await expect(window.getByLabel('Modo previsto')).toBeVisible();
@@ -40,7 +42,7 @@ test('configuración general: navegación, edición, validación, guardado y ais
   const window = await launch();
   const form = window.getByRole('region', { name: 'Configuración de envío', exact: true });
   const menu = window.getByRole('navigation', { name: 'Secciones de configuración' });
-  await expect(menu.getByRole('link')).toHaveCount(5);
+  await expect(menu.getByRole('link')).toHaveCount(6);
   await expect(window.getByRole('region', { name: 'Ambiente y estación' })).toContainText(
     'Documentada',
   );
@@ -55,6 +57,13 @@ test('configuración general: navegación, edición, validación, guardado y ais
   await form.getByLabel('Espera de conexión (ms)').fill('0');
   await expect(form.getByText('Sin guardar', { exact: true })).toBeVisible();
   await expect(window.getByLabel('Ambiente', { exact: true })).toBeDisabled();
+  await expect(
+    window.getByRole('button', { name: 'PREPROD Configuración y observación' }),
+  ).toBeDisabled();
+  await expect(window.getByRole('button', { name: 'Administrar perfiles ATM' })).toBeDisabled();
+  await expect(
+    window.getByRole('button', { name: 'Conectar al Switch', exact: true }),
+  ).toBeDisabled();
   await form.getByRole('button', { name: 'Guardar configuración de envío', exact: true }).click();
   await expect(form.getByRole('alert')).toContainText('entre 1 y 30000');
   await form.getByRole('button', { name: 'Descartar cambios de envío' }).click();
@@ -87,6 +96,188 @@ test('configuración general: navegación, edición, validación, guardado y ais
     true,
   );
   await window.screenshot({ path: 'artifacts/settings-compact.png' });
+});
+
+test('configuración operativa: ambiente persistido, accesos reales y recarga de catálogo', async () => {
+  const window = await launch();
+  const profiles = window.getByRole('region', { name: 'Perfiles y herramientas' });
+  await expect(profiles).toContainText('0 ATM activos con entidad activa en QA');
+  const saved = await window.evaluate(async () => {
+    const api = globalThis.window.desktop!;
+    const result = await api.saveEntity({
+      environment: 'QA',
+      id: null,
+      revision: null,
+      values: { code: '205', name: 'Entidad sintética', networkType: 'COONECTA', active: true },
+    });
+    if (!result.ok) return result.ok;
+    const entity = result.value.entities.find((entry) => entry.code === '205');
+    if (!entity) return false;
+    return (
+      await api.saveAtm({
+        environment: 'QA',
+        id: null,
+        revision: null,
+        values: {
+          alias: 'ATM de prueba',
+          entityId: entity.id,
+          terminalId: 'ATM20521',
+          acquirerId: '205',
+          active: true,
+        },
+      })
+    ).ok;
+  });
+  expect(saved).toBe(true);
+  await profiles.getByRole('button', { name: 'Actualizar perfiles' }).click();
+  await expect(profiles).toContainText('1 ATM activo con entidad activa en QA');
+  await window.getByRole('button', { name: 'PREPROD Configuración y observación' }).click();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toHaveValue('PREPROD');
+  await expect(profiles).toContainText('0 ATM activos con entidad activa en PREPROD');
+  await expect(window.getByRole('region', { name: 'Conexión al Switch' })).toContainText(
+    'únicamente en QA',
+  );
+  await window.getByRole('button', { name: 'QA Pruebas del simulador' }).click();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toHaveValue('QA');
+  await profiles.getByRole('button', { name: 'Administrar perfiles ATM' }).click();
+  await expect(window.getByRole('heading', { name: 'Perfiles ATM', exact: true })).toBeVisible();
+  await window.getByRole('button', { name: 'Configuración', exact: true }).click();
+  await app!.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('catalog:list');
+    ipcMain.handle('catalog:list', () => ({
+      ok: false,
+      error: { code: 'STORAGE_UNAVAILABLE', message: 'Catálogo temporalmente no disponible.' },
+    }));
+  });
+  await profiles.getByRole('button', { name: 'Actualizar perfiles' }).click();
+  await expect(profiles.getByRole('alert')).toContainText('Catálogo temporalmente no disponible');
+  await expect(profiles).toContainText('Catálogo sin verificar');
+});
+
+test('configuración operativa: comprobar lector, ausencia y timeout sin leer el chip', async () => {
+  const window = await launch();
+  const reader = window.getByRole('region', { name: 'Comprobación del lector' });
+  await expect(reader).toContainText('Sin comprobar en esta pantalla');
+  await app!.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('reader:inspect');
+    ipcMain.handle('reader:inspect', () => ({
+      ok: true,
+      value: {
+        checkedAt: new Date().toISOString(),
+        readers: [{ name: 'Lector de prueba', state: 'CARD_PRESENT', atr: null }],
+        identityStatus: 'NOT_READ',
+      },
+    }));
+    ipcMain.removeHandler('reader:identity:read');
+    ipcMain.handle('reader:identity:read', () => {
+      throw Error('UNEXPECTED_CHIP_READ');
+    });
+  });
+  await reader.getByRole('button', { name: 'Comprobar lector' }).click();
+  await expect(reader.getByRole('status')).toContainText('Lector de prueba');
+  await expect(reader).toContainText('Tarjeta presente');
+  await app!.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('reader:inspect');
+    ipcMain.handle('reader:inspect', () => ({
+      ok: true,
+      value: { checkedAt: new Date().toISOString(), readers: [], identityStatus: 'NOT_READ' },
+    }));
+  });
+  await reader.getByRole('button', { name: 'Comprobar lector' }).click();
+  await expect(reader.getByRole('status')).toContainText('No se detectaron lectores');
+  await expect(reader).not.toContainText('Lector de prueba');
+  await app!.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('reader:inspect');
+    ipcMain.handle('reader:inspect', () => new Promise(() => {}));
+  });
+  await reader.getByRole('button', { name: 'Comprobar lector' }).click();
+  await expect(reader.getByRole('button', { name: 'Comprobando…', exact: true })).toBeDisabled();
+  await expect(reader.getByRole('alert')).toContainText('no respondió a tiempo', {
+    timeout: 15000,
+  });
+  await expect(reader).not.toContainText('Última comprobación');
+  await expect(reader.getByRole('button', { name: 'Comprobar lector' })).toBeEnabled();
+});
+
+test('configuración operativa: conectar y desconectar requieren una acción explícita', async () => {
+  const window = await launch();
+  await app!.evaluate(({ ipcMain }) => {
+    let connected = false;
+    const value = () => ({
+      environment: 'QA',
+      connectionId: null,
+      state: connected ? 'CONNECTED' : 'DISCONNECTED',
+      endpoint: null,
+      localEndpoint: null,
+      connectedAt: null,
+      disconnectedAt: null,
+      observedAt: new Date().toISOString(),
+      reason: null,
+      bytesReceived: 0,
+      networkMessage: null,
+    });
+    for (const action of ['status', 'connect', 'disconnect'])
+      ipcMain.removeHandler(`switch:connection:${action}`);
+    ipcMain.handle('switch:connection:status', () => ({ ok: true, value: value() }));
+    ipcMain.handle('switch:connection:connect', () => {
+      connected = true;
+      return { ok: true, value: value() };
+    });
+    ipcMain.handle('switch:connection:disconnect', () => {
+      connected = false;
+      return { ok: true, value: value() };
+    });
+  });
+  const link = window.getByRole('region', { name: 'Conexión al Switch', exact: true });
+  await expect(link.getByRole('status')).toContainText('Desconectado');
+  await link.getByRole('button', { name: 'Conectar al Switch' }).click();
+  await expect(link.getByRole('status')).toContainText('TCP conectado');
+  await link.getByRole('button', { name: 'Desconectar', exact: true }).click();
+  await expect(link.getByRole('status')).toContainText('Desconectado');
+  await app!.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('switch:connection:connect');
+    ipcMain.handle('switch:connection:connect', () => ({
+      ok: false,
+      error: { code: 'SERVICE_UNAVAILABLE', message: 'Destino no disponible.' },
+    }));
+  });
+  await link.getByRole('button', { name: 'Conectar al Switch' }).click();
+  await expect(link.getByRole('alert')).toContainText('Destino no disponible');
+});
+
+test('configuración operativa: descarta comprobaciones del lector al cambiar de ambiente', async () => {
+  const window = await launch();
+  await app!.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('reader:inspect');
+    ipcMain.handle(
+      'reader:inspect',
+      () =>
+        new Promise((resolveResult) => {
+          const state = globalThis as typeof globalThis & { finishSettingsReader?: () => void };
+          state.finishSettingsReader = () =>
+            resolveResult({
+              ok: true,
+              value: {
+                checkedAt: new Date().toISOString(),
+                readers: [{ name: 'Lector anterior', state: 'CARD_PRESENT', atr: null }],
+                identityStatus: 'NOT_READ',
+              },
+            });
+        }),
+    );
+  });
+  const reader = window.getByRole('region', { name: 'Comprobación del lector' });
+  await reader.getByRole('button', { name: 'Comprobar lector' }).click();
+  await expect(reader.getByRole('status')).toContainText('Comprobando lector');
+  await window.getByRole('button', { name: 'PREPROD Configuración y observación' }).click();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toHaveValue('PREPROD');
+  await app!.evaluate(() =>
+    (
+      globalThis as typeof globalThis & { finishSettingsReader?: () => void }
+    ).finishSettingsReader?.(),
+  );
+  await expect(reader.getByRole('status')).toContainText('Sin comprobar en esta pantalla');
+  await expect(reader).not.toContainText('Lector anterior');
 });
 
 test('configuración general: evidencia ausente mantiene ajustes bloqueados y navegación disponible', async () => {

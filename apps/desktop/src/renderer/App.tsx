@@ -394,6 +394,18 @@ export function App() {
               client={client}
               disabled={busy || !snapshot || transactionBusy}
               onEditingChange={setSendConfigurationEditing}
+              editing={sendConfigurationEditing}
+              catalog={catalog}
+              catalogBusy={catalogBusy}
+              catalogError={catalogError?.message}
+              link={link}
+              onEnvironmentChange={(value) => void changeEnvironment(value)}
+              onRefreshCatalog={() => void refreshCatalog()}
+              onNavigate={(destination) => {
+                if (busy || transactionBusy || sendConfigurationEditing || catalogBusy) return;
+                setTransactionSetup(undefined);
+                setPage(destination);
+              }}
             />
           )}
 

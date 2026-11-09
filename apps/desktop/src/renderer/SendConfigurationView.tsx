@@ -100,9 +100,9 @@ export function SendConfigurationView({ environment, client, disabled, onEditing
     <section className="panel send-configuration-panel" aria-label="Configuración de envío">
       <div className="panel-heading">
         <div>
-          <h2>Envío de tramas</h2>
+          <h2>Plazos y preparación de envío</h2>
           <p>
-            Ajusta la preparación y los plazos del intento para{' '}
+            Configura la espera de conexión y de respuesta para{' '}
             {environment ?? 'el ambiente seleccionado'}.
           </p>
         </div>
@@ -162,8 +162,8 @@ export function SendConfigurationView({ environment, client, disabled, onEditing
                   <div>
                     <h3>Preparación de la transacción</h3>
                     <p>
-                      El modo expresa la intención de envío. Revisar o guardar no inicia una
-                      transmisión.
+                      Preferencia del plan documental. La ejecución real se inicia manualmente en
+                      Transacciones.
                     </p>
                   </div>
                   <label>

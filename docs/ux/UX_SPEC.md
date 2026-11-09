@@ -2,14 +2,33 @@
 
 ## Configuración general — 2026-11-09
 
-La pantalla reúne Ambiente y estación, Envío, Evidencia de red, Requisitos y
-Auditoría. Un índice lateral con enlaces accesibles por teclado lleva a cada
-sección sin desmontar el formulario. En ventanas intermedias se convierte en
-una fila adaptable; los campos y los detalles se apilan en ventanas estrechas.
+La pantalla reúne Ambiente y estación, Envío, Dispositivos y perfiles, Evidencia
+de red, Requisitos y Auditoría. Un índice horizontal con enlaces accesibles por
+teclado lleva a cada sección sin desmontar el formulario ni cambiar la URL validada
+por IPC. En escritorio, ajustes y herramientas se distribuyen en dos columnas;
+en ventanas intermedias se apilan.
 
 El resumen muestra equipo, versión y estado documental de red del ambiente
-actual. El selector de QA/PREPROD sigue en la cabecera global. El destino de
+actual. Los botones QA/PREPROD y el selector de la cabecera global usan el mismo
+cambio persistido de ambiente, con invalidación transaccional y auditoría. El destino de
 envío es de solo lectura y procede de la evidencia validada por Main.
+
+Herramientas operativas:
+
+- Conectar/Desconectar usa el estado y las acciones del Switch de la cabecera,
+  sin otro sondeo ni conexión automática. Solo QA; errores visibles y estado TCP
+  separado de disponibilidad financiera.
+- Comprobar lector consulta el snapshot PC/SC por IPC bajo acción explícita.
+  Presenta nombre, presencia y fecha de la última comprobación. No lee el chip
+  ni muestra identidad, ATR, PAN o secretos. Una consulta fallida retira el estado
+  anterior; timeout de 10 s libera el botón. Cambiar ambiente/desmontar descarta
+  resultados tardíos. No se presenta como monitoreo continuo.
+- Perfiles cuenta ATM activos cuya entidad también está activa en el catálogo
+  del ambiente. La cuenta no acredita disponibilidad transaccional. Permite
+  recargar el catálogo y abrir ATM, entidades, tarjetas, carga, observación y
+  transacciones. Un fallo se muestra como catálogo sin verificar, no como cero.
+- Edición pendiente, operación activa o carga del catálogo bloquean los cambios
+  de ambiente y los accesos operativos. Guardar o descartar recupera las acciones.
 
 Envío distingue revisión persistida, cambios sin guardar, carga y ausencia de
 configuración. Agrupa modo previsto y plazos, explica el rango 1–30000 ms y el
@@ -30,7 +49,7 @@ Criterios de aceptación:
   y las tablas conservan encabezados y desplazamiento horizontal propio.
 
 Verificación: `tests/e2e/settings.spec.ts`, suites unitarias y de integración
-de configuración de envío y evidencia de red. Las pruebas usan datos sintéticos
+de configuración de envío, conexión, lector, catálogos y evidencia. Las pruebas usan datos sintéticos
 y un directorio temporal de Electron.
 
 ## Inspección interactiva — disposición vigente, 2026-11-04

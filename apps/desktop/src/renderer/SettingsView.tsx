@@ -1,43 +1,75 @@
 import { dataBlockers } from '../../../../packages/domain/src/index';
+import type { Environment } from '../../../../packages/domain/src/index';
+import type { CatalogSnapshot } from '../../../../packages/domain/src/catalogs';
 import type { AppSnapshot } from '../../../../packages/shared/src/contracts';
 import type { DesktopClient } from './desktop-client';
 import { Icon } from './Icon';
 import type { IconName } from './Icon';
 import { NetworkEvidenceView } from './NetworkEvidenceView';
 import { SendConfigurationView } from './SendConfigurationView';
+import { SwitchConnectionView } from './SwitchConnectionView';
+import type { useSwitchConnection } from './SwitchConnectionView';
+import { SettingsReaderStatus } from './SettingsReaderStatus';
 import './settings.css';
 
 const sections: { id: string; label: string; icon: IconName }[] = [
   { id: 'environment', label: 'Ambiente y estación', icon: 'monitor' },
   { id: 'send', label: 'Envío', icon: 'transaction' },
+  { id: 'operations', label: 'Dispositivos y perfiles', icon: 'reader' },
   { id: 'network', label: 'Evidencia de red', icon: 'database' },
   { id: 'requirements', label: 'Requisitos', icon: 'shield' },
   { id: 'audit', label: 'Auditoría', icon: 'history' },
 ];
+
+export type SettingsDestination =
+  'atms' | 'entities' | 'cards' | 'load' | 'transactions' | 'history';
 
 export function SettingsView({
   snapshot,
   client,
   disabled,
   onEditingChange,
+  editing,
+  catalog,
+  catalogBusy,
+  catalogError,
+  link,
+  onEnvironmentChange,
+  onNavigate,
+  onRefreshCatalog,
 }: {
   snapshot: AppSnapshot | undefined;
   client: DesktopClient;
   disabled: boolean;
   onEditingChange(value: boolean): void;
+  editing: boolean;
+  catalog: CatalogSnapshot | undefined;
+  catalogBusy: boolean;
+  catalogError: string | undefined;
+  link: ReturnType<typeof useSwitchConnection>;
+  onEnvironmentChange(environment: Environment): void;
+  onNavigate(destination: SettingsDestination): void;
+  onRefreshCatalog(): void;
 }) {
   const environment = snapshot?.environment;
   const blockers = snapshot?.blockers ?? dataBlockers;
   const documented =
     snapshot?.networkEvidence.status === 'DOCUMENTED' &&
     snapshot.networkEvidence.evidence.environment === environment;
+  const actionDisabled = disabled || editing || catalogBusy || link.pending;
+  const currentCatalog = catalog?.environment === environment ? catalog : undefined;
+  const activeAtms = currentCatalog?.atms.filter(
+    (atm) =>
+      atm.active &&
+      currentCatalog.entities.some((entity) => entity.id === atm.entityId && entity.active),
+  ).length;
   return (
     <div className="settings-workspace">
       <header className="settings-heading">
         <div>
           <span className="settings-eyebrow">PREFERENCIAS DE LA ESTACIÓN</span>
           <h1>Configuración</h1>
-          <p>Prepara tu ambiente de pruebas y consulta su configuración local.</p>
+          <p>Configura el ambiente, los plazos y los dispositivos de tu estación.</p>
         </div>
         <span className="settings-scope">
           <Icon name="shield" size={17} /> Uso exclusivo de QA y PREPROD
@@ -87,6 +119,26 @@ export function SettingsView({
                 {environment ?? 'Sin verificar'}
               </span>
             </div>
+            <div
+              className="settings-environment-picker"
+              role="group"
+              aria-label="Seleccionar ambiente de trabajo"
+            >
+              {(['QA', 'PREPROD'] as const).map((value) => (
+                <button
+                  key={value}
+                  aria-pressed={environment === value}
+                  disabled={actionDisabled || environment === value}
+                  onClick={() => onEnvironmentChange(value)}
+                >
+                  <strong>{value}</strong>
+                  <span>
+                    {value === 'QA' ? 'Pruebas del simulador' : 'Configuración y observación'}
+                  </span>
+                  {environment === value && <Icon name="check" size={18} />}
+                </button>
+              ))}
+            </div>
             <dl className="settings-overview">
               <div>
                 <dt>Estación</dt>
@@ -108,10 +160,96 @@ export function SettingsView({
               </div>
             </dl>
             <p className="settings-context-note">
-              <Icon name="monitor" size={16} /> Cambia el ambiente desde el selector de la barra
-              superior.
+              <Icon name="shield" size={16} /> Cambiar de ambiente reinicia el contexto
+              transaccional y registra el cambio. Los ajustes se guardan por separado.
             </p>
           </section>
+
+          <div id="settings-operations" tabIndex={-1} className="settings-operations">
+            {environment === 'QA' ? (
+              <SwitchConnectionView
+                connection={link.connection}
+                error={link.error}
+                pending={link.pending}
+                disabled={actionDisabled}
+                onChange={(action) => void link.change(action)}
+              />
+            ) : (
+              <section className="panel" aria-label="Conexión al Switch">
+                <h2>Conexión al Switch</h2>
+                <p className="settings-context-note">
+                  La conexión de observación TCP está disponible únicamente en QA.
+                </p>
+              </section>
+            )}
+            <SettingsReaderStatus
+              client={client}
+              disabled={actionDisabled}
+              onOpen={() => onNavigate('cards')}
+            />
+            <section className="panel settings-profiles" aria-label="Perfiles y herramientas">
+              <div className="panel-heading">
+                <div>
+                  <h2>Perfiles y herramientas</h2>
+                  <p>Administra los datos usados por el simulador.</p>
+                </div>
+              </div>
+              {catalogError && (
+                <p className="inline-error" role="alert">
+                  {catalogError}
+                </p>
+              )}
+              <p className="settings-profile-count">
+                {catalogBusy
+                  ? 'Consultando perfiles…'
+                  : activeAtms !== undefined
+                    ? `${activeAtms} ATM ${activeAtms === 1 ? 'activo' : 'activos'} con entidad activa en ${environment}`
+                    : 'Catálogo sin verificar'}
+              </p>
+              <div className="settings-tool-list">
+                <button disabled={actionDisabled} onClick={() => onNavigate('atms')}>
+                  <Icon name="atm" />
+                  <span>
+                    <strong>Administrar perfiles ATM</strong>
+                    <small>Terminal, adquirente y entidad</small>
+                  </span>
+                  <Icon name="arrow" size={16} />
+                </button>
+                <button disabled={actionDisabled} onClick={() => onNavigate('entities')}>
+                  <Icon name="entity" />
+                  <span>
+                    <strong>Administrar entidades</strong>
+                    <small>Catálogo compartido entre ambientes</small>
+                  </span>
+                  <Icon name="arrow" size={16} />
+                </button>
+                <button disabled={actionDisabled} onClick={() => onNavigate('load')}>
+                  <Icon name="load" />
+                  <span>
+                    <strong>Configurar carga y estrés</strong>
+                    <small>ATM, ritmo, límites y presets</small>
+                  </span>
+                  <Icon name="arrow" size={16} />
+                </button>
+                <button disabled={actionDisabled} onClick={() => onNavigate('history')}>
+                  <Icon name="history" />
+                  <span>
+                    <strong>Consultar evidencia Mediator</strong>
+                    <small>Observación e historial remoto</small>
+                  </span>
+                  <Icon name="arrow" size={16} />
+                </button>
+              </div>
+              <div className="settings-operational-actions">
+                <button disabled={actionDisabled} onClick={onRefreshCatalog}>
+                  Actualizar perfiles
+                </button>
+                <button disabled={actionDisabled} onClick={() => onNavigate('transactions')}>
+                  Ir a Transacciones <Icon name="arrow" size={14} />
+                </button>
+              </div>
+            </section>
+          </div>
 
           <div id="settings-send" tabIndex={-1}>
             <SendConfigurationView

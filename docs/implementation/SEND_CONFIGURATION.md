@@ -18,6 +18,10 @@ guardada o los cambios pendientes, conserva el destino documental como solo
 lectura y presenta los últimos diez cambios de ambiente con fecha local.
 Los ajustes quedan deshabilitados mientras hay una operación transaccional activa.
 Guardar ajustes o navegar entre estas secciones no abre conexiones ni transmite.
+La sección Dispositivos y perfiles ofrece Conectar/Desconectar explícitos sobre
+el servicio QA existente. Los plazos guardados alimentan la conexión y el motor
+financiero existente; el modo previsto pertenece al plan documental y no automatiza
+la ejecución. Los accesos a otros módulos se bloquean durante una edición pendiente.
 
 Al iniciar Electron, Main inicializa una configuracion QA solo si hay evidencia
 QA documentada y no existe una configuracion previa. Toma exclusivamente el host,

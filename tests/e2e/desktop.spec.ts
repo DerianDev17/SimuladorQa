@@ -2628,7 +2628,7 @@ test('Configuración muestra evidencia documental QA sin conectar ni heredarla e
   await expect(evidence.getByText('10.0.0.11:16100', { exact: true })).toHaveCount(0);
   await window.getByLabel('Ambiente', { exact: true }).selectOption('QA');
   await expect(evidence.getByText('10.0.0.11:16100', { exact: true })).toBeVisible();
-  await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
+  await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
   await expect(window.getByRole('button', { name: 'Ejecutar Transacción' })).toBeDisabled();
 });
 
