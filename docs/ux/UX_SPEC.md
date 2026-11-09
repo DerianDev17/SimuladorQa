@@ -2,11 +2,14 @@
 
 ## Configuración general — 2026-11-09
 
-La pantalla reúne Ambiente y estación, Envío, Dispositivos y perfiles, Evidencia
-de red, Requisitos y Auditoría. Un índice horizontal con enlaces accesibles por
-teclado lleva a cada sección sin desmontar el formulario ni cambiar la URL validada
-por IPC. En escritorio, ajustes y herramientas se distribuyen en dos columnas;
-en ventanas intermedias se apilan.
+Configuración se divide en seis páginas internas: Ambiente y estación, Envío,
+Dispositivos y perfiles, Evidencia de red, Requisitos y Auditoría. Solo la página
+seleccionada es visible y accesible; las otras conservan su estado en la sesión.
+El menú lateral marca la página actual y se adapta a una fila en ventanas menores.
+La navegación por teclado enfoca el contenido sin cambiar la URL validada por IPC.
+Los cambios de envío sin guardar o en proceso bloquean el cambio de página hasta
+guardar o descartar. Cambiar de ambiente conserva la página elegida y reinicia
+sus datos. El acceso Configurar envío desde Transacciones abre directamente Envío.
 
 El resumen muestra equipo, versión y estado documental de red del ambiente
 actual. Los botones QA/PREPROD y el selector de la cabecera global usan el mismo
@@ -45,7 +48,7 @@ Criterios de aceptación:
   ajustes guardados. La auditoría muestra los últimos diez cambios en hora local.
 - Ausencia o error de evidencia no se presentan como conexión comprobada; solo
   bloquean los ajustes que dependen de ella. Producción permanece bloqueada.
-- Los enlaces enfocan su sección, los campos tienen etiquetas y ayudas asociadas,
+- Los botones de navegación enfocan su página, los campos tienen etiquetas y ayudas asociadas,
   y las tablas conservan encabezados y desplazamiento horizontal propio.
 
 Verificación: `tests/e2e/settings.spec.ts`, suites unitarias y de integración

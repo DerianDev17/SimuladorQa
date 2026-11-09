@@ -1551,6 +1551,10 @@ async function prepareBalanceSubmission() {
   await window.getByLabel('Terminal ID', { exact: true }).fill('ATM20521');
   await window.getByRole('button', { name: 'Guardar borrador', exact: true }).click();
   await window.getByRole('button', { name: 'Configuración', exact: true }).click();
+  await window
+    .getByRole('navigation', { name: 'Páginas de configuración' })
+    .getByRole('button', { name: 'Envío', exact: true })
+    .click();
   const settings = window.getByRole('region', { name: 'Configuración de envío', exact: true });
   await settings.getByLabel('Espera de conexión (ms)').fill('1000');
   await settings.getByLabel('Ventana de respuesta (ms)').fill('2000');
@@ -2611,6 +2615,10 @@ test('Configuración muestra evidencia documental QA sin conectar ni heredarla e
   await writeFile(join(directory, 'network-evidence.json'), JSON.stringify(networkEvidence()));
   const window = await launch();
   await window.getByRole('button', { name: 'Configuración', exact: true }).click();
+  await window
+    .getByRole('navigation', { name: 'Páginas de configuración' })
+    .getByRole('button', { name: 'Evidencia de red', exact: true })
+    .click();
   const evidence = window.getByLabel('Evidencia de red del Switch', { exact: true });
   await expect(evidence.getByRole('heading', { name: 'Destino ATM documentado' })).toBeVisible();
   await expect(evidence.getByText('10.0.0.11:16100', { exact: true })).toBeVisible();
@@ -2636,6 +2644,10 @@ test('evidencia de red corrupta muestra error seguro sin impedir usar el shell',
   await writeFile(join(directory, 'network-evidence.json'), '{private-secret');
   const window = await launch();
   await window.getByRole('button', { name: 'Configuración', exact: true }).click();
+  await window
+    .getByRole('navigation', { name: 'Páginas de configuración' })
+    .getByRole('button', { name: 'Evidencia de red', exact: true })
+    .click();
   const evidence = window.getByLabel('Evidencia de red del Switch', { exact: true });
   await expect(evidence.getByRole('alert')).toContainText(
     'No se pudo validar la evidencia local de red',
@@ -3338,6 +3350,9 @@ test('plantillas documentales, resumen revisado y borrador conservado al navegar
   await expect(summary.locator('code')).toHaveText(/^[0-9a-f-]{36}$/);
   await window.getByRole('button', { name: 'Configurar envío', exact: true }).click();
   await expect(window.getByRole('heading', { name: 'Configuración', exact: true })).toBeVisible();
+  await expect(
+    window.getByRole('region', { name: 'Configuración de envío', exact: true }),
+  ).toBeVisible();
   await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
   await expect(window.getByLabel('Monto de prueba')).toHaveValue('100.50');
   await expect(summary).toBeVisible();
@@ -3518,6 +3533,10 @@ test('PREPROD y su auditoría persisten entre reinicios', async () => {
     window.getByText('Ambiente PREPROD · Configuración y límites independientes de QA.'),
   ).toBeVisible();
   await window.getByRole('button', { name: 'Configuración', exact: true }).click();
+  await window
+    .getByRole('navigation', { name: 'Páginas de configuración' })
+    .getByRole('button', { name: 'Auditoría', exact: true })
+    .click();
   await expect(window.getByRole('cell', { name: 'QA → PREPROD', exact: true })).toBeVisible();
   await app?.close();
   app = undefined;
@@ -4374,6 +4393,10 @@ test('configuración de envío offline guarda ajustes y prepara sin tramas ni tr
   await writeFile(join(directory, 'network-evidence.json'), JSON.stringify(evidence));
   const window = await launch();
   await window.getByRole('button', { name: 'Configuración', exact: true }).click();
+  await window
+    .getByRole('navigation', { name: 'Páginas de configuración' })
+    .getByRole('button', { name: 'Envío', exact: true })
+    .click();
   const settings = window.getByRole('region', { name: 'Configuración de envío', exact: true });
   await expect(
     settings.getByText(evidence.ingress.host + ':' + evidence.ingress.port, { exact: true }),

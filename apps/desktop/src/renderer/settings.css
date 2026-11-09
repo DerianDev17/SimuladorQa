@@ -34,7 +34,7 @@
 }
 .settings-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: 210px minmax(0, 1fr);
   gap: 28px;
   align-items: start;
 }
@@ -42,25 +42,24 @@
   position: static;
 }
 .settings-sidebar nav {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 6px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--border);
 }
-.settings-sidebar a {
+.settings-sidebar button {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 12px 10px;
   border-radius: 6px;
   color: #455c76;
-  text-decoration: none;
+  text-align: left;
+  border: 0;
+  background: transparent;
   font-size: 13px;
   font-weight: 500;
 }
-.settings-sidebar a:hover,
-.settings-sidebar a:focus-visible {
+.settings-sidebar button:hover,
+.settings-sidebar button:focus-visible {
   color: #1255b0;
   background: #e4edf9;
 }
@@ -69,7 +68,7 @@
   outline-offset: 4px;
 }
 .settings-sidebar-note {
-  display: none;
+  display: grid;
   gap: 10px;
   padding: 22px 10px;
   margin-top: 22px;
@@ -83,7 +82,7 @@
 }
 .settings-content {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: 20px;
   min-width: 0;
@@ -112,20 +111,26 @@
 .settings-environment .settings-context-note {
   margin-top: 0;
 }
-.settings-content > #settings-send {
-  grid-column: 1;
-  grid-row: 2;
-}
-.settings-content > #settings-network,
-.settings-content > #settings-requirements {
-  grid-column: 1;
-}
 .settings-operations {
-  grid-column: 2;
-  grid-row: 2 / span 3;
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
   gap: 20px;
   min-width: 0;
+}
+.settings-operations .settings-profiles {
+  grid-column: 1 / -1;
+}
+.settings-sidebar button[aria-current='page'] {
+  background: #e4edf9;
+  color: #1255b0;
+  font-weight: 600;
+}
+.settings-sidebar button:hover:not(:disabled) {
+  background: #e4edf9;
+}
+.settings-content:focus {
+  outline: none;
 }
 .settings-environment-picker {
   display: flex;
@@ -540,6 +545,9 @@
   }
 }
 @media (max-width: 800px) {
+  .settings-operations {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .settings-content .settings-environment {
     grid-template-columns: minmax(0, 1fr);
   }

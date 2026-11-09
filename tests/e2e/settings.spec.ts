@@ -1,5 +1,5 @@
 import { _electron as electron, expect, test } from '@playwright/test';
-import type { ElectronApplication } from '@playwright/test';
+import type { ElectronApplication, Page } from '@playwright/test';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -18,7 +18,17 @@ test.afterEach(async () => {
   await removeTestDirectory(directory, 'coonecta-settings-e2e-');
 });
 
-async function launch(documented = true) {
+async function openSettingsPage(window: Page, name: string) {
+  await window
+    .getByRole('navigation', { name: 'Páginas de configuración' })
+    .getByRole('button', { name, exact: true })
+    .click();
+  await expect(
+    window.getByRole('region', { name: `Página de configuración: ${name}`, exact: true }),
+  ).toBeVisible();
+}
+
+async function launch(documented = true, page = 'Envío') {
   if (documented)
     await writeFile(join(directory, 'network-evidence.json'), JSON.stringify(networkEvidence()));
   const env: Record<string, string> = {};
@@ -34,35 +44,42 @@ async function launch(documented = true) {
   await expect(window.getByLabel('Ambiente', { exact: true })).toBeEnabled();
   await window.getByRole('button', { name: 'Configuración', exact: true }).click();
   await expect(window.getByRole('heading', { name: 'Configuración', exact: true })).toBeVisible();
-  await expect(window.getByLabel('Modo previsto')).toBeVisible();
+  await openSettingsPage(window, page);
   return window;
 }
 
 test('configuración general: navegación, edición, validación, guardado y aislamiento', async () => {
-  const window = await launch();
+  const window = await launch(true, 'Ambiente y estación');
   const form = window.getByRole('region', { name: 'Configuración de envío', exact: true });
-  const menu = window.getByRole('navigation', { name: 'Secciones de configuración' });
-  await expect(menu.getByRole('link')).toHaveCount(6);
-  await expect(window.getByRole('region', { name: 'Ambiente y estación' })).toContainText(
-    'Documentada',
-  );
+  const menu = window.getByRole('navigation', { name: 'Páginas de configuración' });
+  await expect(menu.getByRole('button')).toHaveCount(6);
+  await expect(
+    window.getByRole('region', { name: 'Ambiente y estación', exact: true }),
+  ).toContainText('Documentada');
+  await openSettingsPage(window, 'Auditoría');
   await expect(window.getByRole('region', { name: 'Auditoría de ambientes' })).toContainText(
     'No hay cambios',
   );
   const documentUrl = window.url();
-  await menu.getByRole('link', { name: 'Envío', exact: true }).focus();
+  await menu.getByRole('button', { name: 'Envío', exact: true }).focus();
   await window.keyboard.press('Enter');
-  await expect(window.locator('#settings-send')).toBeFocused();
+  await expect(
+    window.getByRole('region', { name: 'Página de configuración: Envío', exact: true }),
+  ).toBeFocused();
+  await expect(window.locator('.settings-content > [id]:visible')).toHaveCount(1);
+  await expect(menu.getByRole('button', { name: 'Envío', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
   expect(window.url()).toBe(documentUrl);
   await form.getByLabel('Espera de conexión (ms)').fill('0');
   await expect(form.getByText('Sin guardar', { exact: true })).toBeVisible();
   await expect(window.getByLabel('Ambiente', { exact: true })).toBeDisabled();
   await expect(
-    window.getByRole('button', { name: 'PREPROD Configuración y observación' }),
+    menu.getByRole('button', { name: 'Ambiente y estación', exact: true }),
   ).toBeDisabled();
-  await expect(window.getByRole('button', { name: 'Administrar perfiles ATM' })).toBeDisabled();
   await expect(
-    window.getByRole('button', { name: 'Conectar al Switch', exact: true }),
+    menu.getByRole('button', { name: 'Dispositivos y perfiles', exact: true }),
   ).toBeDisabled();
   await form.getByRole('button', { name: 'Guardar configuración de envío', exact: true }).click();
   await expect(form.getByRole('alert')).toContainText('entre 1 y 30000');
@@ -79,12 +96,14 @@ test('configuración general: navegación, edición, validación, guardado y ais
   await expect(
     form.getByRole('button', { name: 'Guardar configuración de envío', exact: true }),
   ).toBeDisabled();
+  await openSettingsPage(window, 'Auditoría');
   await expect(
     window
       .getByRole('region', { name: 'Auditoría de ambientes' })
       .getByRole('cell', { name: 'QA → PREPROD' }),
   ).toBeVisible();
   await window.getByLabel('Ambiente', { exact: true }).selectOption('QA');
+  await openSettingsPage(window, 'Envío');
   await expect(form.getByLabel('Espera de conexión (ms)')).toHaveValue('1000');
   await expect(window.getByRole('button', { name: 'Conectar', exact: true })).toBeEnabled();
   await window.setViewportSize({ width: 1440, height: 1080 });
@@ -99,7 +118,7 @@ test('configuración general: navegación, edición, validación, guardado y ais
 });
 
 test('configuración operativa: ambiente persistido, accesos reales y recarga de catálogo', async () => {
-  const window = await launch();
+  const window = await launch(true, 'Dispositivos y perfiles');
   const profiles = window.getByRole('region', { name: 'Perfiles y herramientas' });
   await expect(profiles).toContainText('0 ATM activos con entidad activa en QA');
   const saved = await window.evaluate(async () => {
@@ -131,13 +150,17 @@ test('configuración operativa: ambiente persistido, accesos reales y recarga de
   expect(saved).toBe(true);
   await profiles.getByRole('button', { name: 'Actualizar perfiles' }).click();
   await expect(profiles).toContainText('1 ATM activo con entidad activa en QA');
+  await openSettingsPage(window, 'Ambiente y estación');
   await window.getByRole('button', { name: 'PREPROD Configuración y observación' }).click();
+  await openSettingsPage(window, 'Dispositivos y perfiles');
   await expect(window.getByLabel('Ambiente', { exact: true })).toHaveValue('PREPROD');
   await expect(profiles).toContainText('0 ATM activos con entidad activa en PREPROD');
   await expect(window.getByRole('region', { name: 'Conexión al Switch' })).toContainText(
     'únicamente en QA',
   );
+  await openSettingsPage(window, 'Ambiente y estación');
   await window.getByRole('button', { name: 'QA Pruebas del simulador' }).click();
+  await openSettingsPage(window, 'Dispositivos y perfiles');
   await expect(window.getByLabel('Ambiente', { exact: true })).toHaveValue('QA');
   await profiles.getByRole('button', { name: 'Administrar perfiles ATM' }).click();
   await expect(window.getByRole('heading', { name: 'Perfiles ATM', exact: true })).toBeVisible();
@@ -154,8 +177,45 @@ test('configuración operativa: ambiente persistido, accesos reales y recarga de
   await expect(profiles).toContainText('Catálogo sin verificar');
 });
 
+test('configuración por páginas: contenido exclusivo, teclado y selección conservada', async () => {
+  const window = await launch(true, 'Ambiente y estación');
+  const documentUrl = window.url();
+  const navigation = window.getByRole('navigation', { name: 'Páginas de configuración' });
+  for (const name of [
+    'Envío',
+    'Dispositivos y perfiles',
+    'Evidencia de red',
+    'Requisitos',
+    'Auditoría',
+    'Ambiente y estación',
+  ]) {
+    const button = navigation.getByRole('button', { name, exact: true });
+    await button.focus();
+    await window.keyboard.press('Enter');
+    await expect(button).toHaveAttribute('aria-current', 'page');
+    await expect(
+      window.getByRole('region', { name: `Página de configuración: ${name}`, exact: true }),
+    ).toBeFocused();
+    await expect(window.locator('.settings-content > [id]:visible')).toHaveCount(1);
+    expect(window.url()).toBe(documentUrl);
+  }
+  await openSettingsPage(window, 'Dispositivos y perfiles');
+  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
+  await expect(
+    navigation.getByRole('button', { name: 'Dispositivos y perfiles', exact: true }),
+  ).toHaveAttribute('aria-current', 'page');
+  await expect(window.locator('.settings-content > [id]:visible')).toHaveCount(1);
+  await window.getByRole('button', { name: 'Inicio', exact: true }).click();
+  await window.getByRole('button', { name: 'Configuración', exact: true }).click();
+  await expect(
+    navigation.getByRole('button', { name: 'Dispositivos y perfiles', exact: true }),
+  ).toHaveAttribute('aria-current', 'page');
+  await window.setViewportSize({ width: 1440, height: 1000 });
+  await window.screenshot({ path: 'artifacts/settings-devices-page.png' });
+});
+
 test('configuración operativa: comprobar lector, ausencia y timeout sin leer el chip', async () => {
-  const window = await launch();
+  const window = await launch(true, 'Dispositivos y perfiles');
   const reader = window.getByRole('region', { name: 'Comprobación del lector' });
   await expect(reader).toContainText('Sin comprobar en esta pantalla');
   await app!.evaluate(({ ipcMain }) => {
@@ -200,7 +260,7 @@ test('configuración operativa: comprobar lector, ausencia y timeout sin leer el
 });
 
 test('configuración operativa: conectar y desconectar requieren una acción explícita', async () => {
-  const window = await launch();
+  const window = await launch(true, 'Dispositivos y perfiles');
   await app!.evaluate(({ ipcMain }) => {
     let connected = false;
     const value = () => ({
@@ -246,7 +306,7 @@ test('configuración operativa: conectar y desconectar requieren una acción exp
 });
 
 test('configuración operativa: descarta comprobaciones del lector al cambiar de ambiente', async () => {
-  const window = await launch();
+  const window = await launch(true, 'Dispositivos y perfiles');
   await app!.evaluate(({ ipcMain }) => {
     ipcMain.removeHandler('reader:inspect');
     ipcMain.handle(
@@ -269,7 +329,7 @@ test('configuración operativa: descarta comprobaciones del lector al cambiar de
   const reader = window.getByRole('region', { name: 'Comprobación del lector' });
   await reader.getByRole('button', { name: 'Comprobar lector' }).click();
   await expect(reader.getByRole('status')).toContainText('Comprobando lector');
-  await window.getByRole('button', { name: 'PREPROD Configuración y observación' }).click();
+  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
   await expect(window.getByLabel('Ambiente', { exact: true })).toHaveValue('PREPROD');
   await app!.evaluate(() =>
     (
@@ -288,8 +348,10 @@ test('configuración general: evidencia ausente mantiene ajustes bloqueados y na
   await expect(
     form.getByRole('button', { name: 'Guardar configuración de envío', exact: true }),
   ).toBeDisabled();
-  await window.getByRole('link', { name: 'Requisitos', exact: true }).click();
-  await expect(window.locator('#settings-requirements')).toBeFocused();
+  await openSettingsPage(window, 'Requisitos');
+  await expect(
+    window.getByRole('region', { name: 'Página de configuración: Requisitos', exact: true }),
+  ).toBeFocused();
   await window.getByRole('button', { name: 'Inicio', exact: true }).click();
   await expect(window.getByRole('heading', { name: 'Estación de pruebas' })).toBeVisible();
 });

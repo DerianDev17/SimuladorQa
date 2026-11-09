@@ -13,7 +13,8 @@ pruebas de envio durante esta implementacion.
 ## Comportamiento entregado
 
 La pantalla Configuración agrupa ambiente y estación, envío, evidencia de red,
-requisitos y auditoría en secciones con navegación local. Muestra la revisión
+requisitos y auditoría en páginas con navegación local. Solo se muestra la página
+seleccionada; cambiar de página requiere guardar o descartar la edición. Muestra la revisión
 guardada o los cambios pendientes, conserva el destino documental como solo
 lectura y presenta los últimos diez cambios de ambiente con fecha local.
 Los ajustes quedan deshabilitados mientras hay una operación transaccional activa.

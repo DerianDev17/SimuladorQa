@@ -4,6 +4,7 @@ import type { Environment } from '../../../../packages/domain/src/index';
 import type { AppSnapshot, ErrorCode, Result } from '../../../../packages/shared/src/contracts';
 import type { CatalogSnapshot } from '../../../../packages/domain/src/catalogs';
 import { SettingsView } from './SettingsView';
+import type { SettingsPage } from './SettingsView';
 import { CatalogView } from './CatalogView';
 import { TransactionWorkspace } from './TransactionWorkspace';
 import { ObservationView } from './ObservationView';
@@ -33,6 +34,7 @@ const client = new DesktopClient(window.desktop);
 
 export function App() {
   const [page, setPage] = useState('dashboard');
+  const [settingsPage, setSettingsPage] = useState<SettingsPage>('environment');
   const [snapshot, setSnapshot] = useState<AppSnapshot>();
   const [error, setError] = useState<{ code: string; message: string }>();
   const [busy, setBusy] = useState(true);
@@ -197,6 +199,7 @@ export function App() {
     setPage('transactions');
   }
   function navigateFromTransaction(next: 'entities' | 'atms' | 'settings' | 'history') {
+    if (next === 'settings') setSettingsPage('send');
     if ((next === 'entities' || next === 'atms') && environment) {
       setTransactionSetup({ environment, stage: next });
     } else setTransactionSetup(undefined);
@@ -394,6 +397,8 @@ export function App() {
               client={client}
               disabled={busy || !snapshot || transactionBusy}
               onEditingChange={setSendConfigurationEditing}
+              page={settingsPage}
+              onPageChange={setSettingsPage}
               editing={sendConfigurationEditing}
               catalog={catalog}
               catalogBusy={catalogBusy}

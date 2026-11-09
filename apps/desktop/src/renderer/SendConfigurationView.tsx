@@ -233,7 +233,7 @@ export function SendConfigurationView({ environment, client, disabled, onEditing
             <div className="catalog-actions editor-actions">
               <span className="settings-save-note">
                 {dirty
-                  ? 'Guarda o descarta para salir de Configuración o cambiar de ambiente.'
+                  ? 'Guarda o descarta para cambiar de página o ambiente.'
                   : 'Guardar ajustes no abre una conexión.'}
               </span>
               {dirty && (

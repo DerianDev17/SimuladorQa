@@ -8,6 +8,8 @@ evidencia documental, requisitos y auditoría. El diseño y sus criterios están
 [UX_SPEC.md](ux/UX_SPEC.md#configuración-general--2026-11-09).
 Esta organización no añade campos persistidos ni permite editar destinos o
 secretos desde el Renderer. El selector global conserva el aislamiento de ambientes.
+Cada área tiene su propia página interna; la selección de página dura durante
+la sesión y no se añade a las preferencias persistidas.
 
 ## Preferences (primera entrega)
 

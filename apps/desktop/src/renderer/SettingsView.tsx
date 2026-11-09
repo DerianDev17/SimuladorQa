@@ -12,7 +12,10 @@ import type { useSwitchConnection } from './SwitchConnectionView';
 import { SettingsReaderStatus } from './SettingsReaderStatus';
 import './settings.css';
 
-const sections: { id: string; label: string; icon: IconName }[] = [
+export type SettingsPage =
+  'environment' | 'send' | 'operations' | 'network' | 'requirements' | 'audit';
+
+const sections: { id: SettingsPage; label: string; icon: IconName }[] = [
   { id: 'environment', label: 'Ambiente y estación', icon: 'monitor' },
   { id: 'send', label: 'Envío', icon: 'transaction' },
   { id: 'operations', label: 'Dispositivos y perfiles', icon: 'reader' },
@@ -37,6 +40,8 @@ export function SettingsView({
   onEnvironmentChange,
   onNavigate,
   onRefreshCatalog,
+  page,
+  onPageChange,
 }: {
   snapshot: AppSnapshot | undefined;
   client: DesktopClient;
@@ -50,7 +55,13 @@ export function SettingsView({
   onEnvironmentChange(environment: Environment): void;
   onNavigate(destination: SettingsDestination): void;
   onRefreshCatalog(): void;
+  page: SettingsPage;
+  onPageChange(page: SettingsPage): void;
 }) {
+  const content = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    content.current?.focus({ preventScroll: true });
+  }, [page]);
   const environment = snapshot?.environment;
   const blockers = snapshot?.blockers ?? dataBlockers;
   const documented =
@@ -78,22 +89,20 @@ export function SettingsView({
 
       <div className="settings-layout">
         <aside className="settings-sidebar">
-          <nav aria-label="Secciones de configuración">
+          <nav aria-label="Páginas de configuración">
             {sections.map((section) => (
-              <a
+              <button
                 key={section.id}
-                href={`#settings-${section.id}`}
-                onClick={(event) => {
-                  // Preserve the document URL validated by Electron's IPC sender guard.
-                  event.preventDefault();
-                  const target = document.getElementById(`settings-${section.id}`);
-                  target?.focus({ preventScroll: true });
-                  target?.scrollIntoView({ block: 'start' });
+                aria-current={page === section.id ? 'page' : undefined}
+                aria-controls={`settings-${section.id}`}
+                disabled={editing && page !== section.id}
+                onClick={() => {
+                  if (!editing) onPageChange(section.id);
                 }}
               >
                 <Icon name={section.icon} size={18} />
                 {section.label}
-              </a>
+              </button>
             ))}
           </nav>
           <div className="settings-sidebar-note">
@@ -103,9 +112,16 @@ export function SettingsView({
           </div>
         </aside>
 
-        <div className="settings-content">
+        <div
+          className="settings-content"
+          ref={content}
+          tabIndex={-1}
+          role="region"
+          aria-label={`Página de configuración: ${sections.find((section) => section.id === page)?.label}`}
+        >
           <section
             id="settings-environment"
+            hidden={page !== 'environment'}
             tabIndex={-1}
             className="panel settings-environment"
             aria-label="Ambiente y estación"
@@ -165,7 +181,12 @@ export function SettingsView({
             </p>
           </section>
 
-          <div id="settings-operations" tabIndex={-1} className="settings-operations">
+          <div
+            id="settings-operations"
+            hidden={page !== 'operations'}
+            tabIndex={-1}
+            className="settings-operations"
+          >
             {environment === 'QA' ? (
               <SwitchConnectionView
                 connection={link.connection}
@@ -251,7 +272,7 @@ export function SettingsView({
             </section>
           </div>
 
-          <div id="settings-send" tabIndex={-1}>
+          <div id="settings-send" hidden={page !== 'send'} tabIndex={-1}>
             <SendConfigurationView
               environment={environment}
               client={client}
@@ -260,12 +281,13 @@ export function SettingsView({
             />
           </div>
 
-          <div id="settings-network" tabIndex={-1}>
+          <div id="settings-network" hidden={page !== 'network'} tabIndex={-1}>
             <NetworkEvidenceView state={snapshot?.networkEvidence} environment={environment} />
           </div>
 
           <section
             id="settings-requirements"
+            hidden={page !== 'requirements'}
             tabIndex={-1}
             className="panel settings-requirements"
             aria-label="Requisitos de configuración"
@@ -298,6 +320,7 @@ export function SettingsView({
 
           <section
             id="settings-audit"
+            hidden={page !== 'audit'}
             tabIndex={-1}
             className="panel settings-audit"
             aria-label="Auditoría de ambientes"
@@ -356,3 +379,4 @@ export function SettingsView({
     </div>
   );
 }
+import { useEffect, useRef } from 'react';
