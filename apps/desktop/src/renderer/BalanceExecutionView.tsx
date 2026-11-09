@@ -66,11 +66,13 @@ export function BalanceExecutionView({
   const details = (
     <>
       {execution.deposit && (
-        <p>
+        <p className="execution-note">
           Monto solicitado: USD {execution.deposit.amount} · Ahorros.{' '}
           {approved
-            ? 'Autorizado por el host; acreditación en Core sin verificar.'
-            : 'Acreditación sin confirmar.'}
+            ? 'El host autorizó la operación; el abono en Core queda sin verificar.'
+            : execution.outcome === 'NOT_APPROVED'
+              ? 'El host respondió sin autorizarla; no se confirma un abono en Core.'
+              : 'El resultado no está confirmado. Recupera esta referencia antes de preparar otro depósito.'}
         </p>
       )}
       {execution.withdrawal && (

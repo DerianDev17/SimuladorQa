@@ -625,6 +625,23 @@ main {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+.deposit-quick-amounts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-top: -8px;
+}
+.deposit-quick-amounts > span {
+  margin-right: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.deposit-quick-amounts button[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: #edf4ff;
+}
 .receipt-options {
   border: 0;
   padding: 0;

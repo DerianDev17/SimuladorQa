@@ -86,6 +86,18 @@ test('depósito QA: monto, canal propio, RC12, mensajes e historial sin opciones
   await window.getByLabel('Transacción', { exact: true }).selectOption('DEPOSIT');
   await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
   const send = window.getByRole('button', { name: 'Ejecutar Transacción', exact: true });
+  const quickAmounts = window.getByRole('group', { name: 'Importes rápidos para depósito' });
+  await quickAmounts.getByRole('button', { name: 'USD 50.00' }).click();
+  await expect(window.getByLabel('Monto de prueba')).toHaveValue('50.00');
+  await expect(quickAmounts.getByRole('button', { name: 'USD 50.00' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await window.getByLabel('Monto de prueba').fill('10.00');
+  await expect(quickAmounts.getByRole('button', { name: 'USD 50.00' })).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  );
   await window.getByLabel('Monto de prueba').fill('0.00');
   await expect(send).toBeDisabled();
   await window.getByLabel('Monto de prueba').fill('10.00');

@@ -51,6 +51,16 @@ El historial y el diario guardan mensajes sanitizados y PAN enmascarado.
 La vista temporal de mensajes QA mantiene el alcance ya definido por ADR-037.
 PROD y ejecución de depósitos en PREPROD permanecen bloqueados.
 
+La preparación muestra el alcance fijo de la prueba junto al importe. El resultado
+distingue una autorización del host de un abono en Core: solo el primero puede
+afirmarse con la respuesta actual; la acreditación se presenta como pendiente de
+verificación. Si el resultado queda incierto, la pantalla pide recuperar esa
+referencia antes de preparar otro depósito.
+
+La UI ofrece atajos editables de USD 10, 20, 50 y 100, además del campo manual.
+Son ejemplos para acelerar la captura: no limitan el importe y no representan
+denominaciones, límites ni aceptación comercial aprobados por el host.
+
 ## TODO-DATA abiertos
 
 - **QA-DEPOSIT-HOST-ACCEPTANCE:** confirmar aceptación y correlación host/Core.

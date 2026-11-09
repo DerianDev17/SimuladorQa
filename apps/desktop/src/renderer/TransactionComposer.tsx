@@ -68,6 +68,7 @@ export function TransactionComposer({ preparation }: { preparation: TransactionP
     checks,
     sendSetupError,
   } = preparation;
+  const depositQuickAmounts = ['10.00', '20.00', '50.00', '100.00'] as const;
   return (
     <section
       className="panel transaction-context transaction-composer"
@@ -217,36 +218,65 @@ export function TransactionComposer({ preparation }: { preparation: TransactionP
           {original && <small className="field-feedback">Pendiente de transacción original</small>}
         </label>
         {monetary && (
-          <label className="withdrawal-amount-input">
-            Monto de prueba
-            <span className="money-input">
-              <span aria-hidden="true">USD</span>
-              <input
-                ref={amountInput}
-                aria-label="Monto de prueba"
-                aria-invalid={amountInvalid}
-                aria-describedby="draft-amount-help"
-                inputMode="decimal"
-                value={amount}
-                maxLength={14}
-                placeholder="0.00"
-                disabled={fieldsDisabled}
-                onChange={(event) => {
-                  invalidate();
-                  setAmount(event.target.value);
-                }}
-              />
-            </span>
-            <small
-              id="draft-amount-help"
-              className={amountInvalid ? 'field-feedback invalid' : 'field-feedback'}
-              aria-live="polite"
-            >
-              {amountInvalid
-                ? 'Usa un monto positivo, punto y dos decimales; hasta 10 dígitos enteros.'
-                : 'Escribe el monto que deseas probar, con punto y dos decimales (ej. 75.25).'}
-            </small>
-          </label>
+          <>
+            <label className="withdrawal-amount-input">
+              Monto de prueba
+              <span className="money-input">
+                <span aria-hidden="true">USD</span>
+                <input
+                  ref={amountInput}
+                  aria-label="Monto de prueba"
+                  aria-invalid={amountInvalid}
+                  aria-describedby="draft-amount-help"
+                  inputMode="decimal"
+                  value={amount}
+                  maxLength={14}
+                  placeholder="0.00"
+                  disabled={fieldsDisabled}
+                  onChange={(event) => {
+                    invalidate();
+                    setAmount(event.target.value);
+                  }}
+                />
+              </span>
+              <small
+                id="draft-amount-help"
+                className={amountInvalid ? 'field-feedback invalid' : 'field-feedback'}
+                aria-live="polite"
+              >
+                {amountInvalid
+                  ? 'Usa un monto positivo, punto y dos decimales; hasta 10 dígitos enteros.'
+                  : transaction === 'DEPOSIT'
+                    ? 'Depósito QA en ahorros/USD. El monto aprobado por el host no confirma el abono en Core.'
+                    : 'Escribe el monto que deseas probar, con punto y dos decimales (ej. 75.25).'}
+              </small>
+            </label>
+            {transaction === 'DEPOSIT' && (
+              <div
+                className="deposit-quick-amounts"
+                role="group"
+                aria-label="Importes rápidos para depósito"
+              >
+                <span>Importes rápidos</span>
+                {depositQuickAmounts.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className="secondary"
+                    aria-pressed={amount === value}
+                    disabled={fieldsDisabled}
+                    onClick={() => {
+                      invalidate();
+                      setAmount(value);
+                      amountInput.current?.focus();
+                    }}
+                  >
+                    USD {Number(value).toFixed(2)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         )}
         {monetary && transaction !== 'DEPOSIT' && (
           <details className="composer-extra-options" open={withReversal}>
