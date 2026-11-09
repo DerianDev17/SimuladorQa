@@ -1,5 +1,13 @@
 # Configuracion
 
+## Pantalla general
+
+La interfaz organiza ambiente/estación, ajustes de envío, evidencia documental,
+requisitos y auditoría. El diseño y sus criterios están en
+[UX_SPEC.md](ux/UX_SPEC.md#configuración-general--2026-11-09).
+Esta organización no añade campos persistidos ni permite editar destinos o
+secretos desde el Renderer. El selector global conserva el aislamiento de ambientes.
+
 ## Preferences (primera entrega)
 
 - version: 1

@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react';
-import { dataBlockers, isEnvironment } from '../../../../packages/domain/src/index';
+import { isEnvironment } from '../../../../packages/domain/src/index';
 import type { Environment } from '../../../../packages/domain/src/index';
 import type { AppSnapshot, ErrorCode, Result } from '../../../../packages/shared/src/contracts';
 import type { CatalogSnapshot } from '../../../../packages/domain/src/catalogs';
-import { SendConfigurationView } from './SendConfigurationView';
+import { SettingsView } from './SettingsView';
 import { CatalogView } from './CatalogView';
 import { TransactionWorkspace } from './TransactionWorkspace';
 import { ObservationView } from './ObservationView';
-import { NetworkEvidenceView } from './NetworkEvidenceView';
 import type { CatalogMutation } from './CatalogView';
 import { DesktopClient } from './desktop-client';
 import { Icon } from './Icon';
@@ -192,7 +191,6 @@ export function App() {
   const linkTitle =
     environment === 'QA' ? connectionTitle(link.connection) : 'Conexión QA inactiva';
   const current = navigation.find((item) => item.id === page);
-  const blockers = snapshot?.blockers ?? dataBlockers;
 
   function goToTransactions() {
     setTransactionSetup(undefined);
@@ -203,25 +201,6 @@ export function App() {
       setTransactionSetup({ environment, stage: next });
     } else setTransactionSetup(undefined);
     setPage(next);
-  }
-
-  function blockerList() {
-    return (
-      <div className="blocker-list">
-        {blockers.map((blocker, index) => (
-          <div className="blocker" key={blocker.id}>
-            <span className="step-number">{String(index + 1).padStart(2, '0')}</span>
-            <div>
-              <details className="inline-details">
-                <summary>{blocker.label}</summary>
-                <p>{blocker.description}</p>
-              </details>
-            </div>
-            <span className="pill amber">Pendiente</span>
-          </div>
-        ))}
-      </div>
-    );
   }
 
   return (
@@ -358,7 +337,7 @@ export function App() {
               </button>
             </div>
           )}
-          {page !== 'dashboard' && page !== 'transactions' && page !== 'load' && (
+          {!['dashboard', 'transactions', 'load', 'settings'].includes(page) && (
             <div className="page-heading">
               <div>
                 <h1>{current?.label}</h1>
@@ -409,65 +388,13 @@ export function App() {
           </div>
 
           {page === 'settings' && (
-            <>
-              <SendConfigurationView
-                key={environment ?? 'unavailable'}
-                environment={environment}
-                client={client}
-                disabled={busy || !snapshot}
-                onEditingChange={setSendConfigurationEditing}
-              />
-              <NetworkEvidenceView state={snapshot?.networkEvidence} environment={environment} />
-              <section className="panel settings-panel">
-                <div className="panel-heading">
-                  <h2>Estado de configuración</h2>
-                  <span className="pill amber">{blockers.length} requisitos pendientes</span>
-                </div>
-                {blockerList()}
-                <div className="document-note">
-                  <Icon name="shield" size={20} />
-                  <div>
-                    <strong>Fuentes antes de implementar</strong>
-                    <p>
-                      Completa docs/INPUT_CHECKLIST.md con especificación oficial, diccionarios
-                      aprobados y evidencia real de QA o PREPROD.
-                    </p>
-                  </div>
-                </div>
-              </section>
-              <section className="panel audit-panel">
-                <div className="panel-heading">
-                  <h2>Cambios de ambiente</h2>
-                  <span className="pill neutral">Auditoría local</span>
-                </div>
-                {snapshot?.audit.length ? (
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Fecha local</th>
-                        <th>Cambio</th>
-                        <th>Usuario</th>
-                        <th>Equipo</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {snapshot.audit.slice(0, 10).map((entry) => (
-                        <tr key={entry.id}>
-                          <td>{new Date(entry.timestamp).toLocaleString('es-EC')}</td>
-                          <td>
-                            {entry.previousEnvironment} → {entry.environment}
-                          </td>
-                          <td>{entry.user}</td>
-                          <td>{entry.machine}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
-                  <p className="form-note">No hay cambios de ambiente registrados.</p>
-                )}
-              </section>
-            </>
+            <SettingsView
+              key={environment ?? 'unavailable'}
+              snapshot={snapshot}
+              client={client}
+              disabled={busy || !snapshot || transactionBusy}
+              onEditingChange={setSendConfigurationEditing}
+            />
           )}
 
           {page === 'monitor' && (

@@ -5,6 +5,7 @@ import type {
   SendTrigger,
 } from '../../../../packages/domain/src/send-configuration';
 import type { DesktopClient } from './desktop-client';
+import { Icon } from './Icon';
 
 interface Props {
   environment: Environment | undefined;
@@ -98,10 +99,23 @@ export function SendConfigurationView({ environment, client, disabled, onEditing
   return (
     <section className="panel send-configuration-panel" aria-label="Configuración de envío">
       <div className="panel-heading">
-        <h2>Envío de tramas</h2>
-        <span className="pill amber">Generación pendiente</span>
+        <div>
+          <h2>Envío de tramas</h2>
+          <p>
+            Ajusta la preparación y los plazos del intento para{' '}
+            {environment ?? 'el ambiente seleccionado'}.
+          </p>
+        </div>
+        <span className={`pill ${dirty ? 'amber' : 'neutral'}`}>
+          {busy
+            ? 'Procesando'
+            : dirty
+              ? 'Sin guardar'
+              : setup?.configuration
+                ? `Revisión ${setup.configuration.revision}`
+                : 'Sin configurar'}
+        </span>
       </div>
-      <p className="form-note">Desde los datos del formulario, sin pegar tramas HEX.</p>
       {busy && <p role="status">Cargando configuración…</p>}
       {error && (
         <p className="inline-error" role="alert">
@@ -115,16 +129,27 @@ export function SendConfigurationView({ environment, client, disabled, onEditing
       )}
       {setup && (
         <>
-          <dl className="station-details">
+          <dl className="settings-destination">
             <div>
-              <dt>Destino {environment}</dt>
+              <dt>
+                <Icon name="database" size={18} /> Destino {environment}
+              </dt>
               <dd>
                 {setup.documentedEndpoint
                   ? setup.documentedEndpoint.host + ':' + setup.documentedEndpoint.port
                   : 'Sin destino documentado'}
               </dd>
             </div>
+            <div>
+              <dt className="visually-hidden">Origen del destino</dt>
+              <dd className="settings-destination-source">Solo lectura · fuente documental</dd>
+            </div>
           </dl>
+          {!setup.documentedEndpoint && (
+            <p className="settings-missing-endpoint">
+              Para guardar ajustes, se necesita evidencia de un destino para este ambiente.
+            </p>
+          )}
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -132,53 +157,85 @@ export function SendConfigurationView({ environment, client, disabled, onEditing
             }}
           >
             <fieldset disabled={disabled || busy || needsReload || !setup.documentedEndpoint}>
-              <div className="form-grid">
-                <label>
-                  Modo previsto
-                  <select
-                    value={trigger}
-                    onChange={(event) => {
-                      if (
-                        event.target.value === 'ON_CLICK' ||
-                        event.target.value === 'AFTER_REVIEW'
-                      )
-                        setTrigger(event.target.value);
-                      setMessage('');
-                    }}
-                  >
-                    <option value="ON_CLICK">Al pulsar Enviar transacción</option>
-                    <option value="AFTER_REVIEW">Después de revisar la transacción</option>
-                  </select>
-                </label>
-                <label>
-                  Espera de conexión (ms)
-                  <input
-                    inputMode="numeric"
-                    maxLength={5}
-                    placeholder="Pendiente"
-                    value={connect}
-                    onChange={(event) => {
-                      setConnect(event.target.value);
-                      setMessage('');
-                    }}
-                  />
-                </label>
-                <label>
-                  Ventana de respuesta (ms)
-                  <input
-                    inputMode="numeric"
-                    maxLength={5}
-                    placeholder="Pendiente"
-                    value={observe}
-                    onChange={(event) => {
-                      setObserve(event.target.value);
-                      setMessage('');
-                    }}
-                  />
-                </label>
+              <div className="settings-send-fields">
+                <div className="settings-field-row">
+                  <div>
+                    <h3>Preparación de la transacción</h3>
+                    <p>
+                      El modo expresa la intención de envío. Revisar o guardar no inicia una
+                      transmisión.
+                    </p>
+                  </div>
+                  <label>
+                    Modo previsto
+                    <select
+                      aria-describedby="settings-trigger-help"
+                      value={trigger}
+                      onChange={(event) => {
+                        if (
+                          event.target.value === 'ON_CLICK' ||
+                          event.target.value === 'AFTER_REVIEW'
+                        )
+                          setTrigger(event.target.value);
+                        setMessage('');
+                      }}
+                    >
+                      <option value="ON_CLICK">Al pulsar Enviar transacción</option>
+                      <option value="AFTER_REVIEW">Después de revisar la transacción</option>
+                    </select>
+                  </label>
+                </div>
+                <p id="settings-trigger-help" className="visually-hidden">
+                  Después de revisar no inicia un envío automático.
+                </p>
+                <div className="settings-field-row">
+                  <div>
+                    <h3>Plazos del intento</h3>
+                    <p>De 1 a 30.000 ms. Deja un campo vacío para mantenerlo pendiente.</p>
+                  </div>
+                  <div className="settings-timeouts">
+                    <label>
+                      Espera de conexión (ms)
+                      <input
+                        inputMode="numeric"
+                        maxLength={5}
+                        placeholder="Pendiente"
+                        aria-describedby="settings-timeout-help"
+                        value={connect}
+                        onChange={(event) => {
+                          setConnect(event.target.value);
+                          setMessage('');
+                        }}
+                      />
+                    </label>
+                    <label>
+                      Ventana de respuesta (ms)
+                      <input
+                        inputMode="numeric"
+                        maxLength={5}
+                        placeholder="Pendiente"
+                        aria-describedby="settings-timeout-help"
+                        value={observe}
+                        onChange={(event) => {
+                          setObserve(event.target.value);
+                          setMessage('');
+                        }}
+                      />
+                    </label>
+                  </div>
+                </div>
               </div>
+              <p id="settings-timeout-help" className="settings-context-note">
+                <Icon name="clock" size={16} /> Son controles técnicos del intento; no definen
+                timeouts ISO del proveedor.
+              </p>
             </fieldset>
             <div className="catalog-actions editor-actions">
+              <span className="settings-save-note">
+                {dirty
+                  ? 'Guarda o descarta para salir de Configuración o cambiar de ambiente.'
+                  : 'Guardar ajustes no abre una conexión.'}
+              </span>
               {dirty && (
                 <button
                   type="button"
@@ -218,16 +275,16 @@ export function SendConfigurationView({ environment, client, disabled, onEditing
             </div>
           </form>
           <details className="inline-details">
-            <summary>Requisitos para activar el envío</summary>
+            <summary>Requisitos del plan documental de envío</summary>
             <ul>
               {setup.pending.map((item) => (
                 <li key={item.id}>{item.label}</li>
               ))}
             </ul>
             <p>
-              Los plazos son controles técnicos del intento; no definen timeouts ISO del proveedor.
-              Guardar o preparar no transmite. El generador sigue bloqueado hasta aprobar campos
-              dinámicos, perfil de tarjeta y seguridad.
+              Este plan documental no genera tramas. La disponibilidad de saldo, retiro y depósito
+              QA se comprueba en Transacciones con el perfil, la tarjeta y la seguridad de cada
+              operación.
             </p>
           </details>
         </>

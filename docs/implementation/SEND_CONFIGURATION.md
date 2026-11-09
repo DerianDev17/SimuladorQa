@@ -12,6 +12,13 @@ pruebas de envio durante esta implementacion.
 
 ## Comportamiento entregado
 
+La pantalla Configuración agrupa ambiente y estación, envío, evidencia de red,
+requisitos y auditoría en secciones con navegación local. Muestra la revisión
+guardada o los cambios pendientes, conserva el destino documental como solo
+lectura y presenta los últimos diez cambios de ambiente con fecha local.
+Los ajustes quedan deshabilitados mientras hay una operación transaccional activa.
+Guardar ajustes o navegar entre estas secciones no abre conexiones ni transmite.
+
 Al iniciar Electron, Main inicializa una configuracion QA solo si hay evidencia
 QA documentada y no existe una configuracion previa. Toma exclusivamente el host,
 puerto e ID de esa fuente; no hereda datos a PREPROD ni cambia el ambiente activo.

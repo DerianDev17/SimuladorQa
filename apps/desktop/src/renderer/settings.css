@@ -1,0 +1,399 @@
+.settings-workspace {
+  max-width: 1320px;
+  margin-inline: auto;
+}
+.settings-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 3px 0 28px;
+}
+.settings-eyebrow {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+}
+.settings-heading h1 {
+  font-size: 30px;
+  letter-spacing: -0.8px;
+  margin: 7px 0;
+}
+.settings-heading p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.settings-scope {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #52677e;
+  font-size: 12px;
+}
+.settings-layout {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+.settings-sidebar {
+  position: sticky;
+  top: 24px;
+}
+.settings-sidebar nav {
+  display: grid;
+  gap: 5px;
+}
+.settings-sidebar a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 10px;
+  border-radius: 6px;
+  color: #455c76;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+}
+.settings-sidebar a:hover,
+.settings-sidebar a:focus-visible {
+  color: #1255b0;
+  background: #e4edf9;
+}
+.settings-workspace :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.settings-sidebar-note {
+  display: grid;
+  gap: 10px;
+  padding: 22px 10px;
+  margin-top: 22px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.settings-sidebar-note strong {
+  color: #455c76;
+}
+.settings-content {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+.settings-content > [id] {
+  scroll-margin-top: 24px;
+}
+.settings-content .panel {
+  margin: 0;
+  padding: 24px;
+  border-color: #dce4ee;
+  border-radius: 12px;
+}
+.settings-content .panel-heading {
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 22px;
+}
+.settings-content h2 {
+  font-size: 17px;
+  letter-spacing: -0.2px;
+}
+.settings-content .panel-heading p {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.settings-content .pill {
+  flex-shrink: 0;
+  font-size: 11px;
+}
+.settings-overview {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  gap: 18px;
+  margin: 0;
+}
+.settings-overview > div + div {
+  border-left: 1px solid var(--border);
+  padding-left: 20px;
+}
+.settings-overview dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.settings-overview dd {
+  margin: 8px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.settings-content .settings-context-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 20px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.settings-context-note svg {
+  flex-shrink: 0;
+}
+.settings-destination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  background: #f3f7fc;
+  border: 1px solid #e1e9f3;
+  border-radius: 8px;
+  margin: 0 0 24px;
+}
+.settings-destination dt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #52677e;
+  font-size: 12px;
+}
+.settings-destination dd {
+  margin: 7px 0 0 26px;
+  font-family: Consolas, monospace;
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.settings-destination .settings-destination-source {
+  margin: 0;
+  font-family: inherit;
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--muted);
+}
+.settings-missing-endpoint {
+  color: #865b17;
+  font-size: 12px;
+  line-height: 1.6;
+  margin: -10px 0 20px;
+}
+.settings-field-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.85fr) minmax(240px, 1.3fr);
+  gap: 24px;
+  align-items: start;
+}
+.settings-field-row + .settings-field-row,
+.settings-send-fields > .visually-hidden + .settings-field-row {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #e9edf3;
+}
+.settings-field-row h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+.settings-field-row p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.settings-field-row label {
+  display: grid;
+  gap: 8px;
+  font-size: 12px;
+  color: #455c76;
+}
+.settings-field-row select,
+.settings-field-row input {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  font-size: 13px;
+}
+.settings-timeouts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.settings-content .editor-actions {
+  flex-wrap: wrap;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+.settings-save-note {
+  flex: 1 1 180px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.settings-content .editor-actions button {
+  font-size: 12px;
+  min-height: 38px;
+}
+.settings-content .inline-details {
+  font-size: 12px;
+  line-height: 1.7;
+}
+.settings-content .inline-details summary {
+  color: #455c76;
+}
+.settings-content .network-evidence-view > p {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+.settings-content .network-evidence-view .station-details {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px 26px;
+  padding: 22px 0;
+  margin: 0;
+}
+.settings-content .station-details dt {
+  font-size: 11px;
+}
+.settings-content .station-details dd {
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.settings-content .network-evidence-view > small {
+  display: block;
+  margin-top: 18px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.settings-content .document-note {
+  margin: 0;
+  padding: 16px;
+  background: #f6f8fb;
+  border-color: #e1e9f3;
+}
+.settings-content .document-note p {
+  line-height: 1.7;
+}
+.settings-requirement-list details {
+  border-top: 1px solid #e9edf3;
+}
+.settings-requirement-list summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px 0;
+  cursor: pointer;
+  font-size: 12px;
+  list-style: none;
+}
+.settings-requirement-list summary::after {
+  content: '+';
+  color: var(--muted);
+  font-size: 18px;
+  width: 14px;
+  text-align: center;
+}
+.settings-requirement-list details[open] summary::after {
+  content: '−';
+}
+.settings-requirement-list svg {
+  flex-shrink: 0;
+  color: #74869c;
+}
+.settings-pending {
+  margin-left: auto;
+  padding-left: 8px;
+  color: #8a601e;
+  font-size: 11px;
+}
+.settings-requirement-list p {
+  margin: 0 28px 16px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.settings-table-scroll {
+  overflow-x: auto;
+}
+.settings-content .settings-audit th,
+.settings-content .settings-audit td {
+  padding: 14px 12px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.settings-audit-transition {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.settings-empty {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 22px;
+  background: #f7f9fc;
+  border: 1px dashed #dce4ee;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.settings-empty strong {
+  color: #455c76;
+  font-weight: 500;
+}
+@media (max-width: 1250px) {
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+  .settings-sidebar {
+    position: static;
+  }
+  .settings-sidebar nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .settings-sidebar-note {
+    display: none;
+  }
+  .settings-scope {
+    display: none;
+  }
+}
+@media (max-width: 800px) {
+  .settings-content .panel {
+    padding: 18px;
+  }
+  .settings-field-row,
+  .settings-content .network-evidence-view .station-details {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  .settings-content .panel-heading,
+  .settings-destination {
+    flex-wrap: wrap;
+  }
+  .settings-overview {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settings-overview > div + div {
+    border-left: 0;
+    padding-left: 0;
+  }
+  .settings-timeouts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settings-save-note {
+    flex-basis: 100%;
+  }
+}

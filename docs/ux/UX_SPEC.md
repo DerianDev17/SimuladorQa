@@ -1,5 +1,38 @@
 # UX Specification
 
+## Configuración general — 2026-11-09
+
+La pantalla reúne Ambiente y estación, Envío, Evidencia de red, Requisitos y
+Auditoría. Un índice lateral con enlaces accesibles por teclado lleva a cada
+sección sin desmontar el formulario. En ventanas intermedias se convierte en
+una fila adaptable; los campos y los detalles se apilan en ventanas estrechas.
+
+El resumen muestra equipo, versión y estado documental de red del ambiente
+actual. El selector de QA/PREPROD sigue en la cabecera global. El destino de
+envío es de solo lectura y procede de la evidencia validada por Main.
+
+Envío distingue revisión persistida, cambios sin guardar, carga y ausencia de
+configuración. Agrupa modo previsto y plazos, explica el rango 1–30000 ms y el
+valor pendiente, y conserva Guardar, Descartar y Recargar. El modo después de
+revisar no implica transmisión automática. El plan documental y la disponibilidad
+financiera de cada operación se describen por separado.
+
+Criterios de aceptación:
+
+- Guardar confirma la persistencia sin conectar. Entradas inválidas muestran un
+  error y conservan el borrador; un timeout exige descartar y recargar antes de
+  repetir. La navegación global y el ambiente se bloquean durante la edición.
+- Cambiar a PREPROD no hereda destino ni plazos QA; volver a QA recupera los
+  ajustes guardados. La auditoría muestra los últimos diez cambios en hora local.
+- Ausencia o error de evidencia no se presentan como conexión comprobada; solo
+  bloquean los ajustes que dependen de ella. Producción permanece bloqueada.
+- Los enlaces enfocan su sección, los campos tienen etiquetas y ayudas asociadas,
+  y las tablas conservan encabezados y desplazamiento horizontal propio.
+
+Verificación: `tests/e2e/settings.spec.ts`, suites unitarias y de integración
+de configuración de envío y evidencia de red. Las pruebas usan datos sintéticos
+y un directorio temporal de Electron.
+
 ## Inspección interactiva — disposición vigente, 2026-11-04
 
 Preparación compacta a la izquierda, resultado a la derecha, historial local
