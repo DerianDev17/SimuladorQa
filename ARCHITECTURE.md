@@ -58,6 +58,13 @@ conserva `runId`, `transactionId`, `requestId`, STAN/RRN cuando existen. La mism
 solicitud no se retransmite tras reinicio. Los diarios serializan sus escrituras
 para conservar respuestas fuera de orden.
 
+El permiso previo al `socket.write` vuelve a validar perfil, contexto, vigencia y
+cancelación después de conectar/esperar el enlace, tanto en operaciones manuales
+como en carga. Los transportes admiten una sola escritura del original aunque el
+permiso se invoque dos veces. El retiro con reverso aplica este permiso al 0200;
+el 0420 conserva su propia intención persistida y su flujo aprobado. Ver
+[correcciones de envío del 2026-11-09](docs/implementation/FINANCIAL_SEND_GUARDS_20261109.md).
+
 Los diarios financieros y de carga usan SQLite; las importaciones desde JSON
 conservan el original como respaldo. Una corrida activa recuperada se marca
 interrumpida y no se reanuda. Un resultado incierto conserva esa clasificación.

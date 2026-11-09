@@ -482,23 +482,23 @@ export class FinancialExecutionService implements FinancialExecutionPort {
           signal: abort.signal,
           onInterrupted: (reason) => execution?.onInterrupted?.(reason),
           onConnectionWait: (elapsedMs) => execution?.onPhase?.('connectionWait', elapsedMs),
-          ...(execution?.withWrite
-            ? {
-                withWrite: (write: () => void) =>
-                  execution.withWrite!(async () => {
-                    await validateLease();
-                    if (
-                      !(await measure('validation', revalidate)) ||
-                      abort.signal.aborted ||
-                      (execution.deadline !== undefined &&
-                        performance.now() >= execution.deadline) ||
-                      Date.parse(lease!.validUntil) <= Date.parse(this.identity.now())
-                    )
-                      throw Error('CONTEXT_CHANGED');
-                    write();
-                  }),
-              }
-            : {}),
+          // Connecting or waiting for the shared link can outlive the context.
+          // Validate at the actual write for manual operations as well as load.
+          withWrite: async (write: () => void) => {
+            const validatedWrite = async () => {
+              await validateLease();
+              if (
+                !(await measure('validation', revalidate)) ||
+                abort.signal.aborted ||
+                (execution?.deadline !== undefined && performance.now() >= execution.deadline) ||
+                Date.parse(lease!.validUntil) <= Date.parse(this.identity.now())
+              )
+                throw Error('CONTEXT_CHANGED');
+              write();
+            };
+            if (execution?.withWrite) await execution.withWrite(validatedWrite);
+            else await validatedWrite();
+          },
           ...(loadExecutionScope(execution) && this.operation === 'BALANCE'
             ? {
                 load: {

@@ -795,7 +795,8 @@ test('carga: selecciona ambos ATM y conserva su identidad al recuperar resultado
     ipcMain.removeHandler('load:run:status');
     ipcMain.handle('load:run:status', () => ({ ok: true, value: run }));
   }, failure);
-  await expect(result).toContainText('Primer error: PEER_CLOSED');
+  // Closed runs poll every 5 s; allow the next poll plus IPC/render completion.
+  await expect(result).toContainText('Primer error: PEER_CLOSED', { timeout: 10000 });
   await expect(result.locator('.load-metrics')).toContainText('Errores1');
   await expect(result.locator('.load-metrics')).toContainText('Canceladas2');
   await expect(result.locator('.load-metrics')).toContainText('Enviadas sin respuesta2');

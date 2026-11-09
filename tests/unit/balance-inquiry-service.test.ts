@@ -46,6 +46,61 @@ const provider = (): BalanceContextProvider => ({
   acquire: async (target) => balanceLease(target),
 });
 describe('orquestación de saldo sin inferir seguridad ni resultados', () => {
+  it.each(['valid', 'changed', 'expired', 'unavailable', 'timeout'] as const)(
+    'revalida una operación manual en el permiso de escritura TCP: %s',
+    async (state) => {
+      const target = balanceTarget();
+      const lease = balanceLease(target);
+      let connected = false;
+      const validate = vi.fn(async () => {
+        if (!connected) return;
+        if (state === 'unavailable') throw Error('PRIVATE_PROVIDER_ERROR');
+        if (state === 'timeout') await new Promise<void>(() => undefined);
+      });
+      lease.validate = validate;
+      const f = fixture({ ...provider(), acquire: async () => lease });
+      const write = vi.fn();
+      vi.mocked(f.transport.exchange).mockImplementation(async (input) => {
+        connected = true;
+        if (state === 'expired') lease.validUntil = runtime.now();
+        try {
+          if (input.withWrite) await input.withWrite(write);
+          else write();
+        } catch {
+          // The TCP adapter closes without sending when validation fails.
+        }
+        return {
+          outcome: write.mock.calls.length ? 'APPROVED' : 'TRANSPORT_ERROR',
+          transmissionAttempted: write.mock.calls.length > 0,
+          bytesQueued: write.mock.calls.length ? 536 : 0,
+          elapsedMs: 1,
+          responseCode: write.mock.calls.length ? '00' : null,
+          balances: [],
+        };
+      });
+      const request = balanceRequest(target);
+      const result = await f.service.execute(
+        request,
+        target,
+        { connect: 100, response: 100 },
+        async () => !connected || state !== 'changed',
+      );
+      expect(write).toHaveBeenCalledTimes(state === 'valid' ? 1 : 0);
+      expect(validate).toHaveBeenCalledTimes(3);
+      expect(result).toMatchObject({
+        ok: true,
+        value: {
+          outcome: state === 'valid' ? 'APPROVED' : 'TRANSPORT_ERROR',
+          transmissionAttempted: state === 'valid',
+        },
+      });
+      expect(JSON.stringify(f.records())).not.toContain('PRIVATE_PROVIDER_ERROR');
+      expect(
+        await f.service.execute(request, target, { connect: 100, response: 100 }, async () => true),
+      ).toEqual(result);
+      expect(f.transport.exchange).toHaveBeenCalledTimes(1);
+    },
+  );
   it('limita concurrencia al mismo run, deduplica y conserva respuestas fuera de orden', async () => {
     const f = fixture(provider());
     const target = balanceTarget();

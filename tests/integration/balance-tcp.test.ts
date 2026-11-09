@@ -48,6 +48,22 @@ function request(port: number): BalanceExchangeRequest {
 }
 const framing = new CapturedVisaFraming();
 describe('consulta financiera TCP en loopback con datos sinteticos', () => {
+  it('un permiso invocado dos veces nunca duplica la escritura financiera', async () => {
+    let received = 0;
+    const port = await listen((peer) => peer.on('data', (chunk) => (received += chunk.length)));
+    const input = request(port);
+    const result = await new BalanceTcpTransport().exchange({
+      ...input,
+      responseDeadlineMs: 80,
+      withWrite: async (write) => {
+        write();
+        write();
+      },
+    });
+    expect(result.outcome).toBe('RESPONSE_TIMEOUT');
+    expect(result.bytesQueued).toBe(input.wire.length);
+    expect(received).toBe(input.wire.length);
+  });
   it('espera el cierre ordenado de carga antes de liberar la conexión', async () => {
     let clientEnded = false;
     const port = await listen((peer) => {

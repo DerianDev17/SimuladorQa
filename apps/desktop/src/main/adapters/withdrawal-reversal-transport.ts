@@ -196,17 +196,24 @@ export class WithdrawalReversalTransport implements BalanceTransport {
         return;
       }
       socket.once('connect', () => {
-        if (ended) return;
-        clearTimeout(timer);
-        timer = setTimeout(() => finish('RESPONSE_TIMEOUT'), request.responseDeadlineMs);
-        attempted = true;
-        try {
-          socket.write(wire, (error) => {
-            if (error) finish('TRANSPORT_ERROR');
-          });
-        } catch {
-          finish('TRANSPORT_ERROR');
-        }
+        void (async () => {
+          if (ended) return;
+          clearTimeout(timer);
+          const write = () => {
+            if (ended || attempted || request.signal?.aborted) return;
+            timer = setTimeout(() => finish('RESPONSE_TIMEOUT'), request.responseDeadlineMs);
+            attempted = true;
+            socket.write(wire, (error) => {
+              if (error) finish('TRANSPORT_ERROR');
+            });
+          };
+          try {
+            if (request.withWrite) await request.withWrite(write);
+            else write();
+          } catch {
+            finish('TRANSPORT_ERROR');
+          }
+        })();
       });
       socket.on('data', (chunk: Buffer) => {
         if (ended) return;
@@ -238,7 +245,7 @@ export class WithdrawalReversalTransport implements BalanceTransport {
               continue;
             }
             // Duplicate/late financial replies never restart the timer or send.
-            if (mti !== 0x0210 || phase !== 'WITHDRAWAL') continue;
+            if (!attempted || mti !== 0x0210 || phase !== 'WITHDRAWAL') continue;
             const metadata = codec.inspect(body);
             if (
               ['stan', 'rrn', 'terminalId', 'currency', 'processingCode'].some(

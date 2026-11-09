@@ -135,8 +135,8 @@ export class BalanceTcpTransport implements BalanceTransport {
           clearTimeout(connectTimer);
           const gateStarted = performance.now();
           const write = () => {
+            if (ended || attempted || request.signal?.aborted) return;
             writeGateMs = performance.now() - gateStarted;
-            if (ended || request.signal?.aborted) return;
             responseTimer = setTimeout(
               () => finish('RESPONSE_TIMEOUT'),
               request.responseDeadlineMs,

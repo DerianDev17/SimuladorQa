@@ -84,6 +84,85 @@ afterEach(async () => {
 });
 
 describe('retiro, espera y reverso en TCP loopback', () => {
+  it('no envía el retiro ni el reverso si falla la validación al conectar', async () => {
+    const received: number[] = [];
+    const port = await listen((_peer, body) => received.push(body.readUInt16BE(22)));
+    const input = request(port);
+    const validate = vi.fn(async () => {
+      throw Error('CONTEXT_CHANGED');
+    });
+    const result = await new WithdrawalReversalTransport().exchange({
+      ...input,
+      withWrite: validate,
+    });
+    expect(validate).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      outcome: 'TRANSPORT_ERROR',
+      transmissionAttempted: false,
+      bytesQueued: 0,
+      reversal: { outcome: 'NOT_SENT', transmissionAttempted: false },
+    });
+    expect(received).toEqual([]);
+    expect(input.progress).toEqual([]);
+  });
+  it('cancelar durante la validación cierra TCP y descarta un permiso tardío', async () => {
+    const received: number[] = [];
+    const port = await listen((_peer, body) => received.push(body.readUInt16BE(22)));
+    const input = request(port);
+    const abort = new AbortController();
+    let enter!: () => void;
+    let release!: () => void;
+    const entered = new Promise<void>((resolve) => (enter = resolve));
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let completed = false;
+    const pending = new WithdrawalReversalTransport().exchange({
+      ...input,
+      signal: abort.signal,
+      withWrite: async (write) => {
+        enter();
+        await gate;
+        write();
+        completed = true;
+      },
+    });
+    await entered;
+    abort.abort();
+    expect(await pending).toMatchObject({ transmissionAttempted: false, bytesQueued: 0 });
+    release();
+    await vi.waitFor(() => expect(completed).toBe(true));
+    await vi.waitFor(() => expect(peers.size).toBe(0));
+    expect(received).toEqual([]);
+    expect(input.progress).toEqual([]);
+  });
+  it('una respuesta anterior al envío no aprueba el retiro ni programa el reverso', async () => {
+    const received: number[] = [];
+    const port = await listen((_peer, body) => received.push(body.readUInt16BE(22)));
+    const input = request(port);
+    server!.on('connection', (peer) => {
+      peer.end(framing.encode(withdrawalResponse(input.expected), Buffer.alloc(2)));
+    });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const pending = new WithdrawalReversalTransport().exchange({
+      ...input,
+      withWrite: async (write) => {
+        await gate;
+        write();
+      },
+    });
+    try {
+      expect(await pending).toMatchObject({
+        outcome: 'PEER_CLOSED',
+        transmissionAttempted: false,
+        bytesQueued: 0,
+        reversal: { outcome: 'NOT_SENT', transmissionAttempted: false },
+      });
+      expect(input.progress).toEqual([]);
+      expect(received).toEqual([]);
+    } finally {
+      release();
+    }
+  });
   it('envía 0200/0420 una sola vez; acepta fragmentación, ignora duplicado y correlaciona F90', async () => {
     const received: number[] = [];
     let approvedAt = 0,
@@ -117,10 +196,18 @@ describe('retiro, espera y reverso en TCP loopback', () => {
     });
     const r = request(port);
     const session: SessionIsoMessage[] = [];
+    const permit = vi.fn(async (write: () => void) => {
+      // Validation can exceed the host response window before the first write.
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      write();
+      write();
+    });
     const result = await new WithdrawalReversalTransport().exchange({
       ...r,
+      withWrite: permit,
       onSessionMessage: (message) => session.push(message),
     });
+    expect(permit).toHaveBeenCalledTimes(1);
     expect(session.map((m) => m.mti)).toEqual(['0200', '0210', '0420', '0430']);
     expect(session.every((m) => m.fields.every((f) => f.value !== '••••••••'))).toBe(true);
     expect(received).toEqual([0x0200, 0x0420]);
