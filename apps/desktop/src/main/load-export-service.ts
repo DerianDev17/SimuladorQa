@@ -49,7 +49,7 @@ export class LoadExportService {
       } catch {
         return failure(
           'STORAGE_UNAVAILABLE',
-          'No se pudo guardar la exportación. Revisa la ubicación y sus permisos.',
+          'No se pudo guardar la exportación. Revisa la extensión, la ubicación y sus permisos.',
         );
       } finally {
         // Keep the native dialog exclusive even if the IPC deadline already expired.

@@ -40,8 +40,10 @@ escapan y neutralizan frente a fórmulas. Los secretos no llegan al diálogo.
 
 El archivo se escribe en un temporal junto al destino y se reemplaza al terminar.
 Se impide escribir en el directorio de datos de la aplicación o usar otra
-extensión. Los errores no exponen rutas privadas. Una sola exportación puede
-mantener diálogo abierto; el plazo es de dos minutos. Tras un timeout, cerrar el
+extensión. El nombre debe conservar `.csv` o `.json`: no se añade una extensión
+después de confirmar el destino en el diálogo. Los errores no exponen rutas
+privadas. Una sola exportación puede mantener diálogo abierto; el plazo es de
+dos minutos. Tras un timeout, cerrar el
 diálogo y revisar el destino antes de repetir. Una selección tardía no inicia una
 escritura; un guardado que ya estaba terminando requiere comprobar el destino.
 

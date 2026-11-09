@@ -24,7 +24,8 @@ export class FileLoadExportSink implements LoadExportSink {
     if (signal.aborted) throw Error('EXPORT_ABORTED');
     if (!selected) return 'CANCELLED';
     const extension = '.' + document.format.toLowerCase();
-    const destination = resolve(extname(selected) ? selected : selected + extension);
+    // Do not change the path after the native overwrite confirmation.
+    const destination = resolve(selected);
     if (extname(destination).toLowerCase() !== extension) throw Error('EXPORT_EXTENSION');
     // Resolve the parent to reject directory links into application data as well.
     const parent = await realpath(dirname(destination));

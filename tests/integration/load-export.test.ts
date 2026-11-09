@@ -88,6 +88,24 @@ describe('exportación de carga desde Main', () => {
     }
     expect(await readFile(destination, 'utf8')).toBe('private');
   });
+  it('no añade una extensión que pueda sobrescribir un archivo no confirmado', async () => {
+    const run = historyRun();
+    const existing = join(directory, 'evidence.json');
+    await writeFile(existing, 'previous evidence');
+    const service = new LoadExportService(
+      async () => ({ ok: true, value: run }),
+      new FileLoadExportSink(
+        { choose: async () => join(directory, 'evidence') },
+        protectedDirectory,
+      ),
+      now,
+    );
+    expect(await service.export({ runId: run.runId, format: 'JSON' })).toMatchObject({
+      ok: false,
+      error: { code: 'STORAGE_UNAVAILABLE' },
+    });
+    expect(await readFile(existing, 'utf8')).toBe('previous evidence');
+  });
   it('valida entradas y bloquea exportación activa o ausente antes del diálogo', async () => {
     let chosen = false;
     const run = historyRun({ state: 'RUNNING' });
