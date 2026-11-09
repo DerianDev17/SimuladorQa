@@ -88,9 +88,9 @@ test('el indicador sigue un socket real y ofrece conexión independiente del PIN
     await expect(panel).toContainText('Desconectado');
     await window.getByRole('button', { name: 'Conectar', exact: true }).click();
     await expect(panel).toContainText('Conectado');
-    await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
+    await window.getByRole('button', { name: 'Desconectar', exact: true }).click();
     await expect.poll(() => peers.size).toBe(0);
-    await expect(window.getByRole('button', { name: 'Conectar', exact: true })).toBeDisabled();
+    await expect(window.getByRole('button', { name: 'Conectar', exact: true })).toBeEnabled();
     expect(written).toBe(0);
   } finally {
     await app?.close();

@@ -1,4 +1,4 @@
-# Consulta de Mediator PREPROD
+# Consulta de Mediator en Qa
 
 Historial permite consultar transacciones externas y la estructura protegida de
 sus mensajes. No son ejecuciones del simulador ni resultados PASS/FAIL.
@@ -19,7 +19,7 @@ Una ventana de hasta 24 horas es un limite tecnico de esta entrega, no una regla
 financiera del proveedor. No hay polling automatico.
 
 Inicio agrega una consulta separada cada cinco segundos para entidad 205/canal 1
-en QA y PREPROD. Usa el mismo archivo privado PREPROD y un proceso de lectura
+en Qa. Usa el mismo archivo privado de Mediator y un proceso de lectura
 que reutiliza una conexión SQL, atiende un sondeo a la vez y se cierra tras
 12 segundos de inactividad. Proyecta las ultimas 50 filas Journal/Message sin
 XML. SQL transforma `jnlCardNumber`: PAN numerico valido a `**** ` y
@@ -46,8 +46,8 @@ Archivo privado `mediator-observer.json` en el directorio userData de Electron:
 
 ```json
 {
-  "environment": "PREPROD",
-  "server": "tcp:servidor-preprod,puerto",
+  "environment": "QA",
+  "server": "tcp:servidor-qa,puerto",
   "database": "Mediator",
   "credentialFile": "C:\\ruta-privada\\sqlserver.credential.xml"
 }
@@ -55,8 +55,9 @@ Archivo privado `mediator-observer.json` en el directorio userData de Electron:
 
 La credencial es un PSCredential protegido por Windows con Export-Clixml e
 Import-Clixml bajo el mismo usuario/equipo. No incluir password en JSON ni Git.
-El archivo privado sigue identificado como PREPROD; Inicio lo comparte cuando
-la UI selecciona QA o PREPROD por instruccion del usuario. Historial mantiene
+El archivo privado admite QA y, por compatibilidad, la etiqueta antigua PREPROD
+para la misma fuente. Qa es el único ambiente de la aplicación (ADR-040).
+No se cambian destino, credenciales ni políticas de acceso. Observación mantiene
 su guard contra db_owner/sysadmin y permisos de escritura/administracion.
 ApplicationIntent=ReadOnly es solo una pista de enrutamiento.
 
@@ -149,6 +150,6 @@ parser .NET real, redaccion de PAN/valores y codificacion UTF-8.
 Integration: ambiente real persistido, proveedor ausente/error/timeout,
 concurrencia, respuestas tardias; PowerShell/.NET reales para redaccion adversarial,
 SQL parametrizado sin ejecutar y proceso indisponible/timeout/cierre.
-E2E: acceso QA bloqueado, filtros PREPROD, validacion, error de configuracion y
+E2E: acceso Qa habilitado, filtros validados, error de configuración y
 limpieza de contexto. No se fabrica una conexion exitosa ni se certifica el
 SELECT con datos reales mientras TLS/cuenta permanezcan pendientes.

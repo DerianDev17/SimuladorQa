@@ -108,7 +108,9 @@ Ver [ADR-037](docs/adr/ADR-037-QA-SESSION-MESSAGES.md).
 
 Renderer no abre sockets ni accede a secretos. Los valores públicos están
 sanitizados y el PAN enmascarado; no se registran PIN, CVV, PIN Block ni Track 2.
-Producción permanece bloqueada. QA y PREPROD mantienen validación de ambiente.
+Qa es el único ambiente operativo y producción permanece bloqueada. Main
+rechaza otros ambientes por IPC; `QaPreferencesStore` respalda y corrige la
+selección histórica sin mezclar datos. Ver [ADR-040](docs/adr/ADR-040-SINGLE-QA-ENVIRONMENT.md).
 
 La plantilla ATM20521 resuelve los perfiles actuales QA/205 y comparte parámetros,
 referencia de clave y pool persistente. Crear otro ATM no duplica reservas. La

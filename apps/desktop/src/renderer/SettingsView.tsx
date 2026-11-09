@@ -1,5 +1,4 @@
 import { dataBlockers } from '../../../../packages/domain/src/index';
-import type { Environment } from '../../../../packages/domain/src/index';
 import type { CatalogSnapshot } from '../../../../packages/domain/src/catalogs';
 import type { AppSnapshot } from '../../../../packages/shared/src/contracts';
 import type { DesktopClient } from './desktop-client';
@@ -37,7 +36,6 @@ export function SettingsView({
   catalogBusy,
   catalogError,
   link,
-  onEnvironmentChange,
   onNavigate,
   onRefreshCatalog,
   page,
@@ -52,7 +50,6 @@ export function SettingsView({
   catalogBusy: boolean;
   catalogError: string | undefined;
   link: ReturnType<typeof useSwitchConnection>;
-  onEnvironmentChange(environment: Environment): void;
   onNavigate(destination: SettingsDestination): void;
   onRefreshCatalog(): void;
   page: SettingsPage;
@@ -80,10 +77,10 @@ export function SettingsView({
         <div>
           <span className="settings-eyebrow">PREFERENCIAS DE LA ESTACIÓN</span>
           <h1>Configuración</h1>
-          <p>Configura el ambiente, los plazos y los dispositivos de tu estación.</p>
+          <p>Ajusta los plazos, los dispositivos y las herramientas de tu estación.</p>
         </div>
         <span className="settings-scope">
-          <Icon name="shield" size={17} /> Uso exclusivo de QA y PREPROD
+          <Icon name="shield" size={17} /> Ambiente Qa
         </span>
       </header>
 
@@ -108,7 +105,7 @@ export function SettingsView({
           <div className="settings-sidebar-note">
             <Icon name="shield" size={20} />
             <strong>Producción bloqueada</strong>
-            <p>Los ajustes se aplican al ambiente seleccionado. QA y PREPROD son independientes.</p>
+            <p>Qa es el único ambiente de trabajo de esta estación.</p>
           </div>
         </aside>
 
@@ -132,28 +129,12 @@ export function SettingsView({
                 <p>Contexto actual de esta instalación.</p>
               </div>
               <span className={`pill ${environment === 'QA' ? 'blue' : 'amber'}`}>
-                {environment ?? 'Sin verificar'}
+                {environment === 'QA' ? 'Qa' : 'Sin verificar'}
               </span>
             </div>
-            <div
-              className="settings-environment-picker"
-              role="group"
-              aria-label="Seleccionar ambiente de trabajo"
-            >
-              {(['QA', 'PREPROD'] as const).map((value) => (
-                <button
-                  key={value}
-                  aria-pressed={environment === value}
-                  disabled={actionDisabled || environment === value}
-                  onClick={() => onEnvironmentChange(value)}
-                >
-                  <strong>{value}</strong>
-                  <span>
-                    {value === 'QA' ? 'Pruebas del simulador' : 'Configuración y observación'}
-                  </span>
-                  {environment === value && <Icon name="check" size={18} />}
-                </button>
-              ))}
+            <div className="settings-environment-fixed">
+              <strong>Qa</strong>
+              <span>Ambiente único · Pruebas del simulador</span>
             </div>
             <dl className="settings-overview">
               <div>
@@ -176,8 +157,8 @@ export function SettingsView({
               </div>
             </dl>
             <p className="settings-context-note">
-              <Icon name="shield" size={16} /> Cambiar de ambiente reinicia el contexto
-              transaccional y registra el cambio. Los ajustes se guardan por separado.
+              <Icon name="shield" size={16} /> Los ajustes, perfiles y operaciones de esta estación
+              se utilizan en Qa.
             </p>
           </section>
 
@@ -199,7 +180,7 @@ export function SettingsView({
               <section className="panel" aria-label="Conexión al Switch">
                 <h2>Conexión al Switch</h2>
                 <p className="settings-context-note">
-                  La conexión de observación TCP está disponible únicamente en QA.
+                  El servicio local todavía no ha confirmado el ambiente Qa.
                 </p>
               </section>
             )}
@@ -240,7 +221,7 @@ export function SettingsView({
                   <Icon name="entity" />
                   <span>
                     <strong>Administrar entidades</strong>
-                    <small>Catálogo compartido entre ambientes</small>
+                    <small>Entidades usadas por los perfiles ATM</small>
                   </span>
                   <Icon name="arrow" size={16} />
                 </button>
@@ -350,11 +331,13 @@ export function SettingsView({
                     {snapshot.audit.slice(0, 10).map((entry) => (
                       <tr key={entry.id}>
                         <td>{new Date(entry.timestamp).toLocaleString('es-EC')}</td>
-                        <td aria-label={`${entry.previousEnvironment} → ${entry.environment}`}>
+                        <td
+                          aria-label={`${entry.previousEnvironment === 'QA' ? 'Qa' : 'Configuración anterior'} → ${entry.environment === 'QA' ? 'Qa' : 'Configuración anterior'}`}
+                        >
                           <span className="settings-audit-transition">
-                            {entry.previousEnvironment}
+                            {entry.previousEnvironment === 'QA' ? 'Qa' : 'Configuración anterior'}
                             <Icon name="arrow" size={14} />
-                            {entry.environment}
+                            {entry.environment === 'QA' ? 'Qa' : 'Configuración anterior'}
                           </span>
                         </td>
                         <td>{entry.user}</td>
@@ -369,7 +352,7 @@ export function SettingsView({
                 <Icon name="history" size={26} />
                 <div>
                   <strong>No hay cambios de ambiente registrados.</strong>
-                  <p>Cuando cambies entre QA y PREPROD, aparecerá el registro aquí.</p>
+                  <p>Aquí se conservan los cambios históricos de configuración.</p>
                 </div>
               </div>
             )}

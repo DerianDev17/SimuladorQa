@@ -1,3 +1,4 @@
+// Historical storage vocabulary. The desktop runtime accepts only QA (ADR-040).
 export const environments = ['QA', 'PREPROD'] as const;
 export type Environment = (typeof environments)[number];
 

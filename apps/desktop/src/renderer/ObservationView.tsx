@@ -56,7 +56,7 @@ export function ObservationView({
     setError(undefined);
   }
   async function search() {
-    if (busy || disabled || environment !== 'PREPROD') return;
+    if (busy || disabled || environment !== 'QA') return;
     const request: ObservationRequest = {
       ...filters,
       entityId: Number(filters.entityId),
@@ -90,7 +90,7 @@ export function ObservationView({
     <section className="panel observation-view" aria-label="Consulta de Mediator">
       <div className="panel-heading">
         <div>
-          <span className="eyebrow">OBSERVADOR · PREPROD</span>
+          <span className="eyebrow">OBSERVADOR · Qa</span>
           <h2>Transacciones y mensajes de Mediator</h2>
         </div>
       </div>
@@ -98,9 +98,9 @@ export function ObservationView({
         Consulta externa de Journal y Message por TraceId. RetCode se muestra tal como está
         registrado, sin clasificar el resultado ATM.
       </p>
-      {environment !== 'PREPROD' && (
+      {environment !== 'QA' && (
         <p role="status" className="document-note">
-          Selecciona PREPROD para consultar Mediator.
+          Espera la confirmación del ambiente Qa para consultar Mediator.
         </p>
       )}
       <form
@@ -109,7 +109,7 @@ export function ObservationView({
           void search();
         }}
       >
-        <fieldset disabled={busy || disabled || environment !== 'PREPROD'}>
+        <fieldset disabled={busy || disabled || environment !== 'QA'}>
           <legend>Filtros de consulta</legend>
           <div className="observation-filters">
             {(

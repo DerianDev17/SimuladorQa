@@ -22,7 +22,7 @@ export function localDraftChecks(context: {
       label: 'Ambiente identificado',
       complete: context.environmentVerified,
       detail: context.environmentVerified
-        ? 'QA o PREPROD verificado por el servicio local.'
+        ? 'Qa verificado por el servicio local.'
         : 'El servicio local todavía no verificó el ambiente.',
     },
     {

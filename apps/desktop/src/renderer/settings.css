@@ -101,7 +101,7 @@
   gap: 20px;
 }
 .settings-environment .panel-heading,
-.settings-environment .settings-environment-picker {
+.settings-environment .settings-environment-fixed {
   margin-bottom: 0;
 }
 .settings-environment .settings-overview,
@@ -131,31 +131,6 @@
 }
 .settings-content:focus {
   outline: none;
-}
-.settings-environment-picker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 24px;
-}
-.settings-environment-picker button {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 48px;
-  padding: 12px 16px;
-  background: #fff;
-  border: 1px solid var(--border);
-  color: var(--ink);
-}
-.settings-environment-picker button[aria-pressed='true'] {
-  opacity: 1;
-  background: #edf4ff;
-  border-color: #9dbfee;
-  color: #1255b0;
-}
-.settings-environment-picker span {
-  font-size: 12px;
 }
 .settings-operations .switch-connection-panel {
   display: grid;
@@ -576,4 +551,33 @@
   .settings-save-note {
     flex-basis: 100%;
   }
+}
+
+.environment-badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #c9dbef;
+  border-radius: 6px;
+  padding: 6px 12px;
+  color: #1c5287;
+  background: #eef5fc;
+  font-weight: 650;
+}
+.settings-environment-fixed {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px;
+  margin: 0;
+  background: #f3f7fc;
+  border: 1px solid #d5e3f2;
+  border-radius: 8px;
+}
+.settings-environment-fixed strong {
+  color: #1c5287;
+  font-size: 20px;
+}
+.settings-environment-fixed span {
+  color: #52647b;
+  font-size: 13px;
 }

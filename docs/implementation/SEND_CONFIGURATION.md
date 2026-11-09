@@ -1,5 +1,7 @@
 # Configuracion y preparacion de envio desde la app
 
+Desde 2026-11-09, Qa es el único ambiente operativo; ver [ADR-040](../adr/ADR-040-SINGLE-QA-ENVIRONMENT.md). Las referencias a cambios de contexto describen defensas y formatos históricos.
+
 Actualizacion 2026-10-12: el motor de consulta CB QA esta implementado por un
 recorrido IPC independiente, con disponibilidad, builder, transporte y diario.
 Ver `BALANCE_EXECUTION.md`. Este plan documental sigue sin generar bytes;
@@ -26,7 +28,7 @@ la ejecución. Los accesos a otros módulos se bloquean durante una edición pen
 
 Al iniciar Electron, Main inicializa una configuracion QA solo si hay evidencia
 QA documentada y no existe una configuracion previa. Toma exclusivamente el host,
-puerto e ID de esa fuente; no hereda datos a PREPROD ni cambia el ambiente activo.
+puerto e ID de esa fuente; conserva el contexto Qa.
 El modo inicial previsto es al pulsar Enviar. Los plazos quedan null hasta que se
 definan explicitamente; no se convierten observaciones historicas en defaults.
 
@@ -46,8 +48,8 @@ no constituye runId, transactionId, STAN, resultado financiero ni ejecucion.
 ## Persistencia y contratos
 
 send-configuration.json vive en userData, independiente de preferencias/casos.
-Guarda hasta dos configuraciones por ambiente y 100 eventos de auditoria, con
-UUID, revision, UTC, usuario y equipo. No guarda tarjetas, monto, tramas, PAN, PIN,
+El formato histórico admite hasta dos configuraciones; la app utiliza solo QA.
+Conserva hasta 100 eventos de auditoría con UUID, revisión, UTC, usuario y equipo. No guarda tarjetas, monto, tramas, PAN, PIN,
 CVV o secretos. Lectura acotada a 256 KiB; escritura temporal y rename atomico.
 Un archivo corrupto/futuro/excesivo se conserva y bloquea solo esta configuracion.
 Las operaciones se serializan en Main; la auditoria local no es certificada ni
@@ -55,7 +57,7 @@ ofrece bloqueo entre procesos Electron independientes.
 
 IPC protegido por la validacion de origen existente:
 
-- transaction:send:configuration: environment QA/PREPROD.
+- transaction:send:configuration: environment QA (otros ambientes rechazados en IPC).
 - transaction:send:configure: environment, revision, values; el endpoint no se
   acepta del Renderer, se deriva de la evidencia vigente de Main.
 - transaction:send:prepare: draft y configurationRevision. Main revalida el

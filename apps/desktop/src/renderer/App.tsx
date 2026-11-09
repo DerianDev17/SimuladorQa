@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { isEnvironment } from '../../../../packages/domain/src/index';
 import type { Environment } from '../../../../packages/domain/src/index';
 import type { AppSnapshot, ErrorCode, Result } from '../../../../packages/shared/src/contracts';
 import type { CatalogSnapshot } from '../../../../packages/domain/src/catalogs';
@@ -174,20 +173,6 @@ export function App() {
     applySnapshot(await client.call((api) => api.getSnapshot()));
   }
 
-  async function changeEnvironment(environment: Environment) {
-    setTransactionSetup(undefined);
-    setPendingAtmSelection(undefined);
-    setBusy(true);
-    const result = await client.call((api) => api.setEnvironment(environment));
-    if (!result.ok && result.error.code === 'TIMEOUT') {
-      // Un timeout IPC no cancela una escritura ya iniciada. Reconciliar con Main.
-      applySnapshot(await client.call((api) => api.getSnapshot()));
-      setError(result.error);
-    } else {
-      applySnapshot(result);
-    }
-  }
-
   const environment = snapshot?.environment;
   const link = useSwitchConnection(client, environment);
   const linkTitle =
@@ -242,7 +227,7 @@ export function App() {
         <div className="sidebar-bottom">
           <div className="sidebar-station">
             <span className="user-avatar">QA</span>
-            <span>Estación QA</span>
+            <span>Estación Qa</span>
             <span>v{snapshot?.version ?? '0.1.0'}</span>
           </div>
           <div className="sidebar-security">
@@ -251,34 +236,15 @@ export function App() {
         </div>
       </aside>
 
-      <div className={`main-area ${environment === 'PREPROD' ? 'preprod' : ''}`}>
+      <div className="main-area">
         <header className="topbar">
           <div className="breadcrumb">
             Operación <span>/</span> <strong>{current?.label}</strong>
           </div>
           <div className="topbar-actions">
-            <label className="environment-label">
-              <span className="visually-hidden">Ambiente</span>
-              <select
-                aria-label="Ambiente"
-                value={environment ?? ''}
-                disabled={
-                  busy ||
-                  !snapshot ||
-                  catalogBusy ||
-                  catalogEditing ||
-                  transactionBusy ||
-                  sendConfigurationEditing
-                }
-                onChange={(event) => {
-                  if (isEnvironment(event.target.value)) void changeEnvironment(event.target.value);
-                }}
-              >
-                {!environment && <option value="">Sin verificar</option>}
-                <option value="QA">QA</option>
-                <option value="PREPROD">PREPROD</option>
-              </select>
-            </label>
+            <span className="environment-label environment-badge" aria-label="Ambiente">
+              {environment === 'QA' ? 'Qa' : 'Sin verificar'}
+            </span>
             <span className="topbar-divider" />
             <span className="topbar-network">
               <span
@@ -319,12 +285,6 @@ export function App() {
             <p className="inline-error" role="alert">
               {link.error}
             </p>
-          )}
-          {environment === 'PREPROD' && (
-            <div className="preprod-banner" role="status">
-              <Icon name="shield" size={17} /> Ambiente PREPROD · Configuración y límites
-              independientes de QA.
-            </div>
           )}
           {error && (
             <div className="error-banner" role="alert">
@@ -404,7 +364,6 @@ export function App() {
               catalogBusy={catalogBusy}
               catalogError={catalogError?.message}
               link={link}
-              onEnvironmentChange={(value) => void changeEnvironment(value)}
               onRefreshCatalog={() => void refreshCatalog()}
               onNavigate={(destination) => {
                 if (busy || transactionBusy || sendConfigurationEditing || catalogBusy) return;
@@ -501,7 +460,7 @@ export function App() {
           <footer className="main-footer">
             <span>Coonecta ATM Transaction Simulator</span>
             <span>
-              <Icon name="shield" size={14} /> Uso exclusivo de QA y PREPROD
+              <Icon name="shield" size={14} /> Ambiente Qa
             </span>
           </footer>
         </main>

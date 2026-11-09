@@ -1,3 +1,4 @@
+import { isRecord } from '../../../../packages/domain/src/index';
 export interface Sender {
   senderId: number;
   frameIsMain: boolean;
@@ -15,4 +16,13 @@ export function developmentRendererUrl(args: readonly string[]): string {
   if (ports.length !== 1 || !value || !/^[1-9]\d{0,4}$/.test(value) || Number(value) > 65535)
     throw Error('DEV_PORT_INVALID');
   return `http://127.0.0.1:${value}/`;
+}
+
+// Historical PREPROD records remain readable, but cannot be selected through IPC.
+export function hasUnsupportedEnvironment(payload: unknown): boolean {
+  const contexts = [payload, isRecord(payload) ? payload.draft : undefined];
+  return contexts.some(
+    (context) =>
+      isRecord(context) && Object.hasOwn(context, 'environment') && context.environment !== 'QA',
+  );
 }

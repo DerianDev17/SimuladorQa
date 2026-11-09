@@ -40,15 +40,15 @@ async function launch(documented = true, page = 'Envío') {
     env,
   });
   const window = await app.firstWindow();
-  await expect(window.getByLabel('Ambiente', { exact: true })).toHaveValue('QA');
-  await expect(window.getByLabel('Ambiente', { exact: true })).toBeEnabled();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toHaveText('Qa');
+  await expect(window.getByRole('combobox', { name: 'Ambiente', exact: true })).toHaveCount(0);
   await window.getByRole('button', { name: 'Configuración', exact: true }).click();
   await expect(window.getByRole('heading', { name: 'Configuración', exact: true })).toBeVisible();
   await openSettingsPage(window, page);
   return window;
 }
 
-test('configuración general: navegación, edición, validación, guardado y aislamiento', async () => {
+test('configuración general: navegación, edición, validación, guardado en Qa', async () => {
   const window = await launch(true, 'Ambiente y estación');
   const form = window.getByRole('region', { name: 'Configuración de envío', exact: true });
   const menu = window.getByRole('navigation', { name: 'Páginas de configuración' });
@@ -74,7 +74,7 @@ test('configuración general: navegación, edición, validación, guardado y ais
   expect(window.url()).toBe(documentUrl);
   await form.getByLabel('Espera de conexión (ms)').fill('0');
   await expect(form.getByText('Sin guardar', { exact: true })).toBeVisible();
-  await expect(window.getByLabel('Ambiente', { exact: true })).toBeDisabled();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toBeVisible();
   await expect(
     menu.getByRole('button', { name: 'Ambiente y estación', exact: true }),
   ).toBeDisabled();
@@ -90,19 +90,10 @@ test('configuración general: navegación, edición, validación, guardado y ais
   await form.getByRole('button', { name: 'Guardar configuración de envío', exact: true }).click();
   await expect(form.getByRole('status')).toContainText('Configuración guardada');
   await expect(form.getByText('Revisión 2', { exact: true })).toBeVisible();
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
-  await expect(form).toContainText('Sin destino documentado');
-  await expect(form.getByLabel('Espera de conexión (ms)')).toHaveValue('');
-  await expect(
-    form.getByRole('button', { name: 'Guardar configuración de envío', exact: true }),
-  ).toBeDisabled();
-  await openSettingsPage(window, 'Auditoría');
-  await expect(
-    window
-      .getByRole('region', { name: 'Auditoría de ambientes' })
-      .getByRole('cell', { name: 'QA → PREPROD' }),
-  ).toBeVisible();
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('QA');
+  await openSettingsPage(window, 'Ambiente y estación');
+  await expect(window.getByText('Ambiente único · Pruebas del simulador')).toBeVisible();
+  await mkdir('artifacts', { recursive: true });
+  await window.screenshot({ path: 'artifacts/settings-qa-environment.png' });
   await openSettingsPage(window, 'Envío');
   await expect(form.getByLabel('Espera de conexión (ms)')).toHaveValue('1000');
   await expect(window.getByRole('button', { name: 'Conectar', exact: true })).toBeEnabled();
@@ -151,17 +142,8 @@ test('configuración operativa: ambiente persistido, accesos reales y recarga de
   await profiles.getByRole('button', { name: 'Actualizar perfiles' }).click();
   await expect(profiles).toContainText('1 ATM activo con entidad activa en QA');
   await openSettingsPage(window, 'Ambiente y estación');
-  await window.getByRole('button', { name: 'PREPROD Configuración y observación' }).click();
+  await expect(window.getByRole('combobox', { name: 'Ambiente', exact: true })).toHaveCount(0);
   await openSettingsPage(window, 'Dispositivos y perfiles');
-  await expect(window.getByLabel('Ambiente', { exact: true })).toHaveValue('PREPROD');
-  await expect(profiles).toContainText('0 ATM activos con entidad activa en PREPROD');
-  await expect(window.getByRole('region', { name: 'Conexión al Switch' })).toContainText(
-    'únicamente en QA',
-  );
-  await openSettingsPage(window, 'Ambiente y estación');
-  await window.getByRole('button', { name: 'QA Pruebas del simulador' }).click();
-  await openSettingsPage(window, 'Dispositivos y perfiles');
-  await expect(window.getByLabel('Ambiente', { exact: true })).toHaveValue('QA');
   await profiles.getByRole('button', { name: 'Administrar perfiles ATM' }).click();
   await expect(window.getByRole('heading', { name: 'Perfiles ATM', exact: true })).toBeVisible();
   await window.getByRole('button', { name: 'Configuración', exact: true }).click();
@@ -200,7 +182,6 @@ test('configuración por páginas: contenido exclusivo, teclado y selección con
     expect(window.url()).toBe(documentUrl);
   }
   await openSettingsPage(window, 'Dispositivos y perfiles');
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
   await expect(
     navigation.getByRole('button', { name: 'Dispositivos y perfiles', exact: true }),
   ).toHaveAttribute('aria-current', 'page');
@@ -305,7 +286,7 @@ test('configuración operativa: conectar y desconectar requieren una acción exp
   await expect(link.getByRole('alert')).toContainText('Destino no disponible');
 });
 
-test('configuración operativa: descarta comprobaciones del lector al cambiar de ambiente', async () => {
+test('configuración operativa: descarta comprobaciones del lector al salir de Configuración', async () => {
   const window = await launch(true, 'Dispositivos y perfiles');
   await app!.evaluate(({ ipcMain }) => {
     ipcMain.removeHandler('reader:inspect');
@@ -329,8 +310,8 @@ test('configuración operativa: descarta comprobaciones del lector al cambiar de
   const reader = window.getByRole('region', { name: 'Comprobación del lector' });
   await reader.getByRole('button', { name: 'Comprobar lector' }).click();
   await expect(reader.getByRole('status')).toContainText('Comprobando lector');
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
-  await expect(window.getByLabel('Ambiente', { exact: true })).toHaveValue('PREPROD');
+  await window.getByRole('button', { name: 'Inicio', exact: true }).click();
+  await window.getByRole('button', { name: 'Configuración', exact: true }).click();
   await app!.evaluate(() =>
     (
       globalThis as typeof globalThis & { finishSettingsReader?: () => void }

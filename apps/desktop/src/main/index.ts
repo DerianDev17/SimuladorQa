@@ -21,8 +21,8 @@ import type {
   CardReaderSnapshot,
 } from '../../../../packages/domain/src/card-reader';
 import { DesktopApplication } from './application';
-import { FilePreferencesStore } from './infrastructure/preferences-store';
-import { developmentRendererUrl, isTrustedSender } from './security';
+import { QaPreferencesStore } from './infrastructure/qa-preferences-store';
+import { developmentRendererUrl, hasUnsupportedEnvironment, isTrustedSender } from './security';
 import { WorkerCatalogStore } from './infrastructure/worker-catalog-store';
 import { QaOperationCatalog } from './adapters/qa-operation-catalog';
 import { MediatorSchemaInspector } from './adapters/mediator-schema-inspector';
@@ -242,7 +242,10 @@ void startupReady
       uuid: randomUUID,
       now: () => new Date().toISOString(),
     };
-    const preferences = new FilePreferencesStore(join(app.getPath('userData'), 'preferences.json'));
+    const preferences = new QaPreferencesStore(
+      join(app.getPath('userData'), 'preferences.json'),
+      runtime,
+    );
     virtualCardGenerator = new VirtualCardGeneratorService(runtime, preferences);
     savedCardProfiles = new SavedCardProfileService(
       cardIdentity,
@@ -414,6 +417,8 @@ void startupReady
         )
           return failure('FORBIDDEN', 'Solicitud no autorizada.');
         if (quitting) return failure('SERVICE_UNAVAILABLE', 'La aplicación se está cerrando.');
+        if (hasUnsupportedEnvironment(payload))
+          return failure('VALIDATION_ERROR', 'El único ambiente disponible es Qa.');
         if (
           loadRun?.isBusy() &&
           new Set<string>([

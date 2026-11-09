@@ -57,10 +57,10 @@ La compilación genera `dist/` para ejecución local; no crea un instalador firm
 | Configuraciones de carga y estrés | Crear, editar, cargar y eliminar parámetros; presets de rampa a 3/5 TPS | Hasta 50 configuraciones QA, sin tarjeta/PIN; cargar no inicia la corrida |
 | Perfiles | Entidades, ATM y referencias QA de tarjetas | Los ATM QA/205 heredan la plantilla ATM20521 y su pool compartido |
 | Casos | Borradores guardados y expectativa local PASS/FAIL/INCONCLUSIVE | No certifica el resultado financiero en Switch/Core |
-| Inicio e historial | Feed Mediator QA/PREPROD y consulta manual del historial PREPROD | No sustituye la correlación financiera ni garantiza captura completa |
+| Inicio e historial | Feed Mediator y consulta manual en Qa | No sustituye la correlación financiera ni garantiza captura completa |
 
-Producción permanece bloqueada. PREPROD tiene configuración y consultas propias;
-no implica que los flujos financieros QA estén habilitados allí. BANRED, RTC,
+Qa es el único ambiente operativo; PREPROD no existe en la aplicación.
+Producción permanece bloqueada. Ver [ambiente Qa](docs/operations/ENVIRONMENTS.md). BANRED, RTC,
 externas, pool virtual, carga distribuida y Control Plane conservan pendientes
 según el [registro de datos faltantes](docs/TODO_DATA.md).
 Tampoco están implementados la conciliación automática con SmartVista/Core ni

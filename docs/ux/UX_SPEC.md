@@ -8,12 +8,10 @@ seleccionada es visible y accesible; las otras conservan su estado en la sesión
 El menú lateral marca la página actual y se adapta a una fila en ventanas menores.
 La navegación por teclado enfoca el contenido sin cambiar la URL validada por IPC.
 Los cambios de envío sin guardar o en proceso bloquean el cambio de página hasta
-guardar o descartar. Cambiar de ambiente conserva la página elegida y reinicia
-sus datos. El acceso Configurar envío desde Transacciones abre directamente Envío.
+guardar o descartar. Qa es el único ambiente disponible. El acceso Configurar envío desde Transacciones abre directamente Envío.
 
 El resumen muestra equipo, versión y estado documental de red del ambiente
-actual. Los botones QA/PREPROD y el selector de la cabecera global usan el mismo
-cambio persistido de ambiente, con invalidación transaccional y auditoría. El destino de
+Qa. La cabecera global y el resumen muestran Qa como indicador fijo, sin selector. El destino de
 envío es de solo lectura y procede de la evidencia validada por Main.
 
 Herramientas operativas:
@@ -24,14 +22,13 @@ Herramientas operativas:
 - Comprobar lector consulta el snapshot PC/SC por IPC bajo acción explícita.
   Presenta nombre, presencia y fecha de la última comprobación. No lee el chip
   ni muestra identidad, ATR, PAN o secretos. Una consulta fallida retira el estado
-  anterior; timeout de 10 s libera el botón. Cambiar ambiente/desmontar descarta
+  anterior; timeout de 10 s libera el botón. Desmontar descarta
   resultados tardíos. No se presenta como monitoreo continuo.
 - Perfiles cuenta ATM activos cuya entidad también está activa en el catálogo
   del ambiente. La cuenta no acredita disponibilidad transaccional. Permite
   recargar el catálogo y abrir ATM, entidades, tarjetas, carga, observación y
   transacciones. Un fallo se muestra como catálogo sin verificar, no como cero.
-- Edición pendiente, operación activa o carga del catálogo bloquean los cambios
-  de ambiente y los accesos operativos. Guardar o descartar recupera las acciones.
+- Edición pendiente, operación activa o carga del catálogo bloquean los accesos operativos. Guardar o descartar recupera las acciones.
 
 Envío distingue revisión persistida, cambios sin guardar, carga y ausencia de
 configuración. Agrupa modo previsto y plazos, explica el rango 1–30000 ms y el
@@ -43,9 +40,9 @@ Criterios de aceptación:
 
 - Guardar confirma la persistencia sin conectar. Entradas inválidas muestran un
   error y conservan el borrador; un timeout exige descartar y recargar antes de
-  repetir. La navegación global y el ambiente se bloquean durante la edición.
-- Cambiar a PREPROD no hereda destino ni plazos QA; volver a QA recupera los
-  ajustes guardados. La auditoría muestra los últimos diez cambios en hora local.
+  repetir. La navegación global se bloquea durante la edición.
+- Qa permanece fijo al editar y navegar. Las preferencias antiguas se respaldan
+  y corrigen a QA. La auditoría muestra los últimos diez cambios en hora local.
 - Ausencia o error de evidencia no se presentan como conexión comprobada; solo
   bloquean los ajustes que dependen de ella. Producción permanece bloqueada.
 - Los botones de navegación enfocan su página, los campos tienen etiquetas y ayudas asociadas,
@@ -131,7 +128,7 @@ Fuente, limites financieros y pendientes: docs/transactions/WITHDRAWAL.md.
 ## Navegacion principal
 
 Inicio prioriza Nueva transacción y una tabla de las últimas 50 filas de Mediator
-para entidad 205/canal 1, tanto en QA como en PREPROD. Consulta cada cinco segundos
+para entidad 205/canal 1, en Qa. Consulta cada cinco segundos
 solo mientras la vista está abierta. Permite pausar, filtrar por terminal y buscar
 por referencia de tarjeta, código o TraceId. No muestra métricas fijas ni controles
 de lectura de chip; el lector se resume con su disponibilidad y la lectura
@@ -156,7 +153,7 @@ local no aparece para ejecuciones previas ni se asocia a un formulario modificad
 
 ## Pantalla Transacciones — diseño aprobado 2026-10-14
 
-- Navegación lateral azul oscuro, área de trabajo clara y selector QA/PREPROD permanente.
+- Navegación lateral azul oscuro, área de trabajo clara y indicador Qa permanente.
 - Una sola composición: Datos de la transacción y Tarjeta a la izquierda; Resultado a la derecha; Actividad de esta sesión debajo.
 - ATM, escenario, operación y cuenta se completan en el mismo formulario. Cuenta usa radios Ahorros/Corriente accesibles con teclado. El monto solo aparece cuando aplica.
 - Leer tarjeta selecciona el resultado válido de esa lectura manual. El polling nunca selecciona una tarjeta por sí mismo. Cambiar tarjeta retira la selección; una identidad existente puede seleccionarse expresamente sin otra lectura.
@@ -209,7 +206,7 @@ El dashboard debe permanecer util incluso con miles de transacciones; mostrar ag
 - Requisitos de envio con titulos visibles y explicacion desplegable por requisito.
 - Flujo/inspector, historial persistido y documentacion/capturas se abren bajo demanda con controles nativos details/summary, accesibles con teclado. La actividad de sesion permanece visible.
 - La revision local y su resumen se consultan dentro de las opciones. Los errores permanecen visibles. El borrador se conserva al navegar y se reinicia al cambiar ambiente.
-- Ambiente, PREPROD, estado del lector, bloqueo de envio y produccion conservan sus controles existentes.
+- Qa es fijo; estado del lector, bloqueo de envío y producción conservan sus controles.
 
 - Inicio ofrece Nueva transaccion hacia el formulario unico, sin acciones numeradas.
 - Seleccion de tarjeta solo en la sesion, con PAN enmascarado y vigencia comprobada

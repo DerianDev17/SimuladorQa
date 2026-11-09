@@ -1,5 +1,17 @@
 # Checklist de informacion por subir
 
+## Corrección de alcance — 2026-11-09
+
+Confirmado por el usuario: solo existe **Qa**, no PREPROD. Esta corrección
+sustituye las referencias históricas de selección QA/PREPROD y elimina la
+necesidad de solicitar endpoints o límites para un segundo ambiente.
+El identificador técnico sigue siendo `QA`; las preferencias antiguas se
+respaldan y migran sin borrar ni mezclar evidencia. Observación y feed utilizan
+Qa con las políticas de acceso existentes. Ver [ADR-040](adr/ADR-040-SINGLE-QA-ENVIRONMENT.md).
+Los datos pendientes de protocolos, seguridad y reglas financieras siguen
+pendientes cuando no están documentados; el cambio de nombre no los resuelve.
+
+
 Depósito QA (2026-11-05): el operador aporta 0200/211000 y 0210/12 y confirma
 ahorros/USD, PIN/AC nuevos, 9C=30 y 9F02 igual al monto para esta prueba.
 Implementado según ADR-038. TODO-DATA QA-DEPOSIT-HOST-ACCEPTANCE,

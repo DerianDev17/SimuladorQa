@@ -1,5 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { developmentRendererUrl, isTrustedSender } from '../../apps/desktop/src/main/security';
+import {
+  developmentRendererUrl,
+  isTrustedSender,
+  hasUnsupportedEnvironment,
+} from '../../apps/desktop/src/main/security';
+
+describe('ambiente único del puente IPC', () => {
+  it.each([undefined, {}, { environment: 'QA' }, { draft: { environment: 'QA' } }])(
+    'permite Qa y deja la validación restante al contrato',
+    (payload) => {
+      expect(hasUnsupportedEnvironment(payload)).toBe(false);
+    },
+  );
+  it.each(['PREPROD', 'PROD', 'qa', '', null])('rechaza otro ambiente: %s', (environment) => {
+    expect(hasUnsupportedEnvironment({ environment })).toBe(true);
+    expect(hasUnsupportedEnvironment({ draft: { environment } })).toBe(true);
+  });
+});
 
 describe('origen local de desarrollo', () => {
   it('usa solo el puerto explícito y exige el mismo origen para IPC', () => {

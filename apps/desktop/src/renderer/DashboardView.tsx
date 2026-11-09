@@ -268,7 +268,7 @@ export function DashboardView({
                 <tr>
                   <td colSpan={8} className="dashboard-feed-empty">
                     {!environment
-                      ? 'Selecciona QA o PREPROD para consultar Mediator.'
+                      ? 'Espera la confirmación del ambiente Qa para consultar Mediator.'
                       : loading && !updatedAt
                         ? 'Consultando Mediator…'
                         : mediatorRows.length

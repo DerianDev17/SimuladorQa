@@ -45,3 +45,4 @@ Cuando una decisión reemplaza a otra, ambas se conservan para trazabilidad.
 | [037](ADR-037-QA-SESSION-MESSAGES.md) | Campos completos de QA en memoria temporal | Implementado; excepción solicitada por el operador |
 | [038](ADR-038-QA-DEPOSIT.md) | Depósito de prueba QA con monto vinculado a EMV | Implementado; aceptación host/Core pendiente |
 | [039](ADR-039-LOAD-STORAGE-WORKER.md) | Persistencia de carga en worker e índices | Implementado |
+| [040](ADR-040-SINGLE-QA-ENVIRONMENT.md) | Único ambiente Qa, compatibilidad de preferencias históricas | Implementado |

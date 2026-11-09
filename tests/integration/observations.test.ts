@@ -60,7 +60,7 @@ describe('observador y ambiente persistido', () => {
     });
     if (result.ok) expect(result.value.queryId).toMatch(/^[0-9a-f-]{36}$/);
   });
-  it('valida entrada, QA y ambiente desactualizado antes de contactar al proveedor', async () => {
+  it('permite Qa y rechaza entradas inválidas o contexto desactualizado', async () => {
     let calls = 0;
     const app = application({
       search: async () => {
@@ -73,12 +73,12 @@ describe('observador y ambiente persistido', () => {
     ).toMatchObject({ ok: false, error: { code: 'VALIDATION_ERROR' } });
     expect(
       await app.searchObservations({ ...observationRequest, environment: 'QA' }),
-    ).toMatchObject({ ok: false, error: { code: 'FORBIDDEN' } });
+    ).toMatchObject({ ok: true });
     expect(await app.searchObservations(observationRequest)).toMatchObject({
       ok: false,
       error: { code: 'CONFLICT' },
     });
-    expect(calls).toBe(0);
+    expect(calls).toBe(1);
   });
   it('descarta respuestas tardías tras PREPROD -> QA -> PREPROD y no bloquea cambios', async () => {
     let complete!: () => void;

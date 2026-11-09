@@ -11,7 +11,7 @@ $reader = $null
 try {
     Add-Type -AssemblyName System.Data
     $config = Get-Content -LiteralPath $ConfigurationPath -Raw | ConvertFrom-Json
-    if ($config.environment -cne 'PREPROD' -or $config.database -cne 'Mediator' -or
+    if ($config.environment -cnotin @('QA', 'PREPROD') -or $config.database -cne 'Mediator' -or
         $config.server -notmatch '^tcp:[A-Za-z0-9.-]+,[0-9]{1,5}$' -or
         -not [System.IO.Path]::IsPathRooted($config.credentialFile) -or
         @($config.PSObject.Properties).Count -ne 4) { throw 'Invalid configuration' }

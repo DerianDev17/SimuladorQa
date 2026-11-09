@@ -278,7 +278,7 @@ export function CatalogView({
             </h2>
             <p>
               {entitiesView
-                ? 'Entidades compartidas entre QA y PREPROD.'
+                ? 'Entidades del ambiente Qa.'
                 : 'Perfiles independientes para el ambiente seleccionado.'}
             </p>
           </div>

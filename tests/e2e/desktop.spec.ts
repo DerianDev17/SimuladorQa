@@ -262,11 +262,6 @@ test('inspección interactiva: historial independiente, flujo, evidencia y fallo
   expect(await window.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
     true,
   );
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
-  await expect(history).toHaveCount(0);
-  await expect(window.getByRole('region', { name: 'Resultado', exact: true })).not.toContainText(
-    'USD 20.00',
-  );
   expect(
     await app!.evaluate(
       () => (globalThis as typeof globalThis & { inspectionSends: number }).inspectionSends,
@@ -920,7 +915,7 @@ async function launch(developmentPort?: number) {
   return window;
 }
 
-test('Inicio muestra el mismo feed Mediator en QA y PREPROD y controla pausa', async () => {
+test('Inicio muestra el feed Mediator de Qa y controla pausa', async () => {
   test.setTimeout(60000);
   const window = await launch();
   const feed = window.getByRole('region', { name: 'Transacciones en vivo' });
@@ -947,10 +942,8 @@ test('Inicio muestra el mismo feed Mediator en QA y PREPROD y controla pausa', a
       },
     }));
   });
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('QA');
-  await expect(feed).toContainText('REF-123456ABCDEF', { timeout: 10000 });
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
+  await window.getByRole('button', { name: 'Configuración', exact: true }).click();
+  await window.getByRole('button', { name: 'Inicio', exact: true }).click();
   await expect(feed).toContainText('REF-123456ABCDEF', { timeout: 10000 });
   await expect(feed).toContainText('31580471');
   await expect(feed).toContainText('hay más anteriores');
@@ -977,14 +970,15 @@ test('Inicio muestra el mismo feed Mediator en QA y PREPROD y controla pausa', a
   await expect(feed).toContainText('REF-123456ABCDEF');
 });
 
-test('Inicio descarta datos y filtros del ambiente anterior incluso ante timeout', async () => {
+test('Inicio descarta datos y filtros al volver a la página incluso ante timeout', async () => {
   const window = await launch();
   await window.getByRole('button', { name: 'Configuración', exact: true }).click();
   await app!.evaluate(({ ipcMain }) => {
     const state = globalThis as typeof globalThis & { finishFeed?: () => void };
     ipcMain.removeHandler('mediator:live');
-    ipcMain.handle('mediator:live', (_event, query) => {
-      if (query.environment === 'PREPROD')
+    let calls = 0;
+    ipcMain.handle('mediator:live', () => {
+      if (calls++ > 0)
         return new Promise((resolveResult) => {
           state.finishFeed = () =>
             resolveResult({ ok: false, error: { code: 'TIMEOUT', message: 'Feed agotado.' } });
@@ -1009,7 +1003,8 @@ test('Inicio descarta datos y filtros del ambiente anterior incluso ante timeout
     'aria-pressed',
     'true',
   );
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
+  await window.getByRole('button', { name: 'Configuración', exact: true }).click();
+  await window.getByRole('button', { name: 'Inicio', exact: true }).click();
   await expect(feed).toContainText('Consultando Mediator');
   await expect(feed).not.toContainText('QA-ONLY');
   await expect(feed).not.toContainText('hay más anteriores');
@@ -1028,22 +1023,24 @@ test('Inicio descarta datos y filtros del ambiente anterior incluso ante timeout
   await expect(feed).toContainText('No se pudo consultar Mediator.');
 });
 
-test('Inicio ignora una respuesta tardía de otro ambiente', async () => {
+test('Inicio ignora una respuesta tardía de una visita anterior', async () => {
   const window = await launch();
   await window.getByRole('button', { name: 'Configuración', exact: true }).click();
   await app!.evaluate(({ ipcMain }) => {
     const state = globalThis as typeof globalThis & { finishFeed?: () => void };
     ipcMain.removeHandler('mediator:live');
-    ipcMain.handle('mediator:live', (_event, query) => {
+    let calls = 0;
+    ipcMain.handle('mediator:live', () => {
+      const first = calls++ === 0;
       const result = {
         ok: true,
         value: {
-          rows: [{ traceId: query.environment === 'QA' ? 'QA-LATE' : 'PREPROD-CURRENT' }],
+          rows: [{ traceId: first ? 'QA-LATE' : 'QA-CURRENT' }],
           hasMore: false,
           queriedAt: '2026-11-07T12:00:00.000Z',
         },
       };
-      if (query.environment === 'QA')
+      if (first)
         return new Promise((resolveResult) => {
           state.finishFeed = () => resolveResult(result);
         });
@@ -1058,14 +1055,15 @@ test('Inicio ignora una respuesta tardía de otro ambiente', async () => {
       ),
     )
     .toBe(true);
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
+  await window.getByRole('button', { name: 'Configuración', exact: true }).click();
+  await window.getByRole('button', { name: 'Inicio', exact: true }).click();
   const feed = window.getByRole('region', { name: 'Transacciones en vivo', exact: true });
-  await expect(feed).toContainText('PREPROD-CURRENT');
+  await expect(feed).toContainText('QA-CURRENT');
   await app!.evaluate(() =>
     (globalThis as typeof globalThis & { finishFeed?: () => void }).finishFeed?.(),
   );
   await expect(feed).not.toContainText('QA-LATE');
-  await expect(feed).toContainText('PREPROD-CURRENT');
+  await expect(feed).toContainText('QA-CURRENT');
 });
 
 test('el sondeo recuperado limpia su error sin ocultar un fallo de conexión manual', async () => {
@@ -2262,7 +2260,7 @@ test('consulta de saldo: envío directo, dependencia ausente y resultado mediant
   await expect(
     window.getByRole('button', { name: 'Consultando saldo…', exact: true }),
   ).toBeDisabled();
-  await expect(window.getByLabel('Ambiente', { exact: true })).toBeDisabled();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toBeVisible();
   await app!.evaluate(() => {
     (globalThis as typeof globalThis & { finishBalanceUi?: () => void }).finishBalanceUi?.();
   });
@@ -2287,11 +2285,6 @@ test('consulta de saldo: envío directo, dependencia ausente y resultado mediant
   await result.scrollIntoViewIfNeeded();
   await mkdir('artifacts', { recursive: true });
   await window.screenshot({ path: 'artifacts/balance-inquiry-result.png' });
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
-  await expect(window.locator('.transaction-history')).toHaveCount(0);
-  await expect(
-    window.getByText('El historial local de ejecución está disponible en QA.', { exact: false }),
-  ).toBeVisible();
 });
 
 for (const outcome of [
@@ -2520,9 +2513,6 @@ test('formulario directo: lectura selecciona la tarjeta, revisión opcional e in
   await expect(
     window.getByRole('button', { name: 'Ejecutar Transacción', exact: true }),
   ).toBeDisabled();
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
-  await expect(window.getByLabel('Perfil ATM', { exact: true })).toHaveValue('');
-  await expect(preview).toContainText('Pendiente de seleccionar');
 });
 
 test('formulario directo valida entradas y recupera un timeout de lectura', async () => {
@@ -2598,10 +2588,6 @@ test('muestra evidencia de capturas sin habilitar envío ni RAW', async () => {
   ).toBeVisible();
   await expect(window.getByRole('tab', { name: 'RAW', exact: true })).toHaveCount(0);
   await expect(window.getByRole('button', { name: 'Ejecutar Transacción' })).toBeDisabled();
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
-  await window.getByRole('tab', { name: 'Evidencia', exact: true }).click();
-  await expect(evidence.getByRole('heading', { name: '10 archivos · 218 mensajes' })).toBeVisible();
-  await expect(window.getByRole('button', { name: 'Ejecutar Transacción' })).toBeDisabled();
   await mkdir('artifacts', { recursive: true });
   await window.screenshot({ path: 'artifacts/capture-evidence.png', fullPage: true });
 });
@@ -2611,7 +2597,7 @@ test.afterEach(async () => {
   await removeTestDirectory(directory, 'coonecta-e2e-');
 });
 
-test('Configuración muestra evidencia documental QA sin conectar ni heredarla en PREPROD', async () => {
+test('Configuración muestra evidencia documental Qa sin conectar', async () => {
   await writeFile(join(directory, 'network-evidence.json'), JSON.stringify(networkEvidence()));
   const window = await launch();
   await window.getByRole('button', { name: 'Configuración', exact: true }).click();
@@ -2629,12 +2615,6 @@ test('Configuración muestra evidencia documental QA sin conectar ni heredarla e
   ).toBeVisible();
   await mkdir('artifacts', { recursive: true });
   await window.screenshot({ path: 'artifacts/switch-network-evidence-test.png', fullPage: true });
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
-  await expect(evidence.getByRole('status')).toContainText(
-    'No hay evidencia de red cargada para PREPROD',
-  );
-  await expect(evidence.getByText('10.0.0.11:16100', { exact: true })).toHaveCount(0);
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('QA');
   await expect(evidence.getByText('10.0.0.11:16100', { exact: true })).toBeVisible();
   await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
   await expect(window.getByRole('button', { name: 'Ejecutar Transacción' })).toBeDisabled();
@@ -2653,20 +2633,18 @@ test('evidencia de red corrupta muestra error seguro sin impedir usar el shell',
     'No se pudo validar la evidencia local de red',
   );
   await expect(window.getByText('private-secret')).toHaveCount(0);
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
-  await expect(window.getByLabel('Ambiente', { exact: true })).toHaveValue('PREPROD');
+  await window.getByRole('button', { name: 'Inicio', exact: true }).click();
+  await expect(window.getByRole('heading', { name: 'Estación de pruebas' })).toBeVisible();
 });
 
-test('Historial: consulta Mediator validada, QA bloqueado y dependencia no configurada', async () => {
+test('Observación Qa: consulta validada y dependencia no configurada', async () => {
   const window = await launch();
   await window.getByRole('button', { name: 'Observación', exact: false }).click();
   const observer = window.getByLabel('Consulta de Mediator', { exact: true });
   await expect(
     observer.getByRole('heading', { name: 'Transacciones y mensajes de Mediator' }),
   ).toBeVisible();
-  await expect(observer.getByRole('button', { name: 'Consultar Mediator' })).toBeDisabled();
-  await expect(observer.getByText('Selecciona PREPROD para consultar Mediator.')).toBeVisible();
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
+  await expect(observer.getByRole('button', { name: 'Consultar Mediator' })).toBeEnabled();
   await expect(observer.getByLabel('Entidad', { exact: true })).toHaveValue('205');
   await expect(observer.getByLabel('Canal', { exact: true })).toHaveValue('1');
   await expect(observer.getByLabel('Desde (hora SQL)', { exact: true })).toHaveValue(
@@ -2682,12 +2660,8 @@ test('Historial: consulta Mediator validada, QA bloqueado y dependencia no confi
     timeout: 20_000,
   });
   await expect(observer.locator('tbody tr')).toHaveCount(0);
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('QA');
-  await expect(observer.getByRole('alert')).toHaveCount(0);
-  await expect(observer.getByRole('button', { name: 'Consultar Mediator' })).toBeDisabled();
   await expect(observer.locator('pre')).toHaveCount(0);
   await mkdir('artifacts', { recursive: true });
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
   await window.screenshot({ path: 'artifacts/mediator-observer.png', fullPage: true });
 });
 
@@ -2721,7 +2695,6 @@ test('Historial muestra mandatorios CMS y variantes sin exponer valores', async 
       value: { ...value, queryId: 'synthetic-cms-review', queriedAt: '2026-10-08T22:00:00.000Z' },
     }));
   }, decoded.value);
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
   await window.getByRole('button', { name: 'Observación', exact: false }).click();
   const observer = window.getByLabel('Consulta de Mediator', { exact: true });
   await observer.getByRole('button', { name: 'Consultar Mediator' }).click();
@@ -2740,8 +2713,8 @@ test('Historial muestra mandatorios CMS y variantes sin exponer valores', async 
 
 test('dashboard real, aislamiento, navegación y gate transaccional', async () => {
   const window = await launch();
-  await expect(window.locator('.sidebar-station')).toContainText('Estación QA');
-  await expect(window.getByLabel('Ambiente', { exact: true })).toHaveValue('QA');
+  await expect(window.locator('.sidebar-station')).toContainText('Estación Qa');
+  await expect(window.getByLabel('Ambiente', { exact: true })).toHaveText('Qa');
   const csp = await window
     .locator('meta[http-equiv="Content-Security-Policy"]')
     .getAttribute('content');
@@ -2797,11 +2770,11 @@ test('dashboard real, aislamiento, navegación y gate transaccional', async () =
     globalThis.window.desktop?.setEnvironment('PROD' as Environment),
   );
   expect(invalid).toMatchObject({ ok: false, error: { code: 'VALIDATION_ERROR' } });
-  await expect(window.getByLabel('Ambiente', { exact: true })).toHaveValue('QA');
+  await expect(window.getByLabel('Ambiente', { exact: true })).toHaveText('Qa');
   const pageErrors: string[] = [];
   window.on('pageerror', (error) => pageErrors.push(error.message));
   await window.reload();
-  await expect(window.locator('.sidebar-station')).toContainText('Estación QA');
+  await expect(window.locator('.sidebar-station')).toContainText('Estación Qa');
   expect(pageErrors).toEqual([]);
 });
 
@@ -2811,7 +2784,7 @@ async function openComposerOptions(window: Page) {
     await window.getByRole('button', { name: 'Opciones y detalles técnicos', exact: true }).click();
 }
 async function reviewDraft(window: Page) {
-  await expect(window.getByLabel('Ambiente', { exact: true })).toBeEnabled();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toHaveText('Qa');
   await openComposerOptions(window);
   await expect(
     window.getByRole('button', { name: 'Recargar perfiles', exact: true }),
@@ -2827,7 +2800,7 @@ async function openPreparationDetails(window: Page) {
 async function createTestEntity(window: Page) {
   await window.getByRole('button', { name: 'Entidades', exact: true }).click();
   await window.getByRole('button', { name: 'Nueva entidad' }).click();
-  await expect(window.getByLabel('Ambiente', { exact: true })).toBeDisabled();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toBeVisible();
   await window.getByLabel('Código de entidad').fill('TEST-E2E');
   await window.getByLabel('Nombre de entidad').fill('Entidad sintética E2E');
   await window.getByLabel('Red de entidad').selectOption('COONECTA');
@@ -2947,7 +2920,7 @@ test('clonación ATM exige nueva identidad y conserva el origen', async () => {
   await expect(window.getByRole('button', { name: 'Editar ATM clonado' })).toBeVisible();
 });
 
-test('casos locales: validación, reinicio, carga, separación de ambientes y eliminación', async () => {
+test('casos locales en Qa: validación, reinicio, carga y eliminación', async () => {
   let window = await launch();
   await createTestEntity(window);
   await createTestAtm(window, 'ATM de casos');
@@ -2963,7 +2936,7 @@ test('casos locales: validación, reinicio, carga, separación de ambientes y el
   await window.getByLabel('Monto de prueba').fill('100.50');
   await window.getByRole('button', { name: 'Guardar como caso', exact: true }).click();
   let dialog = window.getByRole('dialog');
-  await expect(window.getByLabel('Ambiente', { exact: true })).toBeDisabled();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toBeVisible();
   await dialog.getByLabel('Nombre del caso').fill('0000 '.repeat(4).trim());
   await dialog.getByRole('button', { name: 'Guardar caso', exact: true }).click();
   await expect(dialog.getByRole('alert')).toContainText('sin datos de tarjeta');
@@ -3001,12 +2974,6 @@ test('casos locales: validación, reinicio, carga, separación de ambientes y el
   await expect(window.getByLabel('Contexto revisado', { exact: true })).toHaveCount(0);
   await reviewDraft(window);
   await expect(window.getByText('Revisión documental · QA')).toBeVisible();
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
-  await window.getByRole('button', { name: 'Casos guardados (0)', exact: true }).click();
-  await expect(dialog.getByText('Aún no hay casos guardados en este ambiente.')).toBeVisible();
-  await window.keyboard.press('Escape');
-  await expect(dialog).not.toBeVisible();
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('QA');
   await window.getByRole('button', { name: 'Casos guardados (1)', exact: true }).click();
   await dialog
     .getByRole('button', { name: 'Eliminar caso Retiro sintético corriente', exact: true })
@@ -3113,7 +3080,7 @@ test('fallo al guardar un caso exige recargar antes de reintentar', async () => 
   await expect(
     window.getByRole('button', { name: 'Guardar como caso', exact: true }),
   ).toBeDisabled();
-  await expect(window.getByLabel('Ambiente', { exact: true })).toBeEnabled();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toHaveText('Qa');
 });
 
 test('una recarga fallida de casos bloquea la lista anterior hasta recuperar la base', async () => {
@@ -3198,7 +3165,7 @@ test('Escape no cierra una eliminación de catálogo pendiente y permite cancela
   }
 });
 
-test('pantalla del mockup: contexto ATM, catálogo CMS, monto y cambio de ambiente', async () => {
+test('pantalla del mockup: contexto ATM, catálogo CMS y monto en Qa', async () => {
   const window = await launch();
   await createTestEntity(window);
   await createTestAtm(window, 'ATM de preparación QA');
@@ -3247,18 +3214,6 @@ test('pantalla del mockup: contexto ATM, catálogo CMS, monto y cambio de ambien
     )
     .toBe(true);
   await window.screenshot({ path: 'artifacts/transaction-workspace-small.png' });
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
-  await expect(window.getByLabel('Perfil ATM', { exact: true })).toHaveValue('');
-  await expect(window.getByLabel('Transacción', { exact: true })).toHaveValue('BALANCE');
-  await expect(window.getByLabel('Monto de prueba')).toHaveCount(0);
-  await expect(window.getByText('Revisión documental · QA')).toHaveCount(0);
-  await expect(window.getByLabel('Perfil ATM', { exact: true })).toBeDisabled();
-  await reviewDraft(window);
-  await expect(window.getByText('Revisión documental · PREPROD')).toBeVisible();
-  await expect(
-    window.getByText('El historial local de ejecución está disponible en QA.', { exact: false }),
-  ).toBeVisible();
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('QA');
   await window.getByLabel('Transacción', { exact: true }).selectOption('TIMEOUT_REVERSAL');
   await expect(window.getByRole('combobox', { name: 'Cuenta', exact: true })).toBeDisabled();
   await expect(reference.getByText('TrnCode CMS', { exact: true })).toHaveCount(0);
@@ -3377,40 +3332,19 @@ test('plantillas documentales, resumen revisado y borrador conservado al navegar
   ).toBeVisible();
 });
 
-test('compatibilidad Mediator PREPROD desde evidencia del esquema, sin conexión simulada ni truncado', async () => {
+test('Qa no aplica automáticamente una evaluación histórica de otro contexto', async () => {
   const window = await launch();
   await createTestEntity(window);
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
   await createTestAtm(window, 'ATM para Mediator');
-  await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
+  await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
   await window
     .getByLabel('Perfil ATM', { exact: true })
     .selectOption({ label: 'ATM para Mediator' });
   await reviewDraft(window);
-  const compatibility = window.getByRole('region', { name: 'Compatibilidad del destino' });
-  await expect(compatibility).toContainText('Esquema Mediator PREPROD');
-  await expect(compatibility).toContainText('Terminal ID · Incompatible');
-  await expect(compatibility).toContainText('13 bytes ASCII; Mediator admite 10. No se trunca.');
-  await expect(compatibility).toContainText('Entidad, canal y terminal · Pendiente');
-  await expect(window.getByRole('button', { name: 'Ejecutar Transacción' })).toBeDisabled();
-  await compatibility.scrollIntoViewIfNeeded();
-  await mkdir('artifacts', { recursive: true });
-  await window.screenshot({ path: 'artifacts/mediator-compatibility.png' });
-  await window.getByRole('button', { name: 'Perfiles ATM', exact: true }).click();
-  await window.getByRole('button', { name: 'Editar ATM para Mediator', exact: true }).click();
-  await expect(window.getByLabel('Terminal ID', { exact: true })).toHaveValue('Test-Terminal');
-  await window.getByLabel('Terminal ID', { exact: true }).fill('TESTTERM');
-  await window.getByRole('button', { name: 'Guardar borrador' }).click();
-  await window.getByRole('button', { name: 'Transacciones', exact: false }).click();
-  await expect(compatibility).toHaveCount(0);
-  await reviewDraft(window);
-  await expect(compatibility).toContainText('Terminal ID · Longitud compatible');
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('QA');
-  await reviewDraft(window);
-  await expect(compatibility).toHaveCount(0);
+  await expect(window.getByRole('region', { name: 'Compatibilidad del destino' })).toHaveCount(0);
 });
 
-test('CRUD de entidades y ATM, separación de ambientes, reinicio y eliminación protegida', async () => {
+test('CRUD de entidades y ATM en Qa, reinicio y eliminación protegida', async () => {
   test.setTimeout(60_000);
   let window = await launch();
   await createTestEntity(window);
@@ -3420,10 +3354,6 @@ test('CRUD de entidades y ATM, separación de ambientes, reinicio y eliminación
   await window.getByLabel('Perfil ATM activo').uncheck();
   await window.getByRole('button', { name: 'Guardar borrador' }).click();
   await expect(window.getByRole('cell', { name: 'Inactivo', exact: true })).toBeVisible();
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
-  await expect(window.getByText('Aún no hay perfiles ATM en este ambiente')).toBeVisible();
-  await createTestAtm(window, 'ATM sintético PREPROD');
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('QA');
   await expect(
     window.getByRole('button', { name: 'Editar ATM QA editado', exact: true }),
   ).toBeVisible();
@@ -3441,11 +3371,6 @@ test('CRUD de entidades y ATM, separación de ambientes, reinicio y eliminación
   });
   await mkdir('artifacts', { recursive: true });
   await window.screenshot({ path: 'artifacts/atm-catalog.png', fullPage: true });
-  await window.getByRole('button', { name: 'Eliminar ATM QA editado', exact: true }).click();
-  await window.getByRole('dialog').getByRole('button', { name: 'Confirmar eliminación' }).click();
-  await expect(
-    window.getByRole('button', { name: 'Editar ATM QA editado', exact: true }),
-  ).toHaveCount(0);
   await window.getByRole('button', { name: 'Entidades', exact: true }).click();
   await window.getByRole('button', { name: 'Eliminar TEST-E2E', exact: true }).click();
   await window.getByRole('dialog').getByRole('button', { name: 'Confirmar eliminación' }).click();
@@ -3453,11 +3378,12 @@ test('CRUD de entidades y ATM, separación de ambientes, reinicio y eliminación
     'perfiles ATM asociados',
   );
   await window.getByRole('dialog').getByRole('button', { name: 'Cancelar', exact: true }).click();
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
   await window.getByRole('button', { name: 'Perfiles ATM', exact: true }).click();
-  await window.getByRole('button', { name: 'Eliminar ATM sintético PREPROD', exact: true }).click();
+  await window.getByRole('button', { name: 'Eliminar ATM QA editado', exact: true }).click();
   await window.getByRole('dialog').getByRole('button', { name: 'Confirmar eliminación' }).click();
-  await expect(window.getByText('Aún no hay perfiles ATM en este ambiente')).toBeVisible();
+  await expect(
+    window.getByRole('button', { name: 'Editar ATM QA editado', exact: true }),
+  ).toHaveCount(0);
   await window.getByRole('button', { name: 'Entidades', exact: true }).click();
   await window.getByRole('button', { name: 'Eliminar TEST-E2E', exact: true }).click();
   await window.getByRole('dialog').getByRole('button', { name: 'Confirmar eliminación' }).click();
@@ -3526,32 +3452,41 @@ test('SQLite corrupto bloquea el catálogo pero permite el shell y conserva el a
   expect(await readFile(file, 'utf8')).toBe('private-secret');
 });
 
-test('PREPROD y su auditoría persisten entre reinicios', async () => {
+test('preferencias antiguas migran a Qa y el puente rechaza PREPROD', async () => {
+  const original = JSON.stringify({ version: 1, environment: 'PREPROD', audit: [] });
+  await writeFile(join(directory, 'preferences.json'), original);
   let window = await launch();
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
-  await expect(
-    window.getByText('Ambiente PREPROD · Configuración y límites independientes de QA.'),
-  ).toBeVisible();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toHaveText('Qa');
+  await expect(window.getByRole('combobox', { name: 'Ambiente', exact: true })).toHaveCount(0);
+  const results = await window.evaluate(async () => {
+    const api = globalThis.window.desktop!;
+    return Promise.all([api.setEnvironment('PREPROD'), api.getCatalog('PREPROD')]);
+  });
+  for (const result of results)
+    expect(result).toMatchObject({ ok: false, error: { code: 'VALIDATION_ERROR' } });
   await window.getByRole('button', { name: 'Configuración', exact: true }).click();
   await window
     .getByRole('navigation', { name: 'Páginas de configuración' })
     .getByRole('button', { name: 'Auditoría', exact: true })
     .click();
-  await expect(window.getByRole('cell', { name: 'QA → PREPROD', exact: true })).toBeVisible();
-  await app?.close();
+  await expect(
+    window.getByRole('cell', { name: 'Configuración anterior → Qa', exact: true }),
+  ).toBeVisible();
+  expect(JSON.parse(await readFile(join(directory, 'preferences.json'), 'utf8'))).toMatchObject({
+    environment: 'QA',
+    audit: [{ previousEnvironment: 'PREPROD', environment: 'QA' }],
+  });
+  await app!.close();
   app = undefined;
   window = await launch();
-  await expect(window.getByLabel('Ambiente', { exact: true })).toHaveValue('PREPROD');
-  await expect(
-    window.getByText('Ambiente PREPROD · Configuración y límites independientes de QA.'),
-  ).toBeVisible();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toHaveText('Qa');
 });
 
 test('configuración corrupta muestra error seguro y bloquea preparación', async () => {
   await writeFile(join(directory, 'preferences.json'), '{private-secret');
   const window = await launch();
   await expect(window.getByRole('alert')).toContainText('No se pudo leer la configuración local');
-  await expect(window.getByLabel('Ambiente', { exact: true })).toBeDisabled();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toHaveText('Sin verificar');
   await expect(
     window.getByRole('button', { name: 'Nueva transacción', exact: true }),
   ).toBeDisabled();
@@ -3591,11 +3526,11 @@ test('modo desarrollo carga React y el puente IPC con Vite', async () => {
     expect(csp).not.toContain('127.0.0.1:*');
     const errors: string[] = [];
     window.on('pageerror', (error) => errors.push(error.message));
-    await expect(window.locator('.sidebar-station')).toContainText('Estación QA');
+    await expect(window.locator('.sidebar-station')).toContainText('Estación Qa');
     await window.reload();
-    await expect(window.locator('.sidebar-station')).toContainText('Estación QA');
+    await expect(window.locator('.sidebar-station')).toContainText('Estación Qa');
     expect(errors).toEqual([]);
-    await expect(window.getByLabel('Ambiente', { exact: true })).toHaveValue('QA');
+    await expect(window.getByLabel('Ambiente', { exact: true })).toHaveText('Qa');
   } finally {
     await app?.close();
     app = undefined;
@@ -3684,7 +3619,7 @@ test('mejoras UI: configuración rápida conserva datos y selecciona el ATM crea
   await window.getByLabel('Monto de prueba').fill('100.50');
   await window.getByRole('button', { name: 'Crear entidad', exact: true }).click();
   await expect(window.getByLabel('Código de entidad')).toBeVisible();
-  await expect(window.getByLabel('Ambiente', { exact: true })).toBeDisabled();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toBeVisible();
   await expect(window.getByRole('button', { name: 'Inicio', exact: true })).toBeDisabled();
   await window.getByLabel('Código de entidad').fill('CANCELLED');
   await window.getByRole('button', { name: 'Cancelar', exact: true }).click();
@@ -3800,7 +3735,7 @@ test('mejoras UI: limpiar requiere confirmación y conserva los casos guardados'
   await expect(
     dialog.getByRole('button', { name: 'Conservar borrador', exact: true }),
   ).toBeFocused();
-  await expect(window.getByLabel('Ambiente', { exact: true })).toBeDisabled();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toBeVisible();
   await mkdir('artifacts', { recursive: true });
   await window.screenshot({ path: 'artifacts/discard-draft-confirmation.png', scale: 'css' });
   await dialog.getByRole('button', { name: 'Conservar borrador', exact: true }).click();
@@ -3813,7 +3748,7 @@ test('mejoras UI: limpiar requiere confirmación y conserva los casos guardados'
   await window.getByRole('button', { name: 'Limpiar borrador', exact: true }).click();
   await window.keyboard.press('Escape');
   await expect(window.getByLabel('Monto de prueba')).toHaveValue('25.00');
-  await expect(window.getByLabel('Ambiente', { exact: true })).toBeEnabled();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toHaveText('Qa');
   await openComposerOptions(window);
   await window.getByRole('button', { name: 'Limpiar borrador', exact: true }).click();
   await dialog.getByRole('button', { name: 'Confirmar limpieza', exact: true }).click();
@@ -3939,7 +3874,7 @@ test('caso QA permite guardar y editar expectativa sin ejecutar una transacción
   );
 });
 
-test('mejoras UI: revisión ocupada mantiene el ambiente bloqueado al salir del lector', async () => {
+test('mejoras UI: revisión ocupada mantiene los controles bloqueados al salir del lector', async () => {
   const window = await launch();
   await installTransactionReader();
   await createTestEntity(window);
@@ -3968,16 +3903,16 @@ test('mejoras UI: revisión ocupada mantiene el ambiente bloqueado al salir del 
   });
   await reviewDraft(window);
   await expect(window.getByRole('button', { name: 'Revisando…', exact: true })).toBeDisabled();
-  await expect(window.getByLabel('Ambiente', { exact: true })).toBeDisabled();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toBeVisible();
   await window.getByRole('button', { name: 'Observación', exact: true }).click();
   await expect(window.getByRole('heading', { name: 'Observación', exact: true })).toBeVisible();
-  await expect(window.getByLabel('Ambiente', { exact: true })).toBeDisabled();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toBeVisible();
   await app!.evaluate(() => {
     const state = globalThis as typeof globalThis & { finishUiReview?: () => void };
     state.finishUiReview?.();
     delete state.finishUiReview;
   });
-  await expect(window.getByLabel('Ambiente', { exact: true })).toBeEnabled();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toHaveText('Qa');
   await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
   await expect(window.getByRole('alert')).toContainText('Dependencia de revisión no disponible.');
   await expect(
@@ -4008,7 +3943,7 @@ test('pulido UI: recargar protege la edición, permite cancelar y recupera un ti
     dialog.getByRole('heading', { name: '¿Descartar cambios y recargar?', exact: true }),
   ).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Seguir editando', exact: true })).toBeFocused();
-  await expect(window.getByLabel('Ambiente', { exact: true })).toBeDisabled();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toBeVisible();
   await dialog.getByRole('button', { name: 'Seguir editando', exact: true }).click();
   await expect(window.getByLabel('Nombre de entidad')).toHaveValue('Edición sintética temporal');
   await window.getByRole('button', { name: 'Recargar', exact: true }).click();
@@ -4303,7 +4238,7 @@ for (const pollingResult of ['present', 'removed', 'error', 'timeout'] as const)
           ),
         ).toBe(0);
       }
-      await expect(window.getByLabel('Ambiente', { exact: true })).toBeEnabled();
+      await expect(window.getByLabel('Ambiente', { exact: true })).toHaveText('Qa');
     } finally {
       await window.clock.resume();
     }
@@ -4354,7 +4289,7 @@ test('lector por eventos: no consulta periódicamente durante ni después de lee
       picker.getByRole('button', { name: 'Leyendo tarjeta…', exact: true }),
     ).toBeDisabled();
     await expect(picker.locator('.transaction-card-status')).toContainText('Leyendo tarjeta…');
-    await expect(window.getByLabel('Ambiente', { exact: true })).toBeDisabled();
+    await expect(window.getByLabel('Ambiente', { exact: true })).toBeVisible();
     const checks = await app!.evaluate(
       () => (globalThis as typeof globalThis & { uiReaderChecks?: number }).uiReaderChecks,
     );
@@ -4382,7 +4317,7 @@ test('lector por eventos: no consulta periódicamente durante ni después de lee
     await expect(
       picker.getByRole('button', { name: 'Cambiar tarjeta', exact: true }),
     ).toBeEnabled();
-    await expect(window.getByLabel('Ambiente', { exact: true })).toBeEnabled();
+    await expect(window.getByLabel('Ambiente', { exact: true })).toHaveText('Qa');
   } finally {
     await window.clock.resume();
   }
@@ -4408,7 +4343,7 @@ test('configuración de envío offline guarda ajustes y prepara sin tramas ni tr
     .getByRole('button', { name: 'Guardar configuración de envío', exact: true })
     .click();
   await expect(settings.getByRole('alert')).toContainText('entre 1 y 30000');
-  await expect(window.getByLabel('Ambiente', { exact: true })).toBeDisabled();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toBeVisible();
   await settings.getByLabel('Espera de conexión (ms)').fill('1000');
   await settings.getByLabel('Ventana de respuesta (ms)').fill('2000');
   await settings.getByLabel('Modo previsto').selectOption('AFTER_REVIEW');
@@ -4484,10 +4419,6 @@ test('bugs tarjeta: errores por interfaz y selección estable tras desconexión'
   await setDevices(devices);
   await panel.getByRole('button', { name: 'Actualizar', exact: true }).click();
   await expect(selector).toHaveValue('Synthetic Backup');
-  await window.getByLabel('Ambiente', { exact: true }).selectOption('PREPROD');
-  await expect(
-    window.getByText('El guardado está disponible solo en QA.', { exact: true }),
-  ).toBeVisible();
 });
 
 test('bugs tarjeta: rechaza una identidad de otro lector y actualiza el retiro después del fallo', async () => {

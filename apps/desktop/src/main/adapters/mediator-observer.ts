@@ -182,7 +182,7 @@ export class MediatorObserver implements TransactionObserver {
   ) {}
 
   search(request: ObservationRequest): Promise<Result<ObservationBatch>> {
-    if (!parseObservationRequest(request) || request.environment !== 'PREPROD')
+    if (!parseObservationRequest(request))
       return Promise.resolve(failure('VALIDATION_ERROR', 'Consulta de Mediator inválida.'));
     return this.execute(request, (output) => decodeResponse(output, request.limit));
   }

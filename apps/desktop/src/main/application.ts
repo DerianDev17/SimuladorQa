@@ -151,7 +151,10 @@ export class DesktopApplication {
         );
       const environment = parseEnvironmentRequest(payload);
       if (!environment)
-        return failure('VALIDATION_ERROR', 'Selecciona QA o PREPROD. Producción está bloqueada.');
+        return failure(
+          'VALIDATION_ERROR',
+          'El ambiente disponible es Qa. Producción está bloqueada.',
+        );
       try {
         const current = await this.store.read();
         if (environment === current.environment) return { ok: true, value: this.snapshot(current) };
@@ -205,8 +208,6 @@ export class DesktopApplication {
         'VALIDATION_ERROR',
         'Revisa los filtros: intervalo de hasta 24 horas, fechas SQL y máximo 100 resultados.',
       );
-    if (request.environment !== 'PREPROD')
-      return failure('FORBIDDEN', 'La consulta de Mediator está disponible únicamente en PREPROD.');
     if (this.observationSearchBusy)
       return failure('CONFLICT', 'Ya hay una consulta de Mediator en curso.');
     this.observationSearchBusy = true;
@@ -216,7 +217,7 @@ export class DesktopApplication {
         revision: this.environmentRevision,
       }));
       if (initial.preferences.environment !== request.environment)
-        return failure('CONFLICT', 'El ambiente cambió. Repite la consulta en PREPROD.');
+        return failure('CONFLICT', 'El contexto cambió. Repite la consulta.');
       if (!this.observer)
         return failure('SERVICE_UNAVAILABLE', 'El observador de Mediator no está configurado.');
       const result = await this.observer.search(request);
@@ -337,7 +338,7 @@ export class DesktopApplication {
   getSendConfiguration(payload: unknown): Promise<Result<SendConfigurationSnapshot>> {
     return this.serialize(async () => {
       const environment = parseEnvironmentRequest(payload);
-      if (!environment) return failure('VALIDATION_ERROR', 'Selecciona QA o PREPROD.');
+      if (!environment) return failure('VALIDATION_ERROR', 'El ambiente disponible es Qa.');
       try {
         const preferences = await this.store.read();
         if (preferences.environment !== environment)
