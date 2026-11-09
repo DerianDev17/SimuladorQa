@@ -3585,71 +3585,75 @@ test('modo desarrollo carga React y el puente IPC con Vite', async () => {
   }
 });
 
-test('el lanzador dev muestra la ventana nativa de Electron en Windows', async () => {
-  test.skip(process.platform !== 'win32', 'Regresion de SW_HIDE en Windows.');
-  const launcher = spawn(
-    process.execPath,
-    [resolve('tooling/dev.mjs'), `--user-data-dir=${directory}`],
-    { cwd: resolve('.'), stdio: 'ignore', windowsHide: true },
-  );
-  if (!launcher.pid) throw Error('El lanzador no inicio.');
-  const launcherPid = launcher.pid;
-  const exited = new Promise<void>((done) => launcher.once('exit', () => done()));
-  const run = promisify(execFile);
-  const powershell = join(
-    process.env.SystemRoot ?? 'C:\\Windows',
-    'System32/WindowsPowerShell/v1.0/powershell.exe',
-  );
-  let electronPid: number | undefined;
-  let rendererPort: number | undefined;
-  try {
-    await expect
-      .poll(
-        async () => {
-          const { stdout } = await run(
-            powershell,
-            [
-              '-NoProfile',
-              '-NonInteractive',
-              '-Command',
-              `[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); Get-CimInstance Win32_Process -Filter "Name='electron.exe' AND ParentProcessId=${launcherPid}" | ForEach-Object { $p=Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue; [pscustomobject]@{id=$_.ProcessId;visible=($p.MainWindowHandle -ne 0);title=$p.MainWindowTitle;port=[regex]::Match($_.CommandLine, '--dev-port=([0-9]+)').Groups[1].Value} } | ConvertTo-Json -Compress`,
-            ],
-            { windowsHide: true, timeout: 5000 },
-          );
-          if (!stdout.trim()) return false;
-          const state = JSON.parse(stdout) as {
-            id: number;
-            visible: boolean;
-            title: string;
-            port: string;
-          };
-          electronPid = state.id;
-          rendererPort = Number(state.port);
-          return state.visible && state.title.includes('ATM Transaction Simulator');
-        },
-        { timeout: 15000, intervals: [250, 500] },
-      )
-      .toBe(true);
-    expect(rendererPort).toBeGreaterThan(0);
-    const response = await fetch(`http://127.0.0.1:${rendererPort}/`, {
-      signal: AbortSignal.timeout(3000),
-    });
-    expect(response.status).toBe(200);
-  } finally {
-    if (electronPid && launcher.exitCode === null)
-      await run(
-        powershell,
-        [
-          '-NoProfile',
-          '-NonInteractive',
-          '-Command',
-          `Get-CimInstance Win32_Process -Filter "Name='electron.exe' AND ProcessId=${electronPid} AND ParentProcessId=${launcherPid}" | ForEach-Object { Stop-Process -Id $_.ProcessId }`,
-        ],
-        { windowsHide: true, timeout: 5000 },
-      );
-    if (launcher.exitCode === null) await exited;
-  }
-});
+for (const command of ['dev', 'start']) {
+  test(`el lanzador ${command} muestra la ventana nativa de Electron en Windows`, async () => {
+    test.skip(process.platform !== 'win32', 'Regresion de SW_HIDE en Windows.');
+    const launcher = spawn(
+      process.execPath,
+      [resolve(`tooling/${command}.mjs`), `--user-data-dir=${directory}`],
+      { cwd: resolve('.'), stdio: 'ignore', windowsHide: true },
+    );
+    if (!launcher.pid) throw Error('El lanzador no inicio.');
+    const launcherPid = launcher.pid;
+    const exited = new Promise<void>((done) => launcher.once('exit', () => done()));
+    const run = promisify(execFile);
+    const powershell = join(
+      process.env.SystemRoot ?? 'C:\\Windows',
+      'System32/WindowsPowerShell/v1.0/powershell.exe',
+    );
+    let electronPid: number | undefined;
+    let rendererPort: number | undefined;
+    try {
+      await expect
+        .poll(
+          async () => {
+            const { stdout } = await run(
+              powershell,
+              [
+                '-NoProfile',
+                '-NonInteractive',
+                '-Command',
+                `[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); Get-CimInstance Win32_Process -Filter "Name='electron.exe' AND ParentProcessId=${launcherPid}" | ForEach-Object { $p=Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue; [pscustomobject]@{id=$_.ProcessId;visible=($p.MainWindowHandle -ne 0);title=$p.MainWindowTitle;port=[regex]::Match($_.CommandLine, '--dev-port=([0-9]+)').Groups[1].Value} } | ConvertTo-Json -Compress`,
+              ],
+              { windowsHide: true, timeout: 5000 },
+            );
+            if (!stdout.trim()) return false;
+            const state = JSON.parse(stdout) as {
+              id: number;
+              visible: boolean;
+              title: string;
+              port: string;
+            };
+            electronPid = state.id;
+            rendererPort = Number(state.port);
+            return state.visible && state.title.includes('ATM Transaction Simulator');
+          },
+          { timeout: 15000, intervals: [250, 500] },
+        )
+        .toBe(true);
+      if (command === 'dev') {
+        expect(rendererPort).toBeGreaterThan(0);
+        const response = await fetch(`http://127.0.0.1:${rendererPort}/`, {
+          signal: AbortSignal.timeout(3000),
+        });
+        expect(response.status).toBe(200);
+      }
+    } finally {
+      if (electronPid && launcher.exitCode === null)
+        await run(
+          powershell,
+          [
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            `Get-CimInstance Win32_Process -Filter "Name='electron.exe' AND ProcessId=${electronPid} AND ParentProcessId=${launcherPid}" | ForEach-Object { Stop-Process -Id $_.ProcessId }`,
+          ],
+          { windowsHide: true, timeout: 5000 },
+        );
+      if (launcher.exitCode === null) await exited;
+    }
+  });
+}
 
 test('mejoras UI: configuración rápida conserva datos y selecciona el ATM creado', async () => {
   const window = await launch();

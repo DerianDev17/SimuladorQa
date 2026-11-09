@@ -3,7 +3,6 @@ import { spawn } from 'node:child_process';
 import { watch } from 'node:fs';
 import electronPath from 'electron';
 import { buildMain } from './build.mjs';
-import { createLineFilter } from './electron-log-filter.mjs';
 
 await buildMain();
 const server = await createServer();
@@ -20,8 +19,6 @@ delete env.ELECTRON_RUN_AS_NODE;
 const dataArgument = process.argv.find((argument) => argument.startsWith('--user-data-dir='));
 let stopping = false;
 let child;
-let stdoutFilter;
-let stderrFilter;
 let ready = false;
 let reloadRequested = false;
 let dirty = false;
@@ -38,15 +35,11 @@ function launch() {
     electronPath,
     ['dist/main.cjs', '--dev', rendererPortArgument, ...(dataArgument ? [dataArgument] : [])],
     {
-      stdio: ['inherit', 'pipe', 'pipe', 'ipc'],
+      stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
       env,
       windowsHide: false,
     },
   );
-  stdoutFilter = createLineFilter(process.stdout);
-  stderrFilter = createLineFilter(process.stderr);
-  child.stdout.on('data', (chunk) => stdoutFilter.write(chunk));
-  child.stderr.on('data', (chunk) => stderrFilter.write(chunk));
   child.on('message', (message) => {
     if (message === 'DEV_READY') {
       ready = true;
@@ -58,8 +51,6 @@ function launch() {
     void stop(1);
   });
   child.on('exit', (code) => {
-    stdoutFilter?.flush();
-    stderrFilter?.flush();
     ready = false;
     if (!stopping && reloadRequested && code === 0) {
       void (async () => {

@@ -19,6 +19,11 @@ espera rechaza nuevos inicios. Un fallo de compilación conserva la instancia ac
 y se informa en consola. Cambios en el lanzador requieren reiniciar el comando.
 Cerrar Electron normalmente detiene Vite.
 
+Los lanzadores `dev` y `start` muestran stdout/stderr de Electron directamente
+en la consola y eliminan `ELECTRON_RUN_AS_NODE` del entorno del proceso hijo.
+No dependen de un filtro de logs externo. `start` ejecuta la compilación existente
+en `dist/main.cjs`; requiere ejecutar `npm run build` previamente.
+
 Vite usa un puerto libre de loopback por sesión; el lanzador lo entrega a Main
 automáticamente. No hace falta conocer ni configurar un número de puerto. Ver
 [ADR-035](../adr/ADR-035-ISOLATED-DEVELOPMENT-PORT.md).
