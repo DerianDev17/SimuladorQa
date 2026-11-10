@@ -4,6 +4,7 @@ import { App } from './App';
 import './styles.css';
 import './workspace.css';
 import './transaction-inspection.css';
+import './shell.css';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('No se encontró el contenedor de la aplicación.');

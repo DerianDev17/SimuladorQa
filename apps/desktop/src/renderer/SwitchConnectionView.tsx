@@ -22,7 +22,8 @@ export function useSwitchConnection(client: DesktopClient, environment?: Environ
   const [connection, setConnection] = useState<SwitchConnectionSnapshot>();
   const [pollError, setPollError] = useState<string>();
   const [actionError, setActionError] = useState<string>();
-  const [pending, setPending] = useState(false);
+  const [pendingAction, setPendingAction] = useState<'connect' | 'disconnect'>();
+  const pending = pendingAction !== undefined;
   const generation = useRef(0);
   useEffect(() => {
     const ticket = ++generation.current;
@@ -30,7 +31,7 @@ export function useSwitchConnection(client: DesktopClient, environment?: Environ
     setConnection(undefined);
     setPollError(undefined);
     setActionError(undefined);
-    setPending(false);
+    setPendingAction(undefined);
     async function poll() {
       const result = await client.call((api) => api.getSwitchConnection('QA'));
       if (ticket !== generation.current) return;
@@ -55,7 +56,7 @@ export function useSwitchConnection(client: DesktopClient, environment?: Environ
   async function change(action: 'connect' | 'disconnect') {
     if (environment !== 'QA' || pending) return;
     const ticket = generation.current;
-    setPending(true);
+    setPendingAction(action);
     setActionError(undefined);
     const result = await client.call((api) =>
       action === 'connect' ? api.connectSwitch('QA') : api.disconnectSwitch('QA'),
@@ -66,9 +67,9 @@ export function useSwitchConnection(client: DesktopClient, environment?: Environ
         !previous || result.value.observedAt >= previous.observedAt ? result.value : previous,
       );
     else setActionError(result.error.message);
-    setPending(false);
+    setPendingAction(undefined);
   }
-  return { connection, error: actionError ?? pollError, pending, change };
+  return { connection, error: actionError ?? pollError, pending, pendingAction, change };
 }
 
 const reasons: Record<SwitchDisconnectReason, string> = {
@@ -92,6 +93,7 @@ export function SwitchConnectionView({
   connection,
   error,
   pending,
+  pendingAction,
   disabled,
   endpoint,
   onChange,
@@ -99,6 +101,7 @@ export function SwitchConnectionView({
   connection?: SwitchConnectionSnapshot | undefined;
   error?: string | undefined;
   pending: boolean;
+  pendingAction?: 'connect' | 'disconnect' | undefined;
   disabled: boolean;
   endpoint?: { host: string; port: number } | undefined;
   onChange(action: 'connect' | 'disconnect'): void;
@@ -142,7 +145,15 @@ export function SwitchConnectionView({
         disabled={disabled || pending}
         onClick={() => onChange(active ? 'disconnect' : 'connect')}
       >
-        {pending ? 'Procesando…' : active ? 'Desconectar' : 'Conectar al Switch'}
+        {pending
+          ? pendingAction === 'disconnect'
+            ? 'Desconectando…'
+            : pendingAction === 'connect'
+              ? 'Conectando…'
+              : 'Procesando…'
+          : active
+            ? 'Desconectar'
+            : 'Conectar al Switch'}
       </button>
     </section>
   );

@@ -1,5 +1,12 @@
 # UX Specification
 
+## Navegación y ventanas compactas — 2026-11-10
+
+Nombres accesibles en el menú de iconos, acceso por teclado al contenido,
+foco y desplazamiento al cambiar de sección, aviso de edición y estados de
+conexión precisos. Criterios y pruebas en
+[correcciones de navegación](UI_SHELL_20261110.md).
+
 ## Configuración general — 2026-11-09
 
 Configuración se divide en seis páginas internas: Ambiente y estación, Envío,

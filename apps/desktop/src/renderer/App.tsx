@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Environment } from '../../../../packages/domain/src/index';
 import type { AppSnapshot, ErrorCode, Result } from '../../../../packages/shared/src/contracts';
 import type { CatalogSnapshot } from '../../../../packages/domain/src/catalogs';
@@ -33,6 +33,17 @@ const client = new DesktopClient(window.desktop);
 
 export function App() {
   const [page, setPage] = useState('dashboard');
+  const content = useRef<HTMLElement>(null);
+  const previousPage = useRef(page);
+  useEffect(() => {
+    if (previousPage.current === page) return;
+    previousPage.current = page;
+    // Preserve a destination view's own focus (for example, a quick-create editor).
+    if (!content.current?.contains(document.activeElement)) {
+      content.current?.focus({ preventScroll: true });
+    }
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [page]);
   const [settingsPage, setSettingsPage] = useState<SettingsPage>('environment');
   const [snapshot, setSnapshot] = useState<AppSnapshot>();
   const [error, setError] = useState<{ code: string; message: string }>();
@@ -178,6 +189,11 @@ export function App() {
   const linkTitle =
     environment === 'QA' ? connectionTitle(link.connection) : 'Conexión QA inactiva';
   const current = navigation.find((item) => item.id === page);
+  const editingNotice = sendConfigurationEditing
+    ? 'Guarda o descarta los cambios de envío para volver a navegar.'
+    : catalogEditing
+      ? 'Guarda o cancela la edición del catálogo para volver a navegar.'
+      : undefined;
 
   function goToTransactions() {
     setTransactionSetup(undefined);
@@ -193,6 +209,9 @@ export function App() {
 
   return (
     <div className="app-shell">
+      <button className="skip-to-content" onClick={() => content.current?.focus()}>
+        Ir al contenido
+      </button>
       <aside className="sidebar">
         <div className="brand">
           <span className="brand-mark">
@@ -211,6 +230,10 @@ export function App() {
               {item.group && <p className="nav-group">{item.group}</p>}
               <button
                 className={`nav-item ${page === item.id ? 'active' : ''}`}
+                aria-label={item.label}
+                title={item.label}
+                aria-controls="main-content"
+                aria-describedby={editingNotice ? 'navigation-editing-notice' : undefined}
                 aria-current={page === item.id ? 'page' : undefined}
                 disabled={catalogEditing || catalogBusy || sendConfigurationEditing}
                 onClick={() => {
@@ -239,14 +262,18 @@ export function App() {
       <div className="main-area">
         <header className="topbar">
           <div className="breadcrumb">
-            Operación <span>/</span> <strong>{current?.label}</strong>
+            <span className="breadcrumb-parent">Operación</span>
+            <span className="breadcrumb-separator" aria-hidden="true">
+              /
+            </span>
+            <strong>{current?.label}</strong>
           </div>
           <div className="topbar-actions">
             <span className="environment-label environment-badge" aria-label="Ambiente">
               {environment === 'QA' ? 'Qa' : 'Sin verificar'}
             </span>
             <span className="topbar-divider" />
-            <span className="topbar-network">
+            <span className="topbar-network" role="status" aria-live="polite">
               <span
                 className={`status-dot ${link.connection?.state === 'CONNECTED' ? 'green' : ''}`}
               />{' '}
@@ -272,7 +299,9 @@ export function App() {
             >
               <Icon name="monitor" size={16} />
               {link.pending
-                ? 'Conectando…'
+                ? link.pendingAction === 'disconnect'
+                  ? 'Desconectando…'
+                  : 'Conectando…'
                 : link.connection?.state === 'CONNECTED' || link.connection?.state === 'CONNECTING'
                   ? 'Desconectar'
                   : 'Conectar'}
@@ -280,7 +309,13 @@ export function App() {
           </div>
         </header>
 
-        <main>
+        <main id="main-content" ref={content} tabIndex={-1} aria-label={current?.label}>
+          {editingNotice && (
+            <p id="navigation-editing-notice" className="navigation-editing-notice" role="status">
+              <Icon name="file" size={18} />
+              {editingNotice}
+            </p>
+          )}
           {link.error && page !== 'dashboard' && (
             <p className="inline-error" role="alert">
               {link.error}

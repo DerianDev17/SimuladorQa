@@ -173,6 +173,7 @@ export function SettingsView({
                 connection={link.connection}
                 error={link.error}
                 pending={link.pending}
+                pendingAction={link.pendingAction}
                 disabled={actionDisabled}
                 onChange={(action) => void link.change(action)}
               />

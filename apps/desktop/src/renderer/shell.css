@@ -1,0 +1,113 @@
+/* Shared navigation and layout, including narrow viewports at desktop zoom. */
+.skip-to-content {
+  position: fixed;
+  top: 10px;
+  left: 12px;
+  z-index: 20;
+  transform: translateY(calc(-100% - 20px));
+  background: white;
+  color: var(--accent);
+}
+.skip-to-content:focus {
+  transform: translateY(0);
+}
+#main-content:focus {
+  outline: none;
+}
+#main-content:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -4px;
+}
+.sidebar nav {
+  padding: 4px;
+  margin-inline: -4px;
+  scrollbar-color: #6784a5 transparent;
+}
+.sidebar .nav-item:focus-visible {
+  outline-offset: 1px;
+}
+.breadcrumb .breadcrumb-parent {
+  padding: 0;
+  color: var(--muted);
+}
+.navigation-editing-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border: 1px solid #b8cfee;
+  border-radius: 8px;
+  background: #edf4ff;
+  color: #244e84;
+  line-height: 1.5;
+}
+.navigation-editing-notice svg {
+  flex-shrink: 0;
+}
+.main-footer {
+  flex-wrap: wrap;
+  gap: 12px;
+  color: var(--muted);
+}
+.catalog-heading,
+.catalog-actions,
+.catalog-filters,
+.catalog-pagination {
+  flex-wrap: wrap;
+}
+.catalog-filters > label {
+  min-width: 0;
+}
+.catalog-filters .search-field {
+  flex: 1 1 240px;
+  width: auto;
+}
+.catalog-filters input,
+.catalog-filters select {
+  max-width: 100%;
+}
+@media (max-width: 1050px) {
+  .topbar {
+    flex-wrap: wrap;
+    gap: 10px 16px;
+  }
+  .breadcrumb {
+    display: block;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .breadcrumb-parent,
+  .breadcrumb-separator {
+    display: none;
+  }
+  .topbar-actions {
+    flex-wrap: wrap;
+    gap: 10px;
+    min-width: 0;
+  }
+  .settings-heading {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+}
+@media (max-width: 720px) {
+  .sidebar {
+    padding-top: 16px;
+    padding-bottom: 12px;
+  }
+  .sidebar nav {
+    margin-top: 20px;
+  }
+  .catalog-filters > label {
+    flex: 1 1 180px;
+  }
+  .catalog-count {
+    flex-basis: 100%;
+    margin: 0;
+  }
+  .catalog-pagination {
+    justify-content: flex-start;
+  }
+}
