@@ -4,7 +4,7 @@
 
 La interfaz muestra el único ambiente Qa, permite editar IP, puerto y plazos de envío, controlar la
 conexión, comprobar lectores y acceder a catálogos y carga. También presenta
-evidencia documental, requisitos y auditoría. El diseño y sus criterios están en
+evidencia de referencia, comprobaciones operativas y auditoría de envío. El diseño y sus criterios están en
 [UX_SPEC.md](ux/UX_SPEC.md#configuración-general--2026-11-09).
 Main valida y persiste el destino propuesto por el formulario. Los destinos explícitos
 usan `evidenceId: null`; las fuentes documentales originales se conservan. No se
@@ -12,6 +12,11 @@ editan secretos desde el Renderer. Ver [ADR-041](adr/ADR-041-OPERATIONAL-SEND-SE
 La cabecera muestra Qa como indicador fijo.
 Cada área tiene su propia página interna; la selección de página dura durante
 la sesión y no se añade a las preferencias persistidas.
+
+La auditoría de envío agrega `settings` opcional por evento: endpoint (host/port),
+connectDeadlineMs y observationWindowMs. Main lo captura al guardar; los registros
+anteriores mantienen la ausencia de detalle. `SendConfigurationSnapshot.audit`
+expone hasta 100 eventos del ambiente solicitado, en orden reciente primero.
 
 Ver [ambiente único y migración](operations/ENVIRONMENTS.md).
 

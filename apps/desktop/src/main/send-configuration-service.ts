@@ -42,6 +42,7 @@ export class SendConfigurationService {
           environment,
           file.configurations.find((item) => item.environment === environment),
           network.status === 'DOCUMENTED' ? network.evidence : undefined,
+          file.audit,
         ),
       };
     } catch {
@@ -97,6 +98,11 @@ export class SendConfigurationService {
           revision: configuration.revision,
           user: this.identity.user,
           machine: this.identity.hostname,
+          settings: {
+            endpoint: { ...configuration.endpoint },
+            connectDeadlineMs: configuration.connectDeadlineMs,
+            observationWindowMs: configuration.observationWindowMs,
+          },
         },
       ].slice(-100);
       await this.store.write(file);
@@ -106,6 +112,7 @@ export class SendConfigurationService {
           request.environment,
           configuration,
           network.status === 'DOCUMENTED' ? network.evidence : undefined,
+          file.audit,
         ),
       };
     } catch {

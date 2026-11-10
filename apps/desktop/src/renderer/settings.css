@@ -490,6 +490,32 @@
   color: #455c76;
   font-weight: 500;
 }
+
+.settings-check-list {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0;
+}
+.settings-check-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid #e3eaf2;
+}
+.settings-check-list li > div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.settings-check-list li > div > span {
+  color: #526780;
+}
+.settings-check-list .pill {
+  flex-shrink: 0;
+}
 @media (max-width: 1250px) {
   .settings-content {
     grid-template-columns: minmax(0, 1fr);

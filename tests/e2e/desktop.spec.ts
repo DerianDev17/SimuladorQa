@@ -3469,6 +3469,7 @@ test('preferencias antiguas migran a Qa y el puente rechaza PREPROD', async () =
     .getByRole('navigation', { name: 'Páginas de configuración' })
     .getByRole('button', { name: 'Auditoría', exact: true })
     .click();
+  await window.getByText('Cambios históricos de ambiente', { exact: true }).click();
   await expect(
     window.getByRole('cell', { name: 'Configuración anterior → Qa', exact: true }),
   ).toBeVisible();

@@ -31,6 +31,11 @@ export interface SendConfigurationAudit {
   revision: number;
   user: string;
   machine: string;
+  settings?: {
+    endpoint: SendConfiguration['endpoint'];
+    connectDeadlineMs: number | null;
+    observationWindowMs: number | null;
+  };
 }
 export interface SendConfigurationFile {
   version: 1;
@@ -43,6 +48,7 @@ export interface SendConfigurationSnapshot {
   documentedEndpoint: { host: string; port: number; evidenceId: string } | null;
   status: 'NOT_CONFIGURED' | 'CONFIGURED_BLOCKED' | 'SOURCE_CHANGED';
   pending: readonly { id: string; label: string }[];
+  audit: readonly SendConfigurationAudit[];
 }
 function keys(value: unknown, fields: readonly string[]): value is Record<string, unknown> {
   return (
@@ -174,16 +180,22 @@ export function parseSendConfigurationFile(value: unknown): SendConfigurationFil
     environments.add(item.environment);
   }
   for (const item of value.audit) {
+    const fields = [
+      'id',
+      'timestamp',
+      'environment',
+      'configurationId',
+      'revision',
+      'user',
+      'machine',
+    ];
     if (
-      !keys(item, [
-        'id',
-        'timestamp',
-        'environment',
-        'configurationId',
-        'revision',
-        'user',
-        'machine',
-      ]) ||
+      !(keys(item, fields) || keys(item, [...fields, 'settings'])) ||
+      (Object.hasOwn(item, 'settings') &&
+        (!keys(item.settings, ['endpoint', 'connectDeadlineMs', 'observationWindowMs']) ||
+          !isSendEndpoint(item.settings.endpoint) ||
+          !deadline(item.settings.connectDeadlineMs) ||
+          !deadline(item.settings.observationWindowMs))) ||
       !isUuid(item.id) ||
       !isUuid(item.configurationId) ||
       !isRevision(item.revision) ||
@@ -207,6 +219,7 @@ export function sendConfigurationSnapshot(
   environment: Environment,
   configuration: SendConfiguration | undefined,
   evidence: NetworkEvidence | undefined,
+  audit: readonly SendConfigurationAudit[] = [],
 ): SendConfigurationSnapshot {
   const source = evidence?.environment === environment ? evidence : undefined;
   const matches =
@@ -241,5 +254,11 @@ export function sendConfigurationSnapshot(
     documentedEndpoint: source ? { ...source.ingress, evidenceId: source.id } : null,
     status: !configuration ? 'NOT_CONFIGURED' : matches ? 'CONFIGURED_BLOCKED' : 'SOURCE_CHANGED',
     pending,
+    audit: structuredClone(
+      audit
+        .filter((entry) => entry.environment === environment)
+        .slice(-100)
+        .reverse(),
+    ),
   };
 }

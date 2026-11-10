@@ -55,6 +55,7 @@ function fixture() {
         status: 'CONFIGURED_BLOCKED' as const,
         documentedEndpoint: null,
         pending: [],
+        audit: [],
         configuration: {
           id: randomUUID(),
           revision: 1,

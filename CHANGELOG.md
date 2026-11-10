@@ -7,6 +7,9 @@
 - Retira el selector de intención documental y muestra ajustes guardados/revisión.
 - Cierra la conexión anterior tras guardar; mantiene bloqueos durante operaciones,
   validación de perfiles financieros y producción deshabilitada.
+- Requisitos muestra ajustes, perfiles y conexión actuales con accesos de corrección.
+  Auditoría presenta revisiones de envío con IP, puerto y plazos capturados al guardar;
+  conserva registros históricos y distingue errores de consulta de un historial vacío.
 
 ## 2026-11-08 — Integración y entrega completa de depósito
 

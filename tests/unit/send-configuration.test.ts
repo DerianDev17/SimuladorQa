@@ -58,6 +58,61 @@ function fixture() {
 }
 
 describe('configuración y preparación offline, sin envío', () => {
+  it('proyecta auditoría por ambiente, reciente primero, acotada y sin referencias mutables', () => {
+    const entries = Array.from({ length: 105 }, (_, index) => ({
+      id: randomUUID(),
+      timestamp: runtime.now(),
+      environment: 'QA' as const,
+      configurationId: configuration.id,
+      revision: index + 1,
+      user: runtime.user,
+      machine: runtime.hostname,
+      settings: {
+        endpoint: { ...evidence.ingress },
+        connectDeadlineMs: 1000,
+        observationWindowMs: 2000,
+      },
+    }));
+    const other = { ...entries[0]!, id: randomUUID(), environment: 'PREPROD' as const };
+    const snapshot = sendConfigurationSnapshot('QA', configuration, evidence, [...entries, other]);
+    expect(snapshot.audit).toHaveLength(100);
+    expect(snapshot.audit[0]?.revision).toBe(105);
+    expect(snapshot.audit.at(-1)?.revision).toBe(6);
+    expect(snapshot.audit.every((entry) => entry.environment === 'QA')).toBe(true);
+    snapshot.audit[0]!.settings!.endpoint.port = 1;
+    expect(entries.at(-1)?.settings.endpoint.port).toBe(evidence.ingress.port);
+    expect(sendConfigurationSnapshot('QA', configuration, evidence).audit).toEqual([]);
+  });
+  it('lee auditoría histórica y rechaza detalles inválidos o campos no permitidos', () => {
+    const entry = {
+      id: randomUUID(),
+      timestamp: runtime.now(),
+      environment: 'QA',
+      configurationId: configuration.id,
+      revision: 1,
+      user: runtime.user,
+      machine: runtime.hostname,
+    };
+    const file = { version: 1, configurations: [configuration], audit: [entry] };
+    expect(parseSendConfigurationFile(file)?.audit[0]?.settings).toBeUndefined();
+    const settings = {
+      endpoint: { ...evidence.ingress },
+      connectDeadlineMs: 1000,
+      observationWindowMs: null,
+    };
+    expect(parseSendConfigurationFile({ ...file, audit: [{ ...entry, settings }] })).toBeDefined();
+    for (const invalid of [
+      null,
+      {},
+      { ...settings, connectDeadlineMs: 0 },
+      { ...settings, endpoint: { host: 'invalid', port: 1 } },
+      { ...settings, unexpected: 'private' },
+      { ...settings, observationWindowMs: '1000' },
+    ])
+      expect(
+        parseSendConfigurationFile({ ...file, audit: [{ ...entry, settings: invalid }] }),
+      ).toBeUndefined();
+  });
   it('guarda un destino operativo sin evidencia y conserva la revisión y auditoría', async () => {
     const { store, getFile } = fixture();
     const service = new SendConfigurationService(

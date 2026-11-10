@@ -223,6 +223,7 @@ it.each([
           status: 'CONFIGURED_BLOCKED',
           documentedEndpoint: null,
           pending: [],
+          audit: [],
           configuration: {
             id: randomUUID(),
             environment: 'QA',

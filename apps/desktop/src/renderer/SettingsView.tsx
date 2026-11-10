@@ -1,4 +1,3 @@
-import { dataBlockers } from '../../../../packages/domain/src/index';
 import type { CatalogSnapshot } from '../../../../packages/domain/src/catalogs';
 import type { AppSnapshot } from '../../../../packages/shared/src/contracts';
 import type { DesktopClient } from './desktop-client';
@@ -9,6 +8,7 @@ import { SendConfigurationView } from './SendConfigurationView';
 import { SwitchConnectionView } from './SwitchConnectionView';
 import type { useSwitchConnection } from './SwitchConnectionView';
 import { SettingsReaderStatus } from './SettingsReaderStatus';
+import { SettingsConfigurationDetails } from './SettingsConfigurationDetails';
 import './settings.css';
 
 export type SettingsPage =
@@ -60,7 +60,6 @@ export function SettingsView({
     content.current?.focus({ preventScroll: true });
   }, [page]);
   const environment = snapshot?.environment;
-  const blockers = snapshot?.blockers ?? dataBlockers;
   const documented =
     snapshot?.networkEvidence.status === 'DOCUMENTED' &&
     snapshot.networkEvidence.evidence.environment === environment;
@@ -267,97 +266,28 @@ export function SettingsView({
             <NetworkEvidenceView state={snapshot?.networkEvidence} environment={environment} />
           </div>
 
-          <section
-            id="settings-requirements"
-            hidden={page !== 'requirements'}
-            tabIndex={-1}
-            className="panel settings-requirements"
-            aria-label="Requisitos de configuración"
-          >
-            <div className="panel-heading">
-              <div>
-                <h2>Estado de configuración</h2>
-                <p>Fuentes y validaciones pendientes del proyecto.</p>
-              </div>
-              <span className={`pill ${blockers.length ? 'amber' : 'neutral'}`}>
-                {blockers.length} requisitos pendientes
-              </span>
+          {(['requirements', 'audit'] as const).map((mode) => (
+            <div key={mode} id={`settings-${mode}`} hidden={page !== mode} tabIndex={-1}>
+              {page === mode && (
+                <SettingsConfigurationDetails
+                  mode={mode}
+                  environment={environment}
+                  client={client}
+                  disabled={actionDisabled}
+                  activeAtms={activeAtms}
+                  catalogBusy={catalogBusy}
+                  catalogError={catalogError}
+                  connection={link.connection}
+                  connectionError={link.error}
+                  environmentAudit={snapshot?.audit ?? []}
+                  onRefreshCatalog={onRefreshCatalog}
+                  onOpenSend={() => onPageChange('send')}
+                  onOpenDevices={() => onPageChange('operations')}
+                  onOpenAtms={() => onNavigate('atms')}
+                />
+              )}
             </div>
-            <div className="settings-requirement-list">
-              {blockers.map((blocker) => (
-                <details key={blocker.id}>
-                  <summary>
-                    <Icon name="file" size={17} />
-                    <span>{blocker.label}</span>
-                    <span className="settings-pending">Pendiente</span>
-                  </summary>
-                  <p>{blocker.description}</p>
-                </details>
-              ))}
-            </div>
-            <p className="settings-context-note">
-              Cada operación valida sus propios requisitos antes de ejecutarse.
-            </p>
-          </section>
-
-          <section
-            id="settings-audit"
-            hidden={page !== 'audit'}
-            tabIndex={-1}
-            className="panel settings-audit"
-            aria-label="Auditoría de ambientes"
-          >
-            <div className="panel-heading">
-              <div>
-                <h2>Cambios de ambiente</h2>
-                <p>Últimos 10 cambios registrados en esta estación.</p>
-              </div>
-              <span className="pill neutral">Auditoría local</span>
-            </div>
-            {snapshot?.audit.length ? (
-              <div className="settings-table-scroll">
-                <table>
-                  <caption className="visually-hidden">
-                    Cambios de ambiente con fecha local, usuario y equipo
-                  </caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Fecha local</th>
-                      <th scope="col">Cambio</th>
-                      <th scope="col">Usuario</th>
-                      <th scope="col">Equipo</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {snapshot.audit.slice(0, 10).map((entry) => (
-                      <tr key={entry.id}>
-                        <td>{new Date(entry.timestamp).toLocaleString('es-EC')}</td>
-                        <td
-                          aria-label={`${entry.previousEnvironment === 'QA' ? 'Qa' : 'Configuración anterior'} → ${entry.environment === 'QA' ? 'Qa' : 'Configuración anterior'}`}
-                        >
-                          <span className="settings-audit-transition">
-                            {entry.previousEnvironment === 'QA' ? 'Qa' : 'Configuración anterior'}
-                            <Icon name="arrow" size={14} />
-                            {entry.environment === 'QA' ? 'Qa' : 'Configuración anterior'}
-                          </span>
-                        </td>
-                        <td>{entry.user}</td>
-                        <td>{entry.machine}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="settings-empty">
-                <Icon name="history" size={26} />
-                <div>
-                  <strong>No hay cambios de ambiente registrados.</strong>
-                  <p>Aquí se conservan los cambios históricos de configuración.</p>
-                </div>
-              </div>
-            )}
-          </section>
+          ))}
         </div>
       </div>
     </div>

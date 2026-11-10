@@ -59,8 +59,8 @@ test('configuración general: navegación, edición, validación, guardado en Qa
     window.getByRole('region', { name: 'Ambiente y estación', exact: true }),
   ).toContainText('Documentada');
   await openSettingsPage(window, 'Auditoría');
-  await expect(window.getByRole('region', { name: 'Auditoría de ambientes' })).toContainText(
-    'No hay cambios',
+  await expect(window.getByRole('region', { name: 'Auditoría de envío' })).toContainText(
+    'Revisión 1',
   );
   const documentUrl = window.url();
   await menu.getByRole('button', { name: 'Envío', exact: true }).focus();
@@ -92,6 +92,13 @@ test('configuración general: navegación, edición, validación, guardado en Qa
   await form.getByRole('button', { name: 'Guardar configuración de envío', exact: true }).click();
   await expect(form.getByRole('status')).toContainText('Configuración guardada');
   await expect(form.getByText('Revisión 2', { exact: true })).toBeVisible();
+  await openSettingsPage(window, 'Auditoría');
+  const audit = window.getByRole('region', { name: 'Auditoría de envío' });
+  await expect(audit.getByRole('row').nth(1)).toContainText('Revisión 2');
+  await expect(audit.getByRole('row').nth(1)).toContainText('Conexión: 1000 ms');
+  await expect(audit.getByRole('row').nth(1)).toContainText('Respuesta: 2000 ms');
+  await mkdir('artifacts', { recursive: true });
+  await window.screenshot({ path: 'artifacts/settings-send-audit.png' });
   await openSettingsPage(window, 'Ambiente y estación');
   await expect(window.getByText('Ambiente único · Pruebas del simulador')).toBeVisible();
   await mkdir('artifacts', { recursive: true });
@@ -403,4 +410,87 @@ test('configuración general: timeout de guardado obliga a reconciliar antes de 
   await form.getByRole('button', { name: 'Recargar envío' }).click();
   await expect(form.getByLabel('Espera de conexión (ms)')).toBeEnabled();
   await expect(form.getByLabel('Espera de conexión (ms)')).toHaveValue('');
+});
+
+test('configuración operativa: requisitos reflejan ajustes actuales y permiten corregirlos', async () => {
+  const window = await launch(false, 'Requisitos');
+  const checks = window.getByRole('region', { name: 'Requisitos de configuración' });
+  await expect(checks).toContainText('Falta guardar IP y puerto');
+  await expect(checks).toContainText('0 ATM con entidad activa');
+  await checks.getByRole('button', { name: 'Configurar envío', exact: true }).click();
+  const form = window.getByRole('region', { name: 'Configuración de envío', exact: true });
+  await form.getByLabel('Dirección IP del Switch').fill('127.0.0.1');
+  await form.getByLabel('Puerto del Switch').fill('16104');
+  await form.getByLabel('Espera de conexión (ms)').fill('1300');
+  await form.getByLabel('Ventana de respuesta (ms)').fill('2300');
+  await form.getByRole('button', { name: 'Guardar configuración de envío', exact: true }).click();
+  await expect(form.getByRole('status')).toContainText('Configuración guardada');
+  await openSettingsPage(window, 'Requisitos');
+  await expect(checks.getByRole('listitem').filter({ hasText: 'Destino de envío' })).toContainText(
+    '127.0.0.1:16104',
+  );
+  await expect(checks.getByRole('listitem').filter({ hasText: 'Plazo de conexión' })).toContainText(
+    '1300 ms',
+  );
+  await expect(
+    checks.getByRole('listitem').filter({ hasText: 'Plazo de respuesta' }),
+  ).toContainText('2300 ms');
+  await expect(checks.getByRole('listitem').filter({ hasText: 'Conexión TCP' })).toContainText(
+    'Desconectado',
+  );
+  await mkdir('artifacts', { recursive: true });
+  await window.screenshot({ path: 'artifacts/settings-operational-checks.png' });
+  await app!.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('transaction:send:configuration');
+    ipcMain.handle('transaction:send:configuration', () => ({
+      ok: false,
+      error: { code: 'STORAGE_UNAVAILABLE', message: 'Configuración temporalmente no disponible.' },
+    }));
+  });
+  await checks.getByRole('button', { name: 'Actualizar comprobaciones' }).click();
+  await expect(checks.getByRole('alert')).toContainText(
+    'Configuración temporalmente no disponible',
+  );
+  await expect(checks.getByRole('listitem').filter({ hasText: 'Destino de envío' })).toContainText(
+    'Sin verificar',
+  );
+  await expect(checks).not.toContainText('127.0.0.1:16104');
+  await checks.getByRole('button', { name: 'Revisar perfiles ATM' }).click();
+  await expect(window.getByRole('heading', { name: 'Perfiles ATM', exact: true })).toBeVisible();
+});
+
+test('configuración operativa: auditoría vacía y timeout retiran datos sin ocultar el error', async () => {
+  const window = await launch(false, 'Auditoría');
+  const audit = window.getByRole('region', { name: 'Auditoría de envío' });
+  await expect(audit).toContainText('No hay configuraciones de envío guardadas');
+  expect(
+    await window.evaluate(
+      async () =>
+        (
+          await globalThis.window.desktop!.saveSendConfiguration({
+            environment: 'QA',
+            revision: null,
+            endpoint: { host: '127.0.0.1', port: 16104 },
+            values: {
+              evidenceId: null,
+              trigger: 'ON_CLICK',
+              connectDeadlineMs: 1300,
+              observationWindowMs: 2300,
+            },
+          })
+        ).ok,
+    ),
+  ).toBe(true);
+  await audit.getByRole('button', { name: 'Actualizar auditoría' }).click();
+  await expect(audit.getByRole('table')).toContainText('127.0.0.1:16104');
+  await app!.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('transaction:send:configuration');
+    ipcMain.handle('transaction:send:configuration', () => new Promise(() => {}));
+  });
+  await audit.getByRole('button', { name: 'Actualizar auditoría' }).click();
+  await expect(audit.getByRole('alert')).toContainText('no respondió a tiempo', { timeout: 10000 });
+  await expect(audit).not.toContainText('No hay configuraciones de envío guardadas');
+  await expect(audit.getByRole('table')).toHaveCount(0);
+  await expect(audit).not.toContainText('127.0.0.1:16104');
+  await expect(audit.getByRole('button', { name: 'Actualizar auditoría' })).toBeEnabled();
 });

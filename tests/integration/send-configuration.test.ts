@@ -77,6 +77,49 @@ describe('configuración real en archivo y preparación Main offline', () => {
       },
     });
     expect(JSON.parse(await readFile(file, 'utf8')).audit).toHaveLength(1);
+    const changed = {
+      endpoint: { ...endpoint, port: 16103 },
+      connectDeadlineMs: 900,
+      observationWindowMs: 1900,
+    };
+    expect(
+      await restarted.save({
+        environment: 'QA',
+        revision: 1,
+        endpoint: changed.endpoint,
+        values: {
+          evidenceId: null,
+          trigger: 'ON_CLICK',
+          connectDeadlineMs: changed.connectDeadlineMs,
+          observationWindowMs: changed.observationWindowMs,
+        },
+      }),
+    ).toMatchObject({
+      ok: true,
+      value: {
+        audit: [
+          { revision: 2, settings: changed },
+          {
+            revision: 1,
+            settings: { endpoint, connectDeadlineMs: 1200, observationWindowMs: 2400 },
+          },
+        ],
+      },
+    });
+    const read = await new SendConfigurationService(
+      new FileSendConfigurationStore(file),
+      missing,
+      runtime,
+    ).read('QA');
+    expect(read).toMatchObject({
+      ok: true,
+      value: {
+        audit: [
+          { revision: 2, settings: changed, user: runtime.user, machine: runtime.hostname },
+          { revision: 1, settings: { endpoint } },
+        ],
+      },
+    });
   });
   it('persiste fuente, modo, revisión y auditoría sin tramas al reiniciar', async () => {
     const service = new SendConfigurationService(

@@ -31,6 +31,10 @@ tarjeta y seguridad vigentes. Producción permanece bloqueada.
 `send-configuration.json` vive en userData, fuera del repositorio. Mantiene
 formato versión 1, UUID, revisión, timestamps UTC y hasta 100 eventos de auditoría
 con usuario/equipo. `evidenceId` admite null para un destino explícito del operador.
+Los eventos nuevos incluyen `settings` con copia de IP, puerto y ambos plazos
+de esa revisión. El campo es opcional al leer eventos anteriores; nunca se
+reconstruyen sus valores a partir de la configuración actual. La respuesta IPC
+incluye hasta 100 eventos del ambiente solicitado, recientes primero.
 Los archivos históricos con UUID de evidencia conservan su validación de fuente;
 al guardar desde el formulario pasan a configuración explícita. Lectura acotada
 a 256 KiB, escritura temporal y reemplazo atómico. Archivos corruptos se conservan.
@@ -62,3 +66,18 @@ sintéticos y no acreditan aceptación financiera del host.
 Los TODO-DATA de generación general, otros perfiles y reglas financieras están
 en [el registro de pendientes](../TODO_DATA.md). No bloquean editar la configuración
 de conexión ni reemplazan las implementaciones vigentes de saldo/retiro/depósito.
+
+## Comprobaciones y auditoría en Configuración
+
+Requisitos consulta la configuración persistida y muestra destino, ambos plazos,
+cantidad de ATM activos con entidad activa y estado TCP para ese mismo destino.
+Actualizar comprobaciones vuelve a leer configuración y catálogo. Los accesos
+abren Envío, perfiles ATM o dispositivos para corregir los datos. Un fallo retira
+los valores de configuración anteriores y los marca sin verificar. No se usa la
+lista estática de pendientes documentales como estado operativo.
+
+Auditoría muestra las revisiones guardadas con fecha local, valores, usuario y
+equipo. Los registros antiguos sin detalles se identifican explícitamente. Los
+cambios históricos de ambiente se conservan en un desplegable separado. Error o
+timeout de lectura retira la tabla de envío; no se presenta como un historial vacío.
+Al salir se descartan respuestas tardías. Ninguna consulta abre conexiones o lee el chip.

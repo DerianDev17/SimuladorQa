@@ -26,6 +26,12 @@ persistidos. Guardar o reiniciar no abre sockets. Los guardados fallidos no
 desconectan; los errores o timeouts de IPC requieren recargar para reconciliar.
 Persistencia atómica, revisión y auditoría UUID/UTC se mantienen.
 
+La continuación agrega una copia de endpoint y plazos a cada nuevo evento de
+auditoría (`settings` opcional para leer registros anteriores). Configuración
+expone ese historial por ambiente y sustituye los requisitos estáticos por
+comprobaciones de ajustes, perfiles y conexión. Los errores de consulta retiran
+datos anteriores y las respuestas posteriores a salir de la página se descartan.
+
 ## Revisión de límites
 
 Se sustituye la restricción documental de ADR-011 para la configuración de

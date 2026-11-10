@@ -42,10 +42,11 @@ Herramientas operativas:
 - Edición pendiente, operación activa o carga del catálogo bloquean los accesos operativos. Guardar o descartar recupera las acciones.
 
 Envío distingue revisión persistida, cambios sin guardar, carga y ausencia de
-configuración. Agrupa modo previsto y plazos, explica el rango 1–30000 ms y el
-valor pendiente, y conserva Guardar, Descartar y Recargar. El modo después de
-revisar no implica transmisión automática. El plan documental y la disponibilidad
-financiera de cada operación se describen por separado.
+configuración. Agrupa IP, puerto y plazos, explica el rango 1–30000 ms y el
+valor pendiente, y conserva Guardar, Descartar y Recargar. Requisitos muestra
+comprobaciones de destino, plazos, perfiles y conexión con accesos para corregirlos.
+Auditoría consulta las revisiones de envío guardadas con valores, usuario y equipo;
+los eventos anteriores sin valores se identifican sin completarlos por inferencia.
 
 Criterios de aceptación:
 
@@ -53,7 +54,10 @@ Criterios de aceptación:
   error y conservan el borrador; un timeout exige descartar y recargar antes de
   repetir. La navegación global se bloquea durante la edición.
 - Qa permanece fijo al editar y navegar. Las preferencias antiguas se respaldan
-  y corrigen a QA. La auditoría muestra los últimos diez cambios en hora local.
+  y corrigen a QA. La auditoría muestra hasta 100 revisiones de envío en hora local;
+  los últimos diez cambios históricos de ambiente permanecen en un desplegable.
+- Error o timeout de consulta retira el estado anterior; se puede actualizar
+  sin confundir un servicio no disponible con un historial vacío.
 - Ausencia o error de evidencia no se presentan como conexión comprobada; solo
   bloquean los ajustes que dependen de ella. Producción permanece bloqueada.
 - Los botones de navegación enfocan su página, los campos tienen etiquetas y ayudas asociadas,
