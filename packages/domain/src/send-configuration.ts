@@ -5,7 +5,7 @@ import type { NetworkEvidence } from './network-evidence';
 
 export type SendTrigger = 'ON_CLICK' | 'AFTER_REVIEW';
 export interface SendConfigurationValues {
-  evidenceId: string;
+  evidenceId: string | null;
   trigger: SendTrigger;
   connectDeadlineMs: number | null;
   observationWindowMs: number | null;
@@ -21,6 +21,7 @@ export interface SaveSendConfigurationRequest {
   environment: Environment;
   revision: number | null;
   values: SendConfigurationValues;
+  endpoint?: SendConfiguration['endpoint'];
 }
 export interface SendConfigurationAudit {
   id: string;
@@ -65,7 +66,7 @@ function deadline(value: unknown): value is number | null {
     (typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 30000)
   );
 }
-function endpoint(value: unknown): value is SendConfiguration['endpoint'] {
+export function isSendEndpoint(value: unknown): value is SendConfiguration['endpoint'] {
   if (
     !keys(value, ['host', 'port']) ||
     typeof value.host !== 'string' ||
@@ -86,7 +87,7 @@ function endpoint(value: unknown): value is SendConfiguration['endpoint'] {
 export function parseSendConfigurationValues(value: unknown): SendConfigurationValues | undefined {
   if (
     !keys(value, ['evidenceId', 'trigger', 'connectDeadlineMs', 'observationWindowMs']) ||
-    !isUuid(value.evidenceId) ||
+    !(value.evidenceId === null || isUuid(value.evidenceId)) ||
     (value.trigger !== 'ON_CLICK' && value.trigger !== 'AFTER_REVIEW') ||
     !deadline(value.connectDeadlineMs) ||
     !deadline(value.observationWindowMs)
@@ -103,12 +104,31 @@ export function parseSaveSendConfiguration(
   value: unknown,
 ): SaveSendConfigurationRequest | undefined {
   if (
-    !keys(value, ['environment', 'revision', 'values']) ||
+    !(
+      keys(value, ['environment', 'revision', 'values']) ||
+      keys(value, ['environment', 'revision', 'values', 'endpoint'])
+    ) ||
     !isEnvironment(value.environment) ||
     !(value.revision === null || isRevision(value.revision))
   )
     return undefined;
   const values = parseSendConfigurationValues(value.values);
+  if (Object.hasOwn(value, 'endpoint')) {
+    if (
+      !isSendEndpoint(value.endpoint) ||
+      value.environment !== 'QA' ||
+      values?.evidenceId !== null ||
+      values.trigger !== 'ON_CLICK'
+    )
+      return undefined;
+    return {
+      environment: 'QA',
+      revision: value.revision as number | null,
+      values,
+      endpoint: { ...value.endpoint },
+    };
+  }
+  if (values?.evidenceId === null) return undefined;
   return values
     ? { environment: value.environment, revision: value.revision as number | null, values }
     : undefined;
@@ -141,7 +161,7 @@ export function parseSendConfigurationFile(value: unknown): SendConfigurationFil
       !isEnvironment(item.environment) ||
       !isRevision(item.revision) ||
       !utc(item.updatedAt) ||
-      !endpoint(item.endpoint) ||
+      !isSendEndpoint(item.endpoint) ||
       !parseSendConfigurationValues({
         evidenceId: item.evidenceId,
         trigger: item.trigger,
@@ -191,13 +211,15 @@ export function sendConfigurationSnapshot(
   const source = evidence?.environment === environment ? evidence : undefined;
   const matches =
     !!configuration &&
-    !!source &&
     configuration.environment === environment &&
-    configuration.evidenceId === source.id &&
-    configuration.endpoint.host === source.ingress.host &&
-    configuration.endpoint.port === source.ingress.port;
+    ((environment === 'QA' && configuration.evidenceId === null) ||
+      (!!source &&
+        configuration.evidenceId === source.id &&
+        configuration.endpoint.host === source.ingress.host &&
+        configuration.endpoint.port === source.ingress.port));
   const pending: { id: string; label: string }[] = [];
-  if (!source) pending.push({ id: 'ENVIRONMENT', label: 'Destino documentado para este ambiente' });
+  if (!source && !matches)
+    pending.push({ id: 'ENVIRONMENT', label: 'Configurar el destino de conexión' });
   if (!configuration)
     pending.push({ id: 'SEND-CONFIGURATION', label: 'Guardar la configuración de envío' });
   if (configuration && !matches)

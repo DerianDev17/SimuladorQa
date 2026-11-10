@@ -1,6 +1,7 @@
 export type SwitchDisconnectReason =
   | 'USER_DISCONNECTED'
   | 'ENVIRONMENT_CHANGED'
+  | 'CONFIGURATION_CHANGED'
   | 'APP_CLOSED'
   | 'TRANSACTION_STARTED'
   | 'PEER_CLOSED'

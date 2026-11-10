@@ -3,6 +3,8 @@ import type { ElectronApplication, Page } from '@playwright/test';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { createServer } from 'node:net';
+import type { AddressInfo, Socket } from 'node:net';
 import { networkEvidence } from '../helpers/network-evidence';
 import { removeTestDirectory } from '../helpers/temporary-directory';
 
@@ -321,20 +323,67 @@ test('configuración operativa: descarta comprobaciones del lector al salir de C
   await expect(reader).not.toContainText('Lector anterior');
 });
 
-test('configuración general: evidencia ausente mantiene ajustes bloqueados y navegación disponible', async () => {
-  const window = await launch(false);
-  const form = window.getByRole('region', { name: 'Configuración de envío', exact: true });
-  await expect(form).toContainText('se necesita evidencia de un destino');
-  await expect(form.getByLabel('Modo previsto')).toBeDisabled();
-  await expect(
-    form.getByRole('button', { name: 'Guardar configuración de envío', exact: true }),
-  ).toBeDisabled();
-  await openSettingsPage(window, 'Requisitos');
-  await expect(
-    window.getByRole('region', { name: 'Página de configuración: Requisitos', exact: true }),
-  ).toBeFocused();
-  await window.getByRole('button', { name: 'Inicio', exact: true }).click();
-  await expect(window.getByRole('heading', { name: 'Estación de pruebas' })).toBeVisible();
+test('configuración operativa: destino editable sin evidencia, persistencia y conexión TCP local', async () => {
+  const peers = new Set<Socket>();
+  let connections = 0;
+  let bytes = 0;
+  const server = createServer((peer) => {
+    connections++;
+    peers.add(peer);
+    peer.on('error', () => {});
+    peer.on('data', (chunk) => {
+      bytes += chunk.length;
+    });
+    peer.on('close', () => peers.delete(peer));
+  });
+  await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
+  const port = String((server.address() as AddressInfo).port);
+  try {
+    const window = await launch(false);
+    const form = window.getByRole('region', { name: 'Configuración de envío', exact: true });
+    await expect(form.getByLabel('Modo previsto')).toHaveCount(0);
+    await form.getByLabel('Dirección IP del Switch').fill('999.0.0.1');
+    await form.getByLabel('Puerto del Switch').fill(port);
+    await form.getByRole('button', { name: 'Guardar configuración de envío', exact: true }).click();
+    await expect(form.getByRole('alert')).toContainText('IPv4 válida');
+    await form.getByLabel('Dirección IP del Switch').fill('127.0.0.1');
+    await form.getByLabel('Espera de conexión (ms)').fill('1500');
+    await form.getByLabel('Ventana de respuesta (ms)').fill('2500');
+    await form.getByRole('button', { name: 'Guardar configuración de envío', exact: true }).click();
+    await expect(form.getByRole('status')).toContainText('Configuración guardada');
+    expect(connections).toBe(0);
+    await app!.close();
+    app = undefined;
+    const restarted = await launch(false);
+    const savedForm = restarted.getByRole('region', {
+      name: 'Configuración de envío',
+      exact: true,
+    });
+    await expect(savedForm.getByLabel('Dirección IP del Switch')).toHaveValue('127.0.0.1');
+    await expect(savedForm.getByLabel('Puerto del Switch')).toHaveValue(port);
+    await expect(savedForm.getByLabel('Espera de conexión (ms)')).toHaveValue('1500');
+    await expect(savedForm.getByLabel('Ventana de respuesta (ms)')).toHaveValue('2500');
+    expect(connections).toBe(0);
+    await openSettingsPage(restarted, 'Dispositivos y perfiles');
+    const link = restarted.getByRole('region', { name: 'Conexión al Switch', exact: true });
+    await link.getByRole('button', { name: 'Conectar al Switch' }).click();
+    await expect(link.getByRole('status')).toContainText('TCP conectado');
+    expect(connections).toBe(1);
+    await openSettingsPage(restarted, 'Envío');
+    await savedForm.getByLabel('Espera de conexión (ms)').fill('1600');
+    await savedForm
+      .getByRole('button', { name: 'Guardar configuración de envío', exact: true })
+      .click();
+    await expect(savedForm.getByRole('status')).toContainText('Configuración guardada');
+    await openSettingsPage(restarted, 'Dispositivos y perfiles');
+    await expect(link.getByRole('status')).toContainText('Desconectado');
+    await expect.poll(() => peers.size).toBe(0);
+    expect(connections).toBe(1);
+    expect(bytes).toBe(0);
+  } finally {
+    for (const peer of peers) peer.destroy();
+    await new Promise<void>((done) => server.close(() => done()));
+  }
 });
 
 test('configuración general: timeout de guardado obliga a reconciliar antes de reintentar', async () => {

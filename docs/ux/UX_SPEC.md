@@ -11,8 +11,12 @@ Los cambios de envío sin guardar o en proceso bloquean el cambio de página has
 guardar o descartar. Qa es el único ambiente disponible. El acceso Configurar envío desde Transacciones abre directamente Envío.
 
 El resumen muestra equipo, versión y estado documental de red del ambiente
-Qa. La cabecera global y el resumen muestran Qa como indicador fijo, sin selector. El destino de
-envío es de solo lectura y procede de la evidencia validada por Main.
+Qa. La cabecera global y el resumen muestran Qa como indicador fijo, sin selector.
+Desde 2026-11-10, Envío permite editar IPv4, puerto y plazos, validados y guardados
+en Main. Muestra valores guardados y revisión. Guardar cierra el enlace anterior;
+Conectar usa esos valores. El selector Modo previsto se retira por no tener efecto
+operativo. No se requiere evidencia de red para guardar un destino explícito;
+los perfiles financieros conservan su vinculación al destino autorizado (ADR-041).
 
 Herramientas operativas:
 

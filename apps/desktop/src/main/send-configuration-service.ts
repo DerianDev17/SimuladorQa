@@ -59,11 +59,17 @@ export class SendConfigurationService {
         'Revisa el modo y los plazos. No incluyas tramas ni datos de tarjeta.',
       );
     const network = this.evidence.forEnvironment(request.environment);
-    if (network.status !== 'DOCUMENTED' || network.evidence.id !== request.values.evidenceId)
+    if (
+      !request.endpoint &&
+      (network.status !== 'DOCUMENTED' || network.evidence.id !== request.values.evidenceId)
+    )
       return failure(
         'CONFLICT',
         'El destino documentado cambió o no está disponible. Recarga la configuración.',
       );
+    const endpoint =
+      request.endpoint ?? (network.status === 'DOCUMENTED' ? network.evidence.ingress : undefined);
+    if (!endpoint) return failure('VALIDATION_ERROR', 'Define la IP y el puerto del destino Qa.');
     try {
       const file = await this.store.read();
       const current = file.configurations.find((item) => item.environment === request.environment);
@@ -75,7 +81,7 @@ export class SendConfigurationService {
         environment: request.environment,
         revision: (current?.revision ?? 0) + 1,
         updatedAt: this.identity.now(),
-        endpoint: { ...network.evidence.ingress },
+        endpoint: { ...endpoint },
       };
       file.configurations = [
         ...file.configurations.filter((item) => item.environment !== request.environment),
@@ -96,7 +102,11 @@ export class SendConfigurationService {
       await this.store.write(file);
       return {
         ok: true,
-        value: sendConfigurationSnapshot(request.environment, configuration, network.evidence),
+        value: sendConfigurationSnapshot(
+          request.environment,
+          configuration,
+          network.status === 'DOCUMENTED' ? network.evidence : undefined,
+        ),
       };
     } catch {
       return failure(

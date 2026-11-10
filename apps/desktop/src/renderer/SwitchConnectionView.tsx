@@ -74,6 +74,7 @@ export function useSwitchConnection(client: DesktopClient, environment?: Environ
 const reasons: Record<SwitchDisconnectReason, string> = {
   USER_DISCONNECTED: 'Desconectado por el operador.',
   ENVIRONMENT_CHANGED: 'Conexión cerrada al cambiar de ambiente.',
+  CONFIGURATION_CHANGED: 'Configuración actualizada. Pulsa Conectar para usar los nuevos ajustes.',
   APP_CLOSED: 'La aplicación cerró la conexión.',
   TRANSACTION_STARTED: 'Envío en curso. La conexión de observación se restablecerá al terminar.',
   PEER_CLOSED: 'El servidor cerró la conexión.',

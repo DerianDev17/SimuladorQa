@@ -67,6 +67,37 @@ async function fixture() {
   return { app, evidence, connect, disconnect, configure, setup, connection };
 }
 describe('conexión por Main con destino derivado de configuración', () => {
+  it('aplica el destino y plazo guardados y cierra el enlace solo después de guardar', async () => {
+    const { app, connect, disconnect } = await fixture();
+    const endpoint = { host: '127.0.0.1', port: 16102 };
+    const request = {
+      environment: 'QA',
+      revision: 1,
+      endpoint,
+      values: {
+        evidenceId: null,
+        trigger: 'ON_CLICK',
+        connectDeadlineMs: 1200,
+        observationWindowMs: 2400,
+      },
+    };
+    expect(await app.saveSendConfiguration(request)).toMatchObject({ ok: true });
+    expect(connect).not.toHaveBeenCalled();
+    expect(disconnect).toHaveBeenCalledExactlyOnceWith('CONFIGURATION_CHANGED');
+    expect(await app.switchConnectionAction('connect', { environment: 'QA' })).toMatchObject({
+      ok: true,
+    });
+    expect(connect).toHaveBeenCalledExactlyOnceWith({
+      environment: 'QA',
+      endpoint,
+      connectDeadlineMs: 1200,
+    });
+    expect(await app.saveSendConfiguration(request)).toMatchObject({
+      ok: false,
+      error: { code: 'CONFLICT' },
+    });
+    expect(disconnect).toHaveBeenCalledTimes(1);
+  });
   it('conecta sin llave/lector/perfil financiero y solo usa el endpoint documentado', async () => {
     const { app, configure, evidence, connect, disconnect } = await fixture();
     await configure();

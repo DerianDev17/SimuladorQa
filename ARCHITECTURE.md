@@ -98,6 +98,11 @@ Fuentes: [ADR-028](docs/adr/ADR-028-LOAD-PREPARATION-REUSE.md),
 
 ## Seguridad y perfiles
 
+Configuración permite proponer IPv4, puerto y plazos desde Renderer mediante IPC.
+Main valida y persiste los valores, cierra el enlace anterior al guardar y usa
+el destino guardado al conectar. Los perfiles financieros conservan su vinculación
+al endpoint autorizado. Ver [ADR-041](docs/adr/ADR-041-OPERATIONAL-SEND-SETTINGS.md).
+
 Excepción de visualización QA autorizada el 2026-11-05: el puerto
 `SessionMessagePort` recibe diagnósticos de los adaptadores y conserva hasta 20
 solicitudes/15 minutos solo en memoria de Main. IPC dedicado valida ambiente,

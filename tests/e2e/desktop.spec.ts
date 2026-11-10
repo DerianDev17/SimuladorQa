@@ -4336,7 +4336,7 @@ test('configuración de envío offline guarda ajustes y prepara sin tramas ni tr
   await expect(
     settings.getByText(evidence.ingress.host + ':' + evidence.ingress.port, { exact: true }),
   ).toBeVisible();
-  await expect(settings.getByLabel('Modo previsto')).toHaveValue('ON_CLICK');
+  await expect(settings.getByLabel('Dirección IP del Switch')).toHaveValue(evidence.ingress.host);
   await expect(settings.getByLabel('Espera de conexión (ms)')).toHaveValue('');
   await settings.getByLabel('Espera de conexión (ms)').fill('0');
   await settings
@@ -4346,11 +4346,10 @@ test('configuración de envío offline guarda ajustes y prepara sin tramas ni tr
   await expect(window.getByLabel('Ambiente', { exact: true })).toBeVisible();
   await settings.getByLabel('Espera de conexión (ms)').fill('1000');
   await settings.getByLabel('Ventana de respuesta (ms)').fill('2000');
-  await settings.getByLabel('Modo previsto').selectOption('AFTER_REVIEW');
   await settings
     .getByRole('button', { name: 'Guardar configuración de envío', exact: true })
     .click();
-  await expect(settings.getByRole('status')).toContainText('No se ha abierto ninguna conexión.');
+  await expect(settings.getByRole('status')).toContainText('Configuración guardada');
   await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
   await reviewDraft(window);
   await expect(
@@ -4358,8 +4357,7 @@ test('configuración de envío offline guarda ajustes y prepara sin tramas ni tr
   ).toBeVisible();
   const plan = window.getByLabel('Plan de envío', { exact: true });
   await expect(plan).toContainText('Configuración de envío');
-  await expect(plan).toContainText('Después de revisar');
-  await expect(plan).toContainText('Plan documental · sin transmisión.');
+  await expect(plan).toContainText('Revisión 2');
   await expect(
     window.getByRole('button', { name: 'Ejecutar Transacción', exact: true }),
   ).toBeDisabled();

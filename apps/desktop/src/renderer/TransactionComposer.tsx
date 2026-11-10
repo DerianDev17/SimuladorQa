@@ -580,11 +580,7 @@ export function TransactionComposer({ preparation }: { preparation: TransactionP
               <span>
                 {sendPlan.endpoint.host}:{sendPlan.endpoint.port}
               </span>
-              <small>
-                Modo documental:{' '}
-                {sendPlan.trigger === 'ON_CLICK' ? 'Al pulsar Enviar' : 'Después de revisar'}
-              </small>
-              <small>Plan documental · sin transmisión.</small>
+              <small>Revisión {sendPlan.configurationRevision}</small>
             </div>
           )}
           {review && (

@@ -38,6 +38,46 @@ describe('configuración real en archivo y preparación Main offline', () => {
   afterEach(async () => {
     await removeTestDirectory(directory, 'coonecta-send-config-');
   });
+  it('recupera IP, puerto y plazos operativos tras reinicio sin evidencia de red', async () => {
+    const missing = { forEnvironment: () => ({ status: 'NOT_CONFIGURED' as const }) };
+    const service = new SendConfigurationService(
+      new FileSendConfigurationStore(file),
+      missing,
+      runtime,
+    );
+    const endpoint = { host: '127.0.0.1', port: 16102 };
+    expect(
+      await service.save({
+        environment: 'QA',
+        revision: null,
+        endpoint,
+        values: {
+          evidenceId: null,
+          trigger: 'ON_CLICK',
+          connectDeadlineMs: 1200,
+          observationWindowMs: 2400,
+        },
+      }),
+    ).toMatchObject({ ok: true });
+    const restarted = new SendConfigurationService(
+      new FileSendConfigurationStore(file),
+      missing,
+      runtime,
+    );
+    expect(await restarted.initializeDocumentedQa()).toMatchObject({
+      ok: true,
+      value: {
+        configuration: {
+          endpoint,
+          evidenceId: null,
+          connectDeadlineMs: 1200,
+          observationWindowMs: 2400,
+          revision: 1,
+        },
+      },
+    });
+    expect(JSON.parse(await readFile(file, 'utf8')).audit).toHaveLength(1);
+  });
   it('persiste fuente, modo, revisión y auditoría sin tramas al reiniciar', async () => {
     const service = new SendConfigurationService(
       new FileSendConfigurationStore(file),

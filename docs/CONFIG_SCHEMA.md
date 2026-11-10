@@ -2,12 +2,14 @@
 
 ## Pantalla general
 
-La interfaz muestra el único ambiente Qa, permite ajustar plazos de envío, controlar la
+La interfaz muestra el único ambiente Qa, permite editar IP, puerto y plazos de envío, controlar la
 conexión, comprobar lectores y acceder a catálogos y carga. También presenta
 evidencia documental, requisitos y auditoría. El diseño y sus criterios están en
 [UX_SPEC.md](ux/UX_SPEC.md#configuración-general--2026-11-09).
-Esta organización no añade campos persistidos ni permite editar destinos o
-secretos desde el Renderer. La cabecera muestra Qa como indicador fijo.
+Main valida y persiste el destino propuesto por el formulario. Los destinos explícitos
+usan `evidenceId: null`; las fuentes documentales originales se conservan. No se
+editan secretos desde el Renderer. Ver [ADR-041](adr/ADR-041-OPERATIONAL-SEND-SETTINGS.md).
+La cabecera muestra Qa como indicador fijo.
 Cada área tiene su propia página interna; la selección de página dura durante
 la sesión y no se añade a las preferencias persistidas.
 
@@ -20,8 +22,8 @@ Ver [ambiente único y migración](operations/ENVIRONMENTS.md).
 - audit: ultimos 100 cambios, con UUID, timestamp UTC, ambiente previo/nuevo, usuario y equipo
 
 Persistido por adaptador JSON desde Electron Main. No contiene secretos ni perfiles.
-Los contratos de endpoints/framing siguen pendientes y no habilitan conexiones desde la UI.
-Ver `adr/ADR-003-DESKTOP-BOOTSTRAP.md`.
+La configuración de envío es independiente de Preferences. Conectar utiliza su
+destino guardado en Main; ver [configuración de envío](implementation/SEND_CONFIGURATION.md).
 
 ## Catalogos locales (segunda entrega)
 

@@ -379,11 +379,6 @@ export class DesktopApplication {
               'CONFLICT',
               'No hay una configuración de conexión guardada. Abre Configuración para definirla.',
             );
-          if (!setup.value.documentedEndpoint)
-            return failure(
-              'CONFLICT',
-              'El destino QA documentado no está disponible. Revisa Configuración.',
-            );
           if (setup.value.status !== 'CONFIGURED_BLOCKED')
             return failure(
               'CONFLICT',
@@ -419,9 +414,11 @@ export class DesktopApplication {
         const preferences = await this.store.read();
         if (preferences.environment !== request.environment)
           return failure('CONFLICT', 'El ambiente cambió. Recarga antes de guardar.');
-        return this.sendConfiguration
-          ? await this.sendConfiguration.save(request)
-          : failure('SERVICE_UNAVAILABLE', 'La configuración de envío no está disponible.');
+        if (!this.sendConfiguration)
+          return failure('SERVICE_UNAVAILABLE', 'La configuración de envío no está disponible.');
+        const saved = await this.sendConfiguration.save(request);
+        if (saved.ok) this.switchConnection?.disconnect('CONFIGURATION_CHANGED');
+        return saved;
       } catch {
         return failure('STORAGE_UNAVAILABLE', 'No se pudo verificar el ambiente.');
       }

@@ -58,6 +58,68 @@ function fixture() {
 }
 
 describe('configuración y preparación offline, sin envío', () => {
+  it('guarda un destino operativo sin evidencia y conserva la revisión y auditoría', async () => {
+    const { store, getFile } = fixture();
+    const service = new SendConfigurationService(
+      store,
+      {
+        forEnvironment: () => ({ status: 'NOT_CONFIGURED' }),
+      },
+      runtime,
+    );
+    const request = {
+      environment: 'QA',
+      revision: null,
+      endpoint: { host: '127.0.0.1', port: 16101 },
+      values: { ...values, evidenceId: null, connectDeadlineMs: 1234, observationWindowMs: 4321 },
+    };
+    expect(await service.save(request)).toMatchObject({
+      ok: true,
+      value: {
+        status: 'CONFIGURED_BLOCKED',
+        documentedEndpoint: null,
+        configuration: { endpoint: request.endpoint, evidenceId: null, revision: 1 },
+      },
+    });
+    expect(parseSendConfigurationFile(getFile())).toBeDefined();
+    expect(getFile().audit).toHaveLength(1);
+    expect(await service.save(request)).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+    store.write = async () => {
+      throw Error('PRIVATE_PATH');
+    };
+    const failed = await service.save({ ...request, revision: 1 });
+    expect(failed).toMatchObject({ ok: false, error: { code: 'STORAGE_UNAVAILABLE' } });
+    expect(JSON.stringify(failed)).not.toContain('PRIVATE_PATH');
+    expect(getFile().configurations[0]?.revision).toBe(1);
+  });
+  it('valida el destino operativo y no permite atribuirlo a una fuente documental', () => {
+    const request = {
+      environment: 'QA',
+      revision: null,
+      endpoint: { host: '127.0.0.1', port: 16101 },
+      values: { ...values, evidenceId: null },
+    };
+    expect(parseSaveSendConfiguration(request)).toEqual(request);
+    for (const endpoint of [
+      { host: '999.0.0.1', port: 16101 },
+      { host: '01.0.0.1', port: 16101 },
+      { host: 'host/path', port: 16101 },
+      { host: '127.0.0.1', port: 0 },
+      { host: '127.0.0.1', port: 65536 },
+      { host: '127.0.0.1', port: 1.5 },
+      { host: '127.0.0.1', port: '16101' },
+      { host: '127.0.0.1', port: 1, secret: 'private' },
+    ])
+      expect(parseSaveSendConfiguration({ ...request, endpoint })).toBeUndefined();
+    for (const invalid of [
+      { ...request, environment: 'PROD' },
+      { ...request, environment: 'PREPROD' },
+      { ...request, values },
+      { ...request, values: { ...request.values, trigger: 'AFTER_REVIEW' } },
+      { environment: 'QA', revision: null, values: request.values },
+    ])
+      expect(parseSaveSendConfiguration(invalid)).toBeUndefined();
+  });
   it('acepta plazos pendientes y modos previstos sin fabricar reglas del proveedor', () => {
     expect(parseSaveSendConfiguration({ environment: 'QA', revision: null, values })).toBeDefined();
     expect(

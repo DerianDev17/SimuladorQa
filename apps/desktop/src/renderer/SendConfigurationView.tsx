@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Environment } from '../../../../packages/domain/src/index';
-import type {
-  SendConfigurationSnapshot,
-  SendTrigger,
-} from '../../../../packages/domain/src/send-configuration';
+import { isSendEndpoint } from '../../../../packages/domain/src/send-configuration';
+import type { SendConfigurationSnapshot } from '../../../../packages/domain/src/send-configuration';
 import type { DesktopClient } from './desktop-client';
 import { Icon } from './Icon';
 
@@ -15,7 +13,8 @@ interface Props {
 }
 export function SendConfigurationView({ environment, client, disabled, onEditingChange }: Props) {
   const [setup, setSetup] = useState<SendConfigurationSnapshot>();
-  const [trigger, setTrigger] = useState<SendTrigger>('ON_CLICK');
+  const [host, setHost] = useState('');
+  const [port, setPort] = useState('');
   const [connect, setConnect] = useState('');
   const [observe, setObserve] = useState('');
   const [busy, setBusy] = useState(true);
@@ -25,7 +24,10 @@ export function SendConfigurationView({ environment, client, disabled, onEditing
   const [retry, setRetry] = useState(0);
   const dirty =
     !!setup &&
-    (trigger !== (setup.configuration?.trigger ?? 'ON_CLICK') ||
+    (host !== (setup.configuration?.endpoint.host ?? setup.documentedEndpoint?.host ?? '') ||
+      port !==
+        ((setup.configuration?.endpoint.port ?? setup.documentedEndpoint?.port)?.toString() ??
+          '') ||
       connect !== (setup.configuration?.connectDeadlineMs?.toString() ?? '') ||
       observe !== (setup.configuration?.observationWindowMs?.toString() ?? ''));
   useEffect(() => {
@@ -34,7 +36,10 @@ export function SendConfigurationView({ environment, client, disabled, onEditing
   }, [dirty, busy, onEditingChange]);
   function apply(value: SendConfigurationSnapshot) {
     setSetup(value);
-    setTrigger(value.configuration?.trigger ?? 'ON_CLICK');
+    setHost(value.configuration?.endpoint.host ?? value.documentedEndpoint?.host ?? '');
+    setPort(
+      (value.configuration?.endpoint.port ?? value.documentedEndpoint?.port)?.toString() ?? '',
+    );
     setConnect(value.configuration?.connectDeadlineMs?.toString() ?? '');
     setObserve(value.configuration?.observationWindowMs?.toString() ?? '');
   }
@@ -65,7 +70,12 @@ export function SendConfigurationView({ environment, client, disabled, onEditing
     };
   }, [environment, client, retry]);
   async function save() {
-    if (!setup?.documentedEndpoint || !environment || busy || disabled || needsReload) return;
+    if (!setup || !environment || busy || disabled || needsReload) return;
+    const endpoint = { host: host.trim(), port: Number(port) };
+    if (!/^[1-9]\d{0,4}$/.test(port) || !isSendEndpoint(endpoint)) {
+      setError('Introduce una dirección IPv4 válida y un puerto entero entre 1 y 65535.');
+      return;
+    }
     const valid = (value: string) =>
       !value || (/^[1-9]\d{0,4}$/.test(value) && Number(value) <= 30000);
     if (!valid(connect) || !valid(observe)) {
@@ -79,9 +89,10 @@ export function SendConfigurationView({ environment, client, disabled, onEditing
       api.saveSendConfiguration({
         environment,
         revision: setup.configuration?.revision ?? null,
+        endpoint,
         values: {
-          evidenceId: setup.documentedEndpoint!.evidenceId,
-          trigger,
+          evidenceId: null,
+          trigger: 'ON_CLICK',
           connectDeadlineMs: connect ? Number(connect) : null,
           observationWindowMs: observe ? Number(observe) : null,
         },
@@ -90,7 +101,9 @@ export function SendConfigurationView({ environment, client, disabled, onEditing
     setBusy(false);
     if (result.ok) {
       apply(result.value);
-      setMessage('Configuración guardada. No se ha abierto ninguna conexión.');
+      setMessage(
+        'Configuración guardada. Se aplicará al siguiente intento. Pulsa Conectar para abrir la conexión con estos ajustes.',
+      );
     } else {
       setError(result.error.message);
       setNeedsReload(true);
@@ -100,11 +113,8 @@ export function SendConfigurationView({ environment, client, disabled, onEditing
     <section className="panel send-configuration-panel" aria-label="Configuración de envío">
       <div className="panel-heading">
         <div>
-          <h2>Plazos y preparación de envío</h2>
-          <p>
-            Configura la espera de conexión y de respuesta para{' '}
-            {environment ?? 'el ambiente seleccionado'}.
-          </p>
+          <h2>Destino y plazos de envío</h2>
+          <p>Define la IP, el puerto y los plazos que utiliza el simulador en Qa.</p>
         </div>
         <span className={`pill ${dirty ? 'amber' : 'neutral'}`}>
           {busy
@@ -129,65 +139,76 @@ export function SendConfigurationView({ environment, client, disabled, onEditing
       )}
       {setup && (
         <>
-          <dl className="settings-destination">
+          <dl className="settings-destination" aria-label="Ajustes guardados">
             <div>
               <dt>
-                <Icon name="database" size={18} /> Destino {environment}
+                <Icon name="database" size={18} /> Destino guardado
               </dt>
               <dd>
-                {setup.documentedEndpoint
-                  ? setup.documentedEndpoint.host + ':' + setup.documentedEndpoint.port
-                  : 'Sin destino documentado'}
+                {setup.configuration
+                  ? setup.configuration.endpoint.host + ':' + setup.configuration.endpoint.port
+                  : 'Sin configurar'}
               </dd>
             </div>
             <div>
-              <dt className="visually-hidden">Origen del destino</dt>
-              <dd className="settings-destination-source">Solo lectura · fuente documental</dd>
+              <dt>Plazos guardados</dt>
+              <dd className="settings-destination-source">
+                Conexión:{' '}
+                {setup.configuration?.connectDeadlineMs
+                  ? `${setup.configuration.connectDeadlineMs} ms`
+                  : 'Pendiente'}
+                {' · '}Respuesta:{' '}
+                {setup.configuration?.observationWindowMs
+                  ? `${setup.configuration.observationWindowMs} ms`
+                  : 'Pendiente'}
+              </dd>
             </div>
           </dl>
-          {!setup.documentedEndpoint && (
-            <p className="settings-missing-endpoint">
-              Para guardar ajustes, se necesita evidencia de un destino para este ambiente.
-            </p>
-          )}
           <form
             onSubmit={(event) => {
               event.preventDefault();
               void save();
             }}
           >
-            <fieldset disabled={disabled || busy || needsReload || !setup.documentedEndpoint}>
+            <fieldset disabled={disabled || busy || needsReload}>
               <div className="settings-send-fields">
                 <div className="settings-field-row">
                   <div>
-                    <h3>Preparación de la transacción</h3>
+                    <h3>Conexión al Switch</h3>
                     <p>
-                      Preferencia del plan documental. La ejecución real se inicia manualmente en
-                      Transacciones.
+                      Destino utilizado por Conectar. Las transacciones requieren un perfil ATM
+                      compatible con esta IP y puerto.
                     </p>
                   </div>
-                  <label>
-                    Modo previsto
-                    <select
-                      aria-describedby="settings-trigger-help"
-                      value={trigger}
-                      onChange={(event) => {
-                        if (
-                          event.target.value === 'ON_CLICK' ||
-                          event.target.value === 'AFTER_REVIEW'
-                        )
-                          setTrigger(event.target.value);
-                        setMessage('');
-                      }}
-                    >
-                      <option value="ON_CLICK">Al pulsar Enviar transacción</option>
-                      <option value="AFTER_REVIEW">Después de revisar la transacción</option>
-                    </select>
-                  </label>
+                  <div className="settings-timeouts">
+                    <label>
+                      Dirección IP del Switch
+                      <input
+                        value={host}
+                        maxLength={15}
+                        inputMode="decimal"
+                        autoComplete="off"
+                        onChange={(event) => {
+                          setHost(event.target.value);
+                          setMessage('');
+                        }}
+                      />
+                    </label>
+                    <label>
+                      Puerto del Switch
+                      <input
+                        value={port}
+                        maxLength={5}
+                        inputMode="numeric"
+                        autoComplete="off"
+                        onChange={(event) => {
+                          setPort(event.target.value);
+                          setMessage('');
+                        }}
+                      />
+                    </label>
+                  </div>
                 </div>
-                <p id="settings-trigger-help" className="visually-hidden">
-                  Después de revisar no inicia un envío automático.
-                </p>
                 <div className="settings-field-row">
                   <div>
                     <h3>Plazos del intento</h3>
@@ -226,15 +247,15 @@ export function SendConfigurationView({ environment, client, disabled, onEditing
                 </div>
               </div>
               <p id="settings-timeout-help" className="settings-context-note">
-                <Icon name="clock" size={16} /> Son controles técnicos del intento; no definen
-                timeouts ISO del proveedor.
+                <Icon name="clock" size={16} /> La conexión requiere su plazo. Las transacciones
+                requieren ambos plazos y se inician desde Transacciones o Carga.
               </p>
             </fieldset>
             <div className="catalog-actions editor-actions">
               <span className="settings-save-note">
                 {dirty
-                  ? 'Guarda o descarta para cambiar de página o ambiente.'
-                  : 'Guardar ajustes no abre una conexión.'}
+                  ? 'Guarda o descarta para cambiar de página.'
+                  : 'Guardar cierra la conexión anterior. Conectar utiliza los ajustes guardados.'}
               </span>
               {dirty && (
                 <button
@@ -265,8 +286,7 @@ export function SendConfigurationView({ environment, client, disabled, onEditing
                   disabled ||
                   busy ||
                   needsReload ||
-                  !setup.documentedEndpoint ||
-                  (!!setup.configuration && !dirty)
+                  (!!setup.configuration && !dirty && setup.status !== 'SOURCE_CHANGED')
                 }
                 type="submit"
               >
@@ -274,19 +294,6 @@ export function SendConfigurationView({ environment, client, disabled, onEditing
               </button>
             </div>
           </form>
-          <details className="inline-details">
-            <summary>Requisitos del plan documental de envío</summary>
-            <ul>
-              {setup.pending.map((item) => (
-                <li key={item.id}>{item.label}</li>
-              ))}
-            </ul>
-            <p>
-              Este plan documental no genera tramas. La disponibilidad de saldo, retiro y depósito
-              QA se comprueba en Transacciones con el perfil, la tarjeta y la seguridad de cada
-              operación.
-            </p>
-          </details>
         </>
       )}
       {!setup && !busy && (

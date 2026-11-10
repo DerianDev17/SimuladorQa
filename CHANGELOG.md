@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-10 — Configuración operativa de envío
+
+- Permite editar y persistir IP, puerto y plazos desde Configuración sin depender
+  de una captura de red. Conectar consume los valores guardados en Main.
+- Retira el selector de intención documental y muestra ajustes guardados/revisión.
+- Cierra la conexión anterior tras guardar; mantiene bloqueos durante operaciones,
+  validación de perfiles financieros y producción deshabilitada.
+
 ## 2026-11-08 — Integración y entrega completa de depósito
 
 - Completa los módulos de dominio, servicio, builder, catálogo QA y fixtures
