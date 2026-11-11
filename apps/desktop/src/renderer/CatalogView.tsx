@@ -36,6 +36,8 @@ interface Props {
   quickCreate?: boolean;
   initialEntityId?: string | undefined;
   onCancelCreation?: (() => void) | undefined;
+  onCreateQaAtm?: (() => void) | undefined;
+  onVerifyQaAtm?: ((atm: AtmProfile) => void) | undefined;
 }
 type EntityForm = Omit<EntityValues, 'networkType'> & { networkType: NetworkType | '' };
 interface Editor {
@@ -66,6 +68,8 @@ export function CatalogView({
   quickCreate = false,
   initialEntityId,
   onCancelCreation,
+  onCreateQaAtm,
+  onVerifyQaAtm,
 }: Props) {
   const templateAtm =
     environment === 'QA'
@@ -325,6 +329,11 @@ export function CatalogView({
             </p>
           </div>
           <div className="catalog-actions">
+            {!entitiesView && onCreateQaAtm && (
+              <button className="primary" disabled={blocked || !!editor} onClick={onCreateQaAtm}>
+                Crear ATM QA/205
+              </button>
+            )}
             <button onClick={requestRefresh} disabled={loading || disabled}>
               Recargar
             </button>
@@ -773,6 +782,19 @@ export function CatalogView({
                           >
                             Editar
                           </button>
+                          {'alias' in item && (
+                            <button
+                              disabled={
+                                blocked ||
+                                !!editor ||
+                                entitiesById.get(item.entityId)?.code !== '205'
+                              }
+                              onClick={() => onVerifyQaAtm?.(item)}
+                              aria-label={`Verificar ${item.alias}`}
+                            >
+                              Verificar y probar
+                            </button>
+                          )}
                           {'alias' in item && (
                             <button
                               disabled={blocked || Boolean(editor)}

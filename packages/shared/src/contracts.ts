@@ -61,6 +61,11 @@ import type {
   WithdrawalReceiptRequest,
 } from '../../domain/src/withdrawal-receipt';
 import type { SessionMessages } from './session-messages';
+import type {
+  AtmLocalInspection,
+  CreateQaAtmRequest,
+  InspectQaAtmRequest,
+} from '../../domain/src/atm-onboarding';
 
 export const channels = {
   sessionMessages: 'transaction:messages:session',
@@ -99,6 +104,8 @@ export const channels = {
   saveEntity: 'catalog:entity:save',
   deleteEntity: 'catalog:entity:delete',
   saveAtm: 'catalog:atm:save',
+  createQaAtm: 'catalog:atm:create-qa',
+  inspectQaAtm: 'catalog:atm:inspect-qa',
   deleteAtm: 'catalog:atm:delete',
   saveCase: 'catalog:case:save',
   deleteCase: 'catalog:case:delete',
@@ -234,6 +241,8 @@ export interface DesktopApi {
   saveEntity(request: SaveEntityRequest): Promise<Result<CatalogSnapshot>>;
   deleteEntity(request: DeleteRequest): Promise<Result<CatalogSnapshot>>;
   saveAtm(request: SaveAtmRequest): Promise<Result<CatalogSnapshot>>;
+  createQaAtm(request: CreateQaAtmRequest): Promise<Result<CatalogSnapshot>>;
+  inspectQaAtm(request: InspectQaAtmRequest): Promise<Result<AtmLocalInspection>>;
   deleteAtm(request: DeleteRequest): Promise<Result<CatalogSnapshot>>;
   saveCase(request: SaveCaseRequest): Promise<Result<CatalogSnapshot>>;
   deleteCase(request: DeleteRequest): Promise<Result<CatalogSnapshot>>;

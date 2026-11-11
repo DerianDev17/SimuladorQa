@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Environment } from '../../../../packages/domain/src/index';
 import type { AppSnapshot, ErrorCode, Result } from '../../../../packages/shared/src/contracts';
-import type { CatalogSnapshot } from '../../../../packages/domain/src/catalogs';
+import type { AtmProfile, CatalogSnapshot } from '../../../../packages/domain/src/catalogs';
+import { AtmOnboardingWizard } from './AtmOnboardingWizard';
 import { SettingsView } from './SettingsView';
 import type { SettingsPage } from './SettingsView';
 import { CatalogView } from './CatalogView';
@@ -60,6 +61,7 @@ export function App() {
     entityId?: string;
   }>();
   const [pendingAtmSelection, setPendingAtmSelection] = useState<AtmSelection>();
+  const [atmWizard, setAtmWizard] = useState<{ atm: AtmProfile | null }>();
 
   function applySnapshot(result: Result<AppSnapshot>) {
     if (result.ok) {
@@ -126,6 +128,8 @@ export function App() {
           return api.saveEntity(command.request);
         case 'saveAtm':
           return api.saveAtm(command.request);
+        case 'createQaAtm':
+          return api.createQaAtm(command.request);
         case 'deleteEntity':
           return api.deleteEntity(command.request);
         case 'deleteAtm':
@@ -192,7 +196,9 @@ export function App() {
   const editingNotice = sendConfigurationEditing
     ? 'Guarda o descarta los cambios de envío para volver a navegar.'
     : catalogEditing
-      ? 'Guarda o cancela la edición del catálogo para volver a navegar.'
+      ? atmWizard && page === 'atms'
+        ? 'Finaliza el asistente o vuelve al catálogo para navegar. El ATM creado se conserva.'
+        : 'Guarda o cancela la edición del catálogo para volver a navegar.'
       : undefined;
 
   function goToTransactions() {
@@ -447,14 +453,14 @@ export function App() {
             </section>
           )}
 
-          {['entities', 'atms'].includes(page) && (
+          {['entities', 'atms'].includes(page) && !(page === 'atms' && atmWizard) && (
             <CatalogView
               key={`${page}-${environment ?? 'unavailable'}`}
               kind={page === 'entities' ? 'entities' : 'atms'}
               environment={environment}
               catalog={catalog}
               loading={catalogBusy}
-              disabled={busy || !snapshot}
+              disabled={busy || !snapshot || transactionBusy}
               error={catalogError}
               onRefresh={refreshCatalog}
               onMutate={mutateCatalog}
@@ -462,7 +468,36 @@ export function App() {
               quickCreate={transactionSetup?.stage === page}
               initialEntityId={transactionSetup?.entityId}
               onCancelCreation={transactionSetup ? goToTransactions : undefined}
+              onCreateQaAtm={() => {
+                setTransactionSetup(undefined);
+                setAtmWizard({ atm: null });
+              }}
+              onVerifyQaAtm={(atm) => {
+                setTransactionSetup(undefined);
+                setAtmWizard({ atm });
+              }}
             />
+          )}
+
+          {atmWizard && snapshot && (
+            <div hidden={page !== 'atms'}>
+              <AtmOnboardingWizard
+                initialAtm={atmWizard.atm}
+                visible={page === 'atms'}
+                snapshot={snapshot}
+                catalog={catalog}
+                client={client}
+                onCatalogChange={setCatalog}
+                onRefresh={refreshCatalog}
+                onEditingChange={setCatalogEditing}
+                onTestingChange={setTransactionBusy}
+                onSettings={() => {
+                  setSettingsPage('send');
+                  setPage('settings');
+                }}
+                onClose={() => setAtmWizard(undefined)}
+              />
+            </div>
           )}
 
           {page === 'history' && (

@@ -38,6 +38,293 @@ import { NewVisaDeposit } from '../../apps/desktop/src/main/adapters/new-visa-de
 let directory: string;
 let app: ElectronApplication | undefined;
 
+async function prepareAtmWizard() {
+  await writeFile(join(directory, 'network-evidence.json'), JSON.stringify(networkEvidence()));
+  const window = await launch();
+  await installTransactionReader();
+  const seeded = await window.evaluate(async () => {
+    const api = globalThis.window.desktop!;
+    const saved = await api.saveEntity({
+      environment: 'QA',
+      id: null,
+      revision: null,
+      values: { code: '205', name: 'Entidad sintética QA', networkType: 'COONECTA', active: true },
+    });
+    if (!saved.ok) throw Error(saved.error.code);
+    const entity = saved.value.entities[0]!;
+    const result = await api.saveAtm({
+      environment: 'QA',
+      id: null,
+      revision: null,
+      values: {
+        alias: 'Plantilla QA',
+        terminalId: 'ATM20521',
+        entityId: entity.id,
+        acquirerId: '12345678901',
+        active: true,
+      },
+    });
+    if (!result.ok) throw Error(result.error.code);
+    const send = await api.getSendConfiguration('QA');
+    if (!send.ok || !send.value.configuration) throw Error('Missing synthetic send configuration');
+    const config = send.value.configuration;
+    const configured = await api.saveSendConfiguration({
+      environment: 'QA',
+      revision: config.revision,
+      values: {
+        evidenceId: config.evidenceId,
+        trigger: 'ON_CLICK',
+        connectDeadlineMs: 1000,
+        observationWindowMs: 2000,
+      },
+    });
+    if (!configured.ok) throw Error(configured.error.code);
+    return { atm: result.value.atms[0]!, endpoint: config.endpoint };
+  });
+  const fixture = qaExecutionFixture();
+  fixture.row.atmId = seeded.atm.id;
+  fixture.row.endpoint = seeded.endpoint;
+  await writeFile(join(directory, 'qa-execution-profiles.json'), JSON.stringify(fixture.input));
+  await window.getByRole('button', { name: 'Perfiles ATM', exact: true }).click();
+  await window.getByRole('button', { name: 'Recargar', exact: true }).click();
+  await window.getByRole('button', { name: 'Crear ATM QA/205', exact: true }).click();
+  return window;
+}
+
+test('asistente ATM: valida entradas, crea una vez y detecta seguridad ausente con Main real', async () => {
+  test.setTimeout(60000);
+  const window = await prepareAtmWizard();
+  const wizard = window.getByRole('region', { name: 'Asistente ATM QA/205' });
+  await expect(wizard.getByLabel('Acquirer ID heredado')).toHaveValue('12345678901');
+  const terminal = wizard.getByLabel('Terminal ID autorizado');
+  await terminal.fill('ATM20521');
+  await expect(wizard.getByText('Este Terminal ID ya existe en Qa.')).toBeVisible();
+  await expect(
+    wizard.getByRole('button', { name: 'Crear y verificar', exact: true }),
+  ).toBeDisabled();
+  await terminal.fill('atm20524');
+  await expect(
+    wizard.getByRole('button', { name: 'Crear y verificar', exact: true }),
+  ).toBeDisabled();
+  await terminal.fill('ATM20524');
+  await wizard.getByLabel('Alias ATM').fill('1234 5678 1234');
+  await expect(wizard.getByLabel('Alias ATM')).toHaveValue('');
+  await expect(
+    wizard.getByRole('button', { name: 'Crear y verificar', exact: true }),
+  ).toBeDisabled();
+  await wizard.getByLabel('Alias ATM').fill('ATM guiado');
+  await wizard.getByRole('button', { name: 'Crear y verificar', exact: true }).click();
+  await expect(wizard.getByText('Seguridad TEST no disponible', { exact: true })).toBeVisible();
+  await expect(wizard.getByText('2 secuencias disponibles en el pool de origen')).toBeVisible();
+  await expect(wizard.getByRole('button', { name: 'Continuar a prueba de saldo' })).toBeDisabled();
+  const stored = JSON.parse(await readFile(join(directory, 'qa-execution-profiles.json'), 'utf8'));
+  expect(stored.profiles).toHaveLength(1);
+  expect(stored.profiles[0].reservedSequences).toEqual([650101, 650102]);
+  await wizard.getByRole('button', { name: 'Revisar configuración de envío' }).click();
+  await expect(window.getByRole('heading', { name: 'Configuración', exact: true })).toBeVisible();
+  await window.getByRole('button', { name: 'Perfiles ATM', exact: true }).click();
+  await expect(wizard.getByText('Seguridad TEST no disponible', { exact: true })).toBeVisible();
+  await app!.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0]?.setContentSize(1024, 768),
+  );
+  expect(await window.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+    true,
+  );
+  await mkdir('artifacts', { recursive: true });
+  await window.screenshot({ path: 'artifacts/atm-onboarding-verification.png', fullPage: true });
+  await wizard.getByRole('button', { name: 'Volver al catálogo' }).click();
+  await expect(
+    window.getByRole('button', { name: 'Verificar ATM guiado', exact: true }),
+  ).toBeVisible();
+  await window.getByRole('button', { name: 'Verificar ATM guiado', exact: true }).click();
+  await expect(wizard.getByText('Seguridad TEST no disponible', { exact: true })).toBeVisible();
+});
+
+test('asistente ATM: prueba de saldo explícita con tarjeta, resultado correlacionado y borrador conservado', async () => {
+  test.setTimeout(60000);
+  const window = await prepareAtmWizard();
+  await window.getByRole('button', { name: 'Cancelar asistente' }).click();
+  await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
+  await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
+  await window.getByLabel('Monto de prueba').fill('75.25');
+  await window.getByRole('button', { name: 'Perfiles ATM', exact: true }).click();
+  await window.getByRole('button', { name: 'Crear ATM QA/205', exact: true }).click();
+  // Synthetic IPC dependencies: never asks for a real PIN or sends to QA.
+  await app!.evaluate(({ ipcMain }) => {
+    const state = globalThis as typeof globalThis & { wizardSends?: number };
+    state.wizardSends = 0;
+    let saved: Record<string, unknown> | undefined;
+    for (const channel of [
+      'catalog:atm:inspect-qa',
+      'transaction:balance:readiness',
+      'transaction:balance:execute',
+      'transaction:balance:history',
+    ])
+      ipcMain.removeHandler(channel);
+    ipcMain.handle('catalog:atm:inspect-qa', (_event, request) => ({
+      ok: true,
+      value: {
+        atmId: request.atmId,
+        revision: request.revision,
+        checkedAt: '2026-11-11T15:00:00.000Z',
+        configurationRevision: 2,
+        readyForBalanceTest: true,
+        source: 'ATM20521',
+        sequencesRemaining: 2,
+        checks: [
+          {
+            id: 'PROFILE',
+            status: 'VERIFIED',
+            label: 'Configuración heredada de ATM20521',
+            action: '',
+          },
+          {
+            id: 'HOST',
+            status: 'NOT_CHECKED',
+            label: 'Aceptación del host no comprobada',
+            action: '',
+          },
+        ],
+      },
+    }));
+    ipcMain.handle('transaction:balance:readiness', () => ({
+      ok: true,
+      value: { ready: true, blockers: [], sequencesRemaining: 2 },
+    }));
+    ipcMain.handle('transaction:balance:history', () => ({
+      ok: true,
+      value: saved ? [saved] : [],
+    }));
+    ipcMain.handle('transaction:balance:execute', (_event, request) => {
+      if (
+        request.draft.transaction !== 'BALANCE' ||
+        request.draft.account !== 'SAVINGS' ||
+        request.draft.scenario !== 'LOCAL' ||
+        request.draft.amount !== null ||
+        !request.cardReadId
+      )
+        throw Error('Invalid guided balance');
+      state.wizardSends!++;
+      saved = {
+        requestId: request.requestId,
+        runId: request.requestId,
+        transactionId: request.requestId,
+        environment: 'QA',
+        atmId: request.draft.atmId,
+        atmRevision: request.draft.atmRevision,
+        configurationRevision: request.configurationRevision,
+        cardReadId: request.cardReadId,
+        startedAt: '2026-11-11T15:01:00.000Z',
+        finishedAt: '2026-11-11T15:01:01.000Z',
+        scenario: 'LOCAL',
+        outcome: 'APPROVED',
+        frameGenerated: true,
+        transmissionAttempted: true,
+        bytesQueued: 451,
+        elapsedMs: 1000,
+        correlation: { stan: '650101', rrn: '6315' + '00650101', terminalId: 'ATM20524' },
+        responseCode: '00',
+        balances: [],
+        blockers: [],
+      };
+      return { ok: true, value: saved };
+    });
+  });
+  const wizard = window.getByRole('region', { name: 'Asistente ATM QA/205' });
+  await wizard.getByLabel('Terminal ID autorizado').fill('ATM20524');
+  await wizard.getByRole('button', { name: 'Crear y verificar', exact: true }).click();
+  await expect(wizard.getByText('Aceptación del host no comprobada')).toBeVisible();
+  await wizard.getByRole('button', { name: 'Continuar a prueba de saldo' }).click();
+  const send = wizard.getByRole('button', { name: 'Probar consulta de saldo', exact: true });
+  await expect(send).toBeDisabled();
+  await expect(wizard.getByRole('combobox', { name: 'Transacción', exact: true })).toHaveCount(0);
+  await wizard.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
+  await expect(send).toBeEnabled();
+  expect(
+    await app!.evaluate(
+      () => (globalThis as typeof globalThis & { wizardSends?: number }).wizardSends,
+    ),
+  ).toBe(0);
+  await send.focus();
+  await window.keyboard.press('Enter');
+  await expect(
+    wizard.getByRole('heading', { name: 'Consulta de saldo aprobada', exact: true }),
+  ).toBeVisible();
+  await expect(wizard.getByLabel('Resultado de prueba ATM')).toContainText('650101');
+  await expect(send).toBeDisabled();
+  expect(
+    await app!.evaluate(
+      () => (globalThis as typeof globalThis & { wizardSends?: number }).wizardSends,
+    ),
+  ).toBe(1);
+  await mkdir('artifacts', { recursive: true });
+  await window.screenshot({ path: 'artifacts/atm-onboarding-balance.png', fullPage: true });
+  await wizard.getByRole('button', { name: 'Volver al catálogo' }).click();
+  await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
+  await expect(window.getByLabel('Transacción', { exact: true })).toHaveValue(
+    'WITHDRAWAL_APPROVED',
+  );
+  await expect(window.getByLabel('Monto de prueba')).toHaveValue('75.25');
+});
+
+test('asistente ATM: timeout de inspección retira la aprobación anterior y permite recuperar', async () => {
+  test.setTimeout(60000);
+  const window = await prepareAtmWizard();
+  await app!.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('catalog:atm:inspect-qa');
+    let count = 0;
+    ipcMain.handle('catalog:atm:inspect-qa', async (_event, request) => {
+      count++;
+      if (count === 2) return new Promise(() => undefined);
+      return {
+        ok: true,
+        value: {
+          atmId: request.atmId,
+          revision: request.revision,
+          checkedAt: '2026-11-11T15:00:00.000Z',
+          configurationRevision: 2,
+          readyForBalanceTest: count === 1,
+          checks: [
+            {
+              id: 'PROFILE',
+              status: count === 1 ? 'VERIFIED' : 'ACTION_REQUIRED',
+              label:
+                count === 1
+                  ? 'Configuración verificada sintética'
+                  : 'Plantilla no disponible sintética',
+              action: '',
+            },
+          ],
+        },
+      };
+    });
+  });
+  const wizard = window.getByRole('region', { name: 'Asistente ATM QA/205' });
+  await wizard.getByLabel('Terminal ID autorizado').fill('ATM20524');
+  await wizard.getByRole('button', { name: 'Crear y verificar', exact: true }).click();
+  const next = wizard.getByRole('button', { name: 'Continuar a prueba de saldo' });
+  await expect(next).toBeEnabled();
+  await wizard.getByRole('button', { name: 'Actualizar verificación' }).click();
+  await expect(next).toBeDisabled();
+  await expect(wizard.getByText('Configuración verificada sintética')).toHaveCount(0);
+  await expect(wizard.getByRole('alert')).toContainText('no respondió a tiempo', {
+    timeout: 10000,
+  });
+  await wizard.getByRole('button', { name: 'Actualizar verificación' }).click();
+  await expect(wizard.getByText('Plantilla no disponible sintética')).toBeVisible();
+  await expect(next).toBeDisabled();
+  const totals = await window.evaluate(async () => {
+    const result = await globalThis.window.desktop!.getCatalog('QA');
+    if (!result.ok) throw Error(result.error.code);
+    const atm = result.value.atms.find((item) => item.terminalId === 'ATM20524')!;
+    return {
+      count: result.value.atms.length,
+      audit: result.value.audit.filter((item) => item.recordId === atm.id).length,
+    };
+  });
+  expect(totals).toEqual({ count: 2, audit: 1 });
+});
+
 test('depósito QA: monto, canal propio, RC12, mensajes e historial sin opciones de retiro', async () => {
   test.setTimeout(60000);
   const window = await prepareBalanceSubmission();

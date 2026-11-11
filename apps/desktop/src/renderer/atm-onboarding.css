@@ -1,0 +1,71 @@
+.atm-onboarding {
+  max-width: 1040px;
+  margin-inline: auto;
+  padding: 24px;
+}
+.atm-onboarding .panel-heading {
+  align-items: flex-start;
+}
+.atm-onboarding fieldset {
+  border: 0;
+  padding: 0;
+  margin-block: 20px;
+}
+.atm-wizard-steps {
+  display: flex;
+  list-style: none;
+  padding: 0;
+  gap: 12px;
+  margin-block: 20px 28px;
+}
+.atm-wizard-steps li {
+  flex: 1;
+  padding: 12px;
+  border-bottom: 3px solid var(--border, #dce2eb);
+}
+.atm-wizard-steps [aria-current='step'] {
+  font-weight: 700;
+  border-color: #2563eb;
+  color: #1d4ed8;
+}
+.atm-inspection-checks {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  margin-block: 20px;
+}
+.atm-inspection-checks li {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--border, #dce2eb);
+  border-left: 4px solid #64748b;
+  border-radius: 8px;
+}
+.atm-inspection-checks [data-status='VERIFIED'] {
+  border-left-color: #14804a;
+}
+.atm-inspection-checks [data-status='ACTION_REQUIRED'] {
+  border-left-color: #b45309;
+}
+.atm-onboarding .catalog-actions {
+  flex-wrap: wrap;
+  margin-block: 16px;
+}
+.atm-balance-test > ol {
+  padding-left: 24px;
+  line-height: 1.8;
+}
+.atm-balance-test .card-reader {
+  margin-block: 16px;
+}
+@media (max-width: 700px) {
+  .atm-onboarding {
+    padding: 16px;
+  }
+  .atm-wizard-steps {
+    gap: 4px;
+    font-size: 13px;
+  }
+}

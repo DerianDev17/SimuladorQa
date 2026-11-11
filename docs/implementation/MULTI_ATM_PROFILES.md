@@ -1,5 +1,29 @@
 # ATM20521 como plantilla funcional
 
+## Asistente de alta y prueba (2026-11-11)
+
+1. En **Perfiles ATM**, pulsar **Crear ATM QA/205**.
+2. Introducir el Terminal ID autorizado de ocho caracteres en mayúsculas y un
+   alias opcional. Entidad y adquirente se heredan de ATM20521 activa.
+3. Pulsar **Crear y verificar**. El perfil se guarda una sola vez y se comprueban
+   automáticamente configuración, destino, plazos, seguridad TEST y reservas.
+4. Corregir los requisitos indicados; **Revisar configuración de envío** conserva
+   el alta y al regresar se vuelve a verificar. Un fallo no elimina el perfil.
+5. Pulsar **Continuar a prueba de saldo**, leer la tarjeta QA y pulsar
+   **Probar consulta de saldo**. El PIN se solicita por el diálogo protegido
+   existente. Consultar el resultado y su correlación en el asistente/historial.
+
+**Verificar y probar** permite retomar un ATM existente de la entidad 205.
+La prueba usa saldo/LOCAL/ahorros y conserva el borrador de Transacciones.
+La inspección local no consume secuencias ni conecta; la consulta explícita
+sí consume una reserva. Un timeout del alta conserva su UUID para **Recuperar
+alta** sin duplicar registros. No se reenvían consultas automáticamente.
+
+El resultado distingue requisitos locales de aceptación del host. Una respuesta
+aprobada acredita esa consulta y configuración, no el retiro ni la admisión
+permanente. Un terminal nuevo debe estar habilitado en el switch; el asistente
+no realiza esa alta remota. Detalles y criterios: [ADR-042](../adr/ADR-042-QA-ATM-ONBOARDING.md).
+
 ## Mejoras de catálogo (2026-11-10)
 
 Perfiles ATM muestra totales de perfiles activos e inactivos y cuántos tienen

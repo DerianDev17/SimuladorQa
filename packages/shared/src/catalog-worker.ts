@@ -7,12 +7,14 @@ import type {
 import type { Environment } from '../../domain/src/index';
 import type { Result } from './contracts';
 import type { SaveCaseRequest } from '../../domain/src/saved-cases';
+import type { CreateQaAtmRequest } from '../../domain/src/atm-onboarding';
 
 export type CatalogCommand =
   | { kind: 'list'; environment: Environment }
   | { kind: 'saveEntity'; request: SaveEntityRequest }
   | { kind: 'deleteEntity'; request: DeleteRequest }
   | { kind: 'saveAtm'; request: SaveAtmRequest }
+  | { kind: 'createQaAtm'; request: CreateQaAtmRequest }
   | { kind: 'deleteAtm'; request: DeleteRequest }
   | { kind: 'saveCase'; request: SaveCaseRequest }
   | { kind: 'deleteCase'; request: DeleteRequest };

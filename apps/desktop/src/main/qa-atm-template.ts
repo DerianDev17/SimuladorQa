@@ -1,4 +1,5 @@
 import type { CatalogSnapshot } from '../../../../packages/domain/src/catalogs';
+import type { InspectQaAtmRequest } from '../../../../packages/domain/src/atm-onboarding';
 import { selectableAtms } from '../../../../packages/domain/src/catalogs';
 import type { BalanceContextProvider, BalanceTarget, BalanceContextLease } from './balance-ports';
 import type { BalanceReadiness } from '../../../../packages/domain/src/balance-inquiry';
@@ -33,17 +34,30 @@ export class QaAtmTemplate {
   ) {}
 
   private async snapshot(target: BalanceTarget) {
+    if (target.draft.environment !== 'QA') throw Error('QA_TEMPLATE_ATM_INVALID');
+    const current = await this.configuration(
+      { environment: 'QA', atmId: target.draft.atmId!, revision: target.draft.atmRevision! },
+      target.endpoint,
+    );
+    if (current.profile.terminalId !== target.terminalId) throw Error('QA_TEMPLATE_ATM_INVALID');
+    return current;
+  }
+
+  // Read-only inspection and execution share the same identity/destination checks.
+  private async configuration(
+    request: InspectQaAtmRequest,
+    endpoint: { host: string; port: number },
+  ) {
     const [state, catalog] = await Promise.all([this.profiles.read(), this.catalog()]);
-    const atm = selectableAtms(catalog).find((item) => item.id === target.draft.atmId);
+    const atm = selectableAtms(catalog).find((item) => item.id === request.atmId);
     const entity = catalog.entities.find((item) => item.id === atm?.entityId);
     if (
       catalog.environment !== 'QA' ||
-      target.draft.environment !== 'QA' ||
+      request.environment !== 'QA' ||
       !atm ||
       atm.environment !== 'QA' ||
       entity?.code !== '205' ||
-      atm.revision !== target.draft.atmRevision ||
-      atm.terminalId !== target.terminalId ||
+      atm.revision !== request.revision ||
       !/^[A-Z0-9]{8}$/.test(atm.terminalId) ||
       !/^\d{1,11}$/.test(atm.acquirerId)
     )
@@ -57,8 +71,8 @@ export class QaAtmTemplate {
       !sourceAtm ||
       sourceAtm.entityId !== atm.entityId ||
       sourceAtm.terminalId !== source.terminalId ||
-      source.endpoint.host !== target.endpoint.host ||
-      source.endpoint.port !== target.endpoint.port
+      source.endpoint.host !== endpoint.host ||
+      source.endpoint.port !== endpoint.port
     )
       throw Error('QA_TEMPLATE_UNAVAILABLE');
     const fixedFields = new Map(source.fixedFields);
@@ -80,6 +94,27 @@ export class QaAtmTemplate {
     };
     const row = state.file.profiles.find((item) => item.id === source.id)!;
     return { source, profile, row, sourceAtm };
+  }
+
+  async inspectLocal(
+    request: InspectQaAtmRequest,
+    endpoint: { host: string; port: number },
+    securityAvailable: (reference: string) => Promise<boolean>,
+  ) {
+    const initial = await this.configuration(request, endpoint);
+    const available = await securityAvailable(initial.profile.keyReference);
+    const current = await this.configuration(request, endpoint);
+    if (
+      qaExecutionProfileIdentity(initial.profile) !== qaExecutionProfileIdentity(current.profile) ||
+      initial.sourceAtm.revision !== current.sourceAtm.revision
+    )
+      throw Error('QA_PROFILE_CHANGED');
+    return {
+      source:
+        current.source.atmId === request.atmId ? ('SPECIFIC' as const) : ('ATM20521' as const),
+      sequencesRemaining: (current.row.reservedSequences as number[]).length,
+      securityAvailable: available,
+    };
   }
 
   async resolve(target: BalanceTarget) {

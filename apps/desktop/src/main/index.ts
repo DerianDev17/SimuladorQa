@@ -37,6 +37,7 @@ import { WithdrawalService } from './withdrawal-service';
 import { WithdrawalReceiptService } from './withdrawal-receipt-service';
 import { ElectronReceiptPrinter } from './adapters/electron-receipt-printer';
 import { QaAtmTemplate, QaTemplateContextProvider } from './qa-atm-template';
+import { AtmInspectionService } from './atm-inspection-service';
 import { FileQaExecutionProfiles } from './infrastructure/qa-execution-profiles';
 import { FileQaWithdrawalPolicies } from './infrastructure/qa-withdrawal-policies';
 import { WindowsQaPinEntry } from './adapters/qa-pin-entry';
@@ -373,6 +374,14 @@ void startupReady
       withdrawalService,
       sessionMessages,
       depositService,
+      new AtmInspectionService(
+        {
+          inspectLocal: (request, endpoint) =>
+            template.inspectLocal(request, endpoint, (reference) => pinCipher.available(reference)),
+        },
+        sendConfiguration,
+        runtime.now,
+      ),
     );
     financialApplication = application;
     loadRunStore = new WorkerLoadRunStore(
@@ -444,6 +453,7 @@ void startupReady
             channels.disconnectSwitch,
             channels.saveSendConfiguration,
             channels.saveAtm,
+            channels.createQaAtm,
             channels.deleteAtm,
             channels.saveEntity,
             channels.deleteEntity,
@@ -602,6 +612,10 @@ void startupReady
             return application.catalog('deleteEntity', payload);
           case channels.saveAtm:
             return application.catalog('saveAtm', payload);
+          case channels.createQaAtm:
+            return application.catalog('createQaAtm', payload);
+          case channels.inspectQaAtm:
+            return application.inspectQaAtm(payload);
           case channels.deleteAtm:
             return application.catalog('deleteAtm', payload);
           case channels.saveCase:

@@ -8,6 +8,10 @@ import {
 import { failure } from '../../../../packages/shared/src/contracts';
 import type { AppSnapshot, Result, ReviewedDraft } from '../../../../packages/shared/src/contracts';
 import type { Preparation } from '../../../../packages/domain/src/index';
+import {
+  parseCreateQaAtm,
+  parseInspectQaAtm,
+} from '../../../../packages/domain/src/atm-onboarding';
 import type { Preferences, PreferencesStore, RuntimeIdentity } from './ports';
 import {
   parseSaveAtmRequest,
@@ -17,6 +21,7 @@ import {
 import type { CatalogSnapshot } from '../../../../packages/domain/src/catalogs';
 import type { CatalogCommand } from '../../../../packages/shared/src/catalog-worker';
 import type { CatalogStore } from './catalog-port';
+import type { AtmInspectionPort } from './atm-inspection-port';
 import { parseDraftRequest, reviewDraft } from '../../../../packages/domain/src/transaction-draft';
 import type { OperationCatalog } from '../../../../packages/domain/src/transaction-draft';
 import type { DestinationInspector } from '../../../../packages/domain/src/destination-compatibility';
@@ -98,6 +103,7 @@ export class DesktopApplication {
     private readonly withdrawalService?: FinancialExecutionPort,
     private readonly sessionMessages?: SessionMessagePort,
     private readonly depositService?: FinancialExecutionPort,
+    private readonly atmInspection?: AtmInspectionPort,
   ) {}
 
   private serialize<T>(operation: () => Promise<T>): Promise<T> {
@@ -791,6 +797,21 @@ export class DesktopApplication {
     });
   }
 
+  async inspectQaAtm(payload: unknown) {
+    const request = parseInspectQaAtm(payload);
+    if (!request) return failure('VALIDATION_ERROR', 'Selecciona un ATM QA y su revisión actual.');
+    try {
+      const preferences = await this.store.read();
+      if (preferences.environment !== 'QA')
+        return failure('FORBIDDEN', 'La verificación requiere Qa.');
+      return this.atmInspection
+        ? await this.atmInspection.inspect(request)
+        : failure('SERVICE_UNAVAILABLE', 'La verificación de ATM no está disponible.');
+    } catch {
+      return failure('SERVICE_UNAVAILABLE', 'No se pudo comprobar el ambiente de la estación.');
+    }
+  }
+
   catalog(kind: CatalogCommand['kind'], payload: unknown): Promise<Result<CatalogSnapshot>> {
     return this.serialize(async () => {
       if (this.balanceBusy && kind !== 'list')
@@ -807,6 +828,11 @@ export class DesktopApplication {
         }
         case 'saveEntity': {
           const request = parseSaveEntityRequest(payload);
+          if (request) command = { kind, request };
+          break;
+        }
+        case 'createQaAtm': {
+          const request = parseCreateQaAtm(payload);
           if (request) command = { kind, request };
           break;
         }

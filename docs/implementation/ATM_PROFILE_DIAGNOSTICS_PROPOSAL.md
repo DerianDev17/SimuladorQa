@@ -2,6 +2,14 @@
 
 Fecha: 2026-11-10. Estado: análisis; el diagnóstico completo no está implementado.
 
+Actualización 2026-11-11: se implementa el diagnóstico acotado a alta y prueba
+de saldo QA/205 mediante el asistente de [ADR-042](../adr/ADR-042-QA-ATM-ONBOARDING.md).
+Incluye identidad/plantilla/destino, plazos, seguridad y pool, sin efectos
+financieros durante la inspección. El diagnóstico de contratos de todas las
+operaciones y un estado persistente de disponibilidad permanecen propuestos.
+Las referencias siguientes al diagnóstico pendiente corresponden a la propuesta
+original de alcance general.
+
 ## Problema y valor
 
 Un ATM puede estar activo en el catálogo y no estar disponible para operar:

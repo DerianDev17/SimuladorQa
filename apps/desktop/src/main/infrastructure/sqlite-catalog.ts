@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { parseCreateQaAtm } from '../../../../../packages/domain/src/atm-onboarding';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -318,6 +319,77 @@ export class SqliteCatalog {
                 context.timestamp,
               );
           this.audit(context, environment, 'ENTITY', recordId, id ? 'UPDATED' : 'CREATED');
+          break;
+        }
+        case 'createQaAtm': {
+          const request = parseCreateQaAtm(command.request);
+          if (!request)
+            throw new CatalogFault(
+              'VALIDATION_ERROR',
+              'Revisa el alias y el Terminal ID QA de ocho caracteres.',
+            );
+          const source = this.existing(
+            'atm_profiles',
+            request.templateId,
+            request.templateRevision,
+            'QA',
+          );
+          const owner = this.database
+            .prepare('SELECT * FROM entities WHERE id = ?')
+            .get(source.entity_id as string);
+          if (
+            source.terminal_id !== 'ATM20521' ||
+            source.active !== 1 ||
+            owner?.active !== 1 ||
+            owner.code !== '205' ||
+            typeof source.acquirer_id !== 'string' ||
+            !/^\d{1,11}$/.test(source.acquirer_id)
+          )
+            throw new CatalogFault(
+              'CONFLICT',
+              'Recarga una plantilla ATM20521 activa de la entidad 205.',
+            );
+          const existing = this.database
+            .prepare('SELECT * FROM atm_profiles WHERE id = ?')
+            .get(request.requestId);
+          if (existing) {
+            // The same request recovers a committed creation after a lost response.
+            if (
+              existing.environment !== 'QA' ||
+              existing.revision !== 1 ||
+              existing.active !== 1 ||
+              existing.alias !== request.alias ||
+              existing.terminal_id !== request.terminalId ||
+              existing.entity_id !== source.entity_id ||
+              existing.acquirer_id !== source.acquirer_id
+            )
+              throw new CatalogFault(
+                'CONFLICT',
+                'El alta ya existe con otros datos. Recarga el catálogo.',
+              );
+            break;
+          }
+          if (
+            this.database
+              .prepare('SELECT id FROM atm_profiles WHERE environment = ? AND terminal_id = ?')
+              .get('QA', request.terminalId)
+          )
+            throw new CatalogFault('VALIDATION_ERROR', 'Ya existe ese Terminal ID en Qa.');
+          this.database
+            .prepare('INSERT INTO atm_profiles VALUES (?,?,?,?,?,?,?,?,?,?)')
+            .run(
+              request.requestId,
+              request.alias,
+              source.entity_id as string,
+              'QA',
+              request.terminalId,
+              source.acquirer_id,
+              1,
+              1,
+              context.timestamp,
+              context.timestamp,
+            );
+          this.audit(context, 'QA', 'ATM', request.requestId, 'CREATED');
           break;
         }
         case 'saveAtm': {

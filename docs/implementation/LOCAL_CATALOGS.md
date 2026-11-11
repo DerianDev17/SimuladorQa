@@ -1,5 +1,11 @@
 # Catálogos de entidades y ATM
 
+Actualización 2026-11-11: **Crear ATM QA/205** agrega un asistente con herencia
+atómica de entidad/adquirente, recuperación de alta, verificación local sin
+efectos financieros y prueba explícita de saldo. **Verificar y probar** retoma
+un ATM guardado. El CRUD administrativo sigue disponible; ver
+[asistente y alcance](MULTI_ATM_PROFILES.md#asistente-de-alta-y-prueba-2026-11-11).
+
 Actualización 2026-10-27: en QA/205, **Nuevo perfil ATM** toma entidad y
 adquirente de ATM20521, y **Clonar** conserva esos datos del origen. Solo alias
 y Terminal ID deben diferenciar el nuevo registro. Main resuelve al usarlo la
