@@ -1,5 +1,30 @@
 # ATM20521 como plantilla funcional
 
+## Mejoras de catálogo (2026-11-10)
+
+Perfiles ATM muestra totales de perfiles activos e inactivos y cuántos tienen
+una entidad no disponible. Este último contador puede incluir perfiles activos
+o inactivos: no es una tercera categoría excluyente ni un diagnóstico financiero.
+La tabla identifica esas entidades y permite filtrarlas. Un perfil activo solo
+es seleccionable cuando su entidad también está activa.
+
+La búsqueda combina palabras de alias, Terminal ID, Acquirer ID, código y nombre
+de entidad; ignora acentos, mayúsculas y espacios exteriores. Se combina con
+filtros de entidad y estado. Cambiar filtros vuelve a la primera página;
+**Limpiar filtros** recupera el catálogo completo. Los totales no se restringen
+a los resultados filtrados. La tabla conserva paginación de 15 filas.
+
+El editor indica un Terminal ID duplicado antes de guardar, incluidos registros
+inactivos. Excluye el propio registro editado y conserva la unicidad existente
+de SQLite (comparación exacta tras quitar espacios exteriores). Main mantiene
+la validación definitiva frente a cambios concurrentes. Errores y timeouts
+conservan el formulario y requieren recargar antes de reintentar.
+
+El formulario distingue registro administrativo, herencia QA/205 y aceptación
+del host. No interpreta los contadores como disponibilidad del perfil privado,
+clave o pool. La propuesta de diagnóstico completo está en
+[análisis de la feature](ATM_PROFILE_DIAGNOSTICS_PROPOSAL.md).
+
 ## Uso vigente (2026-10-27)
 
 En QA, los ATM activos de la entidad 205 usan automáticamente la plantilla

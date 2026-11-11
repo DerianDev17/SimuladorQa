@@ -15,10 +15,12 @@ de todos los envíos no aplican a esta ruta QA de la entidad 205.
 2. Abrir **Entidades**, crear código/nombre y seleccionar explícitamente una red.
 3. Abrir **Perfiles ATM**, seleccionar una entidad activa y capturar alias, Terminal ID y Acquirer ID.
 4. Guardar como borrador. Buscar, filtrar activos/inactivos, editar o eliminar desde la tabla.
-5. Guardar o cancelar el editor antes de navegar o cambiar entre QA y PREPROD.
+5. Guardar o cancelar el editor antes de navegar. Qa es el único ambiente operativo.
 
 Las entidades son compartidas; los ATM se consultan y modifican solo en el ambiente activo.
 Los filtros son locales y la tabla muestra 15 filas por página. El catálogo inicia vacío.
+Perfiles ATM incluye resumen, búsqueda por adquirente/código de entidad, filtros
+por entidad y advertencias de duplicados; ver [mejoras del catálogo](MULTI_ATM_PROFILES.md).
 
 Los datos usados en tests/capturas son sintéticos y viven en directorios temporales. No son fixtures ISO aprobados ni se agregan al catálogo del usuario.
 
@@ -37,6 +39,13 @@ Las entidades referenciadas no se pueden eliminar. Entidades inactivas conservan
 no permiten crear/activar nuevos perfiles. Los registros tienen una revisión creciente;
 un editor obsoleto no puede sobrescribir ni eliminar la versión actual.
 
+Al cambiar el código de una entidad con ATM asociados en Qa, el editor muestra
+cuántos perfiles seguirán vinculados, incluidos los inactivos. Si el código original
+es `205`, advierte que guardar otro código impide a esos perfiles utilizar la
+plantilla ATM20521 para ejecutar transacciones. El aviso desaparece al restituir
+el código original; los espacios de los extremos no cuentan como cambio. Es un
+aviso informativo y permite guardar o cancelar con las validaciones existentes.
+
 Ante conflicto o timeout, pulsar **Recargar** antes de volver a editar. Si hay cambios
 sin guardar, se pide confirmar **Descartar y recargar**; **Seguir editando** y Escape
 conservan el formulario. Sin cambios, la recarga es directa. El refresco confirmado cierra
@@ -54,10 +63,10 @@ disponible cuando llega su respuesta, incluso si termina en timeout.
 
 ## Alcance pendiente
 
-Ahora se puede **Clonar** un ATM del catálogo. Se copia únicamente su entidad
-administrativa; alias, Terminal ID y Acquirer ID quedan vacíos para completarlos
-con evidencia del nuevo cajero. El UUID y la revisión se crean al guardar. La
-clonación no copia clave, campos ISO ni reservas STAN y no habilita el envío.
+Se puede **Clonar** un ATM del catálogo. Se conservan entidad, Acquirer ID y
+estado activo del origen; alias y Terminal ID quedan vacíos. El UUID y la revisión
+se crean al guardar. La clonación no copia claves ni reservas STAN. Main resuelve
+la herencia QA/205 según la guía vigente; guardar no acredita aceptación del host.
 El historial QA de Transacciones permite filtrar las operaciones por ATM.
 
 Guardar un perfil **DRAFT** no valida los campos ISO ni habilita envío. Transacciones
@@ -71,7 +80,7 @@ La navegación lateral se bloquea durante la edición o escritura para evitar pe
 Un fallo mantiene el formulario y no avanza el recorrido. Ante conflicto/timeout se debe
 recargar; el refresco cierra el editor y permite volver al borrador mediante **Volver a
 transacción**. Perfiles/entidades inactivos no se seleccionan automáticamente.
-Todos los flujos ISO permanecen bloqueados.
+La disponibilidad de envío se verifica en Main según la configuración vigente.
 
 Membresía, BIN/rangos, Core, fixedFields/red ATM, endpoints, framing, timeouts y tarjetas
 permanecen pendientes de fuentes aprobadas. El conflicto de clasificación está registrado

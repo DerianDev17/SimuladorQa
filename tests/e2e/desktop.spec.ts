@@ -2900,6 +2900,105 @@ test('crear ATM desde plantilla hereda adquirente y resuelve envío en Main sin 
   ).toHaveLength(1);
 });
 
+test('perfiles ATM: resumen, búsqueda combinada, filtros y entidad inactiva', async () => {
+  const window = await launch();
+  await createTestEntity(window);
+  await createTestAtm(window, 'Cajero jardín');
+  const seed = await window.evaluate(async () => {
+    const api = globalThis.window.desktop!;
+    const entityResult = await api.saveEntity({
+      environment: 'QA',
+      id: null,
+      revision: null,
+      values: { code: 'OTRA', name: 'Entidad secundaria', networkType: 'COONECTA', active: true },
+    });
+    if (!entityResult.ok) throw Error('SEED_ENTITY');
+    const entity = entityResult.value.entities.find((item) => item.code === 'OTRA')!;
+    for (let index = 0; index < 16; index++) {
+      const result = await api.saveAtm({
+        environment: 'QA',
+        id: null,
+        revision: null,
+        values: {
+          alias: `Cajero secundario ${index}`,
+          entityId: entity.id,
+          terminalId: `TEST${String(index).padStart(4, '0')}`,
+          acquirerId: '123456',
+          active: index !== 0,
+        },
+      });
+      if (!result.ok) throw Error('SEED_ATM');
+    }
+    const disabled = await api.saveEntity({
+      environment: 'QA',
+      id: entity.id,
+      revision: entity.revision,
+      values: {
+        code: entity.code,
+        name: entity.name,
+        networkType: entity.networkType,
+        active: false,
+      },
+    });
+    if (!disabled.ok) throw Error('SEED_DISABLE');
+    return entity.id;
+  });
+  await window.getByRole('button', { name: 'Recargar', exact: true }).click();
+  const summary = window.getByLabel('Resumen de perfiles ATM');
+  await expect(summary.locator('dd')).toHaveText(['17', '16', '1', '16']);
+  await window.getByRole('button', { name: 'Siguiente', exact: true }).click();
+  await window.getByLabel('Buscar ATM').fill('  jardin test-e2e ');
+  await expect(window.locator('.catalog-table tbody tr')).toHaveCount(1);
+  await expect(
+    window.getByRole('button', { name: 'Editar Cajero jardín', exact: true }),
+  ).toBeVisible();
+  await window.getByRole('button', { name: 'Limpiar filtros' }).click();
+  await window.getByLabel('Filtrar por entidad').selectOption(seed);
+  await window.getByLabel('Estado', { exact: true }).selectOption('INACTIVE');
+  await expect(window.locator('.catalog-table tbody tr')).toHaveCount(1);
+  await expect(window.locator('.catalog-table tbody')).toContainText('Entidad no disponible');
+  await window.getByLabel('Buscar ATM').fill('123456');
+  await expect(window.locator('.catalog-table tbody tr')).toHaveCount(1);
+  await window.getByLabel('Buscar ATM').fill('sin-coincidencias');
+  await expect(
+    window.getByRole('heading', { name: 'Sin resultados para este filtro' }),
+  ).toBeVisible();
+  await window.getByRole('button', { name: 'Limpiar filtros' }).click();
+  await window.getByLabel('Estado', { exact: true }).selectOption('ENTITY_INACTIVE');
+  await expect(window.locator('.catalog-count')).toHaveText('16 registros');
+  await window.getByRole('button', { name: 'Limpiar filtros' }).click();
+  await window.setViewportSize({ width: 1024, height: 768 });
+  expect(await window.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+    true,
+  );
+  await window.evaluate(() => globalThis.window.scrollTo(0, 0));
+  await window.screenshot({ path: 'artifacts/atm-profiles-improved.png' });
+});
+
+for (const errorCode of ['TIMEOUT', 'SERVICE_UNAVAILABLE'] as const) {
+  test(`perfiles ATM: conserva la edición ante ${errorCode}`, async () => {
+    const window = await launch();
+    await createTestEntity(window);
+    await createTestAtm(window, 'ATM recuperable');
+    await window.getByRole('button', { name: 'Editar ATM recuperable' }).click();
+    await window.getByLabel('Alias ATM').fill('Alias pendiente');
+    await app!.evaluate(({ ipcMain }, code) => {
+      ipcMain.removeHandler('catalog:atm:save');
+      ipcMain.handle('catalog:atm:save', () => ({
+        ok: false,
+        error: { code, message: 'No se pudo confirmar el guardado. Recarga el catálogo.' },
+      }));
+    }, errorCode);
+    await window.getByRole('button', { name: 'Guardar borrador' }).click();
+    await expect(window.getByRole('alert')).toContainText('No se pudo confirmar el guardado');
+    await expect(window.getByLabel('Alias ATM')).toHaveValue('Alias pendiente');
+    await expect(window.getByRole('button', { name: 'Guardar borrador' })).toBeDisabled();
+    await window.getByRole('button', { name: 'Recargar', exact: true }).click();
+    await window.getByRole('button', { name: 'Descartar y recargar' }).click();
+    await expect(window.getByRole('button', { name: 'Editar ATM recuperable' })).toBeVisible();
+  });
+}
+
 test('clonación ATM exige nueva identidad y conserva el origen', async () => {
   const window = await launch();
   await createTestEntity(window);
@@ -2911,6 +3010,10 @@ test('clonación ATM exige nueva identidad y conserva el origen', async () => {
   await expect(window.getByLabel('Entidad del ATM')).not.toHaveValue('');
   await window.getByLabel('Alias ATM').fill('ATM clonado');
   await window.getByLabel('Terminal ID', { exact: true }).fill('Test-Terminal');
+  await expect(window.getByLabel('Terminal ID', { exact: true })).toHaveAttribute(
+    'aria-invalid',
+    'true',
+  );
   await window.getByLabel('Acquirer ID', { exact: true }).fill('Test-Acquirer-2');
   await window.getByRole('button', { name: 'Guardar borrador' }).click();
   await expect(window.getByRole('alert')).toContainText('Terminal ID');
@@ -3389,6 +3492,76 @@ test('CRUD de entidades y ATM en Qa, reinicio y eliminación protegida', async (
   await window.getByRole('dialog').getByRole('button', { name: 'Confirmar eliminación' }).click();
   await expect(window.getByText('Crea tu primera entidad de prueba')).toBeVisible();
 });
+
+for (const originalCode of ['205', 'TEST-E2E']) {
+  test(`cambio de código ${originalCode}: aviso de impacto, cancelación y timeout`, async () => {
+    test.setTimeout(60_000);
+    const window = await launch();
+    await createTestEntity(window);
+    const code = window.getByLabel('Código de entidad');
+    const warning = window.locator('#entity-code-impact');
+    const save = window.getByRole('button', { name: 'Guardar borrador' });
+    const cancel = window.getByRole('button', { name: 'Cancelar', exact: true });
+    await window.getByRole('button', { name: 'Editar TEST-E2E', exact: true }).click();
+    await code.fill('SIN-ATM');
+    await expect(warning).toHaveCount(0);
+    await cancel.click();
+    await createTestAtm(window, 'ATM de impacto');
+    await window.getByRole('button', { name: 'Editar ATM de impacto', exact: true }).click();
+    await window.getByLabel('Perfil ATM activo').uncheck();
+    await save.click();
+    await window.getByRole('button', { name: 'Entidades', exact: true }).click();
+    await window.getByRole('button', { name: 'Editar TEST-E2E', exact: true }).click();
+    await code.fill(originalCode);
+    await save.click();
+    await window.getByRole('button', { name: `Editar ${originalCode}`, exact: true }).click();
+    await window.getByLabel('Nombre de entidad').fill('Nombre actualizado');
+    await expect(warning).toHaveCount(0);
+    await code.fill(` ${originalCode} `);
+    await expect(warning).toHaveCount(0);
+    await code.fill('CAMBIADO');
+    await expect(warning).toContainText('1 perfil ATM asociado en Qa');
+    await expect(code).toHaveAttribute('aria-describedby', 'entity-code-impact');
+    if (originalCode === '205') {
+      await expect(warning).toContainText('dejarán de poder utilizar la plantilla ATM20521');
+    } else {
+      await expect(warning).not.toContainText('dejarán de poder');
+    }
+    await cancel.click();
+    await window.getByRole('button', { name: `Editar ${originalCode}`, exact: true }).click();
+    await expect(code).toHaveValue(originalCode);
+    await expect(warning).toHaveCount(0);
+    await code.fill('');
+    await save.click();
+    await expect(code).toHaveValue('');
+    await expect(
+      window.getByRole('heading', { name: 'Editar entidad', exact: true }),
+    ).toBeVisible();
+    await code.fill('CAMBIADO');
+    await save.click();
+    await window.getByRole('button', { name: 'Editar CAMBIADO', exact: true }).click();
+    await expect(code).toHaveValue('CAMBIADO');
+    await expect(warning).toHaveCount(0);
+    await code.fill('OTRO-CODIGO');
+    await app!.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler('catalog:entity:save');
+      ipcMain.handle('catalog:entity:save', () => ({
+        ok: false,
+        error: {
+          code: 'TIMEOUT',
+          message: 'El catálogo no respondió. Recarga antes de reintentar.',
+        },
+      }));
+    });
+    await save.click();
+    await expect(window.getByRole('alert')).toContainText('Recarga antes de reintentar');
+    await expect(warning).toBeVisible();
+    await expect(code).toHaveValue('OTRO-CODIGO');
+    await expect(save).toBeDisabled();
+    const catalog = await window.evaluate(() => globalThis.window.desktop!.getCatalog('QA'));
+    expect(catalog).toMatchObject({ ok: true, value: { entities: [{ code: 'CAMBIADO' }] } });
+  });
+}
 
 test('una edición concurrente se conserva y los contratos rechazan producción/datos sensibles', async () => {
   const window = await launch();

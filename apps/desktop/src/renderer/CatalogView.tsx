@@ -20,6 +20,7 @@ import type { Environment } from '../../../../packages/domain/src/index';
 import type { CatalogCommand } from '../../../../packages/shared/src/catalog-worker';
 import type { ErrorCode } from '../../../../packages/shared/src/contracts';
 import { Icon } from './Icon';
+import { duplicateAtmTerminal, matchesAtmSearch } from './atm-catalog';
 
 export type CatalogMutation = Exclude<CatalogCommand, { kind: 'list' }>;
 interface Props {
@@ -103,11 +104,35 @@ export function CatalogView({
   const [deleting, setDeleting] = useState<Entity | AtmProfile>();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('ALL');
+  const [entityFilter, setEntityFilter] = useState('ALL');
   const [page, setPage] = useState(0);
   const [formError, setFormError] = useState('');
   const [notice, setNotice] = useState('');
   const dialog = useRef<HTMLDialogElement>(null);
   const entitiesView = kind === 'entities';
+  const entitiesById = new Map(catalog?.entities.map((entity) => [entity.id, entity]));
+  const atmProfiles = catalog?.atms.filter((atm) => atm.environment === environment) ?? [];
+  const inactiveEntityCount = atmProfiles.filter(
+    (atm) => !entitiesById.get(atm.entityId)?.active,
+  ).length;
+  const duplicateTerminal =
+    !!editor &&
+    !entitiesView &&
+    duplicateAtmTerminal(atmProfiles, editor.atm.terminalId, environment, editor.id);
+  const qaTemplateEntity =
+    environment === 'QA' && entitiesById.get(editor?.atm.entityId ?? '')?.code === '205';
+  const originalEntity = entitiesView
+    ? catalog?.entities.find((entity) => entity.id === editor?.id)
+    : undefined;
+  const linkedAtmCount = originalEntity
+    ? (catalog?.atms.filter(
+        (atm) => atm.entityId === originalEntity.id && atm.environment === environment,
+      ).length ?? 0)
+    : 0;
+  const showCodeImpact =
+    linkedAtmCount > 0 &&
+    !!editor?.entity.code.trim() &&
+    editor.entity.code.trim() !== originalEntity?.code;
   const blocked =
     disabled ||
     loading ||
@@ -146,14 +171,27 @@ export function CatalogView({
     else void refresh();
   }
 
-  const rows = (entitiesView ? (catalog?.entities ?? []) : (catalog?.atms ?? [])).filter((item) => {
-    const text =
+  const filtersApplied = !!search || status !== 'ALL' || (!entitiesView && entityFilter !== 'ALL');
+  function clearFilters() {
+    setSearch('');
+    setStatus('ALL');
+    setEntityFilter('ALL');
+    setPage(0);
+  }
+  const rows = (entitiesView ? (catalog?.entities ?? []) : atmProfiles).filter((item) => {
+    const matchesSearch =
       'name' in item
         ? `${item.code} ${item.name}`
-        : `${item.alias} ${item.terminalId} ${catalog?.entities.find((entity) => entity.id === item.entityId)?.name ?? ''}`;
+            .toLocaleLowerCase()
+            .includes(search.trim().toLocaleLowerCase())
+        : matchesAtmSearch(item, entitiesById.get(item.entityId), search);
     return (
-      text.toLocaleLowerCase().includes(search.toLocaleLowerCase()) &&
-      (status === 'ALL' || item.active === (status === 'ACTIVE'))
+      matchesSearch &&
+      ('name' in item || entityFilter === 'ALL' || item.entityId === entityFilter) &&
+      (status === 'ALL' ||
+        (status === 'ENTITY_INACTIVE'
+          ? 'alias' in item && !entitiesById.get(item.entityId)?.active
+          : item.active === (status === 'ACTIVE')))
     );
   });
   const totalPages = Math.max(1, Math.ceil(rows.length / 15));
@@ -218,6 +256,10 @@ export function CatalogView({
       }
       command = { kind: 'saveEntity', request: { ...metadata, values } };
     } else {
+      if (duplicateTerminal) {
+        setFormError('El Terminal ID ya existe en este ambiente. Usa otro identificador.');
+        return;
+      }
       const values = parseAtmValues(editor.atm);
       if (!values) {
         setFormError('Completa el alias, entidad, Terminal ID y Acquirer ID.');
@@ -279,7 +321,7 @@ export function CatalogView({
             <p>
               {entitiesView
                 ? 'Entidades del ambiente Qa.'
-                : 'Perfiles independientes para el ambiente seleccionado.'}
+                : 'Administra tus cajeros de prueba, su entidad y sus identificadores.'}
             </p>
           </div>
           <div className="catalog-actions">
@@ -302,8 +344,36 @@ export function CatalogView({
         </div>
         <div className="catalog-draft" hidden={!!editor}>
           <Icon name="shield" size={17} />
-          <span>Catálogo local · validación pendiente</span>
+          <span>
+            {entitiesView
+              ? 'Catálogo local · validación pendiente'
+              : 'Activo es un estado del catálogo. La configuración de envío y la aceptación del host se verifican por separado.'}
+          </span>
         </div>
+        {!entitiesView && !editor && catalog && (
+          <dl
+            className="atm-catalog-summary"
+            aria-label="Resumen de perfiles ATM"
+            aria-busy={loading}
+          >
+            <div>
+              <dt>Perfiles en Qa</dt>
+              <dd>{atmProfiles.length}</dd>
+            </div>
+            <div>
+              <dt>Activos</dt>
+              <dd>{atmProfiles.filter((atm) => atm.active).length}</dd>
+            </div>
+            <div>
+              <dt>Inactivos</dt>
+              <dd>{atmProfiles.filter((atm) => !atm.active).length}</dd>
+            </div>
+            <div className={inactiveEntityCount ? 'needs-attention' : ''}>
+              <dt>Entidad no disponible</dt>
+              <dd>{inactiveEntityCount}</dd>
+            </div>
+          </dl>
+        )}
         {error && (
           <div className="error-banner" role="alert">
             <div>
@@ -355,6 +425,7 @@ export function CatalogView({
                         autoFocus
                         required
                         maxLength={catalogLimits.code}
+                        aria-describedby={showCodeImpact ? 'entity-code-impact' : undefined}
                         value={editor.entity.code}
                         onChange={(event) => textField('code', event.target.value)}
                       />
@@ -447,18 +518,38 @@ export function CatalogView({
                       <input
                         required
                         maxLength={catalogLimits.text}
+                        aria-invalid={duplicateTerminal || undefined}
+                        aria-describedby="atm-terminal-help"
+                        aria-label="Terminal ID"
                         value={editor.atm.terminalId}
                         onChange={(event) => textField('terminalId', event.target.value)}
                       />
+                      <small
+                        id="atm-terminal-help"
+                        className={duplicateTerminal ? 'atm-field-error' : 'atm-field-help'}
+                      >
+                        {duplicateTerminal
+                          ? 'Este Terminal ID ya existe en Qa; elige uno distinto.'
+                          : qaTemplateEntity
+                            ? '8 letras mayúsculas o dígitos. Debe ser único en Qa.'
+                            : 'Identificador único del terminal en Qa.'}
+                      </small>
                     </label>
                     <label>
                       Acquirer ID
                       <input
                         required
                         maxLength={catalogLimits.text}
+                        aria-describedby="atm-acquirer-help"
+                        aria-label="Acquirer ID"
                         value={editor.atm.acquirerId}
                         onChange={(event) => textField('acquirerId', event.target.value)}
                       />
+                      <small id="atm-acquirer-help" className="atm-field-help">
+                        {qaTemplateEntity
+                          ? 'Numérico, hasta 11 dígitos. Se hereda al crear desde ATM20521 o clonar.'
+                          : 'Identificador del adquirente según la configuración aprobada.'}
+                      </small>
                     </label>
                     <label className="checkbox-field">
                       <input
@@ -477,6 +568,20 @@ export function CatalogView({
                 )}
               </div>
             </fieldset>
+            {showCodeImpact && (
+              <p id="entity-code-impact" className="catalog-warning" role="status">
+                <strong>Impacto del cambio de código.</strong> Esta entidad tiene {linkedAtmCount}{' '}
+                {linkedAtmCount === 1 ? 'perfil ATM asociado' : 'perfiles ATM asociados'} en Qa. Los
+                perfiles seguirán vinculados a esta entidad.
+                {environment === 'QA' && originalEntity?.code === '205' && (
+                  <>
+                    {' '}
+                    Al guardar un código distinto de 205, estos perfiles dejarán de poder utilizar
+                    la plantilla ATM20521 para ejecutar transacciones.
+                  </>
+                )}
+              </p>
+            )}
             {formError && (
               <p className="catalog-form-error" role="alert">
                 {formError}
@@ -489,15 +594,15 @@ export function CatalogView({
                     catalog?.entities.some(
                       (entity) => entity.id === editor.atm.entityId && entity.code === '205',
                     )
-                  ? 'Usa la configuración de envío de ATM20521. Completa el alias y un Terminal ID distinto; al guardar podrás seleccionarlo en Transacciones y Carga y estrés.'
-                  : 'La plantilla ATM20521 está disponible para la entidad 205 en QA.'}
+                  ? 'Los perfiles QA/205 pueden heredar la configuración de ATM20521 y compartir sus reservas; una configuración específica tiene prioridad. La aplicación verifica los requisitos al operar. El terminal debe estar habilitado en el switch.'
+                  : 'La herencia de ATM20521 aplica a QA/205. Guardar este perfil no acredita una configuración de envío.'}
             </p>
             <details className="inline-details">
               <summary>Detalles del perfil</summary>
               <p className="form-note">
                 {entitiesView
                   ? 'La membresía FRONT/BACK/EXTERNAL está pendiente de validar entre las fuentes del proyecto.'
-                  : 'Los identificadores se guardan como los introduces, sin padding ni validación de formato ISO.'}{' '}
+                  : 'Se eliminan espacios de los extremos; no se añade padding. Para QA/205 se comprueban los formatos de Terminal ID y Acquirer ID documentados.'}{' '}
               </p>
             </details>
             <div className="catalog-actions editor-actions">
@@ -531,7 +636,9 @@ export function CatalogView({
                 type="search"
                 maxLength={catalogLimits.text}
                 value={search}
-                placeholder={entitiesView ? 'Código o nombre' : 'Alias, terminal o entidad'}
+                placeholder={
+                  entitiesView ? 'Código o nombre' : 'Alias, terminal, adquirente o entidad'
+                }
                 onChange={(event) => {
                   if (isRestrictedCatalogText(event.target.value)) {
                     setFormError(
@@ -545,9 +652,31 @@ export function CatalogView({
                 }}
               />
             </label>
+            {!entitiesView && (
+              <label>
+                Filtrar por entidad
+                <select
+                  aria-label="Filtrar por entidad"
+                  value={entityFilter}
+                  onChange={(event) => {
+                    setEntityFilter(event.target.value);
+                    setPage(0);
+                  }}
+                >
+                  <option value="ALL">Todas las entidades</option>
+                  {catalog?.entities.map((entity) => (
+                    <option key={entity.id} value={entity.id}>
+                      {entity.code} · {entity.name}
+                      {!entity.active ? ' (inactiva)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label>
               Estado
               <select
+                aria-label="Estado"
                 value={status}
                 onChange={(event) => {
                   setStatus(event.target.value);
@@ -557,8 +686,10 @@ export function CatalogView({
                 <option value="ALL">Todos</option>
                 <option value="ACTIVE">Activos</option>
                 <option value="INACTIVE">Inactivos</option>
+                {!entitiesView && <option value="ENTITY_INACTIVE">Entidad no disponible</option>}
               </select>
             </label>
+            {filtersApplied && <button onClick={clearFilters}>Limpiar filtros</button>}
             <span className="catalog-count">
               {rows.length} {rows.length === 1 ? 'registro' : 'registros'}
             </span>
@@ -574,18 +705,20 @@ export function CatalogView({
                 <Icon name={entitiesView ? 'entity' : 'atm'} size={30} />
               </span>
               <h3>
-                {search || status !== 'ALL'
+                {filtersApplied
                   ? 'Sin resultados para este filtro'
                   : entitiesView
                     ? 'Crea tu primera entidad de prueba'
                     : 'Aún no hay perfiles ATM en este ambiente'}
               </h3>
               <p>
-                {entitiesView
-                  ? 'Usa datos del catálogo aprobado del proyecto.'
-                  : catalog.entities.some((entity) => entity.active)
-                    ? 'Selecciona Nuevo perfil ATM para añadirlo.'
-                    : 'Crea una entidad activa antes de añadir perfiles ATM.'}
+                {filtersApplied
+                  ? 'Prueba otra búsqueda o limpia los filtros para ver el catálogo completo.'
+                  : entitiesView
+                    ? 'Usa datos del catálogo aprobado del proyecto.'
+                    : catalog.entities.some((entity) => entity.active)
+                      ? 'Selecciona Nuevo perfil ATM para añadirlo.'
+                      : 'Crea una entidad activa antes de añadir perfiles ATM.'}
               </p>
             </div>
           )}
@@ -614,7 +747,15 @@ export function CatalogView({
                         {'name' in item ? (
                           <span className="pill blue">{item.networkType}</span>
                         ) : (
-                          catalog?.entities.find((entity) => entity.id === item.entityId)?.name
+                          <>
+                            {entitiesById.get(item.entityId)?.name ?? 'Entidad no disponible'}
+                            <small>{entitiesById.get(item.entityId)?.code}</small>
+                            {!entitiesById.get(item.entityId)?.active && (
+                              <span className="atm-entity-warning">
+                                Entidad no disponible · no seleccionable
+                              </span>
+                            )}
+                          </>
                         )}
                       </td>
                       {'alias' in item && <td>{item.acquirerId}</td>}
