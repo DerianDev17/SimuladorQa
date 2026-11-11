@@ -55,6 +55,7 @@ import { VirtualCardGeneratorService } from './virtual-card-generator-service';
 import { SavedCardProfileService } from './saved-card-profile-service';
 import { FileSavedCardProfileStore } from './infrastructure/saved-card-profile-store';
 import { drainBeforeQuit } from './shutdown-drain';
+import { developmentWindowPresentation, presentWindow } from './window-presentation';
 
 const development = process.argv.includes('--dev');
 // Vite serves development assets directly; avoid reusing a corrupt HTTP disk cache.
@@ -85,10 +86,11 @@ let financialApplication: DesktopApplication | undefined;
 let financialJournals: SqliteBalanceJournal[] = [];
 let quitting = false;
 let developmentReload = false;
+let developmentReloadStateSent = false;
 let developmentReloadTimer: ReturnType<typeof setTimeout> | undefined;
 
 function reloadDevelopmentWhenIdle(): void {
-  if (!developmentReload || quitting) return;
+  if (!developmentReload || quitting || developmentReloadStateSent) return;
   clearTimeout(developmentReloadTimer);
   if (
     loadRun?.isBusy() ||
@@ -101,7 +103,17 @@ function reloadDevelopmentWhenIdle(): void {
     developmentReloadTimer = setTimeout(reloadDevelopmentWhenIdle, 250);
     return;
   }
-  app.quit();
+  if (process.send && process.connected) {
+    developmentReloadStateSent = true;
+    // Capture at the actual restart, after any active operation has finished.
+    process.send(
+      {
+        type: 'DEV_WINDOW_STATE',
+        state: window?.isMinimized() ? 'minimized' : window?.isVisible() ? 'background' : 'hidden',
+      },
+      () => app.quit(),
+    );
+  } else app.quit();
 }
 let readerRevision = 0;
 
@@ -136,13 +148,8 @@ if (dataArgument) app.setPath('userData', dataArgument.slice('--user-data-dir='.
 // and send it before either sees the other's PENDING record.
 const ownsInstanceLock = app.requestSingleInstanceLock();
 if (!ownsInstanceLock) app.quit();
-else
-  app.on('second-instance', () => {
-    const activeWindow = window ?? BrowserWindow.getAllWindows()[0];
-    if (!activeWindow) return;
-    if (activeWindow.isMinimized()) activeWindow.restore();
-    activeWindow.focus();
-  });
+// A duplicate launcher still exits, but must not restore/focus the existing window.
+// The user can bring it forward explicitly from the taskbar or Alt+Tab.
 
 async function createWindow(): Promise<void> {
   window = new BrowserWindow({
@@ -168,7 +175,14 @@ async function createWindow(): Promise<void> {
     if (url !== rendererUrl) event.preventDefault();
   });
   window.webContents.on('will-attach-webview', (event) => event.preventDefault());
-  window.once('ready-to-show', () => window?.show());
+  const createdWindow = window;
+  createdWindow.once('ready-to-show', () => {
+    if (!createdWindow.isDestroyed())
+      presentWindow(
+        createdWindow,
+        development ? developmentWindowPresentation(process.argv) : 'background',
+      );
+  });
   window.on('closed', () => {
     window = null;
   });

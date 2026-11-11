@@ -24,6 +24,7 @@ let reloadRequested = false;
 let dirty = false;
 let rebuilding;
 let debounce;
+let windowState;
 const watchers = [];
 
 function requestReload() {
@@ -33,7 +34,13 @@ function launch() {
   ready = false;
   child = spawn(
     electronPath,
-    ['dist/main.cjs', '--dev', rendererPortArgument, ...(dataArgument ? [dataArgument] : [])],
+    [
+      'dist/main.cjs',
+      '--dev',
+      rendererPortArgument,
+      ...(dataArgument ? [dataArgument] : []),
+      ...(windowState ? [`--dev-window-state=${windowState}`] : []),
+    ],
     {
       stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
       env,
@@ -41,6 +48,12 @@ function launch() {
     },
   );
   child.on('message', (message) => {
+    if (
+      message?.type === 'DEV_WINDOW_STATE' &&
+      ['background', 'minimized', 'hidden'].includes(message.state)
+    ) {
+      windowState = message.state;
+    }
     if (message === 'DEV_READY') {
       ready = true;
       requestReload();

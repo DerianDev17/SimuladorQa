@@ -19,6 +19,27 @@ espera rechaza nuevos inicios. Un fallo de compilación conserva la instancia ac
 y se informa en consola. Cambios en el lanzador requieren reiniciar el comando.
 Cerrar Electron normalmente detiene Vite.
 
+## Foco y minimización (2026-11-10)
+
+La ventana se muestra sin activación automática (`showInactive`). Lanzar otra
+instancia sobre los mismos datos mantiene el bloqueo de instancia única, pero
+no restaura ni enfoca la ventana existente. El usuario la recupera desde la
+barra de tareas o Alt+Tab.
+Si el usuario minimiza durante el arranque, el evento tardío `ready-to-show`
+respeta esa decisión y no vuelve a mostrar la ventana.
+
+Antes de un reinicio de desarrollo, Main envía al lanzador su estado de ventana
+por el IPC privado del proceso padre, después de esperar las operaciones activas.
+El lanzador conserva minimizada/oculta; una ventana visible reaparece sin pedir
+foco. El estado es efímero y no cambia preferencias ni datos financieros.
+No se agrega IPC al Renderer. Los cambios del lanzador requieren reiniciar
+`npm run dev` para activar la conservación de estado.
+
+La regresión Electron comprueba segunda instancia sobre ventana minimizada,
+actualizaciones IPC/recarga de Renderer en segundo plano y arranque de desarrollo
+con estado minimizado. El diálogo PIN interactivo conserva su comportamiento
+independiente; este cambio corresponde a la ventana principal.
+
 Los lanzadores `dev` y `start` muestran stdout/stderr de Electron directamente
 en la consola y eliminan `ELECTRON_RUN_AS_NODE` del entorno del proceso hijo.
 No dependen de un filtro de logs externo. `start` ejecuta la compilación existente

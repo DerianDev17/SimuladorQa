@@ -896,7 +896,7 @@ for (const recovery of ['POLL', 'LATE_REJECTION'] as const) {
   });
 }
 
-async function launch(developmentPort?: number) {
+async function launch(developmentPort?: number, extraArgs: string[] = []) {
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
     if (value !== undefined && key !== 'ELECTRON_RUN_AS_NODE') env[key] = value;
@@ -906,6 +906,7 @@ async function launch(developmentPort?: number) {
       resolve('dist/main.cjs'),
       `--user-data-dir=${directory}`,
       '--simulate-reader',
+      ...extraArgs,
       ...(developmentPort === undefined ? [] : ['--dev', `--dev-port=${developmentPort}`]),
     ],
     env,
@@ -1130,6 +1131,12 @@ test.beforeEach(async () => {
 
 test('impide una segunda instancia sobre el mismo diario financiero', async () => {
   const window = await launch();
+  await app!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.minimize());
+  await expect
+    .poll(() =>
+      app!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.isMinimized()),
+    )
+    .toBe(true);
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
     if (value !== undefined && key !== 'ELECTRON_RUN_AS_NODE') env[key] = value;
@@ -1152,6 +1159,12 @@ test('impide una segunda instancia sobre el mismo diario financiero', async () =
       }),
     ]);
     expect(duplicate.exitCode).toBe(0);
+    expect(
+      await app!.evaluate(({ BrowserWindow }) => ({
+        minimized: BrowserWindow.getAllWindows()[0]!.isMinimized(),
+        focused: BrowserWindow.getAllWindows()[0]!.isFocused(),
+      })),
+    ).toEqual({ minimized: true, focused: false });
     await expect(window.getByRole('heading', { name: 'Estación de pruebas' })).toBeVisible();
     expect(await app!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)).toBe(
       1,
@@ -3671,6 +3684,54 @@ test('configuración corrupta muestra error seguro y bloquea preparación', asyn
   await window.getByRole('button', { name: 'Reintentar' }).click();
   await expect(window.getByRole('alert')).toBeVisible();
   expect(await readFile(join(directory, 'preferences.json'), 'utf8')).toBe('{private-secret');
+});
+
+test('ventana en segundo plano conserva foco y minimización durante actualizaciones', async () => {
+  const window = await launch();
+  await app!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.blur());
+  await window.evaluate(async () => {
+    await globalThis.window.desktop!.getCatalog('QA');
+    await globalThis.window.desktop!.getSnapshot();
+  });
+  expect(
+    await app!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.isFocused()),
+  ).toBe(false);
+  await app!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.minimize());
+  // Reloading the renderer and background IPC must not show/restore the native window.
+  await window.reload();
+  await expect(window.getByRole('heading', { name: 'Estación de pruebas' })).toBeVisible();
+  expect(
+    await app!.evaluate(({ BrowserWindow }) => ({
+      minimized: BrowserWindow.getAllWindows()[0]!.isMinimized(),
+      focused: BrowserWindow.getAllWindows()[0]!.isFocused(),
+      alwaysOnTop: BrowserWindow.getAllWindows()[0]!.isAlwaysOnTop(),
+    })),
+  ).toEqual({ minimized: true, focused: false, alwaysOnTop: false });
+});
+
+test('reinicio de desarrollo recupera la ventana minimizada sin activarla', async () => {
+  const server = await createServer({
+    configFile: resolve('vite.config.ts'),
+    cacheDir: join(directory, 'vite-minimized'),
+  });
+  try {
+    await server.listen();
+    const address = server.httpServer!.address();
+    if (!address || typeof address === 'string') throw Error('NO_SERVER');
+    await launch(address.port, ['--dev-window-state=minimized']);
+    await expect
+      .poll(() =>
+        app!.evaluate(({ BrowserWindow }) => ({
+          minimized: BrowserWindow.getAllWindows()[0]!.isMinimized(),
+          focused: BrowserWindow.getAllWindows()[0]!.isFocused(),
+        })),
+      )
+      .toEqual({ minimized: true, focused: false });
+  } finally {
+    await app?.close();
+    app = undefined;
+    await server.close();
+  }
 });
 
 test('modo desarrollo carga React y el puente IPC con Vite', async () => {
