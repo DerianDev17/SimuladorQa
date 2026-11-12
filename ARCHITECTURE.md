@@ -122,11 +122,18 @@ referencia de clave y pool persistente. Crear otro ATM no duplica reservas. La
 fecha contable del mensaje no certifica la fecha efectiva del switch. Ver
 [ADR-024](docs/adr/ADR-024-REUSABLE-ATM-TEMPLATE.md).
 
-El asistente QA/205 crea el perfil mediante un comando idempotente en el Worker
+El asistente Qa crea el perfil mediante un comando idempotente en el Worker
 de catálogos. `AtmInspectionService`, detrás de `AtmInspectionPort`, inspecciona
 la misma resolución de plantilla en Main sin tarjeta, PIN, reservas ni TCP.
 El Renderer recibe solo comprobaciones públicas y reutiliza el flujo financiero
 existente para la consulta de saldo explícita. Ver [ADR-042](docs/adr/ADR-042-QA-ATM-ONBOARDING.md).
+
+La ampliación por entidad conserva la herencia solo para 205; otras entidades
+usan identidad/adquirente explícitos y muestran sus pendientes. La inspección
+lee entidad/revisión/clasificación desde el catálogo y detecta cambios concurrentes.
+El canal de prueba guiada revalida en Main antes de preparar saldo y comprueba
+la entidad nuevamente al autorizar el envío. Reutiliza exclusión, diario y
+transporte financieros existentes. Ver [ADR-044](docs/adr/ADR-044-ATM-ENTITY-ONBOARDING.md).
 
 ## Observación y alcance pendiente
 

@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseCreateQaAtm, parseInspectQaAtm } from '../../packages/domain/src/atm-onboarding';
+import {
+  parseCreateQaAtm,
+  parseInspectQaAtm,
+  parseQaAtmBalanceTest,
+} from '../../packages/domain/src/atm-onboarding';
+import { balanceRequest, balanceTarget } from '../helpers/balance-inquiry';
 import { AtmInspectionService } from '../../apps/desktop/src/main/atm-inspection-service';
 import { QaAtmTemplate } from '../../apps/desktop/src/main/qa-atm-template';
 import { parseQaExecutionProfileFile } from '../../apps/desktop/src/main/infrastructure/qa-execution-profiles';
@@ -12,6 +17,7 @@ import type { Result } from '../../packages/shared/src/contracts';
 function setup() {
   const fixture = qaExecutionFixture();
   const catalog = templateCatalog(fixture.target);
+  catalog.entities[0]!.memberTypes = ['FRONT'];
   const target = qaExecutionFixture().target;
   target.terminalId = 'ATM20524';
   const atm = templateAtm(target, catalog.entities[0]!.id);
@@ -52,6 +58,7 @@ function setup() {
     { inspectLocal: (request, endpoint) => template.inspectLocal(request, endpoint, security) },
     send,
     () => '2026-11-11T15:00:00.000Z',
+    async () => structuredClone(catalog),
     100,
   );
   const request = { environment: 'QA' as const, atmId: atm.id, revision: 1 };
@@ -98,6 +105,52 @@ describe('alta QA/205: límites de entrada', () => {
       { environment: 'QA', atmId: create.templateId, revision: 1, endpoint: {} },
     ])
       expect(parseInspectQaAtm(request)).toBeUndefined();
+  });
+  it('acepta el alta administrativa con entidad/adquirente explícitos y rechaza valores inválidos', () => {
+    const manual = {
+      environment: 'QA',
+      requestId: randomUUID(),
+      entityId: randomUUID(),
+      entityRevision: 1,
+      terminalId: 'QA-ENTITY-01',
+      alias: '  Otra entidad  ',
+      acquirerId: 'ADQ-TEST',
+    };
+    expect(parseCreateQaAtm(manual)).toMatchObject({
+      entityId: manual.entityId,
+      alias: 'Otra entidad',
+      acquirerId: 'ADQ-TEST',
+    });
+    for (const change of [
+      { entityRevision: 0 },
+      { entityId: '312' },
+      { acquirerId: '' },
+      { acquirerId: '1234 5678 1234' },
+      { templateId: randomUUID() },
+      { terminalId: 'ATM20521' },
+      { environment: 'PROD' },
+    ])
+      expect(parseCreateQaAtm({ ...manual, ...change })).toBeUndefined();
+  });
+  it('exige entidad y revisión en la prueba guiada sin aceptar otros flujos o secretos', () => {
+    const request = {
+      execution: balanceRequest(balanceTarget()),
+      entityId: randomUUID(),
+      entityRevision: 1,
+    };
+    expect(parseQaAtmBalanceTest(request)).toEqual(request);
+    for (const change of [
+      { entityId: '205' },
+      { entityRevision: 0 },
+      { pin: 'invalid' },
+      {
+        execution: {
+          ...request.execution,
+          draft: { ...request.execution.draft, transaction: 'WITHDRAWAL_APPROVED', amount: '1.00' },
+        },
+      },
+    ])
+      expect(parseQaAtmBalanceTest({ ...request, ...change })).toBeUndefined();
   });
 });
 
@@ -155,12 +208,54 @@ describe('verificación local sin tarjeta ni efectos financieros', () => {
       return true;
     });
     expect(await f.inspector.inspect(f.request)).toMatchObject({
-      ok: true,
-      value: { readyForBalanceTest: false },
+      ok: false,
+      error: { code: 'CONFLICT' },
     });
     f.atm.revision = 1;
     f.security.mockImplementation(async () => {
       f.config.configuration!.revision++;
+      return true;
+    });
+    expect(await f.inspector.inspect(f.request)).toMatchObject({
+      ok: false,
+      error: { code: 'CONFLICT' },
+    });
+  });
+  it.each(['FRONT', 'BACK', 'EXTERNAL', 'HYBRID'] as const)(
+    'muestra %s sin heredar una plantilla de otra entidad',
+    async (memberType) => {
+      const f = setup();
+      f.catalog.entities[0]!.code = '312';
+      f.catalog.entities[0]!.memberTypes = [memberType];
+      const result = await f.inspector.inspect(f.request);
+      expect(result).toMatchObject({
+        ok: true,
+        value: { readyForBalanceTest: false, entity: { code: '312', memberTypes: [memberType] } },
+      });
+      if (result.ok)
+        expect(result.value.checks).toContainEqual(
+          expect.objectContaining({ id: 'ENTITY_SCOPE', status: 'ACTION_REQUIRED' }),
+        );
+      expect(f.security).not.toHaveBeenCalled();
+      expect(f.store.reserve).not.toHaveBeenCalled();
+    },
+  );
+  it.each([{ memberTypes: [] }, { memberTypes: ['FRONT', 'EXTERNAL'] }] as const)(
+    'impide probar una entidad sin clasificación validada: %j',
+    async ({ memberTypes }) => {
+      const f = setup();
+      f.catalog.entities[0]!.memberTypes = [...memberTypes];
+      expect(await f.inspector.inspect(f.request)).toMatchObject({
+        ok: true,
+        value: { readyForBalanceTest: false },
+      });
+      expect(f.security).not.toHaveBeenCalled();
+    },
+  );
+  it('rechaza la entidad que cambia mientras se comprueba la seguridad', async () => {
+    const f = setup();
+    f.security.mockImplementation(async () => {
+      f.catalog.entities[0]!.revision++;
       return true;
     });
     expect(await f.inspector.inspect(f.request)).toMatchObject({

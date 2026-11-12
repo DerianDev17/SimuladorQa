@@ -49,3 +49,4 @@ Cuando una decisión reemplaza a otra, ambas se conservan para trazabilidad.
 | [041](ADR-041-OPERATIONAL-SEND-SETTINGS.md) | Destino y plazos operativos editables desde la app | Implementado |
 | [042](ADR-042-QA-ATM-ONBOARDING.md) | Asistente de alta QA/205, verificación local y prueba guiada de saldo | Implementado; aceptación remota por terminal pendiente |
 | [043](ADR-043-COONECTA-ENTITY-CLASSIFICATION.md) | Clasificación de 74 entidades, migración y carga auditada | Implementado; tres clasificaciones múltiples pendientes |
+| [044](ADR-044-ATM-ENTITY-ONBOARDING.md) | Entidades en asistente ATM y revalidación antes de saldo | Implementado; perfiles financieros fuera de 205 pendientes |

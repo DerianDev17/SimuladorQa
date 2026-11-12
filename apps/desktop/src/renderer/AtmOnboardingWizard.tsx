@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   catalogLimits,
+  entityMemberLabels,
   isRestrictedCatalogText,
   type AtmProfile,
   type CatalogSnapshot,
 } from '../../../../packages/domain/src/catalogs';
 import {
   parseCreateQaAtm,
+  qaAtmEntityChecks,
   type AtmLocalInspection,
   type CreateQaAtmRequest,
 } from '../../../../packages/domain/src/atm-onboarding';
@@ -38,7 +40,14 @@ export function AtmOnboardingWizard(props: Props) {
   const { catalog, client, visible, onEditingChange } = props;
   const [alias, setAlias] = useState('');
   const [terminalId, setTerminalId] = useState('');
-  const [rejected, setRejected] = useState({ alias: false, terminal: false });
+  const [selectedEntityId, setSelectedEntityId] = useState(
+    props.initialAtm?.entityId ??
+      catalog?.entities.find((item) => item.code === '205' && item.active)?.id ??
+      '',
+  );
+  const [entitySearch, setEntitySearch] = useState('');
+  const [acquirerId, setAcquirerId] = useState('');
+  const [rejected, setRejected] = useState({ alias: false, terminal: false, acquirer: false });
   const [atmId, setAtmId] = useState(props.initialAtm?.id);
   const [busy, setBusy] = useState(false);
   const [testBusy, setTestBusy] = useState(false);
@@ -59,21 +68,40 @@ export function AtmOnboardingWizard(props: Props) {
   const lock = useRef(false);
   const active = useRef(true);
   const atm = catalog?.atms.find((item) => item.id === atmId);
+  const entity = catalog?.entities.find((item) => item.id === (atm?.entityId ?? selectedEntityId));
+  const useTemplate = entity?.code === '205';
+  const entityChecks = qaAtmEntityChecks(entity);
+  const entityReady = entityChecks.every((check) => check.status === 'VERIFIED');
+  const normalize = (value: string) =>
+    value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+  const entityOptions =
+    catalog?.entities.filter(
+      (item) =>
+        item.id === selectedEntityId ||
+        normalize(`${item.code} ${item.name}`).includes(normalize(entitySearch.trim())),
+    ) ?? [];
   const template = catalog?.atms.find(
     (item) =>
       item.environment === 'QA' &&
       item.terminalId === 'ATM20521' &&
       item.active &&
+      item.entityId === entity?.id &&
       catalog.entities.some(
         (entity) => entity.id === item.entityId && entity.code === '205' && entity.active,
       ),
   );
   const duplicate = duplicateAtmTerminal(catalog?.atms ?? [], terminalId, 'QA', null);
-  const terminalValid = /^[A-Z0-9]{8}$/.test(terminalId.trim());
+  const terminalValid = useTemplate ? /^[A-Z0-9]{8}$/.test(terminalId.trim()) : !!terminalId.trim();
   const verified =
     inspection?.atmId === atm?.id &&
     inspection?.revision === atm?.revision &&
     inspection?.readyForBalanceTest &&
+    inspection.entity?.id === entity?.id &&
+    inspection.entity?.revision === entity?.revision &&
+    entityReady &&
     !inspecting;
   useEffect(() => {
     active.current = true;
@@ -102,23 +130,32 @@ export function AtmOnboardingWizard(props: Props) {
     return () => {
       current = false;
     };
-  }, [atm, client, visible, inspectionVersion, testing]);
+  }, [atm, entity, client, visible, inspectionVersion, testing]);
 
   async function create() {
-    if (lock.current || rejected.alias || rejected.terminal || (!template && !pendingRequest))
+    if (
+      lock.current ||
+      rejected.alias ||
+      rejected.terminal ||
+      rejected.acquirer ||
+      (!pendingRequest && (!entity?.active || (useTemplate && !template)))
+    )
       return;
     const request =
       pendingRequest ??
       parseCreateQaAtm({
         environment: 'QA',
         requestId: crypto.randomUUID(),
-        templateId: template!.id,
-        templateRevision: template!.revision,
+        ...(useTemplate
+          ? { templateId: template!.id, templateRevision: template!.revision }
+          : { entityId: entity!.id, entityRevision: entity!.revision, acquirerId }),
         alias: alias.trim() || terminalId.trim(),
         terminalId: terminalId.trim(),
       });
     if (!request) {
-      setError('Completa un Terminal ID de ocho letras mayúsculas o dígitos y un alias válido.');
+      setError(
+        'Revisa la entidad, el Terminal ID, el adquirente y el alias. Para 205, el terminal requiere ocho letras mayúsculas o dígitos.',
+      );
       return;
     }
     lock.current = true;
@@ -149,8 +186,9 @@ export function AtmOnboardingWizard(props: Props) {
       setInspectionVersion((value) => value + 1);
     }
   }
-  function text(value: string, field: 'alias' | 'terminal') {
-    const setter = field === 'alias' ? setAlias : setTerminalId;
+  function text(value: string, field: 'alias' | 'terminal' | 'acquirer') {
+    const setter =
+      field === 'alias' ? setAlias : field === 'terminal' ? setTerminalId : setAcquirerId;
     const restricted = isRestrictedCatalogText(value);
     setRejected((previous) => ({ ...previous, [field]: restricted }));
     if (restricted) {
@@ -162,11 +200,11 @@ export function AtmOnboardingWizard(props: Props) {
     }
   }
   return (
-    <section className="panel atm-onboarding" aria-label="Asistente ATM QA/205">
+    <section className="panel atm-onboarding" aria-label="Asistente ATM Qa">
       <div className="panel-heading">
         <div>
           <h2>Crear y verificar ATM</h2>
-          <p>Qa · Entidad 205 · Plantilla ATM20521</p>
+          <p>Qa · Entidad y configuración del ATM</p>
         </div>
         <button disabled={busy || testBusy} onClick={props.onClose}>
           {atmId ? 'Volver al catálogo' : 'Cancelar asistente'}
@@ -182,6 +220,28 @@ export function AtmOnboardingWizard(props: Props) {
           </li>
         ))}
       </ol>
+      {entity && (
+        <section className="atm-wizard-entity" aria-label="Entidad del ATM">
+          <strong>
+            {entity.code} · {entity.name}
+          </strong>
+          <div className="entity-classifications">
+            {(entity.memberTypes ?? []).map((type) => (
+              <span className="pill blue" key={type}>
+                {entityMemberLabels[type]}
+              </span>
+            ))}
+            {!entity.memberTypes?.length && <span className="pill neutral">Sin clasificar</span>}
+            {(entity.memberTypes?.length ?? 0) > 1 && (
+              <span className="pill amber">Validación pendiente</span>
+            )}
+          </div>
+          <small>
+            Red {entity.networkType} · {entity.active ? 'Activa' : 'Inactiva'} · Revisión{' '}
+            {entity.revision}
+          </small>
+        </section>
+      )}
       {!atmId && (
         <form
           onSubmit={(event) => {
@@ -191,21 +251,55 @@ export function AtmOnboardingWizard(props: Props) {
         >
           <h3>1. Identifica el nuevo ATM</h3>
           <p>
-            Usa el Terminal ID habilitado en el switch. La entidad y el adquirente se toman de
-            ATM20521.
+            Selecciona la entidad y usa el Terminal ID habilitado en el switch.
+            {useTemplate
+              ? ' El adquirente y la configuración se heredan de ATM20521.'
+              : ' Introduce el adquirente aprobado para esta entidad.'}
           </p>
-          {!template && (
+          {useTemplate && !template && (
             <p role="alert">
               No hay una plantilla ATM20521 activa de la entidad 205. Revisa el catálogo.
             </p>
           )}
           <fieldset disabled={busy || !!pendingRequest} className="form-grid">
             <label>
+              Buscar entidad del ATM
+              <input
+                type="search"
+                value={entitySearch}
+                onChange={(event) => setEntitySearch(event.target.value)}
+                placeholder="Código o nombre"
+              />
+            </label>
+            <label>
+              Entidad del nuevo ATM
+              <select
+                required
+                value={selectedEntityId}
+                onChange={(event) => {
+                  setSelectedEntityId(event.target.value);
+                  setAcquirerId('');
+                  setRejected((previous) => ({ ...previous, acquirer: false }));
+                  setError('');
+                }}
+              >
+                <option value="">Selecciona una entidad</option>
+                {entityOptions.map((item) => (
+                  <option key={item.id} value={item.id} disabled={!item.active}>
+                    {item.code} · {item.name} ·{' '}
+                    {item.memberTypes?.map((type) => entityMemberLabels[type]).join(' / ') ||
+                      'Sin clasificar'}
+                    {!item.active ? ' · Inactiva' : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
               Terminal ID autorizado
               <input
                 autoFocus
                 required
-                maxLength={8}
+                maxLength={useTemplate ? 8 : catalogLimits.text}
                 value={terminalId}
                 aria-invalid={!!terminalId && (!terminalValid || duplicate)}
                 aria-describedby="wizard-terminal-help"
@@ -214,7 +308,9 @@ export function AtmOnboardingWizard(props: Props) {
               <small id="wizard-terminal-help">
                 {duplicate
                   ? 'Este Terminal ID ya existe en Qa.'
-                  : 'Ocho letras mayúsculas o dígitos; no se asigna un terminal en el switch.'}
+                  : useTemplate
+                    ? 'Ocho letras mayúsculas o dígitos; no se asigna un terminal en el switch.'
+                    : 'Identificador aprobado para esta entidad; guardar no registra el terminal en el switch.'}
               </small>
             </label>
             <label>
@@ -227,24 +323,20 @@ export function AtmOnboardingWizard(props: Props) {
               />
             </label>
             <label>
-              Entidad
+              {useTemplate ? 'Acquirer ID heredado' : 'Acquirer ID aprobado'}
               <input
-                readOnly
-                value={
-                  template
-                    ? `205 · ${catalog?.entities.find((entity) => entity.id === template.entityId)?.name ?? ''}`
-                    : 'No disponible'
-                }
+                required
+                maxLength={catalogLimits.text}
+                readOnly={useTemplate}
+                value={useTemplate ? (template?.acquirerId ?? '') : acquirerId}
+                onChange={(event) => text(event.target.value, 'acquirer')}
               />
-            </label>
-            <label>
-              Acquirer ID heredado
-              <input readOnly value={template?.acquirerId ?? ''} />
             </label>
           </fieldset>
           <p className="form-note">
-            La configuración ISO/EMV y la seguridad se resuelven desde la plantilla; las reservas se
-            comparten. No requiere reiniciar.
+            {useTemplate
+              ? 'La configuración ISO/EMV y la seguridad se resuelven desde la plantilla; las reservas se comparten. No requiere reiniciar.'
+              : 'El alta guarda la identidad administrativa. La prueba requiere configuración de saldo aprobada para esta entidad.'}
           </p>
           <div className="catalog-actions">
             <button type="button" disabled={busy} onClick={() => void refresh()}>
@@ -256,7 +348,12 @@ export function AtmOnboardingWizard(props: Props) {
                 busy ||
                 rejected.alias ||
                 rejected.terminal ||
-                (!pendingRequest && (!template || !terminalValid || duplicate))
+                rejected.acquirer ||
+                (!pendingRequest &&
+                  (!entity?.active ||
+                    (useTemplate ? !template : !acquirerId.trim()) ||
+                    !terminalValid ||
+                    duplicate))
               }
             >
               {busy ? 'Creando…' : pendingRequest ? 'Recuperar alta' : 'Crear y verificar'}
@@ -327,20 +424,27 @@ export function AtmOnboardingWizard(props: Props) {
         </p>
       )}
       {atm && testing && (
-        <AtmBalanceTest
-          atm={atm}
-          visible={visible}
-          snapshot={props.snapshot}
-          catalog={catalog}
-          catalogError={undefined}
-          loading={busy}
-          disabled={false}
-          client={client}
-          onRefresh={props.onRefresh}
-          onReviewingChange={testingChanged}
-          onNavigate={() => undefined}
-          onCatalogChange={props.onCatalogChange}
-        />
+        <>
+          <button disabled={testBusy} onClick={() => setTesting(false)}>
+            Volver a verificación
+          </button>
+          <AtmBalanceTest
+            atm={atm}
+            entityId={entity?.id ?? ''}
+            entityRevision={entity?.revision ?? 0}
+            visible={visible}
+            snapshot={props.snapshot}
+            catalog={catalog}
+            catalogError={undefined}
+            loading={busy}
+            disabled={!entityReady || !atm.active}
+            client={client}
+            onRefresh={props.onRefresh}
+            onReviewingChange={testingChanged}
+            onNavigate={() => undefined}
+            onCatalogChange={props.onCatalogChange}
+          />
+        </>
       )}
     </section>
   );

@@ -345,29 +345,46 @@ export class SqliteCatalog {
           if (!request)
             throw new CatalogFault(
               'VALIDATION_ERROR',
-              'Revisa el alias y el Terminal ID QA de ocho caracteres.',
+              'Revisa la entidad, el alias, el Terminal ID y el adquirente del ATM.',
             );
-          const source = this.existing(
-            'atm_profiles',
-            request.templateId,
-            request.templateRevision,
-            'QA',
-          );
-          const owner = this.database
-            .prepare('SELECT * FROM entities WHERE id = ?')
-            .get(source.entity_id as string);
-          if (
-            source.terminal_id !== 'ATM20521' ||
-            source.active !== 1 ||
-            owner?.active !== 1 ||
-            owner.code !== '205' ||
-            typeof source.acquirer_id !== 'string' ||
-            !/^\d{1,11}$/.test(source.acquirer_id)
-          )
-            throw new CatalogFault(
-              'CONFLICT',
-              'Recarga una plantilla ATM20521 activa de la entidad 205.',
+          let ownerId: string;
+          let acquirerId: string;
+          if ('templateId' in request) {
+            const source = this.existing(
+              'atm_profiles',
+              request.templateId,
+              request.templateRevision,
+              'QA',
             );
+            const owner = this.database
+              .prepare('SELECT * FROM entities WHERE id = ?')
+              .get(source.entity_id as string);
+            if (
+              source.terminal_id !== 'ATM20521' ||
+              source.active !== 1 ||
+              owner?.active !== 1 ||
+              owner.code !== '205' ||
+              typeof source.acquirer_id !== 'string' ||
+              !/^\d{1,11}$/.test(source.acquirer_id)
+            )
+              throw new CatalogFault(
+                'CONFLICT',
+                'Recarga una plantilla ATM20521 activa de la entidad 205.',
+              );
+            ownerId = source.entity_id as string;
+            acquirerId = source.acquirer_id;
+          } else {
+            const owner = entity(
+              this.existing('entities', request.entityId, request.entityRevision),
+            );
+            if (!owner.active || owner.code === '205')
+              throw new CatalogFault(
+                'CONFLICT',
+                'Selecciona una entidad activa; la entidad 205 requiere su plantilla ATM20521.',
+              );
+            ownerId = owner.id;
+            acquirerId = request.acquirerId;
+          }
           const existing = this.database
             .prepare('SELECT * FROM atm_profiles WHERE id = ?')
             .get(request.requestId);
@@ -379,8 +396,8 @@ export class SqliteCatalog {
               existing.active !== 1 ||
               existing.alias !== request.alias ||
               existing.terminal_id !== request.terminalId ||
-              existing.entity_id !== source.entity_id ||
-              existing.acquirer_id !== source.acquirer_id
+              existing.entity_id !== ownerId ||
+              existing.acquirer_id !== acquirerId
             )
               throw new CatalogFault(
                 'CONFLICT',
@@ -399,10 +416,10 @@ export class SqliteCatalog {
             .run(
               request.requestId,
               request.alias,
-              source.entity_id as string,
+              ownerId,
               'QA',
               request.terminalId,
-              source.acquirer_id,
+              acquirerId,
               1,
               1,
               context.timestamp,

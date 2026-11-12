@@ -57,7 +57,7 @@ La compilación genera `dist/` para ejecución local; no crea un instalador firm
 | Configuraciones de carga y estrés | Crear, editar, cargar y eliminar parámetros; presets de rampa a 3/5 TPS | Hasta 50 configuraciones QA, sin tarjeta/PIN; cargar no inicia la corrida |
 | Perfiles | Entidades, ATM y referencias QA de tarjetas | Los ATM QA/205 heredan la plantilla ATM20521 y su pool compartido |
 | Entidades Coonecta | Clasificación FRONT/BACK/EXTERNA/HÍBRIDA, edición y filtros | [74 entidades del listado](docs/entities/COONECTA_ENTITIES_20261112.md); tres conservan clasificación múltiple pendiente de validación |
-| Asistente ATM QA/205 | Alta, verificación local automática y prueba guiada de saldo | Reutiliza ATM20521; el terminal debe estar habilitado en el switch |
+| Asistente ATM Qa | Selección de entidad y clasificación, alta, validación y prueba guiada | Saldo disponible en QA/205 con ATM20521; otras entidades muestran requisitos pendientes |
 | Configuración de envío | Editar IP, puerto y plazos; guardar y conectar desde la app | Qa; los perfiles financieros deben ser compatibles con el destino |
 | Casos | Borradores guardados y expectativa local PASS/FAIL/INCONCLUSIVE | No certifica el resultado financiero en Switch/Core |
 | Inicio e historial | Feed Mediator y consulta manual en Qa | No sustituye la correlación financiera ni garantiza captura completa |

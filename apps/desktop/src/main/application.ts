@@ -11,6 +11,8 @@ import type { Preparation } from '../../../../packages/domain/src/index';
 import {
   parseCreateQaAtm,
   parseInspectQaAtm,
+  parseQaAtmBalanceTest,
+  qaAtmEntityChecks,
 } from '../../../../packages/domain/src/atm-onboarding';
 import type { Preferences, PreferencesStore, RuntimeIdentity } from './ports';
 import {
@@ -636,6 +638,7 @@ export class DesktopApplication {
     payload: unknown,
     operation: 'BALANCE' | 'WITHDRAWAL' | 'DEPOSIT' = 'BALANCE',
     execution?: BalanceExecutionContext,
+    onboardingEntity?: { id: string; revision: number },
   ): Promise<Result<BalanceExecution>> {
     const request =
       operation === 'DEPOSIT'
@@ -668,6 +671,29 @@ export class DesktopApplication {
     }
     this.balanceCount++;
     try {
+      if (onboardingEntity) {
+        const inspection = await this.inspectQaAtm({
+          environment: 'QA',
+          atmId: request.draft.atmId,
+          revision: request.draft.atmRevision,
+        });
+        if (!inspection.ok) return inspection;
+        if (
+          !inspection.value.readyForBalanceTest ||
+          inspection.value.entity?.id !== onboardingEntity.id ||
+          inspection.value.entity.revision !== onboardingEntity.revision ||
+          inspection.value.configurationRevision !== request.configurationRevision ||
+          !(await this.qaAtmEntityCurrent(
+            onboardingEntity,
+            request.draft.atmId!,
+            request.draft.atmRevision!,
+          ))
+        )
+          return failure(
+            'CONFLICT',
+            'La configuración del ATM o de su entidad requiere una nueva verificación antes de probar saldo.',
+          );
+      }
       const context = await this.balanceTarget({
         draft: request.draft,
         cardReadId: request.cardReadId,
@@ -701,7 +727,13 @@ export class DesktopApplication {
             current.ok &&
             current.value.target.terminalId === context.value.target.terminalId &&
             current.value.target.endpoint.host === context.value.target.endpoint.host &&
-            current.value.target.endpoint.port === context.value.target.endpoint.port
+            current.value.target.endpoint.port === context.value.target.endpoint.port &&
+            (!onboardingEntity ||
+              (await this.qaAtmEntityCurrent(
+                onboardingEntity,
+                request.draft.atmId!,
+                request.draft.atmRevision!,
+              )))
           );
         },
         execution,
@@ -810,6 +842,38 @@ export class DesktopApplication {
     } catch {
       return failure('SERVICE_UNAVAILABLE', 'No se pudo comprobar el ambiente de la estación.');
     }
+  }
+
+  async testQaAtmBalance(payload: unknown): Promise<Result<BalanceExecution>> {
+    const request = parseQaAtmBalanceTest(payload);
+    if (!request)
+      return failure(
+        'VALIDATION_ERROR',
+        'Revisa la entidad, su revisión y el contexto de la prueba de saldo.',
+      );
+    return this.executeBalance(request.execution, 'BALANCE', undefined, {
+      id: request.entityId,
+      revision: request.entityRevision,
+    });
+  }
+
+  private async qaAtmEntityCurrent(
+    expected: { id: string; revision: number },
+    atmId: string,
+    revision: number,
+  ): Promise<boolean> {
+    const catalog = await this.catalog('list', { environment: 'QA' });
+    if (!catalog.ok) return false;
+    const atm = catalog.value.atms.find(
+      (item) =>
+        item.id === atmId && item.active && item.environment === 'QA' && item.revision === revision,
+    );
+    const entity = catalog.value.entities.find((item) => item.id === atm?.entityId);
+    return (
+      entity?.id === expected.id &&
+      entity.revision === expected.revision &&
+      qaAtmEntityChecks(entity).every((check) => check.status === 'VERIFIED')
+    );
   }
 
   catalog(kind: CatalogCommand['kind'], payload: unknown): Promise<Result<CatalogSnapshot>> {

@@ -6,6 +6,17 @@
 .atm-onboarding .panel-heading {
   align-items: flex-start;
 }
+.atm-wizard-entity {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  margin-block: 16px;
+  border: 1px solid var(--border, #dce2eb);
+  border-radius: 8px;
+}
+.atm-onboarding .form-grid > label {
+  min-width: 0;
+}
 .atm-onboarding fieldset {
   border: 0;
   padding: 0;

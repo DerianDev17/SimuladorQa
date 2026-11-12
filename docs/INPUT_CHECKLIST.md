@@ -1,5 +1,14 @@
 # Checklist de informacion por subir
 
+Asistente por entidad, 2026-11-12: entidades y clasificaciones del listado
+integradas en el alta/diagnóstico ATM. **TODO-DATA ATM-ENTITY-BALANCE-PROFILES**:
+faltan perfiles de saldo aprobados fuera de 205 (adquirente, destino, campos ISO,
+seguridad y respuestas). FRONT/BACK/EXTERNA/HÍBRIDA no determinan esos valores.
+Solo quedan bloqueadas esas pruebas financieras; se puede guardar la identidad
+administrativa y consultar pendientes. La entidad 205 conserva ATM20521.
+**ENTITY-CLASSIFICATION-MULTIPLE** sigue abierto para 200, 207 y 232; no se
+selecciona silenciosamente uno de sus roles. Ver [ADR-044](adr/ADR-044-ATM-ENTITY-ONBOARDING.md).
+
 ## Corrección de alcance — 2026-11-09
 
 Confirmado por el usuario: solo existe **Qa**, no PREPROD. Esta corrección

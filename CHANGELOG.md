@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-12 — Entidades en el asistente ATM
+
+- Agrega búsqueda/selección de entidad y clasificación visible durante el alta,
+  diagnóstico y prueba; conserva las clasificaciones múltiples pendientes.
+- Mantiene herencia ATM20521 para 205 y permite altas administrativas de otras
+  entidades con adquirente explícito, recuperación por UUID y auditoría.
+- Valida entidad, revisión, configuración, seguridad y reservas antes de saldo;
+  Main vuelve a comprobar la entidad antes del envío. Los perfiles financieros
+  de otras entidades quedan documentados como pendientes en ADR-044.
+
 ## 2026-11-12 — Entidades Coonecta y clasificación
 
 - Agrega FRONT, BACK, EXTERNA e HÍBRIDA, independientes de la red, con edición

@@ -1,5 +1,11 @@
 # Registro de TODO-DATA
 
+Asistente ATM, 2026-11-12: **ATM-ENTITY-BALANCE-PROFILES** requiere fuentes
+aprobadas para saldo de entidades distintas de 205. El alta y diagnóstico
+administrativos están disponibles; la prueba financiera depende de esos perfiles.
+Ver [ADR-044](adr/ADR-044-ATM-ENTITY-ONBOARDING.md) y
+[guía del asistente](implementation/MULTI_ATM_PROFILES.md).
+
 Entidades Coonecta, 2026-11-12: resuelta la clasificación administrativa de
 74 entidades con fuente del usuario y códigos confirmados (205, CACECH=312).
 **TODO-DATA ENTITY-CLASSIFICATION-MULTIPLE** mantiene abiertos los roles de

@@ -358,7 +358,7 @@ export function CatalogView({
           <div className="catalog-actions">
             {!entitiesView && onCreateQaAtm && (
               <button className="primary" disabled={blocked || !!editor} onClick={onCreateQaAtm}>
-                Crear ATM QA/205
+                Crear ATM Qa
               </button>
             )}
             <button onClick={requestRefresh} disabled={loading || disabled}>
@@ -882,11 +882,7 @@ export function CatalogView({
                           </button>
                           {'alias' in item && (
                             <button
-                              disabled={
-                                blocked ||
-                                !!editor ||
-                                entitiesById.get(item.entityId)?.code !== '205'
-                              }
+                              disabled={blocked || !!editor}
                               onClick={() => onVerifyQaAtm?.(item)}
                               aria-label={`Verificar ${item.alias}`}
                             >

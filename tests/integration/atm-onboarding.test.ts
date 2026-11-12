@@ -8,7 +8,7 @@ import { FileQaExecutionProfiles } from '../../apps/desktop/src/main/infrastruct
 import { QaAtmTemplate } from '../../apps/desktop/src/main/qa-atm-template';
 import type { Result } from '../../packages/shared/src/contracts';
 import type { CatalogSnapshot } from '../../packages/domain/src/catalogs';
-import type { CreateQaAtmRequest } from '../../packages/domain/src/atm-onboarding';
+import type { CreateTemplateQaAtmRequest } from '../../packages/domain/src/atm-onboarding';
 import { qaExecutionFixture } from '../helpers/qa-execution';
 import { removeTestDirectory } from '../helpers/temporary-directory';
 
@@ -20,7 +20,7 @@ const value = (result: Result<CatalogSnapshot>) => {
 describe('asistente ATM con persistencia SQLite real', () => {
   let directory: string;
   let database: SqliteCatalog;
-  let request: CreateQaAtmRequest;
+  let request: CreateTemplateQaAtmRequest;
   beforeEach(async () => {
     directory = await mkdtemp(join(tmpdir(), 'coonecta-atm-onboarding-'));
     database = new SqliteCatalog(join(directory, 'catalog.sqlite'));
@@ -72,6 +72,110 @@ describe('asistente ATM con persistencia SQLite real', () => {
     await removeTestDirectory(directory, 'coonecta-atm-onboarding-');
   });
   const create = () => database.execute({ kind: 'createQaAtm', request }, context);
+  it('crea para otra entidad con adquirente explícito, recupera por UUID y bloquea revisiones obsoletas', () => {
+    const entity = value(
+      database.execute(
+        {
+          kind: 'saveEntity',
+          request: {
+            environment: 'QA',
+            id: null,
+            revision: null,
+            values: {
+              code: '312',
+              name: 'Synthetic External',
+              networkType: 'COONECTA',
+              active: true,
+              memberTypes: ['FRONT', 'EXTERNAL'],
+            },
+          },
+        },
+        context,
+      ),
+    ).entities.find((item) => item.code === '312')!;
+    const input = {
+      environment: 'QA' as const,
+      requestId: randomUUID(),
+      entityId: entity.id,
+      entityRevision: entity.revision,
+      alias: 'Otro ATM',
+      terminalId: 'QA-OTHER-01',
+      acquirerId: 'OTHER-ACQ',
+    };
+    const first = value(database.execute({ kind: 'createQaAtm', request: input }, context));
+    expect(first.atms.find((item) => item.id === input.requestId)).toMatchObject({
+      entityId: entity.id,
+      acquirerId: 'OTHER-ACQ',
+      revision: 1,
+    });
+    const recovered = value(database.execute({ kind: 'createQaAtm', request: input }, context));
+    expect(recovered.audit.filter((item) => item.recordId === input.requestId)).toHaveLength(1);
+    expect(recovered.atms).toHaveLength(2);
+    expect(
+      database.execute(
+        { kind: 'createQaAtm', request: { ...input, acquirerId: 'changed' } },
+        context,
+      ),
+    ).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+    expect(
+      database.execute(
+        { kind: 'createQaAtm', request: { ...input, requestId: randomUUID() } },
+        context,
+      ),
+    ).toMatchObject({ ok: false, error: { code: 'VALIDATION_ERROR' } });
+    value(
+      database.execute(
+        {
+          kind: 'saveEntity',
+          request: {
+            environment: 'QA',
+            id: entity.id,
+            revision: entity.revision,
+            values: { code: '312', name: entity.name, active: false, networkType: 'COONECTA' },
+          },
+        },
+        context,
+      ),
+    );
+    expect(
+      database.execute(
+        {
+          kind: 'createQaAtm',
+          request: { ...input, requestId: randomUUID(), terminalId: 'QA-OTHER-02' },
+        },
+        context,
+      ),
+    ).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+    expect(
+      database.execute(
+        {
+          kind: 'createQaAtm',
+          request: {
+            ...input,
+            requestId: randomUUID(),
+            entityRevision: 2,
+            terminalId: 'QA-OTHER-02',
+          },
+        },
+        context,
+      ),
+    ).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+    const cb = first.entities.find((item) => item.code === '205')!;
+    expect(
+      database.execute(
+        {
+          kind: 'createQaAtm',
+          request: {
+            ...input,
+            entityId: cb.id,
+            entityRevision: cb.revision,
+            terminalId: 'ATM20525',
+          },
+        },
+        context,
+      ),
+    ).toMatchObject({ ok: false, error: { code: 'CONFLICT' } });
+  });
   it('crea, recupera después de reiniciar y audita una sola vez; hereda sin consumir reservas', async () => {
     const f = qaExecutionFixture();
     f.row.atmId = request.templateId;

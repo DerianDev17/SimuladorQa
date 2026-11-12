@@ -1,5 +1,10 @@
 # Catálogos de entidades y ATM
 
+Integración 2026-11-12: **Crear ATM Qa** incorpora búsqueda/selección de entidad,
+clasificación visible y adquirente explícito fuera de 205. **Verificar y probar**
+diagnostica cualquier ATM y bloquea saldo ante requisitos pendientes. Ver
+[recorrido y alcance](MULTI_ATM_PROFILES.md#entidades-en-el-asistente-2026-11-12).
+
 Actualización 2026-11-12: **Entidades** permite editar y filtrar FRONT, BACK,
 EXTERNA e HÍBRIDA, independientemente de la red. Se conservan valores múltiples
 con **Validación pendiente**, según la confirmación del usuario. El listado

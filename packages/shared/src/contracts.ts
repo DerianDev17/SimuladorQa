@@ -65,6 +65,7 @@ import type {
   AtmLocalInspection,
   CreateQaAtmRequest,
   InspectQaAtmRequest,
+  QaAtmBalanceTestRequest,
 } from '../../domain/src/atm-onboarding';
 
 export const channels = {
@@ -106,6 +107,7 @@ export const channels = {
   saveAtm: 'catalog:atm:save',
   createQaAtm: 'catalog:atm:create-qa',
   inspectQaAtm: 'catalog:atm:inspect-qa',
+  testQaAtmBalance: 'catalog:atm:test-balance',
   deleteAtm: 'catalog:atm:delete',
   saveCase: 'catalog:case:save',
   deleteCase: 'catalog:case:delete',
@@ -243,6 +245,7 @@ export interface DesktopApi {
   saveAtm(request: SaveAtmRequest): Promise<Result<CatalogSnapshot>>;
   createQaAtm(request: CreateQaAtmRequest): Promise<Result<CatalogSnapshot>>;
   inspectQaAtm(request: InspectQaAtmRequest): Promise<Result<AtmLocalInspection>>;
+  testQaAtmBalance(request: QaAtmBalanceTestRequest): Promise<Result<BalanceExecution>>;
   deleteAtm(request: DeleteRequest): Promise<Result<CatalogSnapshot>>;
   saveCase(request: SaveCaseRequest): Promise<Result<CatalogSnapshot>>;
   deleteCase(request: DeleteRequest): Promise<Result<CatalogSnapshot>>;

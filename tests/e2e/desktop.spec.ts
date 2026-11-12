@@ -48,7 +48,13 @@ async function prepareAtmWizard() {
       environment: 'QA',
       id: null,
       revision: null,
-      values: { code: '205', name: 'Entidad sintética QA', networkType: 'COONECTA', active: true },
+      values: {
+        code: '205',
+        name: 'Entidad sintética QA',
+        networkType: 'COONECTA',
+        active: true,
+        memberTypes: ['FRONT'],
+      },
     });
     if (!saved.ok) throw Error(saved.error.code);
     const entity = saved.value.entities[0]!;
@@ -87,14 +93,14 @@ async function prepareAtmWizard() {
   await writeFile(join(directory, 'qa-execution-profiles.json'), JSON.stringify(fixture.input));
   await window.getByRole('button', { name: 'Perfiles ATM', exact: true }).click();
   await window.getByRole('button', { name: 'Recargar', exact: true }).click();
-  await window.getByRole('button', { name: 'Crear ATM QA/205', exact: true }).click();
+  await window.getByRole('button', { name: 'Crear ATM Qa', exact: true }).click();
   return window;
 }
 
 test('asistente ATM: valida entradas, crea una vez y detecta seguridad ausente con Main real', async () => {
   test.setTimeout(60000);
   const window = await prepareAtmWizard();
-  const wizard = window.getByRole('region', { name: 'Asistente ATM QA/205' });
+  const wizard = window.getByRole('region', { name: 'Asistente ATM Qa' });
   await expect(wizard.getByLabel('Acquirer ID heredado')).toHaveValue('12345678901');
   const terminal = wizard.getByLabel('Terminal ID autorizado');
   await terminal.fill('ATM20521');
@@ -148,16 +154,21 @@ test('asistente ATM: prueba de saldo explícita con tarjeta, resultado correlaci
   await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
   await window.getByLabel('Monto de prueba').fill('75.25');
   await window.getByRole('button', { name: 'Perfiles ATM', exact: true }).click();
-  await window.getByRole('button', { name: 'Crear ATM QA/205', exact: true }).click();
+  await window.getByRole('button', { name: 'Crear ATM Qa', exact: true }).click();
   // Synthetic IPC dependencies: never asks for a real PIN or sends to QA.
-  await app!.evaluate(({ ipcMain }) => {
+  const owner = await window.evaluate(async () => {
+    const result = await globalThis.window.desktop!.getCatalog('QA');
+    if (!result.ok) throw Error(result.error.code);
+    return result.value.entities[0]!;
+  });
+  await app!.evaluate(({ ipcMain }, owner) => {
     const state = globalThis as typeof globalThis & { wizardSends?: number };
     state.wizardSends = 0;
     let saved: Record<string, unknown> | undefined;
     for (const channel of [
       'catalog:atm:inspect-qa',
       'transaction:balance:readiness',
-      'transaction:balance:execute',
+      'catalog:atm:test-balance',
       'transaction:balance:history',
     ])
       ipcMain.removeHandler(channel);
@@ -169,6 +180,7 @@ test('asistente ATM: prueba de saldo explícita con tarjeta, resultado correlaci
         checkedAt: '2026-11-11T15:00:00.000Z',
         configurationRevision: 2,
         readyForBalanceTest: true,
+        entity: owner,
         source: 'ATM20521',
         sequencesRemaining: 2,
         checks: [
@@ -195,7 +207,10 @@ test('asistente ATM: prueba de saldo explícita con tarjeta, resultado correlaci
       ok: true,
       value: saved ? [saved] : [],
     }));
-    ipcMain.handle('transaction:balance:execute', (_event, request) => {
+    ipcMain.handle('catalog:atm:test-balance', (_event, payload) => {
+      if (payload.entityId !== owner.id || payload.entityRevision !== owner.revision)
+        throw Error('Invalid entity guard');
+      const request = payload.execution;
       if (
         request.draft.transaction !== 'BALANCE' ||
         request.draft.account !== 'SAVINGS' ||
@@ -229,8 +244,8 @@ test('asistente ATM: prueba de saldo explícita con tarjeta, resultado correlaci
       };
       return { ok: true, value: saved };
     });
-  });
-  const wizard = window.getByRole('region', { name: 'Asistente ATM QA/205' });
+  }, owner);
+  const wizard = window.getByRole('region', { name: 'Asistente ATM Qa' });
   await wizard.getByLabel('Terminal ID autorizado').fill('ATM20524');
   await wizard.getByRole('button', { name: 'Crear y verificar', exact: true }).click();
   await expect(wizard.getByText('Aceptación del host no comprobada')).toBeVisible();
@@ -267,10 +282,110 @@ test('asistente ATM: prueba de saldo explícita con tarjeta, resultado correlaci
   await expect(window.getByLabel('Monto de prueba')).toHaveValue('75.25');
 });
 
+test('asistente ATM: entidades FRONT/BACK/EXTERNA, alta explícita y clasificación múltiple pendiente', async () => {
+  test.setTimeout(60000);
+  const window = await prepareAtmWizard();
+  const ids = await window.evaluate(async () => {
+    const api = globalThis.window.desktop!;
+    const ids: Record<string, string> = {};
+    for (const values of [
+      { code: '209', name: 'Entidad Back sintética', memberTypes: ['BACK'] as const, active: true },
+      {
+        code: '312',
+        name: 'Entidad Externa sintética',
+        memberTypes: ['EXTERNAL'] as const,
+        active: true,
+      },
+      {
+        code: '232',
+        name: 'Entidad Doble sintética',
+        memberTypes: ['FRONT', 'EXTERNAL'] as const,
+        active: true,
+      },
+      {
+        code: '299',
+        name: 'Entidad Inactiva sintética',
+        memberTypes: ['HYBRID'] as const,
+        active: false,
+      },
+    ]) {
+      const saved = await api.saveEntity({
+        environment: 'QA',
+        id: null,
+        revision: null,
+        values: { ...values, memberTypes: [...values.memberTypes], networkType: 'COONECTA' },
+      });
+      if (!saved.ok) throw Error(saved.error.code);
+      ids[values.code] = saved.value.entities.find((item) => item.code === values.code)!.id;
+    }
+    return ids;
+  });
+  const wizard = window.getByRole('region', { name: 'Asistente ATM Qa', exact: true });
+  await wizard.getByRole('button', { name: 'Recargar catálogo', exact: true }).click();
+  const owner = wizard.getByRole('region', { name: 'Entidad del ATM', exact: true });
+  await expect(owner).toContainText('FRONT');
+  const selection = wizard.getByLabel('Entidad del nuevo ATM');
+  await expect(selection.getByRole('option', { name: /299.*HÍBRIDA.*Inactiva/ })).toHaveJSProperty(
+    'disabled',
+    true,
+  );
+  await selection.selectOption(ids['209']!);
+  await expect(owner).toContainText('BACK');
+  await wizard.getByLabel('Acquirer ID aprobado').fill('BACK-TEST');
+  await wizard.getByLabel('Buscar entidad del ATM').fill('externa');
+  await selection.selectOption(ids['312']!);
+  await expect(owner).toContainText('EXTERNA');
+  await expect(wizard.getByLabel('Acquirer ID aprobado')).toHaveValue('');
+  await wizard.getByLabel('Terminal ID autorizado').fill('QA-312-01');
+  await expect(
+    wizard.getByRole('button', { name: 'Crear y verificar', exact: true }),
+  ).toBeDisabled();
+  await wizard.getByLabel('Acquirer ID aprobado').fill('EXTERNAL-TEST');
+  await wizard.getByRole('button', { name: 'Crear y verificar', exact: true }).click();
+  await expect(
+    wizard.getByText('Falta configuración de saldo aprobada para esta entidad', { exact: true }),
+  ).toBeVisible();
+  await expect(wizard.getByRole('button', { name: 'Continuar a prueba de saldo' })).toBeDisabled();
+  const saved = await window.evaluate(async () => {
+    const catalog = await globalThis.window.desktop!.getCatalog('QA');
+    if (!catalog.ok) throw Error(catalog.error.code);
+    return catalog.value.atms.find((item) => item.terminalId === 'QA-312-01')!;
+  });
+  expect(saved.entityId).toBe(ids['312']);
+  expect(saved.acquirerId).toBe('EXTERNAL-TEST');
+  await wizard.getByRole('button', { name: 'Volver al catálogo' }).click();
+  await window.getByRole('button', { name: 'Verificar QA-312-01', exact: true }).click();
+  await expect(owner).toContainText('EXTERNA');
+  await expect(wizard.getByRole('button', { name: 'Continuar a prueba de saldo' })).toBeDisabled();
+  await wizard.getByRole('button', { name: 'Volver al catálogo' }).click();
+  await window.getByRole('button', { name: 'Crear ATM Qa', exact: true }).click();
+  await selection.selectOption(ids['232']!);
+  await expect(owner).toContainText('Validación pendiente');
+  await wizard.getByLabel('Terminal ID autorizado').fill('QA-232-01');
+  await wizard.getByLabel('Acquirer ID aprobado').fill('DUAL-TEST');
+  await wizard.getByRole('button', { name: 'Crear y verificar', exact: true }).click();
+  await expect(
+    wizard.getByText('Clasificaciones múltiples: validación pendiente', { exact: true }),
+  ).toBeVisible();
+  await expect(wizard.getByRole('button', { name: 'Continuar a prueba de saldo' })).toBeDisabled();
+  await app!.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0]?.setContentSize(1024, 768),
+  );
+  expect(await window.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+    true,
+  );
+  await window.screenshot({ path: 'artifacts/atm-wizard-entities.png', fullPage: true });
+});
+
 test('asistente ATM: timeout de inspección retira la aprobación anterior y permite recuperar', async () => {
   test.setTimeout(60000);
   const window = await prepareAtmWizard();
-  await app!.evaluate(({ ipcMain }) => {
+  const owner = await window.evaluate(async () => {
+    const result = await globalThis.window.desktop!.getCatalog('QA');
+    if (!result.ok) throw Error(result.error.code);
+    return result.value.entities[0]!;
+  });
+  await app!.evaluate(({ ipcMain }, owner) => {
     ipcMain.removeHandler('catalog:atm:inspect-qa');
     let count = 0;
     ipcMain.handle('catalog:atm:inspect-qa', async (_event, request) => {
@@ -284,6 +399,7 @@ test('asistente ATM: timeout de inspección retira la aprobación anterior y per
           checkedAt: '2026-11-11T15:00:00.000Z',
           configurationRevision: 2,
           readyForBalanceTest: count === 1,
+          entity: owner,
           checks: [
             {
               id: 'PROFILE',
@@ -298,8 +414,8 @@ test('asistente ATM: timeout de inspección retira la aprobación anterior y per
         },
       };
     });
-  });
-  const wizard = window.getByRole('region', { name: 'Asistente ATM QA/205' });
+  }, owner);
+  const wizard = window.getByRole('region', { name: 'Asistente ATM Qa' });
   await wizard.getByLabel('Terminal ID autorizado').fill('ATM20524');
   await wizard.getByRole('button', { name: 'Crear y verificar', exact: true }).click();
   const next = wizard.getByRole('button', { name: 'Continuar a prueba de saldo' });

@@ -285,22 +285,19 @@ void startupReady
       join(__dirname, 'qa-pin-cipher.ps1'),
       join(app.getPath('userData'), 'qa-test-keys'),
     );
-    const template = new QaAtmTemplate(
-      executionProfiles,
-      async () => {
-        const snapshot = await catalogs!.execute(
-          { kind: 'list', environment: 'QA' },
-          {
-            user: runtime.user,
-            machine: runtime.hostname,
-            timestamp: runtime.now(),
-          },
-        );
-        if (!snapshot.ok) throw Error('QA_TEMPLATE_UNAVAILABLE');
-        return snapshot.value;
-      },
-      withdrawalPolicies,
-    );
+    const readAtmCatalog = async () => {
+      const snapshot = await catalogs!.execute(
+        { kind: 'list', environment: 'QA' },
+        {
+          user: runtime.user,
+          machine: runtime.hostname,
+          timestamp: runtime.now(),
+        },
+      );
+      if (!snapshot.ok) throw Error('QA_TEMPLATE_UNAVAILABLE');
+      return snapshot.value;
+    };
+    const template = new QaAtmTemplate(executionProfiles, readAtmCatalog, withdrawalPolicies);
     const balanceContexts = new QaTemplateContextProvider(
       template,
       'BALANCE',
@@ -381,6 +378,7 @@ void startupReady
         },
         sendConfiguration,
         runtime.now,
+        readAtmCatalog,
       ),
     );
     financialApplication = application;
@@ -448,6 +446,7 @@ void startupReady
             channels.environment,
             channels.readCardIdentity,
             channels.executeBalance,
+            channels.testQaAtmBalance,
             channels.executeWithdrawal,
             channels.connectSwitch,
             channels.disconnectSwitch,
@@ -586,12 +585,17 @@ void startupReady
           case channels.printWithdrawalReceipt:
             return withdrawalReceipts!.print(payload);
           case channels.executeBalance:
+          case channels.testQaAtmBalance:
             if (developmentReload)
               return failure(
                 'IN_USE',
                 'Actualizando la aplicación. Espera a que termine el reinicio.',
               );
-            return application.executeBalance(payload).finally(() => {
+            return (
+              channel === channels.testQaAtmBalance
+                ? application.testQaAtmBalance(payload)
+                : application.executeBalance(payload)
+            ).finally(() => {
               void publishReaderSnapshot();
             });
           case channels.balanceExecution:

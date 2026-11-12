@@ -55,7 +55,9 @@ const api: DesktopApi = Object.freeze<DesktopApi>({
   deleteEntity: (request) => invoke(channels.deleteEntity, request),
   saveAtm: (request) => invoke(channels.saveAtm, request),
   createQaAtm: (request) => invoke(channels.createQaAtm, request),
-  inspectQaAtm: (request) => invoke(channels.inspectQaAtm, request),
+  // Explicit inspection retries must not reuse a request whose Renderer deadline expired.
+  inspectQaAtm: (request) => ipcRenderer.invoke(channels.inspectQaAtm, request),
+  testQaAtmBalance: (request) => invoke(channels.testQaAtmBalance, request),
   deleteAtm: (request) => invoke(channels.deleteAtm, request),
   saveCase: (request) => invoke(channels.saveCase, request),
   deleteCase: (request) => invoke(channels.deleteCase, request),

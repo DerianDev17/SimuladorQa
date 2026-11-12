@@ -65,6 +65,7 @@ export interface TransactionPreparationProps {
   onCatalogChange: (catalog: CatalogSnapshot) => void;
   pendingAtmSelection: AtmSelection | undefined;
   onAtmSelectionApplied: () => void;
+  qaAtmBalanceTest?: { entityId: string; entityRevision: number };
 }
 export function useTransactionPreparation({
   visible,
@@ -80,6 +81,7 @@ export function useTransactionPreparation({
   onCatalogChange,
   pendingAtmSelection,
   onAtmSelectionApplied,
+  qaAtmBalanceTest,
 }: TransactionPreparationProps) {
   const [transaction, setTransaction] = useState<TransactionType>('BALANCE');
   const [optionsOpen, setOptionsOpen] = useState(false);
@@ -593,7 +595,9 @@ export function useTransactionPreparation({
             ? api.executeDeposit(request)
             : monetary
               ? api.executeWithdrawal(request)
-              : api.executeBalance(request));
+              : qaAtmBalanceTest
+                ? api.testQaAtmBalance({ execution: request, ...qaAtmBalanceTest })
+                : api.executeBalance(request));
           return backendResult;
         },
         180000,

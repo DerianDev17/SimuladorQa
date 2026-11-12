@@ -22,6 +22,9 @@ import type { SendConfigurationFile } from '../../packages/domain/src/send-confi
 import { networkEvidence } from '../helpers/network-evidence';
 import { balanceTarget, balanceRequest, balanceLease } from '../helpers/balance-inquiry';
 import { removeTestDirectory } from '../helpers/temporary-directory';
+import type { Entity } from '../../packages/domain/src/catalogs';
+import type { AtmLocalInspection } from '../../packages/domain/src/atm-onboarding';
+import type { Result } from '../../packages/shared/src/contracts';
 
 describe('Main, proveedor y diario de saldo real en archivo', () => {
   let directory: string;
@@ -82,24 +85,24 @@ describe('Main, proveedor y diario de saldo real en archivo', () => {
       },
     };
     const entityId = randomUUID();
+    const owner: Entity = {
+      id: entityId,
+      revision: 1,
+      status: 'DRAFT',
+      createdAt: runtime.now(),
+      updatedAt: runtime.now(),
+      code: '205',
+      name: 'Synthetic CB',
+      networkType: 'COONECTA',
+      active: true,
+      memberTypes: ['FRONT'],
+    };
     const catalogs = {
       execute: vi.fn(async () => ({
         ok: true as const,
         value: {
           environment: 'QA' as const,
-          entities: [
-            {
-              id: entityId,
-              revision: 1,
-              status: 'DRAFT' as const,
-              createdAt: runtime.now(),
-              updatedAt: runtime.now(),
-              code: '205',
-              name: 'Synthetic CB',
-              networkType: 'COONECTA' as const,
-              active: true,
-            },
-          ],
+          entities: [structuredClone(owner)],
           atms: [
             {
               id: target.draft.atmId!,
@@ -139,6 +142,20 @@ describe('Main, proveedor y diario de saldo real en archivo', () => {
       runtime,
       withdrawalContext,
     );
+    const inspection = {
+      inspect: vi.fn(async (): Promise<Result<AtmLocalInspection>> => ({
+        ok: true,
+        value: {
+          atmId: target.draft.atmId!,
+          revision,
+          checkedAt: runtime.now(),
+          configurationRevision: 1,
+          readyForBalanceTest: true,
+          entity: structuredClone(owner),
+          checks: [],
+        },
+      })),
+    };
     const app = new DesktopApplication(
       preferences,
       runtime,
@@ -160,6 +177,7 @@ describe('Main, proveedor y diario de saldo real en archivo', () => {
         runtime,
         depositContext,
       ),
+      inspection,
     );
     return {
       app,
@@ -169,6 +187,8 @@ describe('Main, proveedor y diario de saldo real en archivo', () => {
       target,
       request,
       catalogs,
+      owner,
+      inspection,
       setRevision: (value: number) => {
         revision = value;
       },
@@ -177,6 +197,75 @@ describe('Main, proveedor y diario de saldo real en archivo', () => {
       },
     };
   }
+  it('prueba guiada revalida entidad/configuración en Main y reutiliza el diario de saldo', async () => {
+    const f = await fixture();
+    const request = {
+      execution: f.request,
+      entityId: f.owner.id,
+      entityRevision: f.owner.revision,
+    };
+    expect(await f.app.testQaAtmBalance(request)).toMatchObject({
+      ok: true,
+      value: { outcome: 'APPROVED' },
+    });
+    expect(f.inspection.inspect).toHaveBeenCalledTimes(1);
+    expect(await f.app.testQaAtmBalance(request)).toMatchObject({
+      ok: true,
+      value: { outcome: 'APPROVED' },
+    });
+    expect(f.transport.exchange).toHaveBeenCalledTimes(1);
+  });
+  it.each([
+    'multiple',
+    'unclassified',
+    'inactive',
+    'scope',
+    'revision',
+    'timeout',
+    'unavailable',
+    'configuration',
+  ] as const)('bloquea prueba guiada con %s antes de ejecutar', async (kind) => {
+    const f = await fixture();
+    const request = { execution: f.request, entityId: f.owner.id, entityRevision: 1 };
+    if (kind === 'multiple') f.owner.memberTypes = ['FRONT', 'EXTERNAL'];
+    if (kind === 'unclassified') f.owner.memberTypes = [];
+    if (kind === 'inactive') f.owner.active = false;
+    if (kind === 'scope') f.owner.code = '312';
+    if (kind === 'revision') f.owner.revision++;
+    if (kind === 'configuration') request.execution.configurationRevision++;
+    if (kind === 'timeout' || kind === 'unavailable')
+      f.inspection.inspect.mockResolvedValue({
+        ok: false,
+        error: {
+          code: kind === 'timeout' ? 'TIMEOUT' : 'SERVICE_UNAVAILABLE',
+          message: 'Synthetic inspection failure',
+        },
+      });
+    expect(await f.app.testQaAtmBalance(request)).toMatchObject({ ok: false });
+    expect(f.transport.exchange).not.toHaveBeenCalled();
+    expect(await f.journal.read()).toEqual([]);
+    expect(f.app.isFinancialBusy()).toBe(false);
+  });
+  it('retira el permiso si la entidad cambia durante la preparación de saldo', async () => {
+    let change = () => {};
+    const f = await fixture({
+      inspect: async () => ({ ready: true, blockers: [] }),
+      acquire: async (target) => {
+        change();
+        return balanceLease(target);
+      },
+    });
+    change = () => {
+      f.owner.revision++;
+    };
+    const result = await f.app.testQaAtmBalance({
+      execution: f.request,
+      entityId: f.owner.id,
+      entityRevision: 1,
+    });
+    expect(result).toMatchObject({ ok: true, value: { transmissionAttempted: false } });
+    expect(f.transport.exchange).not.toHaveBeenCalled();
+  });
   it.each(['BALANCE', 'WITHDRAWAL'] as const)(
     'Main mantiene la exclusión de %s hasta confirmar el último resultado',
     async (operation) => {

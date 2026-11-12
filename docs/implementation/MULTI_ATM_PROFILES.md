@@ -1,8 +1,42 @@
 # ATM20521 como plantilla funcional
 
+## Entidades en el asistente (2026-11-12)
+
+**Perfiles ATM → Crear ATM Qa** permite buscar una entidad por código/nombre y
+seleccionarla del catálogo. Muestra FRONT, BACK, EXTERNA e HÍBRIDA, red, estado
+y revisión durante todo el recorrido. Las entidades inactivas no permiten alta;
+las clasificaciones múltiples conservan **Validación pendiente**.
+
+- **205:** sigue seleccionada inicialmente y hereda entidad/adquirente de
+  ATM20521 activa. Conserva el Terminal ID QA de ocho caracteres y el pool común.
+- **Otras entidades:** requiere Terminal ID y Acquirer ID explícitos. Guarda la
+  identidad administrativa con su UUID, revisión y auditoría; no deriva el
+  adquirente del código de entidad ni asigna la plantilla 205. El formato
+  administrativo no acredita un contrato ISO de esa entidad.
+
+**Crear y verificar** comprueba automáticamente entidad activa, clasificación
+única, alcance operativo, revisión ATM, destino, plazos y, cuando corresponde,
+perfil, seguridad TEST y reservas. **Verificar y probar** está disponible también
+en ATM de otras entidades para mostrar sus pendientes. La falta de un requisito
+mantiene bloqueado **Continuar a prueba de saldo**, conservando el ATM guardado.
+
+Al pulsar **Probar consulta de saldo**, Main vuelve a verificar la configuración
+y compara la entidad/revisión mostrada con el catálogo actual. Revalida esa
+identidad antes del envío, junto con los controles existentes del motor. Un
+timeout, un cambio de entidad, una clasificación pendiente o una configuración
+incompatible impiden el envío. **Volver a verificación** permite corregir y revisar.
+
+El alcance financiero disponible sigue siendo **QA/205/LOCAL/ahorros**. Para las
+demás entidades falta el perfil de saldo validado: adquirente, destino,
+campos/diccionario, seguridad y reglas de respuesta. **TODO-DATA
+ATM-ENTITY-BALANCE-PROFILES** bloquea solo sus pruebas financieras, no la creación
+del perfil ni la consulta del diagnóstico. Ver [ADR-044](../adr/ADR-044-ATM-ENTITY-ONBOARDING.md).
+
 ## Asistente de alta y prueba (2026-11-11)
 
-1. En **Perfiles ATM**, pulsar **Crear ATM QA/205**.
+El recorrido QA/205 siguiente se mantiene dentro del asistente **Crear ATM Qa**.
+
+1. En **Perfiles ATM**, pulsar **Crear ATM Qa** y seleccionar la entidad 205.
 2. Introducir el Terminal ID autorizado de ocho caracteres en mayúsculas y un
    alias opcional. Entidad y adquirente se heredan de ATM20521 activa.
 3. Pulsar **Crear y verificar**. El perfil se guarda una sola vez y se comprueban
@@ -13,7 +47,8 @@
    **Probar consulta de saldo**. El PIN se solicita por el diálogo protegido
    existente. Consultar el resultado y su correlación en el asistente/historial.
 
-**Verificar y probar** permite retomar un ATM existente de la entidad 205.
+**Verificar y probar** permite retomar un ATM existente; saldo requiere los
+controles vigentes descritos arriba y el alcance QA/205.
 La prueba usa saldo/LOCAL/ahorros y conserva el borrador de Transacciones.
 La inspección local no consume secuencias ni conecta; la consulta explícita
 sí consume una reserva. Un timeout del alta conserva su UUID para **Recuperar

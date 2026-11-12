@@ -16,9 +16,13 @@ import { TransactionError } from './TransactionError';
 
 export function AtmBalanceTest({
   atm,
+  entityId,
+  entityRevision,
   ...props
 }: Omit<TransactionPreparationProps, 'pendingAtmSelection' | 'onAtmSelectionApplied'> & {
   atm: AtmProfile;
+  entityId: string;
+  entityRevision: number;
 }) {
   const [selection, setSelection] = useState<AtmSelection | undefined>({
     environment: 'QA',
@@ -30,6 +34,7 @@ export function AtmBalanceTest({
     ...props,
     pendingAtmSelection: selection,
     onAtmSelectionApplied: applied,
+    qaAtmBalanceTest: { entityId, entityRevision },
   });
   const [history, setHistory] = useState<BalanceExecution>();
   const [historyError, setHistoryError] = useState('');
