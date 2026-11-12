@@ -2,71 +2,73 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { IpcRendererEvent } from 'electron';
 import { channels, desktopEvents } from '../../../packages/shared/src/contracts';
 import type { DesktopApi } from '../../../packages/shared/src/contracts';
+import { IpcReadRequests } from './ipc-read-requests';
+
+const reads = new IpcReadRequests();
+const invoke: typeof ipcRenderer.invoke = (channel: string, ...args: unknown[]) =>
+  reads.run(channel, args, () => ipcRenderer.invoke(channel, ...args));
 
 const api: DesktopApi = Object.freeze<DesktopApi>({
-  getSessionMessages: (request) => ipcRenderer.invoke(channels.sessionMessages, request),
-  getSnapshot: () => ipcRenderer.invoke(channels.snapshot),
-  getSwitchConnection: (environment) =>
-    ipcRenderer.invoke(channels.switchConnection, { environment }),
-  connectSwitch: (environment) => ipcRenderer.invoke(channels.connectSwitch, { environment }),
-  disconnectSwitch: (environment) => ipcRenderer.invoke(channels.disconnectSwitch, { environment }),
-  getSendConfiguration: (environment) =>
-    ipcRenderer.invoke(channels.sendConfiguration, { environment }),
-  saveSendConfiguration: (request) => ipcRenderer.invoke(channels.saveSendConfiguration, request),
-  prepareSendPlan: (request) => ipcRenderer.invoke(channels.prepareSendPlan, request),
-  getBalanceReadiness: (request) => ipcRenderer.invoke(channels.balanceReadiness, request),
-  executeBalance: (request) => ipcRenderer.invoke(channels.executeBalance, request),
-  getBalanceExecution: (request) => ipcRenderer.invoke(channels.balanceExecution, request),
-  getBalanceHistory: (environment) => ipcRenderer.invoke(channels.balanceHistory, { environment }),
-  getDepositReadiness: (request) => ipcRenderer.invoke(channels.depositReadiness, request),
-  executeDeposit: (request) => ipcRenderer.invoke(channels.executeDeposit, request),
-  getDepositExecution: (request) => ipcRenderer.invoke(channels.depositExecution, request),
-  getDepositHistory: (environment) => ipcRenderer.invoke(channels.depositHistory, { environment }),
-  getWithdrawalReadiness: (request) => ipcRenderer.invoke(channels.withdrawalReadiness, request),
-  executeWithdrawal: (request) => ipcRenderer.invoke(channels.executeWithdrawal, request),
-  getWithdrawalExecution: (request) => ipcRenderer.invoke(channels.withdrawalExecution, request),
-  getWithdrawalHistory: (environment) =>
-    ipcRenderer.invoke(channels.withdrawalHistory, { environment }),
-  printWithdrawalReceipt: (request) => ipcRenderer.invoke(channels.printWithdrawalReceipt, request),
-  getReaderSnapshot: () => ipcRenderer.invoke(channels.reader),
+  getSessionMessages: (request) => invoke(channels.sessionMessages, request),
+  getSnapshot: () => invoke(channels.snapshot),
+  getSwitchConnection: (environment) => invoke(channels.switchConnection, { environment }),
+  connectSwitch: (environment) => invoke(channels.connectSwitch, { environment }),
+  disconnectSwitch: (environment) => invoke(channels.disconnectSwitch, { environment }),
+  getSendConfiguration: (environment) => invoke(channels.sendConfiguration, { environment }),
+  saveSendConfiguration: (request) => invoke(channels.saveSendConfiguration, request),
+  prepareSendPlan: (request) => invoke(channels.prepareSendPlan, request),
+  getBalanceReadiness: (request) => invoke(channels.balanceReadiness, request),
+  executeBalance: (request) => invoke(channels.executeBalance, request),
+  getBalanceExecution: (request) => invoke(channels.balanceExecution, request),
+  getBalanceHistory: (environment) => invoke(channels.balanceHistory, { environment }),
+  getDepositReadiness: (request) => invoke(channels.depositReadiness, request),
+  executeDeposit: (request) => invoke(channels.executeDeposit, request),
+  getDepositExecution: (request) => invoke(channels.depositExecution, request),
+  getDepositHistory: (environment) => invoke(channels.depositHistory, { environment }),
+  getWithdrawalReadiness: (request) => invoke(channels.withdrawalReadiness, request),
+  executeWithdrawal: (request) => invoke(channels.executeWithdrawal, request),
+  getWithdrawalExecution: (request) => invoke(channels.withdrawalExecution, request),
+  getWithdrawalHistory: (environment) => invoke(channels.withdrawalHistory, { environment }),
+  printWithdrawalReceipt: (request) => invoke(channels.printWithdrawalReceipt, request),
+  getReaderSnapshot: () => invoke(channels.reader),
   onReaderSnapshot: (listener) => {
-    const receive = (_event: IpcRendererEvent, result: Parameters<typeof listener>[0]) =>
+    const receive = (_event: IpcRendererEvent, result: Parameters<typeof listener>[0]) => {
+      reads.invalidate(channels.reader);
       listener(result);
+    };
     ipcRenderer.on(desktopEvents.readerChanged, receive);
     return () => {
       ipcRenderer.removeListener(desktopEvents.readerChanged, receive);
     };
   },
-  readCardIdentity: (request) => ipcRenderer.invoke(channels.readCardIdentity, request),
-  generateVirtualCardFixtures: (request) =>
-    ipcRenderer.invoke(channels.generateVirtualCardFixtures, request),
-  listSavedCardProfiles: () => ipcRenderer.invoke(channels.listSavedCardProfiles),
-  saveCardProfile: (request) => ipcRenderer.invoke(channels.saveCardProfile, request),
-  updateCardProfile: (request) => ipcRenderer.invoke(channels.updateCardProfile, request),
-  deleteCardProfile: (request) => ipcRenderer.invoke(channels.deleteCardProfile, request),
-  setEnvironment: (environment) => ipcRenderer.invoke(channels.environment, { environment }),
-  prepareTransaction: (request) => ipcRenderer.invoke(channels.prepare, request),
-  reviewDraft: (request) => ipcRenderer.invoke(channels.reviewDraft, request),
-  getCatalog: (environment) => ipcRenderer.invoke(channels.catalog, { environment }),
-  saveEntity: (request) => ipcRenderer.invoke(channels.saveEntity, request),
-  deleteEntity: (request) => ipcRenderer.invoke(channels.deleteEntity, request),
-  saveAtm: (request) => ipcRenderer.invoke(channels.saveAtm, request),
-  createQaAtm: (request) => ipcRenderer.invoke(channels.createQaAtm, request),
-  inspectQaAtm: (request) => ipcRenderer.invoke(channels.inspectQaAtm, request),
-  deleteAtm: (request) => ipcRenderer.invoke(channels.deleteAtm, request),
-  saveCase: (request) => ipcRenderer.invoke(channels.saveCase, request),
-  deleteCase: (request) => ipcRenderer.invoke(channels.deleteCase, request),
-  searchObservations: (request) => ipcRenderer.invoke(channels.observations, request),
-  getMediatorLive: (request) => ipcRenderer.invoke(channels.mediatorLive, request),
-  startLoadRun: (request) => ipcRenderer.invoke(channels.startLoadRun, request),
-  getLoadConfigurations: () => ipcRenderer.invoke(channels.loadConfigurations),
-  saveLoadConfiguration: (request) => ipcRenderer.invoke(channels.saveLoadConfiguration, request),
-  deleteLoadConfiguration: (request) =>
-    ipcRenderer.invoke(channels.deleteLoadConfiguration, request),
-  exportLoadRun: (request) => ipcRenderer.invoke(channels.exportLoadRun, request),
-  listLoadHistory: (request) => ipcRenderer.invoke(channels.loadHistory, request),
-  getLoadHistory: (request) => ipcRenderer.invoke(channels.loadHistoryDetail, request),
-  getLoadRun: () => ipcRenderer.invoke(channels.loadRun),
-  stopLoadRun: (request) => ipcRenderer.invoke(channels.stopLoadRun, request),
+  readCardIdentity: (request) => invoke(channels.readCardIdentity, request),
+  generateVirtualCardFixtures: (request) => invoke(channels.generateVirtualCardFixtures, request),
+  listSavedCardProfiles: () => invoke(channels.listSavedCardProfiles),
+  saveCardProfile: (request) => invoke(channels.saveCardProfile, request),
+  updateCardProfile: (request) => invoke(channels.updateCardProfile, request),
+  deleteCardProfile: (request) => invoke(channels.deleteCardProfile, request),
+  setEnvironment: (environment) => invoke(channels.environment, { environment }),
+  prepareTransaction: (request) => invoke(channels.prepare, request),
+  reviewDraft: (request) => invoke(channels.reviewDraft, request),
+  getCatalog: (environment) => invoke(channels.catalog, { environment }),
+  saveEntity: (request) => invoke(channels.saveEntity, request),
+  deleteEntity: (request) => invoke(channels.deleteEntity, request),
+  saveAtm: (request) => invoke(channels.saveAtm, request),
+  createQaAtm: (request) => invoke(channels.createQaAtm, request),
+  inspectQaAtm: (request) => invoke(channels.inspectQaAtm, request),
+  deleteAtm: (request) => invoke(channels.deleteAtm, request),
+  saveCase: (request) => invoke(channels.saveCase, request),
+  deleteCase: (request) => invoke(channels.deleteCase, request),
+  searchObservations: (request) => invoke(channels.observations, request),
+  getMediatorLive: (request) => invoke(channels.mediatorLive, request),
+  startLoadRun: (request) => invoke(channels.startLoadRun, request),
+  getLoadConfigurations: () => invoke(channels.loadConfigurations),
+  saveLoadConfiguration: (request) => invoke(channels.saveLoadConfiguration, request),
+  deleteLoadConfiguration: (request) => invoke(channels.deleteLoadConfiguration, request),
+  exportLoadRun: (request) => invoke(channels.exportLoadRun, request),
+  listLoadHistory: (request) => invoke(channels.loadHistory, request),
+  getLoadHistory: (request) => invoke(channels.loadHistoryDetail, request),
+  getLoadRun: () => invoke(channels.loadRun),
+  stopLoadRun: (request) => invoke(channels.stopLoadRun, request),
 });
 contextBridge.exposeInMainWorld('desktop', api);

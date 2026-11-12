@@ -64,6 +64,26 @@ npm start
 Esto no genera un instalador Windows firmado. Main y preload deben cargarse
 juntos después de cambios de contratos IPC.
 
+## Consultas duplicadas (2026-11-12)
+
+Preload comparte una única solicitud IPC para lecturas simultáneas del mismo
+canal y argumentos, incluso entre componentes o montajes de React StrictMode.
+La lista explícita incluye estado, catálogos, historiales, inspección ATM y
+observación. Las respuestas se liberan al terminar; la siguiente consulta
+obtiene datos nuevos. No hay reintentos automáticos.
+
+El timeout del Renderer limita la espera de cada consumidor; no cancela el IPC.
+Mientras Main siga respondiendo a esa solicitud, otra lectura idéntica espera
+la misma operación. Un rechazo libera la solicitud y permite consultar de nuevo.
+Los comandos invalidan las lecturas compartidas al comenzar y terminar, y los
+eventos del lector invalidan su estado pendiente. Así una consulta posterior
+al cambio no reutiliza una lectura anterior. Los comandos conservan su
+validación, exclusión e idempotencia en Main.
+
+Las pruebas del coordinador y de su integración con preload verifican recuentos
+de invocaciones, argumentos distintos, errores, timeout, invalidación y
+recuperación con dependencias sintéticas.
+
 ## Datos y diagnóstico
 
 Preferencias, perfiles privados y diarios se guardan bajo `app.getPath('userData')`,
