@@ -109,13 +109,14 @@ Main valida y persiste los valores, cierra el enlace anterior al guardar y usa
 el destino guardado al conectar. Los perfiles financieros conservan su vinculación
 al endpoint autorizado. Ver [ADR-041](docs/adr/ADR-041-OPERATIONAL-SEND-SETTINGS.md).
 
-Excepción de visualización QA autorizada el 2026-11-05: el puerto
-`SessionMessagePort` recibe diagnósticos de los adaptadores y conserva hasta 20
-solicitudes/15 minutos solo en memoria de Main. IPC dedicado valida ambiente,
-UUID y emisor antes de entregar campos completos temporalmente a Mensajes.
-No modifica `BalanceExecution`, diarios, logs ni exportaciones. El cierre y el
-cambio de ambiente limpian la copia; Renderer retira datos al ocultar/caducar.
-Ver [ADR-037](docs/adr/ADR-037-QA-SESSION-MESSAGES.md).
+Excepción de historial QA autorizada el 2026-11-12: `SessionMessagePort` recibe
+diagnósticos completos y `EncryptedMessageArchive` los persiste fuera del Renderer,
+con archivos atómicos cifrados por `ElectronMessageEncryption`/Windows. No hay
+caducidad ni expulsión de registros; el cierre drena escrituras y conserva archivos.
+IPC dedicado valida ambiente, UUID y emisor antes de recuperar un registro completo
+para Mensajes. No modifica `BalanceExecution`, diarios públicos, logs ni exportaciones.
+Renderer retira datos al ocultar; reabrir descifra bajo demanda en Main. Sustituye
+la retención temporal de ADR-037; ver [ADR-046](docs/adr/ADR-046-ENCRYPTED-QA-MESSAGE-HISTORY.md).
 
 Renderer no abre sockets ni accede a secretos. Los valores públicos están
 sanitizados y el PAN enmascarado; no se registran PIN, CVV, PIN Block ni Track 2.

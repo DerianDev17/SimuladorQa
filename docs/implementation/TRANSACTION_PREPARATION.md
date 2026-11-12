@@ -1,5 +1,21 @@
 # Preparacion documental de transacciones
 
+## Historial completo cifrado — 2026-11-12
+
+Las nuevas solicitudes y respuestas QA se conservan completas en un archivo
+cifrado local, sin límite de 15 minutos ni expulsión a las 20 operaciones.
+**Mostrar valores completos** recupera los campos en Texto legible y Campos,
+incluso después de cerrar y abrir la app con el mismo perfil Windows. Salir de
+Mensajes o desactivar la opción retira los valores de la vista, no del archivo.
+Un fallo de guardado/descifrado se informa al consultar; Actualizar mensajes
+completos no reenvía la transacción. Los registros antiguos que solo guardaron
+máscaras no se pueden recuperar. Binarios, PIN Block y criptogramas conservan
+sus bytes originales en HEX; no incluye PIN ingresado ni claves.
+
+Esta decisión sustituye el límite temporal de la sección histórica siguiente.
+Los diarios públicos, logs y exportaciones mantienen sus máscaras; únicamente
+el archivo privado se conserva completo y cifrado. Ver [ADR-046](../adr/ADR-046-ENCRYPTED-QA-MESSAGE-HISTORY.md).
+
 ## Depósito QA — 2026-11-05
 
 El selector incluye **Depósito** con monto USD positivo, ahorros y ATM Local.

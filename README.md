@@ -9,9 +9,10 @@ historial local combina saldos, retiros y depósitos y permite seleccionar una o
 sin modificar el borrador. Ver [preparación](docs/implementation/TRANSACTION_PREPARATION.md)
 y [ADR-036](docs/adr/ADR-036-TRANSACTION-INSPECTION.md).
 
-Mensajes permite ver todos los campos de nuevas operaciones QA durante la sesión,
-en texto o HEX según su codificación. La copia completa dura hasta 15 minutos y
-el historial conserva las máscaras; ver [ADR-037](docs/adr/ADR-037-QA-SESSION-MESSAGES.md).
+Mensajes guarda todos los campos de nuevas operaciones QA cifrados en este equipo,
+en texto o HEX según su codificación. El historial permite verlos completos después
+de cerrar la app, sin caducidad, con el mismo perfil Windows. Los registros antiguos
+con máscaras no se reconstruyen; ver [ADR-046](docs/adr/ADR-046-ENCRYPTED-QA-MESSAGE-HISTORY.md).
 
 Estado documentado: **2026-11-03**. Consultar el [backlog](docs/BACKLOG.md) para
 distinguir desarrollo pendiente de validación con hardware, Switch y Core.

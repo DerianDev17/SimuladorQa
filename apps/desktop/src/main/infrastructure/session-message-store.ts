@@ -36,7 +36,7 @@ export class SessionMessageStore implements SessionMessagePort {
   read(requestId: string): SessionMessages | null {
     const entry = this.entries.get(requestId);
     if (!entry) return null;
-    if (Date.parse(entry.value.expiresAt) <= Date.now()) {
+    if (entry.value.expiresAt !== null && Date.parse(entry.value.expiresAt) <= Date.now()) {
       this.remove(requestId);
       return null;
     }

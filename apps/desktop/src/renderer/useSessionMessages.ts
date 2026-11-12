@@ -25,10 +25,14 @@ export function useSessionMessages(
             setState({ error: result.error.message });
             return;
           }
-          const remaining = result.value ? Date.parse(result.value.expiresAt) - Date.now() : 0;
+          const remaining = result.value
+            ? result.value.expiresAt === null
+              ? Infinity
+              : Date.parse(result.value.expiresAt) - Date.now()
+            : 0;
           if (result.value && result.value.requestId === execution.requestId && remaining > 0) {
             setState({ value: result.value });
-            expiry = setTimeout(() => setState({}), remaining);
+            if (Number.isFinite(remaining)) expiry = setTimeout(() => setState({}), remaining);
           }
         });
     }
@@ -50,7 +54,7 @@ export function useSessionMessages(
     value:
       visible &&
       state.value?.requestId === execution.requestId &&
-      Date.parse(state.value.expiresAt) > Date.now()
+      (state.value.expiresAt === null || Date.parse(state.value.expiresAt) > Date.now())
         ? state.value
         : undefined,
     error: state.error,

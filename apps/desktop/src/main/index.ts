@@ -31,7 +31,8 @@ import { MediatorObserver } from './adapters/mediator-observer';
 import { FileSendConfigurationStore } from './infrastructure/send-configuration-store';
 import { SendConfigurationService } from './send-configuration-service';
 import { BalanceInquiryService } from './balance-inquiry-service';
-import { SessionMessageStore } from './infrastructure/session-message-store';
+import { EncryptedMessageArchive } from './infrastructure/encrypted-message-archive';
+import { ElectronMessageEncryption } from './adapters/electron-message-encryption';
 import { DepositService } from './deposit-service';
 import { WithdrawalService } from './withdrawal-service';
 import { WithdrawalReceiptService } from './withdrawal-receipt-service';
@@ -143,10 +144,13 @@ async function publishReaderSnapshot(): Promise<void> {
 }
 
 app.setName('Coonecta ATM Simulator');
-const sessionMessages = new SessionMessageStore();
 // Solo se permite redirigir datos locales al lanzar tests con una carpeta temporal explícita.
 const dataArgument = process.argv.find((argument) => argument.startsWith('--user-data-dir='));
 if (dataArgument) app.setPath('userData', dataArgument.slice('--user-data-dir='.length));
+const sessionMessages = new EncryptedMessageArchive(
+  join(app.getPath('userData'), 'qa-message-archive'),
+  new ElectronMessageEncryption(),
+);
 // Two processes using the same journals can both observe an absent requestId
 // and send it before either sees the other's PENDING record.
 const ownsInstanceLock = app.requestSingleInstanceLock();
@@ -676,7 +680,7 @@ app.on('before-quit', (event) => {
     } finally {
       try {
         switchConnection?.disconnect('APP_CLOSED');
-        sessionMessages.clear();
+        await drainBeforeQuit([sessionMessages.close()]);
         readCache?.close();
         observer?.close();
         cardReader?.close();

@@ -802,15 +802,15 @@ export class DesktopApplication {
         return failure('VALIDATION_ERROR', 'Revisa el ambiente QA y la referencia de ejecución.');
       try {
         if ((await this.store.read()).environment !== 'QA')
-          return failure(
-            'CONFLICT',
-            'Los mensajes completos de sesión están disponibles solo en QA.',
-          );
+          return failure('CONFLICT', 'Los mensajes completos están disponibles solo en QA.');
         return this.sessionMessages
-          ? { ok: true, value: this.sessionMessages.read(payload.requestId) }
-          : failure('SERVICE_UNAVAILABLE', 'La vista completa de sesión no está disponible.');
+          ? { ok: true, value: await this.sessionMessages.read(payload.requestId) }
+          : failure('SERVICE_UNAVAILABLE', 'La consulta de mensajes completos no está disponible.');
       } catch {
-        return failure('SERVICE_UNAVAILABLE', 'No se pudieron consultar los mensajes de sesión.');
+        return failure(
+          'STORAGE_UNAVAILABLE',
+          'No se pudieron guardar o recuperar los mensajes completos. Revisa el almacenamiento y el cifrado local; actualizar no reenvía la transacción.',
+        );
       }
     });
   }

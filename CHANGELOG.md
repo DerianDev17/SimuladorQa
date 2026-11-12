@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-12 — Historial QA completo cifrado
+
+- Guarda los campos completos de nuevas solicitudes/respuestas cifrados bajo el
+  perfil Windows, sin caducidad ni expulsión a las 20 operaciones.
+- Permite consultarlos en Texto legible y Campos después de reiniciar la app;
+  informa fallos de guardado/descifrado sin reenviar transacciones.
+- Mantiene diarios públicos, logs y exportaciones protegidos. Los registros
+  antiguos con máscaras no se reconstruyen. Ver ADR-046.
+
 ## 2026-11-12 — Entidades en el asistente ATM
 
 - Agrega búsqueda/selección de entidad y clasificación visible durante el alta,

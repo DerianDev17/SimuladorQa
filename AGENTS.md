@@ -20,6 +20,11 @@ Estas reglas aplican a Codex y a cualquier agente que modifique este repositorio
 
 ## Seguridad
 
+Excepción explícita vigente: ADR-046 autoriza guardar los campos completos QA
+solo en el archivo local cifrado y mostrarlos en Mensajes, incluso tras reinicio.
+Sustituye la retención temporal de ADR-037 por solicitud del operador. Esta excepción
+no habilita secretos en Git ni modifica logs, diarios públicos, exportaciones o demás vistas.
+
 - Nunca commitear `.env`, llaves, ZPK, credenciales, certificados privados o secretos.
 - Nunca registrar PIN, CVV, PIN Block o PAN completo.
 - Enmascarar PAN en UI y logs.

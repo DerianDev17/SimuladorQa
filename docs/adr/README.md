@@ -42,7 +42,7 @@ Cuando una decisión reemplaza a otra, ambas se conservan para trazabilidad.
 | [034](ADR-034-STRESS-CONFIGURATIONS.md) | Presets de estrés y configuraciones reutilizables | Implementado |
 | [035](ADR-035-ISOLATED-DEVELOPMENT-PORT.md) | Puerto local independiente por sesión de desarrollo | Implementado |
 | [036](ADR-036-TRANSACTION-INSPECTION.md) | Preparación e inspección independientes de transacciones | Implementado |
-| [037](ADR-037-QA-SESSION-MESSAGES.md) | Campos completos de QA en memoria temporal | Implementado; excepción solicitada por el operador |
+| [037](ADR-037-QA-SESSION-MESSAGES.md) | Campos completos de QA en memoria temporal | Retención sustituida por ADR-046 |
 | [038](ADR-038-QA-DEPOSIT.md) | Depósito de prueba QA con monto vinculado a EMV | Implementado; aceptación host/Core pendiente |
 | [039](ADR-039-LOAD-STORAGE-WORKER.md) | Persistencia de carga en worker e índices | Implementado |
 | [040](ADR-040-SINGLE-QA-ENVIRONMENT.md) | Único ambiente Qa, compatibilidad de preferencias históricas | Implementado |
@@ -51,3 +51,4 @@ Cuando una decisión reemplaza a otra, ambas se conservan para trazabilidad.
 | [043](ADR-043-COONECTA-ENTITY-CLASSIFICATION.md) | Clasificación de 74 entidades, migración y carga auditada | Implementado; tres clasificaciones múltiples pendientes |
 | [044](ADR-044-ATM-ENTITY-ONBOARDING.md) | Entidades en asistente ATM y revalidación antes de saldo | Implementado; perfiles financieros fuera de 205 pendientes |
 | [045](ADR-045-OPTIONAL-REDIS-READ-CACHE.md) | Caché Redis local opcional para consultas de presentación | Implementado; funcionamiento sin Redis |
+| [046](ADR-046-ENCRYPTED-QA-MESSAGE-HISTORY.md) | Historial QA completo cifrado, sin caducidad | Implementado; excepción solicitada por el operador |

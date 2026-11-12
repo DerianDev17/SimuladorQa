@@ -174,19 +174,21 @@ export function TransactionMessageView({
                   checked={complete}
                   onChange={(event) => setComplete(event.target.checked)}
                 />
-                Mostrar todos los valores de esta sesión
+                Mostrar valores completos
               </label>
               {complete && (
                 <p role="status">
                   {fullMessage
-                    ? 'Valores completos de QA · solo en memoria durante 15 minutos. Binarios en HEX; PIN Block y criptogramas conservan su cifrado.'
+                    ? session.value?.expiresAt === null
+                      ? 'Valores completos guardados · disponibles después de cerrar la app, sin caducidad. Binarios en HEX; PIN Block y criptogramas conservan su cifrado.'
+                      : 'Valores completos de QA · copia temporal de sesión. Binarios en HEX; PIN Block y criptogramas conservan su cifrado.'
                     : (session.error ??
-                      'El original sin máscara no está disponible en esta sesión. Se muestra la versión protegida del diario; las máscaras guardadas no se pueden deshacer.')}
+                      'El original sin máscara no está disponible para este mensaje. Los registros antiguos solo conservaron la versión protegida; sus máscaras no se pueden deshacer.')}
                 </p>
               )}
               {complete && !fullMessage && client && (
                 <button className="text-button" onClick={session.refresh}>
-                  Actualizar mensajes de sesión
+                  Actualizar mensajes completos
                 </button>
               )}
             </div>
@@ -340,7 +342,9 @@ export function TransactionMessageView({
       <p className="inspector-footnote">
         <Icon name="shield" size={14} />{' '}
         {fullMessage
-          ? 'Vista completa temporal · el historial conserva la versión protegida'
+          ? session.value?.expiresAt === null
+            ? 'Historial completo cifrado en este equipo · logs y exportaciones protegidos'
+            : 'Vista completa temporal · copia de sesión'
           : 'PAN enmascarado · PIN, Track 2 y criptogramas protegidos'}
       </p>
       <p className="message-correlation">

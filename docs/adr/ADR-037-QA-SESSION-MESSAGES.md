@@ -2,6 +2,10 @@
 
 Fecha: 2026-11-05. Estado: implementado por solicitud explícita del operador.
 
+Retención sustituida el 2026-11-12 por [ADR-046](ADR-046-ENCRYPTED-QA-MESSAGE-HISTORY.md):
+las nuevas capturas se guardan cifradas, sin caducidad y sobreviven al cierre.
+El contenido siguiente conserva la decisión temporal original para trazabilidad.
+
 ## Solicitud y excepción
 
 El usuario solicita «hay campos que salen ofuscados por seguridad pero quiero

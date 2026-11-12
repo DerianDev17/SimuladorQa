@@ -7,6 +7,9 @@ artifacts/
 **/network-evidence.json
 **/*.credential.xml
 **/qa-test-keys/
+**/qa-message-archive/
+*.iso.enc
+*.iso.enc.*.tmp
 **/qa-atm-master-keys/
 **/qa-cms-atm-evidence.json
 **/qa-cms-atm-evidence.*.backup.json
