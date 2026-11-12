@@ -312,7 +312,7 @@ export function CatalogView({
     }
     if (await onMutate(command)) {
       setEditor(undefined);
-      setNotice('Cambios guardados como borrador.');
+      setNotice(entitiesView ? 'Cambios guardados como borrador.' : 'Cambios guardados.');
     }
   }
 
@@ -440,7 +440,9 @@ export function CatalogView({
                     : 'Crear perfil ATM'}
               </h2>
               <div className="catalog-actions">
-                <span className="pill blue">{environment} · Borrador</span>
+                <span className="pill blue">
+                  {entitiesView ? `${environment} · Borrador` : environment}
+                </span>
                 <button
                   type="button"
                   className="text-button"
@@ -685,7 +687,7 @@ export function CatalogView({
                 Cancelar
               </button>
               <button className="primary" type="submit" disabled={blocked}>
-                {loading ? 'Guardando…' : 'Guardar borrador'}
+                {loading ? 'Guardando…' : entitiesView ? 'Guardar borrador' : 'Guardar'}
               </button>
             </div>
           </form>
@@ -829,7 +831,9 @@ export function CatalogView({
                     <tr key={item.id}>
                       <td>
                         <strong>{'name' in item ? item.code : item.alias}</strong>
-                        <small>Borrador · v{item.revision}</small>
+                        <small>
+                          {entitiesView ? `Borrador · v${item.revision}` : `v${item.revision}`}
+                        </small>
                       </td>
                       <td>{'name' in item ? item.name : item.terminalId}</td>
                       <td>

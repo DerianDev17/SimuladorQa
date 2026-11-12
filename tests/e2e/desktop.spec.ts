@@ -1178,7 +1178,7 @@ test('carga: selecciona ambos ATM y conserva su identidad al recuperar resultado
   await createTestAtm(window, 'Segundo ATM de saldo');
   await window.getByRole('button', { name: 'Editar Segundo ATM de saldo', exact: true }).click();
   await window.getByLabel('Terminal ID', { exact: true }).fill('ATM20524');
-  await window.getByRole('button', { name: 'Guardar borrador', exact: true }).click();
+  await window.getByRole('button', { name: 'Guardar', exact: true }).click();
   await window.getByRole('button', { name: 'Carga y estrés', exact: true }).click();
   await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
   await window.locator('.load-atm-picker summary').click();
@@ -2048,7 +2048,7 @@ async function prepareBalanceSubmission() {
   await createTestAtm(window, 'ATM de saldo');
   await window.getByRole('button', { name: 'Editar ATM de saldo', exact: true }).click();
   await window.getByLabel('Terminal ID', { exact: true }).fill('ATM20521');
-  await window.getByRole('button', { name: 'Guardar borrador', exact: true }).click();
+  await window.getByRole('button', { name: 'Guardar', exact: true }).click();
   await window.getByRole('button', { name: 'Configuración', exact: true }).click();
   await window
     .getByRole('navigation', { name: 'Páginas de configuración' })
@@ -3320,7 +3320,7 @@ async function createTestAtm(window: Page, alias: string) {
     .selectOption({ label: 'TEST-E2E · Entidad sintética E2E' });
   await window.getByLabel('Terminal ID', { exact: true }).fill('Test-Terminal');
   await window.getByLabel('Acquirer ID', { exact: true }).fill('Test-Acquirer');
-  await window.getByRole('button', { name: 'Guardar borrador' }).click();
+  await window.getByRole('button', { name: 'Guardar' }).click();
   await expect(window.getByRole('button', { name: `Editar ${alias}`, exact: true })).toBeVisible();
 }
 
@@ -3340,7 +3340,7 @@ test('crear ATM desde plantilla hereda adquirente y resuelve envío en Main sin 
   await window.getByLabel('Entidad del ATM').selectOption({ label: '205 · Entidad plantilla' });
   await window.getByLabel('Terminal ID', { exact: true }).fill('ATM20521');
   await window.getByLabel('Acquirer ID', { exact: true }).fill('12345678901');
-  await window.getByRole('button', { name: 'Guardar borrador' }).click();
+  await window.getByRole('button', { name: 'Guardar' }).click();
   await expect(window.getByRole('button', { name: 'Editar Plantilla funcional' })).toBeVisible();
   const readAtm = (terminal: string) => {
     const database = new DatabaseSync(join(directory, 'catalogs.sqlite'), { readOnly: true });
@@ -3362,10 +3362,10 @@ test('crear ATM desde plantilla hereda adquirente y resuelve envío en Main sin 
   await expect(window.getByLabel('Entidad del ATM')).not.toHaveValue('');
   await window.getByLabel('Alias ATM').fill('Nuevo desde plantilla');
   await window.getByLabel('Terminal ID', { exact: true }).fill('incorrecto');
-  await window.getByRole('button', { name: 'Guardar borrador' }).click();
+  await window.getByRole('button', { name: 'Guardar' }).click();
   await expect(window.getByRole('alert')).toContainText('ocho');
   await window.getByLabel('Terminal ID', { exact: true }).fill('ATM20524');
-  await window.getByRole('button', { name: 'Guardar borrador' }).click();
+  await window.getByRole('button', { name: 'Guardar' }).click();
   await expect(window.getByRole('button', { name: 'Editar Nuevo desde plantilla' })).toBeVisible();
   const created = readAtm('ATM20524');
   const result = await window.evaluate(
@@ -3529,10 +3529,10 @@ for (const errorCode of ['TIMEOUT', 'SERVICE_UNAVAILABLE'] as const) {
         error: { code, message: 'No se pudo confirmar el guardado. Recarga el catálogo.' },
       }));
     }, errorCode);
-    await window.getByRole('button', { name: 'Guardar borrador' }).click();
+    await window.getByRole('button', { name: 'Guardar' }).click();
     await expect(window.getByRole('alert')).toContainText('No se pudo confirmar el guardado');
     await expect(window.getByLabel('Alias ATM')).toHaveValue('Alias pendiente');
-    await expect(window.getByRole('button', { name: 'Guardar borrador' })).toBeDisabled();
+    await expect(window.getByRole('button', { name: 'Guardar' })).toBeDisabled();
     await window.getByRole('button', { name: 'Recargar', exact: true }).click();
     await window.getByRole('button', { name: 'Descartar y recargar' }).click();
     await expect(window.getByRole('button', { name: 'Editar ATM recuperable' })).toBeVisible();
@@ -3555,10 +3555,10 @@ test('clonación ATM exige nueva identidad y conserva el origen', async () => {
     'true',
   );
   await window.getByLabel('Acquirer ID', { exact: true }).fill('Test-Acquirer-2');
-  await window.getByRole('button', { name: 'Guardar borrador' }).click();
+  await window.getByRole('button', { name: 'Guardar' }).click();
   await expect(window.getByRole('alert')).toContainText('Terminal ID');
   await window.getByLabel('Terminal ID', { exact: true }).fill('Test-Terminal-2');
-  await window.getByRole('button', { name: 'Guardar borrador' }).click();
+  await window.getByRole('button', { name: 'Guardar' }).click();
   await expect(window.getByRole('button', { name: 'Editar ATM de origen' })).toBeVisible();
   await expect(window.getByRole('button', { name: 'Editar ATM clonado' })).toBeVisible();
 });
@@ -3995,7 +3995,7 @@ test('CRUD de entidades y ATM en Qa, reinicio y eliminación protegida', async (
   await window.getByRole('button', { name: 'Editar ATM sintético QA', exact: true }).click();
   await window.getByLabel('Alias ATM').fill('ATM QA editado');
   await window.getByLabel('Perfil ATM activo').uncheck();
-  await window.getByRole('button', { name: 'Guardar borrador' }).click();
+  await window.getByRole('button', { name: 'Guardar' }).click();
   await expect(window.getByRole('cell', { name: 'Inactivo', exact: true })).toBeVisible();
   await expect(
     window.getByRole('button', { name: 'Editar ATM QA editado', exact: true }),
@@ -4049,7 +4049,7 @@ for (const originalCode of ['205', 'TEST-E2E']) {
     await createTestAtm(window, 'ATM de impacto');
     await window.getByRole('button', { name: 'Editar ATM de impacto', exact: true }).click();
     await window.getByLabel('Perfil ATM activo').uncheck();
-    await save.click();
+    await window.getByRole('button', { name: 'Guardar', exact: true }).click();
     await window.getByRole('button', { name: 'Entidades', exact: true }).click();
     await window.getByRole('button', { name: 'Editar TEST-E2E', exact: true }).click();
     await code.fill(originalCode);
@@ -4411,7 +4411,7 @@ test('mejoras UI: configuración rápida conserva datos y selecciona el ATM crea
   await window.getByLabel('Acquirer ID', { exact: true }).fill('TEST-QUICK-ACQ');
   await mkdir('artifacts', { recursive: true });
   await window.screenshot({ path: 'artifacts/quick-atm-setup.png', scale: 'css' });
-  await window.getByRole('button', { name: 'Guardar borrador', exact: true }).click();
+  await window.getByRole('button', { name: 'Guardar', exact: true }).click();
   await expect(
     window.getByRole('heading', { name: 'Nueva transacción', exact: true }),
   ).toBeVisible();
@@ -4455,12 +4455,10 @@ test('mejoras UI: fallo del catálogo no pierde el borrador ni selecciona un ATM
     .selectOption({ label: 'TEST-E2E · Entidad sintética E2E' });
   await window.getByLabel('Terminal ID', { exact: true }).fill('TEST-FAIL-TERM');
   await window.getByLabel('Acquirer ID', { exact: true }).fill('TEST-FAIL-ACQ');
-  await window.getByRole('button', { name: 'Guardar borrador', exact: true }).click();
+  await window.getByRole('button', { name: 'Guardar', exact: true }).click();
   await expect(window.getByRole('alert')).toContainText('Catálogo temporalmente no disponible.');
   await expect(window.getByLabel('Alias ATM')).toHaveValue('ATM sintético fallido');
-  await expect(
-    window.getByRole('button', { name: 'Guardar borrador', exact: true }),
-  ).toBeDisabled();
+  await expect(window.getByRole('button', { name: 'Guardar', exact: true })).toBeDisabled();
   await window.getByRole('button', { name: 'Cancelar', exact: true }).click();
   await expect(window.getByLabel('Monto de prueba')).toHaveValue('50.00');
   await expect(window.getByLabel('Perfil ATM', { exact: true })).toHaveValue('');
@@ -4578,7 +4576,7 @@ test('mejoras UI: buscar y filtrar casos conserva controles de vigencia y errore
   await window.getByRole('button', { name: 'Perfiles ATM', exact: true }).click();
   await window.getByRole('button', { name: 'Editar ATM para filtros', exact: true }).click();
   await window.getByLabel('Alias ATM').fill('ATM para filtros actualizado');
-  await window.getByRole('button', { name: 'Guardar borrador', exact: true }).click();
+  await window.getByRole('button', { name: 'Guardar', exact: true }).click();
   await expect(
     window.getByRole('button', { name: 'Editar ATM para filtros actualizado', exact: true }),
   ).toBeVisible();

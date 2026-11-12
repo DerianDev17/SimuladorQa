@@ -31,10 +31,13 @@ de todos los envíos no aplican a esta ruta QA de la entidad 205.
 1. Iniciar con `npm run dev` o `npm run build` y `npm start`.
 2. Abrir **Entidades**, crear código/nombre, seleccionar una red y marcar las clasificaciones conocidas.
 3. Abrir **Perfiles ATM**, seleccionar una entidad activa y capturar alias, Terminal ID y Acquirer ID.
-4. Guardar como borrador. Buscar, filtrar activos/inactivos, editar o eliminar desde la tabla.
+4. En Perfiles ATM, pulsar **Guardar**; en Entidades, **Guardar borrador**. Buscar, filtrar activos/inactivos, editar o eliminar desde la tabla.
 5. Guardar o cancelar el editor antes de navegar. Qa es el único ambiente operativo.
 
 Las entidades son compartidas; los ATM se consultan y modifican solo en el ambiente activo.
+Perfiles ATM muestra la revisión del registro sin la etiqueta «Borrador» y confirma
+«Cambios guardados». Este ajuste de texto no cambia su estado técnico, validación
+ni disponibilidad financiera; Entidades conserva sus etiquetas de borrador.
 Los filtros son locales y la tabla muestra 15 filas por página. Una instalación
 nueva inicia vacía; el listado del usuario se importa explícitamente, nunca al
 arrancar la aplicación. En Entidades se puede filtrar por clasificación,
