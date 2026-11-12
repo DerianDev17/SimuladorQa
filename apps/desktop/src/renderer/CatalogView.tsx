@@ -3,6 +3,8 @@ import type { FormEvent } from 'react';
 import {
   catalogLimits,
   networkTypes,
+  entityMemberTypes,
+  entityMemberLabels,
   parseAtmValues,
   parseEntityValues,
   isRestrictedCatalogText,
@@ -46,7 +48,13 @@ interface Editor {
   entity: EntityForm;
   atm: AtmValues;
 }
-const blankEntity: EntityForm = { code: '', name: '', networkType: '', active: true };
+const blankEntity: EntityForm = {
+  code: '',
+  name: '',
+  networkType: '',
+  active: true,
+  memberTypes: [],
+};
 const blankAtm: AtmValues = {
   alias: '',
   entityId: '',
@@ -109,6 +117,7 @@ export function CatalogView({
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('ALL');
   const [entityFilter, setEntityFilter] = useState('ALL');
+  const [memberFilter, setMemberFilter] = useState('ALL');
   const [page, setPage] = useState(0);
   const [formError, setFormError] = useState('');
   const [notice, setNotice] = useState('');
@@ -175,11 +184,16 @@ export function CatalogView({
     else void refresh();
   }
 
-  const filtersApplied = !!search || status !== 'ALL' || (!entitiesView && entityFilter !== 'ALL');
+  const filtersApplied =
+    !!search ||
+    status !== 'ALL' ||
+    (!entitiesView && entityFilter !== 'ALL') ||
+    (entitiesView && memberFilter !== 'ALL');
   function clearFilters() {
     setSearch('');
     setStatus('ALL');
     setEntityFilter('ALL');
+    setMemberFilter('ALL');
     setPage(0);
   }
   const rows = (entitiesView ? (catalog?.entities ?? []) : atmProfiles).filter((item) => {
@@ -191,6 +205,13 @@ export function CatalogView({
         : matchesAtmSearch(item, entitiesById.get(item.entityId), search);
     return (
       matchesSearch &&
+      (!('name' in item) ||
+        memberFilter === 'ALL' ||
+        (memberFilter === 'UNCLASSIFIED'
+          ? !item.memberTypes?.length
+          : memberFilter === 'REVIEW'
+            ? (item.memberTypes?.length ?? 0) > 1
+            : item.memberTypes?.some((type) => type === memberFilter))) &&
       ('name' in item || entityFilter === 'ALL' || item.entityId === entityFilter) &&
       (status === 'ALL' ||
         (status === 'ENTITY_INACTIVE'
@@ -209,7 +230,13 @@ export function CatalogView({
       revision: clone ? null : (item?.revision ?? null),
       entity:
         item && 'name' in item
-          ? { code: item.code, name: item.name, networkType: item.networkType, active: item.active }
+          ? {
+              code: item.code,
+              name: item.name,
+              networkType: item.networkType,
+              active: item.active,
+              memberTypes: item.memberTypes ?? [],
+            }
           : { ...blankEntity },
       atm:
         item && 'alias' in item && clone
@@ -465,6 +492,37 @@ export function CatalogView({
                         ))}
                       </select>
                     </label>
+                    <fieldset className="entity-member-types">
+                      <legend>Clasificación de la entidad</legend>
+                      <div className="catalog-actions">
+                        {entityMemberTypes.map((type) => (
+                          <label key={type} className="checkbox-field">
+                            <input
+                              type="checkbox"
+                              checked={editor.entity.memberTypes?.includes(type) ?? false}
+                              onChange={(event) =>
+                                setEditor({
+                                  ...editor,
+                                  entity: {
+                                    ...editor.entity,
+                                    memberTypes: entityMemberTypes.filter((candidate) =>
+                                      candidate === type
+                                        ? event.target.checked
+                                        : editor.entity.memberTypes?.includes(candidate),
+                                    ),
+                                  },
+                                })
+                              }
+                            />
+                            {entityMemberLabels[type]}
+                          </label>
+                        ))}
+                      </div>
+                      <small>
+                        Sin selección: sin clasificar. Varias clasificaciones se conservan con
+                        validación pendiente.
+                      </small>
+                    </fieldset>
                     <label className="checkbox-field">
                       <input
                         type="checkbox"
@@ -610,7 +668,7 @@ export function CatalogView({
               <summary>Detalles del perfil</summary>
               <p className="form-note">
                 {entitiesView
-                  ? 'La membresía FRONT/BACK/EXTERNAL está pendiente de validar entre las fuentes del proyecto.'
+                  ? 'La clasificación FRONT/BACK/EXTERNA/HÍBRIDA es administrativa y se conserva separada de la red. No determina el escenario ni la ruta de envío.'
                   : 'Se eliminan espacios de los extremos; no se añade padding. Para QA/205 se comprueban los formatos de Terminal ID y Acquirer ID documentados.'}{' '}
               </p>
             </details>
@@ -661,6 +719,27 @@ export function CatalogView({
                 }}
               />
             </label>
+            {entitiesView && (
+              <label>
+                Filtrar por clasificación
+                <select
+                  value={memberFilter}
+                  onChange={(event) => {
+                    setMemberFilter(event.target.value);
+                    setPage(0);
+                  }}
+                >
+                  <option value="ALL">Todas las clasificaciones</option>
+                  {entityMemberTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {entityMemberLabels[type]}
+                    </option>
+                  ))}
+                  <option value="REVIEW">Validación pendiente</option>
+                  <option value="UNCLASSIFIED">Sin clasificar</option>
+                </select>
+              </label>
+            )}
             {!entitiesView && (
               <label>
                 Filtrar por entidad
@@ -739,6 +818,7 @@ export function CatalogView({
                     <th>{entitiesView ? 'Código' : 'Alias'}</th>
                     <th>{entitiesView ? 'Entidad' : 'Terminal ID'}</th>
                     <th>{entitiesView ? 'Red' : 'Entidad'}</th>
+                    {entitiesView && <th>Clasificación</th>}
                     {!entitiesView && <th>Acquirer ID</th>}
                     <th>Estado</th>
                     <th>Acciones</th>
@@ -768,6 +848,24 @@ export function CatalogView({
                         )}
                       </td>
                       {'alias' in item && <td>{item.acquirerId}</td>}
+                      {'name' in item && (
+                        <td>
+                          {item.memberTypes?.length ? (
+                            <div className="entity-classifications">
+                              {item.memberTypes.map((type) => (
+                                <span className="pill blue" key={type}>
+                                  {entityMemberLabels[type]}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="pill neutral">Sin clasificar</span>
+                          )}
+                          {(item.memberTypes?.length ?? 0) > 1 && (
+                            <small className="atm-entity-warning">Validación pendiente</small>
+                          )}
+                        </td>
+                      )}
                       <td>
                         <span className={`pill ${item.active ? 'green' : 'neutral'}`}>
                           {item.active ? 'Activo' : 'Inactivo'}

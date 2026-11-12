@@ -3200,6 +3200,45 @@ test('crear ATM desde plantilla hereda adquirente y resuelve envío en Main sin 
   ).toHaveLength(1);
 });
 
+test('entidades: clasificación separada de red, múltiples valores, filtro y persistencia', async () => {
+  let window = await launch();
+  await createTestEntity(window);
+  await window.getByRole('button', { name: 'Editar TEST-E2E', exact: true }).click();
+  const classification = window.getByRole('group', { name: 'Clasificación de la entidad' });
+  await classification.getByRole('checkbox', { name: 'FRONT', exact: true }).check();
+  await classification.getByRole('checkbox', { name: 'EXTERNA', exact: true }).check();
+  await expect(window.getByLabel('Red de entidad')).toHaveValue('COONECTA');
+  await window.getByRole('button', { name: 'Guardar borrador', exact: true }).click();
+  const row = window.getByRole('row').filter({ hasText: 'TEST-E2E' });
+  await expect(row).toContainText('FRONT');
+  await expect(row).toContainText('EXTERNA');
+  await expect(row).toContainText('Validación pendiente');
+  await window.getByLabel('Filtrar por clasificación').selectOption('BACK');
+  await expect(window.getByText('Sin resultados para este filtro', { exact: true })).toBeVisible();
+  await window.getByLabel('Filtrar por clasificación').selectOption('REVIEW');
+  await expect(row).toBeVisible();
+  await window.getByRole('button', { name: 'Editar TEST-E2E', exact: true }).click();
+  await classification.getByRole('checkbox', { name: 'HÍBRIDA', exact: true }).check();
+  await window.getByRole('button', { name: 'Cancelar', exact: true }).click();
+  await expect(row).not.toContainText('HÍBRIDA');
+  await app!.close();
+  app = undefined;
+  window = await launch();
+  await window.getByRole('button', { name: 'Entidades', exact: true }).click();
+  const persisted = window.getByRole('row').filter({ hasText: 'TEST-E2E' });
+  await expect(persisted).toContainText('FRONT');
+  await expect(persisted).toContainText('EXTERNA');
+  await expect(persisted).toContainText('COONECTA');
+  await app!.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0]?.setContentSize(1024, 768),
+  );
+  expect(await window.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+    true,
+  );
+  await mkdir('artifacts', { recursive: true });
+  await window.screenshot({ path: 'artifacts/entity-classification.png', fullPage: true });
+});
+
 test('perfiles ATM: resumen, búsqueda combinada, filtros y entidad inactiva', async () => {
   const window = await launch();
   await createTestEntity(window);

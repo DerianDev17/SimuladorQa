@@ -3,6 +3,22 @@
 input {
   font: inherit;
 }
+.entity-member-types {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.entity-member-types legend {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.entity-member-types .catalog-actions {
+  flex-wrap: wrap;
+}
+.entity-classifications {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
 input:not([type='checkbox']) {
   display: block;
   width: 100%;

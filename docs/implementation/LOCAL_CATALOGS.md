@@ -1,5 +1,11 @@
 # Catálogos de entidades y ATM
 
+Actualización 2026-11-12: **Entidades** permite editar y filtrar FRONT, BACK,
+EXTERNA e HÍBRIDA, independientemente de la red. Se conservan valores múltiples
+con **Validación pendiente**, según la confirmación del usuario. El listado
+aportado contiene 74 entidades; ver [fuente y clasificación](../entities/COONECTA_ENTITIES_20261112.md)
+y [ADR-043](../adr/ADR-043-COONECTA-ENTITY-CLASSIFICATION.md).
+
 Actualización 2026-11-11: **Crear ATM QA/205** agrega un asistente con herencia
 atómica de entidad/adquirente, recuperación de alta, verificación local sin
 efectos financieros y prueba explícita de saldo. **Verificar y probar** retoma
@@ -18,13 +24,16 @@ de todos los envíos no aplican a esta ruta QA de la entidad 205.
 ## Uso
 
 1. Iniciar con `npm run dev` o `npm run build` y `npm start`.
-2. Abrir **Entidades**, crear código/nombre y seleccionar explícitamente una red.
+2. Abrir **Entidades**, crear código/nombre, seleccionar una red y marcar las clasificaciones conocidas.
 3. Abrir **Perfiles ATM**, seleccionar una entidad activa y capturar alias, Terminal ID y Acquirer ID.
 4. Guardar como borrador. Buscar, filtrar activos/inactivos, editar o eliminar desde la tabla.
 5. Guardar o cancelar el editor antes de navegar. Qa es el único ambiente operativo.
 
 Las entidades son compartidas; los ATM se consultan y modifican solo en el ambiente activo.
-Los filtros son locales y la tabla muestra 15 filas por página. El catálogo inicia vacío.
+Los filtros son locales y la tabla muestra 15 filas por página. Una instalación
+nueva inicia vacía; el listado del usuario se importa explícitamente, nunca al
+arrancar la aplicación. En Entidades se puede filtrar por clasificación,
+**Validación pendiente** o **Sin clasificar**.
 Perfiles ATM incluye resumen, búsqueda por adquirente/código de entidad, filtros
 por entidad y advertencias de duplicados; ver [mejoras del catálogo](MULTI_ATM_PROFILES.md).
 
@@ -33,7 +42,11 @@ Los datos usados en tests/capturas son sintéticos y viven en directorios tempor
 ## Persistencia y seguridad
 
 `catalogs.sqlite` vive bajo `app.getPath('userData')`, junto a las preferencias JSON existentes.
-Su esquema actual es versión 2, con migración atómica desde versión 1, foreign keys y restricciones QA/PREPROD. Incluye casos documentales DRAFT y su auditoría; ver `SAVED_CASES.md`. El Worker
+Su esquema actual es versión 4, con migraciones desde versiones 1–3, foreign keys
+y restricciones QA/PREPROD. La versión 3 agregó expectativas documentales; la
+versión 4 agrega `member_types_json`, inicialmente vacío, sin modificar UUID,
+revisiones ni relaciones ATM. Incluye casos documentales DRAFT y su auditoría;
+ver `SAVED_CASES.md`. El Worker
 usa queries parametrizadas; la UI nunca abre SQLite ni recibe el objeto DatabaseSync.
 
 Guardar/eliminar y su evento de auditoría se confirman juntos. Se conservan los últimos
@@ -88,9 +101,37 @@ recargar; el refresco cierra el editor y permite volver al borrador mediante **V
 transacción**. Perfiles/entidades inactivos no se seleccionan automáticamente.
 La disponibilidad de envío se verifica en Main según la configuración vigente.
 
-Membresía, BIN/rangos, Core, fixedFields/red ATM, endpoints, framing, timeouts y tarjetas
-permanecen pendientes de fuentes aprobadas. El conflicto de clasificación está registrado
-como **TODO-DATA ENTITY-CLASSIFICATION** y se solicitó validación al usuario.
+La clasificación administrativa del listado está confirmada. **TODO-DATA
+ENTITY-CLASSIFICATION-MULTIPLE** conserva la validación de 200, 207 y 232.
+BIN/rangos, Core, fixedFields/red ATM, endpoints por entidad, framing, timeouts
+y tarjetas requieren sus fuentes específicas; no se deducen de esta clasificación.
+
+## Importación explícita de entidades
+
+Con la aplicación cerrada, ejecutar desde la raíz del repositorio:
+
+```powershell
+node tooling/import-coonecta-entities.mjs --source "C:\ruta\listado.txt" --catalog "C:\ruta\catalogs.sqlite" --report "C:\ruta\vista-previa.json" --institution-prefix 8 --cacech-code 312
+```
+
+Primero genera una vista previa sin modificar SQLite. Repetir con `--apply` y
+un **nuevo archivo de reporte** para aplicar. El prefijo 8 y CACECH=312 son
+confirmaciones del usuario para este listado, no reglas generales de ISO.
+Se exige una base existente y un reporte nuevo; columnas, códigos y etiquetas
+desconocidos se rechazan antes de modificarla.
+
+Antes de migrar, crea un respaldo consistente `catalogs.before-entities-<UUID>.sqlite`
+junto a la base. Agrupa ADQ/EMI por código, conserva UUID y estado activo de las
+entidades existentes y verifica que todos los ATM queden intactos. Solo actualiza
+nombre, red y clasificación de entidades presentes en la fuente; no elimina las
+demás. Cada cambio y su auditoría son atómicos. Una ejecución repetida no duplica
+entidades ni genera revisiones para valores idénticos.
+
+El reporte registra hash de fuente, líneas, clasificaciones, altas/cambios y
+resultado. Si falla una fila, puede haber cambios previos confirmados: el reporte
+marca `FAILED` y conserva el progreso; no se hace una restauración automática.
+Revisar reporte y respaldo antes de corregir/reintentar. IP, puerto y PID del
+listado no se importan ni aparecen en el reporte. La herramienta no conecta al host.
 
 ## Criterios de aceptación
 

@@ -1,5 +1,13 @@
 # Registro de TODO-DATA
 
+Entidades Coonecta, 2026-11-12: resuelta la clasificación administrativa de
+74 entidades con fuente del usuario y códigos confirmados (205, CACECH=312).
+**TODO-DATA ENTITY-CLASSIFICATION-MULTIPLE** mantiene abiertos los roles de
+200/232 (FRONT + EXTERNAL) y 207 (FRONT + HYBRID). El usuario pide conservarlos
+y marcarlos pendientes; no bloquean el catálogo. Bloquean únicamente elegir
+una clasificación definitiva o deducir rutas dependientes. Ver
+[ADR-043](adr/ADR-043-COONECTA-ENTITY-CLASSIFICATION.md).
+
 Depósito QA, 2026-11-05: **QA-DEPOSIT-HOST-ACCEPTANCE**,
 **QA-DEPOSIT-PRIVATE-FIELDS**, **QA-DEPOSIT-F55-ENVELOPE** y
 **QA-DEPOSIT-RESULT-RULES** permanecen abiertos. La prueba autorizada usa

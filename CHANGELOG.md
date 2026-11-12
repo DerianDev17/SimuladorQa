@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-12 — Entidades Coonecta y clasificación
+
+- Agrega FRONT, BACK, EXTERNA e HÍBRIDA, independientes de la red, con edición
+  y filtros. Los valores múltiples muestran **Validación pendiente**.
+- Migra SQLite a versión 4 conservando UUID, auditoría y asociaciones ATM.
+- Añade importación explícita con vista previa, respaldo, reporte e idempotencia
+  para las 74 entidades aportadas. Conserva 205 y asigna 312 a CACECH.
+- Registra pendientes de clasificación en Tulcán, Mushuc Runa y Pablo Muñoz Vega;
+  no modifica rutas financieras. Ver [ADR-043](docs/adr/ADR-043-COONECTA-ENTITY-CLASSIFICATION.md).
+
 ## 2026-11-10 — Configuración operativa de envío
 
 - Permite editar y persistir IP, puerto y plazos desde Configuración sin depender

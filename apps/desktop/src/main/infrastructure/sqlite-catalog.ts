@@ -93,6 +93,10 @@ const caseExpectationsMigration = `
 ALTER TABLE saved_cases ADD COLUMN expectation_json TEXT;
 PRAGMA user_version = 3;`;
 
+const entityMembershipMigration = `
+ALTER TABLE entities ADD COLUMN member_types_json TEXT NOT NULL DEFAULT '[]';
+PRAGMA user_version = 4;`;
+
 function savedCase(row: Record<string, unknown>): SavedCase {
   if (typeof row.draft_json !== 'string' || typeof row.evidence_json !== 'string')
     throw new Error('INVALID_CASE');
@@ -130,13 +134,17 @@ function record(row: Record<string, unknown>): CatalogRecord {
   };
 }
 function entity(row: Record<string, unknown>): Entity {
+  if (typeof row.member_types_json !== 'string') throw new Error('INVALID_ENTITY_MEMBERSHIP');
+  const memberTypes: unknown = JSON.parse(row.member_types_json);
   const values = parseEntityValues({
     code: row.code,
     name: row.name,
     networkType: row.network_type,
     active: row.active === 1,
+    memberTypes,
   });
   if (!values || (row.active !== 0 && row.active !== 1)) throw new Error('INVALID_ENTITY');
+  if (!values.memberTypes?.length) delete values.memberTypes;
   return { ...record(row), ...values };
 }
 function atm(row: Record<string, unknown>): AtmProfile {
@@ -165,11 +173,13 @@ export class SqliteCatalog {
       this.database.exec('BEGIN IMMEDIATE');
       const version = this.database.prepare('PRAGMA user_version').get()?.user_version;
       if (version === 0) this.database.exec(schema);
-      else if (version !== 1 && version !== 2 && version !== 3)
+      else if (version !== 1 && version !== 2 && version !== 3 && version !== 4)
         throw new Error('UNSUPPORTED_SCHEMA');
       if (version === 0 || version === 1) this.database.exec(casesMigration);
       if (version === 0 || version === 1 || version === 2)
         this.database.exec(caseExpectationsMigration);
+      if (version === 0 || version === 1 || version === 2 || version === 3)
+        this.database.exec(entityMembershipMigration);
       this.database.exec('COMMIT');
     } catch (error) {
       this.database.close();
@@ -285,7 +295,12 @@ export class SqliteCatalog {
           if (!request)
             throw new CatalogFault('VALIDATION_ERROR', 'Revisa los campos de la entidad.');
           const { values, id, revision } = request;
-          if (id) this.existing('entities', id, revision);
+          const previous = id ? this.existing('entities', id, revision) : undefined;
+          // Older clients must not erase a classification they do not understand.
+          const memberTypesJson =
+            values.memberTypes !== undefined
+              ? JSON.stringify(values.memberTypes)
+              : ((previous?.member_types_json as string | undefined) ?? '[]');
           const duplicate = this.database
             .prepare('SELECT id FROM entities WHERE code = ? AND id != ?')
             .get(values.code, id ?? '');
@@ -295,19 +310,22 @@ export class SqliteCatalog {
           if (id)
             this.database
               .prepare(
-                'UPDATE entities SET code=?,name=?,network_type=?,active=?,revision=revision+1,updated_at=? WHERE id=?',
+                'UPDATE entities SET code=?,name=?,network_type=?,active=?,member_types_json=?,revision=revision+1,updated_at=? WHERE id=?',
               )
               .run(
                 values.code,
                 values.name,
                 values.networkType,
                 Number(values.active),
+                memberTypesJson,
                 context.timestamp,
                 id,
               );
           else
             this.database
-              .prepare('INSERT INTO entities VALUES (?,?,?,?,?,?,?,?)')
+              .prepare(
+                'INSERT INTO entities (id,code,name,network_type,active,revision,created_at,updated_at,member_types_json) VALUES (?,?,?,?,?,?,?,?,?)',
+              )
               .run(
                 recordId,
                 values.code,
@@ -317,6 +335,7 @@ export class SqliteCatalog {
                 1,
                 context.timestamp,
                 context.timestamp,
+                memberTypesJson,
               );
           this.audit(context, environment, 'ENTITY', recordId, id ? 'UPDATED' : 'CREATED');
           break;

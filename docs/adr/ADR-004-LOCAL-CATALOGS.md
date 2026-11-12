@@ -1,5 +1,10 @@
 # ADR-004: catálogos locales en SQLite
 
+Actualización 2026-11-12: [ADR-043](ADR-043-COONECTA-ENTITY-CLASSIFICATION.md)
+añade clasificación administrativa y autoriza la importación explícita del
+listado del usuario. Sustituye la restricción de nombres reales solo para esa
+carga; instalaciones nuevas y pruebas permanecen sin precarga real.
+
 ## Decisión
 
 Implementar CRUD de entidades y perfiles ATM como configuración en borrador. Mantener entidades globales y ATM separados por QA/PREPROD. No cargar nombres ni valores de una entidad/ATM real, ni resolver clasificación transaccional o campos ISO a partir del catálogo.

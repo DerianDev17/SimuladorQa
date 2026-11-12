@@ -782,7 +782,7 @@ antes de ejecutar desde ADQCLONE. Ver `docs/protocols/ISOBASEI_REVIEW.md` y
 - **TODO-DATA ENVIRONMENT**: entrada ATM QA, autorizacion en PID 80131 y consulta desde PC confirmadas hasta Mediator. Faltan sesiones prolongadas/coexistencia, otros perfiles, TLS, limites y timeouts por escenario. PREPROD tiene configuracion independiente. Bloquea solo los transportes/envios dependientes.
 - **TODO-DATA PROFILES**: faltan ATM y tarjeta completos/validados. Bloquea configurar ejecuciones reales; el shell desktop y la seleccion de ambiente funcionan de forma independiente.
 - **TODO-DATA AMOUNT-RULES**: faltan moneda, limites, monto minimo/maximo, denominaciones y reglas por cuenta/escenario para retirar. El borrador solo valida la sintaxis decimal del manual; no aprueba elegibilidad financiera.
-- **TODO-DATA ENTITY-CLASSIFICATION**: ENTITY_MODEL propone red/membresia separadas y ENTITY_TEMPLATE mezcla FRONT/BACK/EXTERNA/BANRED como Tipo. Se solicito validacion; el CRUD usa los campos comunes y difiere membresia, BIN/Core y deteccion automatica de escenarios.
+- **TODO-DATA ENTITY-CLASSIFICATION**: resuelta la clasificación administrativa del listado el 2026-11-12: 74 entidades, códigos de tres dígitos (8205 → 205) y CACECH=312 confirmados por el usuario. Red y clasificación permanecen separadas. **ENTITY-CLASSIFICATION-MULTIPLE**: el usuario solicita conservar FRONT+EXTERNAL en 200/232 y FRONT+HYBRID en 207 con validación pendiente. Se bloquea solo resolver esos roles/rutas; BIN/Core y detección automática de escenarios siguen sin fuente. Ver [ADR-043](adr/ADR-043-COONECTA-ENTITY-CLASSIFICATION.md).
 - **TODO-DATA HARDWARE / CARD-IDENTITY-APDU / CARD-TRANSACTION-SECURITY**: OMNIKEY 5422 detectado en Windows, ambas interfaces con tarjeta presente y ATR. Lectura manual por contacto y guardado QA de referencia implementados; el inventario conserva alias, ultimos cuatro, AID y fecha, no datos de autenticacion. Faltan otros PDOL/perfiles/contactless, asociacion de cuenta y proveedor PIN/HSM/EMV dinamico; identidad guardada no habilita envio financiero. Ver `docs/implementation/CARD_READER_STATUS.md` y ADR-018.
 - **TODO-DATA OBSERVERS**: faltan SQL/API y reglas de correlacion aprobadas de SmartVista/Core. Consulta Journal/Message aportada por el usuario e implementada para Mediator; no completa validacion de resultados ni SmartVista.
 - **TODO-DATA MEDIATOR-OBSERVER-ACCESS / MEDIATOR-JOURNAL-CORRELATION**: Historial mantiene consulta acotada PREPROD por TraceId y exige cuenta de lectura/TLS validado. Inicio tiene una excepción explícita del usuario para consultar el mismo Mediator desde QA/PREPROD con la credencial existente: SELECT fijo, TLS cifrado sin validar certificado. La lectura real de 50 filas pasó el 2026-10-26; faltan mínimo privilegio permanente, mapeo entidad/canal y correlación con ISO/runId/transactionId. Ver `docs/implementation/MEDIATOR_OBSERVER.md` y ADR-009.
@@ -900,8 +900,8 @@ Estos items no modifican el estado de las tramas ATM/PCAP pendientes del P0.
 
 ## P1 - Necesario para completar MVP
 
-- [ ] Listado de entidades Coonecta.
-- [ ] FRONT/BACK/EXTERNAS.
+- [x] Listado de entidades Coonecta: 88 filas, 74 entidades; fuente y confirmaciones en [catálogo](entities/COONECTA_ENTITIES_20261112.md).
+- [x] FRONT/BACK/EXTERNAS/HÍBRIDA: clasificación del listado conservada; roles múltiples de 200, 207 y 232 pendientes de validación.
 - [ ] BIN ranges.
 - [ ] Catalogo ATM QA.
 - [ ] Catalogo tarjetas QA.

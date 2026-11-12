@@ -4,6 +4,14 @@ import type { SavedCase } from './saved-cases';
 
 export const networkTypes = ['COONECTA', 'BANRED', 'EXTERNAL'] as const;
 export type NetworkType = (typeof networkTypes)[number];
+export const entityMemberTypes = ['FRONT', 'BACK', 'EXTERNAL', 'HYBRID'] as const;
+export type EntityMemberType = (typeof entityMemberTypes)[number];
+export const entityMemberLabels: Readonly<Record<EntityMemberType, string>> = {
+  FRONT: 'FRONT',
+  BACK: 'BACK',
+  EXTERNAL: 'EXTERNA',
+  HYBRID: 'HÍBRIDA',
+};
 export const catalogLimits = { code: 64, text: 128 } as const;
 
 export interface EntityValues {
@@ -11,6 +19,9 @@ export interface EntityValues {
   name: string;
   networkType: NetworkType;
   active: boolean;
+  // Administrative classifications supplied by a source, separate from network/routing.
+  // Multiple values preserve unresolved source differences; omission means unclassified.
+  memberTypes?: EntityMemberType[];
 }
 export interface AtmValues {
   alias: string;
@@ -111,13 +122,36 @@ export function catalogText(value: unknown, maximum: number): string | undefined
   return text.length ? text : undefined;
 }
 export function parseEntityValues(value: unknown): EntityValues | undefined {
-  if (!isRecord(value) || !hasKeys(value, ['code', 'name', 'networkType', 'active']))
+  if (
+    !isRecord(value) ||
+    !(
+      hasKeys(value, ['code', 'name', 'networkType', 'active']) ||
+      hasKeys(value, ['code', 'name', 'networkType', 'active', 'memberTypes'])
+    )
+  )
     return undefined;
+  if (
+    Object.hasOwn(value, 'memberTypes') &&
+    (!Array.isArray(value.memberTypes) ||
+      value.memberTypes.length > entityMemberTypes.length ||
+      value.memberTypes.some((item) => !entityMemberTypes.includes(item)) ||
+      new Set(value.memberTypes).size !== value.memberTypes.length)
+  )
+    return undefined;
+  const memberTypes = entityMemberTypes.filter((item) =>
+    (value.memberTypes as unknown[] | undefined)?.includes(item),
+  );
   const code = catalogText(value.code, catalogLimits.code);
   const name = catalogText(value.name, catalogLimits.text);
   const networkType = networkTypes.find((type) => type === value.networkType);
   return code && name && networkType && typeof value.active === 'boolean'
-    ? { code, name, networkType, active: value.active }
+    ? {
+        code,
+        name,
+        networkType,
+        active: value.active,
+        ...(Object.hasOwn(value, 'memberTypes') ? { memberTypes } : {}),
+      }
     : undefined;
 }
 export function parseAtmValues(value: unknown): AtmValues | undefined {

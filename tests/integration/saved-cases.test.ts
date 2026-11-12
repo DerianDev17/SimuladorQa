@@ -312,6 +312,7 @@ describe('casos con Main, Worker y SQLite reales', () => {
     const database = new DatabaseSync(file);
     try {
       database.exec(`DROP TABLE saved_cases;
+        ALTER TABLE entities DROP COLUMN member_types_json;
         ALTER TABLE catalog_audit RENAME TO catalog_audit_v2;
         CREATE TABLE catalog_audit (
           sequence INTEGER PRIMARY KEY, id TEXT NOT NULL UNIQUE, timestamp TEXT NOT NULL,
@@ -350,7 +351,7 @@ describe('casos con Main, Worker y SQLite reales', () => {
     const database = new DatabaseSync(file);
     try {
       database.exec(
-        'ALTER TABLE saved_cases DROP COLUMN expectation_json; PRAGMA user_version = 2;',
+        'ALTER TABLE saved_cases DROP COLUMN expectation_json; ALTER TABLE entities DROP COLUMN member_types_json; PRAGMA user_version = 2;',
       );
     } finally {
       database.close();
