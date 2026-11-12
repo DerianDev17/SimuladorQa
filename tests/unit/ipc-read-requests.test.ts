@@ -13,6 +13,31 @@ function deferred<T>() {
 }
 
 describe('lecturas IPC en curso', () => {
+  it('permite recuperar una lectura vencida y su respuesta tardía no elimina la nueva', async () => {
+    vi.useFakeTimers();
+    try {
+      const reads = new IpcReadRequests();
+      const previous = deferred<string>();
+      const latest = deferred<string>();
+      const first = reads.run(channels.loadHistory, [], () => previous.promise);
+      // Keep another key in the same channel map while the first key expires.
+      await vi.advanceTimersByTimeAsync(1000);
+      const other = reads.run(channels.loadHistory, ['other'], () => latest.promise);
+      await vi.advanceTimersByTimeAsync(4000);
+      const next = reads.run(channels.loadHistory, [], () => latest.promise);
+      expect(next).not.toBe(first);
+      previous.resolve('stale');
+      expect(await first).toBe('stale');
+      expect(reads.run(channels.loadHistory, [], async () => 'duplicate')).toBe(next);
+      latest.resolve('current');
+      expect(await next).toBe('current');
+      await other;
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('comparte argumentos equivalentes y vuelve a consultar después de terminar', async () => {
     const reads = new IpcReadRequests();
     const pending = deferred<string>();

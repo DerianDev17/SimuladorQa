@@ -184,19 +184,42 @@ test('historial de carga: timeout, recuperación y payload inválido', async () 
   );
   expect(result).toMatchObject({ ok: false, error: { code: 'VALIDATION_ERROR' } });
   await app!.evaluate(({ ipcMain }) => {
+    const state = globalThis as typeof globalThis & { finishHistory?: () => void };
     ipcMain.removeHandler('load:history:list');
-    ipcMain.handle('load:history:list', () => new Promise(() => {}));
+    ipcMain.handle(
+      'load:history:list',
+      () =>
+        new Promise((resolve) => {
+          state.finishHistory = () =>
+            resolve({
+              ok: false,
+              error: { code: 'TIMEOUT', message: 'Consulta anterior vencida.' },
+            });
+        }),
+    );
   });
-  await history.getByRole('button', { name: 'Actualizar historial', exact: true }).click();
-  await expect(history.getByRole('alert')).toContainText('no respondió a tiempo', {
-    timeout: 7000,
-  });
-  await expect(history.getByRole('button', { name: /^Ver corrida / })).toHaveCount(0);
-  await app!.evaluate(({ ipcMain }) => {
-    ipcMain.removeHandler('load:history:list');
-    ipcMain.handle('load:history:list', () => ({ ok: true, value: { entries: [], next: null } }));
-  });
-  await history.getByRole('button', { name: 'Actualizar historial', exact: true }).click();
+  try {
+    await history.getByRole('button', { name: 'Actualizar historial', exact: true }).click();
+    await expect(history.getByRole('alert')).toContainText('no respondió a tiempo', {
+      timeout: 7000,
+    });
+    await expect(history.getByRole('button', { name: /^Ver corrida / })).toHaveCount(0);
+    await app!.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler('load:history:list');
+      ipcMain.handle('load:history:list', () => ({ ok: true, value: { entries: [], next: null } }));
+    });
+    await history.getByRole('button', { name: 'Actualizar historial', exact: true }).click();
+    await expect(history).toContainText('No hay corridas para los filtros aplicados.');
+    await expect(history.getByRole('alert')).toHaveCount(0);
+  } finally {
+    // Release the synthetic abandoned IPC before closing Electron. Its late
+    // error must not replace the recovered view from the newer request.
+    await app!.evaluate(() => {
+      const state = globalThis as typeof globalThis & { finishHistory?: () => void };
+      state.finishHistory?.();
+      delete state.finishHistory;
+    });
+  }
   await expect(history).toContainText('No hay corridas para los filtros aplicados.');
   await expect(history.getByRole('alert')).toHaveCount(0);
 });

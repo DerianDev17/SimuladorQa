@@ -88,6 +88,59 @@ describe('preload y consumidores de lecturas', () => {
     expect(bridge.invoke).toHaveBeenCalledTimes(2);
   });
 
+  it('Actualizar historial puede consultar de nuevo después del timeout del Renderer', async () => {
+    vi.useFakeTimers();
+    let finishPrevious!: (value: unknown) => void;
+    bridge.invoke.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishPrevious = resolve;
+        }),
+    );
+    const client = new DesktopClient(api);
+    const first = client.call((service) => service.listLoadHistory({}));
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(await first).toMatchObject({ ok: false, error: { code: 'TIMEOUT' } });
+    const current = { ok: true, value: { entries: [], next: null } };
+    bridge.invoke.mockResolvedValue(current);
+    expect(await client.call((service) => service.listLoadHistory({}))).toEqual(current);
+    expect(bridge.invoke).toHaveBeenCalledTimes(2);
+    finishPrevious({
+      ok: false,
+      error: { code: 'TIMEOUT', message: 'Consulta anterior vencida.' },
+    });
+    await Promise.resolve();
+  });
+
+  it('una visita nueva de Inicio no hereda el feed pendiente de la visita anterior', async () => {
+    let finishPrevious!: (value: unknown) => void;
+    bridge.invoke.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishPrevious = resolve;
+        }),
+    );
+    const current = { ok: true, value: { rows: [{ traceId: 'CURRENT' }] } };
+    bridge.invoke.mockResolvedValue(current);
+    const request = {
+      mode: 'live',
+      environment: 'QA',
+      entityId: 205,
+      channelId: 1,
+      limit: 50,
+    } as const;
+    const previous = api.getMediatorLive(request);
+    const next = api.getMediatorLive(request);
+    expect(bridge.invoke).toHaveBeenCalledTimes(2);
+    expect(await next).toEqual(current);
+    finishPrevious({
+      ok: false,
+      error: { code: 'TIMEOUT', message: 'Consulta anterior vencida.' },
+    });
+    expect(await previous).toMatchObject({ ok: false, error: { code: 'TIMEOUT' } });
+    expect(await next).toEqual(current);
+  });
+
   it('los eventos de hardware evitan reutilizar un estado anterior a la retirada', async () => {
     const completions: ((value: unknown) => void)[] = [];
     bridge.invoke.mockImplementation(() => new Promise((done) => completions.push(done)));

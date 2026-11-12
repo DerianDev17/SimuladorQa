@@ -68,13 +68,20 @@ juntos después de cambios de contratos IPC.
 
 Preload comparte una única solicitud IPC para lecturas simultáneas del mismo
 canal y argumentos, incluso entre componentes o montajes de React StrictMode.
-La lista explícita incluye estado, catálogos, historiales, inspección ATM y
-observación. Las respuestas se liberan al terminar; la siguiente consulta
-obtiene datos nuevos. No hay reintentos automáticos.
+La lista explícita incluye estado, catálogos, historiales y consultas de
+observación. Las respuestas se liberan al terminar o al alcanzar una ventana
+de cinco segundos; la siguiente consulta obtiene datos nuevos. No hay reintentos automáticos.
+
+La inspección ATM y el feed de Inicio usan consultas IPC independientes: un
+reintento explícito o una nueva visita no debe heredar una respuesta pendiente
+del recorrido anterior. Main conserva sus controles de concurrencia; Inicio
+descarta respuestas de vistas abandonadas y reconsulta ante `CONFLICT`.
 
 El timeout del Renderer limita la espera de cada consumidor; no cancela el IPC.
-Mientras Main siga respondiendo a esa solicitud, otra lectura idéntica espera
-la misma operación. Un rechazo libera la solicitud y permite consultar de nuevo.
+Dentro de la ventana de cinco segundos, otra lectura idéntica espera la misma
+operación. Después, una actualización explícita puede iniciar otra consulta aunque
+la anterior siga pendiente. Su respuesta tardía no retira ni sustituye la nueva.
+Un rechazo también libera la solicitud y permite consultar de nuevo.
 Los comandos invalidan las lecturas compartidas al comenzar y terminar, y los
 eventos del lector invalidan su estado pendiente. Así una consulta posterior
 al cambio no reutiliza una lectura anterior. Los comandos conservan su

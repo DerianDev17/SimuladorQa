@@ -1,7 +1,13 @@
 # Inicio: últimas transacciones de Mediator
 
-Inicio usa la misma configuración privada de Mediator en QA y PREPROD, por
-instrucción del usuario. Consulta `MDT_Journal` y `MDT_Message` por TraceId para
+Corrección de navegación (2026-11-12): al volver a Inicio se inicia una consulta
+IPC nueva aunque la visita anterior tenga otra pendiente. Preload no las agrupa;
+Main mantiene la exclusión de consultas y la UI reconsulta ante `CONFLICT`.
+Las respuestas tardías de la visita abandonada no se reutilizan ni se muestran
+en la vista nueva. Los filtros, pausa y filas se reinician al salir y volver.
+
+Inicio usa la configuración privada de Mediator en Qa, el único ambiente
+operativo. Consulta `MDT_Journal` y `MDT_Message` por TraceId para
 entidad 205/canal 1, ordena por `msgTraceId` descendente y muestra 50 filas.
 No usa el rango fijo del SQL de investigación: siempre solicita las últimas.
 El polling es de cinco segundos, solo mientras Inicio está abierto y sin consultas
@@ -10,11 +16,11 @@ sin solicitudes. Pausar detiene las lecturas; ante error se conserva la última 
 y el siguiente intento espera 15 segundos. Filtro y búsqueda operan en memoria
 sobre la ventana recibida. No hay persistencia local ni envío financiero.
 
-Al cambiar QA/PREPROD se reinicia la vista completa de Inicio: filas, filtros,
+Al salir y volver a Inicio se reinicia la vista completa: filas, filtros,
 pausa, error y hora de actualización. Mientras llega la nueva consulta se muestra
-el estado de carga; un fallo no conserva filas del ambiente anterior. Las respuestas
-tardías del ambiente abandonado se descartan. La conservación de la última ventana
-ante errores aplica únicamente dentro del mismo ambiente.
+el estado de carga; un fallo no conserva filas de la visita anterior. Las respuestas
+tardías de la vista abandonada se descartan. La conservación de la última ventana
+ante errores aplica únicamente dentro de la misma visita.
 
 La búsqueda se calcula cuando cambian filas o filtros, sin repetirla por cada
 actualización del indicador TCP. La tabla admite foco y desplazamiento con teclado;

@@ -61,9 +61,17 @@ function argumentsKey(args: readonly unknown[]): string | undefined {
 }
 
 export class IpcReadRequests {
-  private readonly pending = new Map<string, Map<string, Promise<unknown>>>();
+  private readonly pending = new Map<
+    string,
+    Map<string, { promise: Promise<unknown>; timer: ReturnType<typeof setTimeout> }>
+  >();
+
+  constructor(private readonly sharingWindowMs = 5000) {}
 
   invalidate(channel?: string): void {
+    const requests = channel === undefined ? this.pending.values() : [this.pending.get(channel)];
+    for (const group of requests)
+      for (const entry of group?.values() ?? []) clearTimeout(entry.timer);
     if (channel === undefined) this.pending.clear();
     else this.pending.delete(channel);
   }
@@ -84,15 +92,23 @@ export class IpcReadRequests {
     }
     const existing = requests.get(key);
     // A channel and its exact arguments have one response type in DesktopApi.
-    if (existing) return existing as Promise<T>;
+    if (existing) return existing.promise as Promise<T>;
     const current = requests;
+    // A consumer timing out does not cancel IPC. Stop sharing the abandoned
+    // request so a later explicit refresh can recover without resending commands.
+    const forget = () => {
+      if (current.get(key)?.promise !== request) return;
+      current.delete(key);
+      if (!current.size && this.pending.get(channel) === current) this.pending.delete(channel);
+    };
     const request = Promise.resolve()
       .then(operation)
       .finally(() => {
-        current.delete(key);
-        if (!current.size && this.pending.get(channel) === current) this.pending.delete(channel);
+        clearTimeout(timer);
+        forget();
       });
-    current.set(key, request);
+    const timer = setTimeout(forget, this.sharingWindowMs);
+    current.set(key, { promise: request, timer });
     return request;
   }
 }

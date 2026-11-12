@@ -62,7 +62,9 @@ const api: DesktopApi = Object.freeze<DesktopApi>({
   saveCase: (request) => invoke(channels.saveCase, request),
   deleteCase: (request) => invoke(channels.deleteCase, request),
   searchObservations: (request) => invoke(channels.observations, request),
-  getMediatorLive: (request) => invoke(channels.mediatorLive, request),
+  // A new dashboard visit must not inherit an abandoned visit's pending response.
+  // Main already prevents overlapping source queries and the UI retries CONFLICT.
+  getMediatorLive: (request) => ipcRenderer.invoke(channels.mediatorLive, request),
   startLoadRun: (request) => invoke(channels.startLoadRun, request),
   getLoadConfigurations: () => invoke(channels.loadConfigurations),
   saveLoadConfiguration: (request) => invoke(channels.saveLoadConfiguration, request),
