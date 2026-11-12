@@ -29,6 +29,7 @@
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run check:security && npm run build"
   },
   "dependencies": {
+    "@redis/client": "6.3.1",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },

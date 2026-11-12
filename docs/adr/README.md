@@ -50,3 +50,4 @@ Cuando una decisión reemplaza a otra, ambas se conservan para trazabilidad.
 | [042](ADR-042-QA-ATM-ONBOARDING.md) | Asistente de alta QA/205, verificación local y prueba guiada de saldo | Implementado; aceptación remota por terminal pendiente |
 | [043](ADR-043-COONECTA-ENTITY-CLASSIFICATION.md) | Clasificación de 74 entidades, migración y carga auditada | Implementado; tres clasificaciones múltiples pendientes |
 | [044](ADR-044-ATM-ENTITY-ONBOARDING.md) | Entidades en asistente ATM y revalidación antes de saldo | Implementado; perfiles financieros fuera de 205 pendientes |
+| [045](ADR-045-OPTIONAL-REDIS-READ-CACHE.md) | Caché Redis local opcional para consultas de presentación | Implementado; funcionamiento sin Redis |

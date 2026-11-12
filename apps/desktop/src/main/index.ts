@@ -57,6 +57,7 @@ import { SavedCardProfileService } from './saved-card-profile-service';
 import { FileSavedCardProfileStore } from './infrastructure/saved-card-profile-store';
 import { drainBeforeQuit } from './shutdown-drain';
 import { developmentWindowPresentation, presentWindow } from './window-presentation';
+import { RedisReadCache, redisCachePort } from './infrastructure/redis-read-cache';
 
 const development = process.argv.includes('--dev');
 // Vite serves development assets directly; avoid reusing a corrupt HTTP disk cache.
@@ -84,6 +85,7 @@ let loadRunStore: WorkerLoadRunStore | undefined;
 let virtualCardGenerator: VirtualCardGeneratorService | undefined;
 let savedCardProfiles: SavedCardProfileService | undefined;
 let financialApplication: DesktopApplication | undefined;
+let readCache: RedisReadCache | undefined;
 let financialJournals: SqliteBalanceJournal[] = [];
 let quitting = false;
 let developmentReload = false;
@@ -355,6 +357,8 @@ void startupReady
       90000,
       sessionMessages,
     );
+    const cachePort = redisCachePort(process.env);
+    if (cachePort !== undefined) readCache = new RedisReadCache(cachePort);
     const application = new DesktopApplication(
       preferences,
       runtime,
@@ -380,6 +384,7 @@ void startupReady
         runtime.now,
         readAtmCatalog,
       ),
+      readCache,
     );
     financialApplication = application;
     loadRunStore = new WorkerLoadRunStore(
@@ -609,7 +614,7 @@ void startupReady
           case channels.mediatorLive:
             return application.getMediatorLive(payload);
           case channels.catalog:
-            return application.catalog('list', payload);
+            return application.getCatalog(payload);
           case channels.saveEntity:
             return application.catalog('saveEntity', payload);
           case channels.deleteEntity:
@@ -672,6 +677,7 @@ app.on('before-quit', (event) => {
       try {
         switchConnection?.disconnect('APP_CLOSED');
         sessionMessages.clear();
+        readCache?.close();
         observer?.close();
         cardReader?.close();
         cardIdentity?.close();

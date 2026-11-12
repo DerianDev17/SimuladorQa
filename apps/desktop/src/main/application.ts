@@ -15,6 +15,7 @@ import {
   qaAtmEntityChecks,
 } from '../../../../packages/domain/src/atm-onboarding';
 import type { Preferences, PreferencesStore, RuntimeIdentity } from './ports';
+import type { ReadCachePort } from './read-cache-port';
 import {
   parseSaveAtmRequest,
   parseSaveEntityRequest,
@@ -106,6 +107,7 @@ export class DesktopApplication {
     private readonly sessionMessages?: SessionMessagePort,
     private readonly depositService?: FinancialExecutionPort,
     private readonly atmInspection?: AtmInspectionPort,
+    private readonly readCache?: ReadCachePort,
   ) {}
 
   private serialize<T>(operation: () => Promise<T>): Promise<T> {
@@ -182,6 +184,7 @@ export class DesktopApplication {
           ].slice(-100),
         };
         await this.store.write(next);
+        this.readCache?.invalidate();
         this.sessionMessages?.clear();
         this.switchConnection?.disconnect('ENVIRONMENT_CHANGED');
         this.environmentRevision++;
@@ -273,7 +276,20 @@ export class DesktopApplication {
         return failure('CONFLICT', 'El ambiente cambió. Repite la consulta.');
       if (!this.observer?.live)
         return failure('SERVICE_UNAVAILABLE', 'El observador de Mediator no está configurado.');
-      const result = await this.observer.live(request);
+      const load = async (): Promise<Result<MediatorLiveSnapshot>> => {
+        const result = await this.observer!.live!(request);
+        return result.ok
+          ? { ok: true, value: { ...result.value, queriedAt: this.identity.now() } }
+          : result;
+      };
+      const result =
+        this.readCache && request.environment === 'QA'
+          ? await this.readCache.read(
+              `mediator:QA:${request.entityId}:${request.channelId}:${request.limit}`,
+              2_000,
+              load,
+            )
+          : await load();
       const current = await this.serialize(async () => ({
         preferences: await this.store.read(),
         revision: this.environmentRevision,
@@ -283,9 +299,7 @@ export class DesktopApplication {
         current.preferences.environment !== request.environment
       )
         return failure('CONFLICT', 'El ambiente cambió durante la consulta.');
-      return result.ok
-        ? { ok: true, value: { ...result.value, queriedAt: this.identity.now() } }
-        : result;
+      return result;
     } catch {
       return failure(
         'SERVICE_UNAVAILABLE',
@@ -876,7 +890,15 @@ export class DesktopApplication {
     );
   }
 
-  catalog(kind: CatalogCommand['kind'], payload: unknown): Promise<Result<CatalogSnapshot>> {
+  getCatalog(payload: unknown): Promise<Result<CatalogSnapshot>> {
+    return this.catalog('list', payload, true);
+  }
+
+  catalog(
+    kind: CatalogCommand['kind'],
+    payload: unknown,
+    forDisplay = false,
+  ): Promise<Result<CatalogSnapshot>> {
     return this.serialize(async () => {
       if (this.balanceBusy && kind !== 'list')
         return failure(
@@ -935,11 +957,23 @@ export class DesktopApplication {
           return failure('CONFLICT', 'El ambiente cambió. Recarga antes de guardar el catálogo.');
         if (!this.catalogs)
           return failure('SERVICE_UNAVAILABLE', 'El servicio de catálogos no está disponible.');
-        return await this.catalogs.execute(command, {
-          user: this.identity.user,
-          machine: this.identity.hostname,
-          timestamp: this.identity.now(),
-        });
+        const execute = () =>
+          this.catalogs!.execute(command, {
+            user: this.identity.user,
+            machine: this.identity.hostname,
+            timestamp: this.identity.now(),
+          });
+        if (command.kind === 'list')
+          return forDisplay && environment === 'QA' && this.readCache
+            ? await this.readCache.read('catalog:QA', 30_000, execute)
+            : await execute();
+        this.readCache?.invalidate();
+        try {
+          return await execute();
+        } finally {
+          // A timed-out mutation may still commit in the catalog worker.
+          this.readCache?.invalidate();
+        }
       } catch {
         return failure(
           'STORAGE_UNAVAILABLE',

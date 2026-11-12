@@ -77,6 +77,12 @@ su bloqueo. Ver [ADR-025](docs/adr/ADR-025-QA-WITHDRAWAL-AFTER-ERROR.md).
 
 ## Concurrencia y recursos
 
+Las consultas de presentación de catálogo y feed Mediator usan opcionalmente
+`ReadCachePort`, implementado por Redis en Main sobre loopback. TTL de 30 s/2 s,
+invalidación en comandos de catálogo y fallback acotado a la fuente original.
+La validación financiera conserva lecturas directas; mensajes completos de
+sesión, secretos y estados de hardware no se cachean. Ver [ADR-045](docs/adr/ADR-045-OPTIONAL-REDIS-READ-CACHE.md).
+
 - **Enlace QA:** una conexión financiera activa. La cola de QaSwitchConnection
   espera turno, respeta cancelación y plazo, y cierra antes de liberar el enlace.
 - **Saldo en carga:** 1–5 operaciones en preparación/envío; chip exclusivo y

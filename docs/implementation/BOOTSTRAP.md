@@ -86,6 +86,10 @@ recuperación con dependencias sintéticas.
 
 ## Datos y diagnóstico
 
+Las consultas administrativas y el feed pueden usar una caché Redis local
+opcional. La aplicación funciona con sus fuentes originales cuando Redis no
+está disponible. Arranque, TTL y opciones en [caché de lecturas](REDIS_READ_CACHE.md).
+
 Preferencias, perfiles privados y diarios se guardan bajo `app.getPath('userData')`,
 fuera del repositorio. Un archivo corrupto no debe reemplazarse silenciosamente;
 conservar respaldo y revisar su integridad. Los diarios financieros no son caché.
