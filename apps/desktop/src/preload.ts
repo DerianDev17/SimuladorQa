@@ -55,16 +55,13 @@ const api: DesktopApi = Object.freeze<DesktopApi>({
   deleteEntity: (request) => invoke(channels.deleteEntity, request),
   saveAtm: (request) => invoke(channels.saveAtm, request),
   createQaAtm: (request) => invoke(channels.createQaAtm, request),
-  // Explicit inspection retries must not reuse a request whose Renderer deadline expired.
-  inspectQaAtm: (request) => ipcRenderer.invoke(channels.inspectQaAtm, request),
+  inspectQaAtm: (request) => invoke(channels.inspectQaAtm, request),
   testQaAtmBalance: (request) => invoke(channels.testQaAtmBalance, request),
   deleteAtm: (request) => invoke(channels.deleteAtm, request),
   saveCase: (request) => invoke(channels.saveCase, request),
   deleteCase: (request) => invoke(channels.deleteCase, request),
   searchObservations: (request) => invoke(channels.observations, request),
-  // A new dashboard visit must not inherit an abandoned visit's pending response.
-  // Main already prevents overlapping source queries and the UI retries CONFLICT.
-  getMediatorLive: (request) => ipcRenderer.invoke(channels.mediatorLive, request),
+  getMediatorLive: (request) => invoke(channels.mediatorLive, request),
   startLoadRun: (request) => invoke(channels.startLoadRun, request),
   getLoadConfigurations: () => invoke(channels.loadConfigurations),
   saveLoadConfiguration: (request) => invoke(channels.saveLoadConfiguration, request),

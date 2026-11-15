@@ -77,6 +77,13 @@ reintento explícito o una nueva visita no debe heredar una respuesta pendiente
 del recorrido anterior. Main conserva sus controles de concurrencia; Inicio
 descarta respuestas de vistas abandonadas y reconsulta ante `CONFLICT`.
 
+Desde el refactor del 2026-11-15, `IpcReadRequests` concentra las tres políticas:
+lecturas compartidas, lecturas independientes y comandos. Todos los métodos de
+preload pasan por ese coordinador; las lecturas independientes no invalidan otras
+consultas. Un canal desconocido conserva el tratamiento de comando: nunca se
+comparte y provoca invalidación al iniciar y terminar. Se eliminan las excepciones
+manuales de preload sin cambiar el contrato público ni la recuperación existente.
+
 El timeout del Renderer limita la espera de cada consumidor; no cancela el IPC.
 Dentro de la ventana de cinco segundos, otra lectura idéntica espera la misma
 operación. Después, una actualización explícita puede iniciar otra consulta aunque

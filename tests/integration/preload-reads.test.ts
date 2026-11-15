@@ -157,4 +157,63 @@ describe('preload y consumidores de lecturas', () => {
     unsubscribe();
     expect(bridge.removeListener).toHaveBeenCalledWith(desktopEvents.readerChanged, receive);
   });
+
+  it.each([
+    {
+      name: 'inspección ATM',
+      channel: channels.inspectQaAtm,
+      read: (service: DesktopApi) =>
+        service.inspectQaAtm({
+          environment: 'QA',
+          atmId: '59ce13ca-6fb8-4f38-a0c9-823ddb5ba605',
+          revision: 1,
+        }),
+    },
+    {
+      name: 'feed Mediator',
+      channel: channels.mediatorLive,
+      read: (service: DesktopApi) =>
+        service.getMediatorLive({
+          mode: 'live',
+          environment: 'QA',
+          entityId: 205,
+          channelId: 1,
+          limit: 50,
+        }),
+    },
+  ])('$name recupera un timeout sin invalidar otras consultas', async ({ channel, read }) => {
+    vi.useFakeTimers();
+    let finishPrevious!: (value: unknown) => void;
+    let finishCatalog!: (value: unknown) => void;
+    let calls = 0;
+    const recovered = { ok: false, error: { code: 'VALIDATION_ERROR', message: 'Invalid' } };
+    bridge.invoke.mockImplementation((requestedChannel) => {
+      if (requestedChannel === channels.catalog)
+        return new Promise((resolve) => {
+          finishCatalog = resolve;
+        });
+      if (requestedChannel === channel && calls++ === 0)
+        return new Promise((resolve) => {
+          finishPrevious = resolve;
+        });
+      return Promise.resolve(recovered);
+    });
+    const catalog = api.getCatalog('QA');
+    const client = new DesktopClient(api, 20);
+    const previous = client.call<unknown>(read);
+    await vi.advanceTimersByTimeAsync(20);
+    expect(await previous).toMatchObject({ ok: false, error: { code: 'TIMEOUT' } });
+    expect(await client.call<unknown>(read)).toEqual(recovered);
+    finishPrevious({ ok: false, error: { code: 'SERVICE_UNAVAILABLE', message: 'Unavailable' } });
+    await Promise.resolve();
+    const sameCatalog = api.getCatalog('QA');
+    await Promise.resolve();
+    expect(bridge.invoke.mock.calls.filter(([value]) => value === channel)).toHaveLength(2);
+    expect(bridge.invoke.mock.calls.filter(([value]) => value === channels.catalog)).toHaveLength(
+      1,
+    );
+    finishCatalog({ ok: true, value: { environment: 'QA', entities: [], atms: [] } });
+    await Promise.all([catalog, sameCatalog]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });

@@ -13,6 +13,45 @@ function deferred<T>() {
 }
 
 describe('lecturas IPC en curso', () => {
+  it.each([channels.inspectQaAtm, channels.mediatorLive])(
+    '%s consulta independientemente sin invalidar lecturas compartidas',
+    async (channel) => {
+      const reads = new IpcReadRequests();
+      const catalogResult = deferred<string>();
+      const independentResult = deferred<string>();
+      const catalog = reads.run(channels.catalog, [], () => catalogResult.promise);
+      const invoke = vi.fn(() => independentResult.promise.then((value) => value));
+      const first = reads.run(channel, [{ environment: 'QA' }], invoke);
+      const second = reads.run(channel, [{ environment: 'QA' }], invoke);
+      expect(second).not.toBe(first);
+      expect(invoke).toHaveBeenCalledTimes(2);
+      expect(reads.run(channels.catalog, [], async () => 'duplicate')).toBe(catalog);
+      independentResult.resolve('fresh');
+      expect(await Promise.all([first, second])).toEqual(['fresh', 'fresh']);
+      expect(reads.run(channels.catalog, [], async () => 'duplicate')).toBe(catalog);
+      catalogResult.resolve('catalog');
+      await catalog;
+    },
+  );
+
+  it.each([channels.inspectQaAtm, channels.mediatorLive])(
+    '%s fallido no invalida el catálogo y permite otra consulta',
+    async (channel) => {
+      const reads = new IpcReadRequests();
+      const pending = deferred<string>();
+      const catalog = reads.run(channels.catalog, [], () => pending.promise);
+      await expect(
+        reads.run(channel, [], async () => {
+          throw Error('unavailable');
+        }),
+      ).rejects.toThrow('unavailable');
+      await expect(reads.run(channel, [], async () => 'recovered')).resolves.toBe('recovered');
+      expect(reads.run(channels.catalog, [], async () => 'duplicate')).toBe(catalog);
+      pending.resolve('catalog');
+      await catalog;
+    },
+  );
+
   it('permite recuperar una lectura vencida y su respuesta tardía no elimina la nueva', async () => {
     vi.useFakeTimers();
     try {
@@ -42,13 +81,21 @@ describe('lecturas IPC en curso', () => {
     const reads = new IpcReadRequests();
     const pending = deferred<string>();
     const invoke = vi.fn(() => pending.promise);
-    const first = reads.run(channels.inspectQaAtm, [{ environment: 'QA', revision: 1 }], invoke);
-    const second = reads.run(channels.inspectQaAtm, [{ revision: 1, environment: 'QA' }], invoke);
+    const first = reads.run(
+      channels.balanceReadiness,
+      [{ environment: 'QA', revision: 1 }],
+      invoke,
+    );
+    const second = reads.run(
+      channels.balanceReadiness,
+      [{ revision: 1, environment: 'QA' }],
+      invoke,
+    );
     expect(second).toBe(first);
     pending.resolve('inspection');
     expect(await Promise.all([first, second])).toEqual(['inspection', 'inspection']);
     expect(invoke).toHaveBeenCalledTimes(1);
-    await reads.run(channels.inspectQaAtm, [{ environment: 'QA', revision: 1 }], invoke);
+    await reads.run(channels.balanceReadiness, [{ environment: 'QA', revision: 1 }], invoke);
     expect(invoke).toHaveBeenCalledTimes(2);
   });
 
@@ -59,8 +106,8 @@ describe('lecturas IPC en curso', () => {
       reads.run(channels.catalog, [{ environment: 'QA' }], invoke),
       reads.run(channels.catalog, [{ environment: 'PROD' }], invoke),
       reads.run(channels.balanceHistory, [{ environment: 'QA' }], invoke),
-      reads.run(channels.inspectQaAtm, [{ revision: 1 }], invoke),
-      reads.run(channels.inspectQaAtm, [{ revision: 2 }], invoke),
+      reads.run(channels.balanceReadiness, [{ revision: 1 }], invoke),
+      reads.run(channels.balanceReadiness, [{ revision: 2 }], invoke),
       reads.run(channels.observations, [{ filters: ['a', 'b'] }], invoke),
       reads.run(channels.observations, [{ filters: ['b', 'a'] }], invoke),
     ]);
@@ -80,8 +127,8 @@ describe('lecturas IPC en curso', () => {
       ]),
     );
     expect(invoke).toHaveBeenCalledTimes(values.length * 2);
-    const valid = reads.run(channels.inspectQaAtm, [{}], invoke);
-    const invalid = reads.run(channels.inspectQaAtm, [{ extra: undefined }], invoke);
+    const valid = reads.run(channels.balanceReadiness, [{}], invoke);
+    const invalid = reads.run(channels.balanceReadiness, [{ extra: undefined }], invoke);
     expect(invalid).not.toBe(valid);
     await Promise.all([valid, invalid]);
   });

@@ -2,7 +2,7 @@ import { channels } from '../../../packages/shared/src/contracts';
 
 // Only queries may share an IPC request. Commands keep their existing Main-side
 // validation, locks and financial idempotency.
-const readChannels = new Set<string>([
+const sharedReadChannels = new Set<string>([
   channels.snapshot,
   channels.catalog,
   channels.reader,
@@ -19,14 +19,17 @@ const readChannels = new Set<string>([
   channels.depositExecution,
   channels.depositHistory,
   channels.sessionMessages,
-  channels.inspectQaAtm,
   channels.observations,
-  channels.mediatorLive,
   channels.loadRun,
   channels.loadConfigurations,
   channels.loadHistory,
   channels.loadHistoryDetail,
 ]);
+
+// Explicit ATM retries and new dashboard visits must not inherit an abandoned
+// request. These are reads, so they must not invalidate unrelated shared reads.
+// Main retains source concurrency controls; the dashboard handles CONFLICT.
+const independentReadChannels = new Set<string>([channels.inspectQaAtm, channels.mediatorLive]);
 
 function argumentsKey(args: readonly unknown[]): string | undefined {
   const ancestors = new Set<object>();
@@ -77,7 +80,8 @@ export class IpcReadRequests {
   }
 
   run<T>(channel: string, args: readonly unknown[], operation: () => Promise<T>): Promise<T> {
-    if (!readChannels.has(channel)) {
+    if (independentReadChannels.has(channel)) return operation();
+    if (!sharedReadChannels.has(channel)) {
       this.invalidate();
       return Promise.resolve()
         .then(operation)
