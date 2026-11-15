@@ -1,6 +1,6 @@
 import { isRecord } from './index';
-import { isRevision, isUuid } from './catalogs';
-import { parseDraftRequest } from './transaction-draft';
+import { isUuid } from './catalogs';
+import { parseQaSavingsContextRequest } from './financial-context';
 import { isReversalDelay } from './withdrawal-reversal';
 import type {
   BalanceContextRequest,
@@ -39,30 +39,16 @@ export function parseWithdrawalDetails(value: unknown): WithdrawalDetails | unde
 }
 
 export function parseWithdrawalContextRequest(value: unknown): BalanceContextRequest | undefined {
+  const context = parseQaSavingsContextRequest(value);
+  if (!context) return undefined;
+  const { draft } = context;
   if (
-    !isRecord(value) ||
-    Object.keys(value).length !== 3 ||
-    !isRevision(value.configurationRevision) ||
-    !isUuid(value.cardReadId)
-  )
-    return undefined;
-  const draft = parseDraftRequest(value.draft);
-  if (
-    !draft ||
-    draft.environment !== 'QA' ||
     draft.scenario !== 'LOCAL' ||
     !['WITHDRAWAL_APPROVED', 'WITHDRAWAL_DECLINED'].includes(draft.transaction) ||
-    draft.account !== 'SAVINGS' ||
-    draft.atmId === null ||
-    draft.atmRevision === null ||
     !isWithdrawalAmount(draft.amount)
   )
     return undefined;
-  return {
-    draft,
-    configurationRevision: value.configurationRevision,
-    cardReadId: value.cardReadId,
-  };
+  return context;
 }
 
 export function parseWithdrawalExecutionRequest(

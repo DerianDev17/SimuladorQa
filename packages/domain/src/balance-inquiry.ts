@@ -1,18 +1,13 @@
 import { isRecord } from './index';
 import type { Scenario } from './index';
-import { isRevision, isUuid, isUtcTimestamp } from './catalogs';
-import { parseDraftRequest } from './transaction-draft';
-import type { DraftRequest } from './transaction-draft';
+import { isUuid, isUtcTimestamp } from './catalogs';
+import { parseQaSavingsContextRequest, type FinancialContextRequest } from './financial-context';
 import type { DepositDetails } from './deposit';
 import type { WithdrawalDetails } from './withdrawal';
 import type { WithdrawalReversal } from './withdrawal-reversal';
 import type { TransactionMessages } from './iso-message';
 
-export interface BalanceContextRequest {
-  draft: DraftRequest;
-  configurationRevision: number;
-  cardReadId: string;
-}
+export type BalanceContextRequest = FinancialContextRequest;
 export interface BalanceExecutionRequest extends BalanceContextRequest {
   requestId: string;
   reversalDelaySeconds?: number;
@@ -243,29 +238,9 @@ export function canStartBalanceAfterUnconfirmedWithdrawal(execution: BalanceExec
 }
 
 export function parseBalanceContextRequest(value: unknown): BalanceContextRequest | undefined {
-  if (
-    !isRecord(value) ||
-    Object.keys(value).length !== 3 ||
-    !isRevision(value.configurationRevision) ||
-    !isUuid(value.cardReadId)
-  )
-    return undefined;
-  const draft = parseDraftRequest(value.draft);
+  const context = parseQaSavingsContextRequest(value);
   // This executable wire profile is limited to the received CB savings sample.
-  if (
-    !draft ||
-    draft.environment !== 'QA' ||
-    draft.transaction !== 'BALANCE' ||
-    draft.account !== 'SAVINGS' ||
-    draft.atmId === null ||
-    draft.atmRevision === null
-  )
-    return undefined;
-  return {
-    draft,
-    configurationRevision: value.configurationRevision,
-    cardReadId: value.cardReadId,
-  };
+  return context?.draft.transaction === 'BALANCE' ? context : undefined;
 }
 export function parseBalanceExecutionRequest(value: unknown): BalanceExecutionRequest | undefined {
   if (!isRecord(value) || Object.keys(value).length !== 4 || !isUuid(value.requestId))

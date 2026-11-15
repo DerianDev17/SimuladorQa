@@ -41,6 +41,11 @@ flowchart TD
 ```
 
 Las fachadas de saldo, retiro y depósito inyectan su builder y configuración al mismo motor.
+En dominio, `financial-context.ts` concentra la validación común de solicitudes
+QA/ahorros: borrador, ATM, UUID de lectura y revisión de configuración. Los parsers
+de saldo, retiro y depósito conservan sus restricciones de operación, escenario,
+importe y reverso; `BalanceContextRequest` mantiene su nombre público como alias.
+Validar este contexto no autoriza el envío ni sustituye la revalidación de Main.
 Retiro no hereda del servicio de saldo. Los DTO de mensaje pertenecen a contratos
 internos de Main y los adaptadores los consumen. El driver de carga depende de
 interfaces de lector, operaciones financieras y ciclo de vida de sesiones; no
