@@ -76,6 +76,12 @@ aceptación de negocio; la presentación de hechos y ambos informes están dispo
 
 ## Lectura visual del informe HTML
 
+- Negocio se organiza en cuatro secciones numeradas: resumen para decisión,
+  alcance y hallazgos, rendimiento y pendientes, y próximos pasos. La conclusión
+  precede a los indicadores; los resultados inciertos se destacan sin asignar
+  una calificación de aceptación. Las acciones conservan su carácter sugerido.
+- Ambos informes incluyen un índice de enlaces internos, utilizable con teclado,
+  que permite navegar sin scripts ni conexiones externas y se oculta al imprimir.
 - Cabecera con identidad de la aplicación, estado registrado, correlación de la
   corrida y fechas UTC. El resumen prioriza envíos, respuestas, TPS observado y
   p95; los demás contadores se conservan en una franja secundaria compacta.

@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-16 — Acabado de presentación por audiencia
+
+- Ordena el informe de negocio en cuatro secciones con conclusión destacada,
+  indicadores independientes, hallazgos y acciones numeradas.
+- Incorpora índices navegables por teclado en negocio y técnico, ocultos en
+  impresión, y conserva el contenido y la incertidumbre de la evidencia.
+- Ajusta tipografía, separadores y distribución móvil; elimina advertencias
+  duplicadas de los hallazgos sin retirar los límites de interpretación.
+
 ## 2026-11-16 — Informes separados de negocio y técnicos
 
 - Añade dos acciones de exportación HTML con archivos independientes y referencia

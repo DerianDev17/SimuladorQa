@@ -22,7 +22,7 @@ export function loadBusinessSummary(evidence: Evidence) {
           : 'La corrida registra respuestas sin envíos pendientes de respuesta. Esto describe la ejecución local; no constituye una aprobación para producción.';
   const findings = [
     `Se registraron ${run.operations.length} operaciones: ${m.sent} envíos y ${m.received} respuestas.`,
-    `El registro clasifica ${m.approved} operaciones como aprobadas y ${m.declined} como rechazadas; no confirma los movimientos en el sistema contable.`,
+    `El registro clasifica ${m.approved} operaciones como aprobadas y ${m.declined} como rechazadas.`,
     `Errores registrados: ${m.errors}; vencimientos de plazo incluidos: ${m.timeouts}; cancelaciones locales: ${m.cancelled}. Estos contadores pueden solaparse.`,
   ];
   if (plan.mode === 'STRESS')
@@ -37,7 +37,7 @@ export function loadBusinessSummary(evidence: Evidence) {
     );
   if (run.state !== 'COMPLETED')
     findings.push(
-      `La corrida figura como «${states[run.state]}». No debe presentarse como una ejecución completada.`,
+      `Estado registrado: «${states[run.state]}». La corrida no alcanzó el estado completado.`,
     );
   const nextSteps: string[] = [];
   if (m.sent === 0)

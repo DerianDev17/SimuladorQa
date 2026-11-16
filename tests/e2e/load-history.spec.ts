@@ -43,6 +43,15 @@ test('informe HTML: ejemplos visuales, barras proporcionales y aviso de incertid
       await reportWindow.loadFile(filePath);
     }, file);
     const report = await opened;
+    await report
+      .getByRole('navigation', { name: 'Contenido del informe técnico' })
+      .getByRole('link', { name: '04 Etapas' })
+      .click();
+    await expect(report.getByRole('heading', { name: 'Tiempos por etapa' })).toBeInViewport();
+    await report
+      .getByRole('navigation', { name: 'Contenido del informe técnico' })
+      .getByRole('link', { name: '01 Resultados' })
+      .click();
     await expect(report.getByRole('region', { name: 'Resultados de ejecución' })).toBeVisible();
     const throughput = report.getByRole('list', { name: 'TPS observado y objetivo' });
     const bars = throughput.locator('.bar-fill');
@@ -121,6 +130,15 @@ test('informe de negocio separado: narrativa, trazabilidad común y presentació
   await expect(report.locator('body')).not.toContainText(run.items[0]!.transactionId!);
   await expect(report.getByRole('table')).toHaveCount(0);
   await report
+    .getByRole('navigation', { name: 'Contenido del informe de negocio' })
+    .getByRole('link', { name: '04 Próximos pasos' })
+    .click();
+  await expect(report.getByRole('heading', { name: 'Próximos pasos sugeridos' })).toBeInViewport();
+  await report
+    .getByRole('navigation', { name: 'Contenido del informe de negocio' })
+    .getByRole('link', { name: '01 Resumen ejecutivo' })
+    .click();
+  await report
     .locator('.report-overview')
     .screenshot({ path: 'artifacts/load-report-business.png' });
   await report.setViewportSize({ width: 390, height: 844 });
@@ -128,6 +146,9 @@ test('informe de negocio separado: narrativa, trazabilidad común y presentació
     true,
   );
   await report.emulateMedia({ media: 'print' });
+  await expect(
+    report.getByRole('navigation', { name: 'Contenido del informe de negocio' }),
+  ).toBeHidden();
   await report.setViewportSize({ width: 1120, height: 790 });
   expect(await report.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
     true,

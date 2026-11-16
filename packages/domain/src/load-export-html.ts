@@ -60,6 +60,11 @@ header { background: #142b40; color: #fff; padding: 28px 36px 24px; border-top: 
 .brand { font-size: 19px; font-weight: 750; letter-spacing: .14em; }
 .brand small { display: block; font-size: 9px; letter-spacing: .17em; font-weight: 500; margin-top: 5px; color: #c0d0de; }
 .report-tag { padding: 7px 12px; border: 1px solid #6b8396; border-radius: 4px; font-size: 10px; letter-spacing: .12em; color: #e4edf5; }
+.report-nav { display: flex; flex-wrap: wrap; gap: 4px 20px; padding: 13px 36px; border-bottom: 1px solid #dce5ed; background: #f7fafb; }
+.report-nav a { padding: 5px 0; color: #37546a; font-size: 11px; text-decoration: none; border-bottom: 2px solid transparent; }
+.report-nav a:hover { color: #126c67; border-bottom-color: #126c67; }
+.report-nav a:focus-visible { outline: 2px solid #126c67; outline-offset: 4px; }
+h2[id] { scroll-margin-top: 20px; }
 h1 { margin: 0 0 8px; font-size: 30px; line-height: 1.25; font-weight: 650; letter-spacing: -.025em; }
 .subtitle { margin: 0 0 22px; color: #c5d5e2; font-size: 13px; }
 header dl { border-top: 1px solid #496073; padding-top: 18px; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px 24px; }
@@ -120,17 +125,34 @@ td dt { font-size: 9px; margin-bottom: 3px; }
 td:nth-child(2) dd, td:nth-child(3) dd, td:nth-child(5) dd { font-family: ui-monospace, Consolas, monospace; font-size: 10px; }
 footer { color: #526679; font-size: 10px; padding: 18px 36px; background: #f7fafb; }
 footer p { margin: 0; }
-.business-conclusion { border-left: 3px solid #16837b; padding: 12px 18px; background: #f1f7f7; margin-bottom: 20px; }
+.business-conclusion { border-left: 3px solid #16837b; padding: 18px 22px; background: #f1f7f7; margin-bottom: 24px; }
 .business-conclusion p { margin: 0; font-size: 16px; line-height: 1.6; }
-.business-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-top: 24px; }
-.business-grid article, .next-steps { border: 1px solid #dce5ec; border-radius: 6px; padding: 20px; }
+.business-conclusion .conclusion-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; margin-bottom: 8px; color: #356762; }
+.business-conclusion.needs-review { border-color: #a56519; background: #fff8ed; }
+.business-conclusion.needs-review .conclusion-label { color: #78470c; }
+.business-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; }
+.business-grid article { padding: 0 24px 0 0; }
+.business-grid article + article { padding: 0 0 0 24px; border-left: 1px solid #dce5ec; }
 h3 { font-size: 14px; margin: 0 0 14px; }
 article p, article li { font-size: 12px; line-height: 1.7; }
 article ul, article ol { padding-left: 18px; margin: 0; }
 article li + li { margin-top: 8px; }
-.next-steps { margin-top: 24px; background: #f7fafb; }
+.findings-list { list-style: none; padding-left: 0; }
+.findings-list li { padding: 0 0 10px; border-bottom: 1px solid #e4ebf0; }
+.findings-list li:last-child { border-bottom: 0; padding-bottom: 0; }
+.next-steps { background: #f7fafb; border: 1px solid #dce5ec; border-radius: 6px; padding: 20px 24px; }
+.next-steps ol { counter-reset: actions; list-style: none; padding-left: 0; }
+.next-steps li { counter-increment: actions; position: relative; min-height: 28px; padding-left: 42px; margin: 0 0 14px; }
+.next-steps li:last-child { margin-bottom: 0; }
+.next-steps li::before { content: counter(actions, decimal-leading-zero); position: absolute; left: 0; top: 0; color: #126c67; font-size: 12px; font-weight: 700; line-height: 26px; width: 28px; text-align: center; border: 1px solid #b8d6d1; border-radius: 4px; }
+.business-report header { padding-bottom: 20px; }
+.business-report .brand-row { margin-bottom: 22px; }
+.business-report h2 { margin-bottom: 24px; }
+.business-report .metrics { border: 0; gap: 16px; border-radius: 0; }
+.business-report .metrics > div { border: 1px solid #d7e2e9; border-radius: 5px; background: white; }
+.business-report .metrics dd { font-size: 34px; }
 .business-report header dl > div { grid-column: auto; }
-.business-report header dl dd { font-family: inherit; }
+.business-report header dl > div:nth-child(-n+2) dd { font-family: inherit; }
 .business-report .metrics dd { color: #153d50; }
 .business-report .metrics > div:last-child dd { color: #78470c; }
 .methodology { font-size: 12px; line-height: 1.7; padding-left: 18px; }
@@ -139,11 +161,16 @@ article li + li { margin-top: 8px; }
   body { padding: 12px; }
   header, section { padding: 22px; }
   .notice, footer { padding: 14px 22px; }
+  .report-nav { padding: 12px 22px; gap: 2px 16px; }
   header dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .metrics, .counters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .metrics > div:nth-child(2) { border-right: 0; }
   .metrics > div:nth-child(-n+2) { border-bottom: 1px solid #d7e2e9; }
   .charts, .business-grid { grid-template-columns: 1fr; }
+  .business-grid article { padding: 0; }
+  .business-grid article + article { border-left: 0; border-top: 1px solid #dce5ec; padding: 22px 0 0; }
+  .business-report .metrics { gap: 10px; }
+  .business-report .metrics > div { padding: 16px 14px; border: 1px solid #d7e2e9; }
   .latencies { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .brand-row { align-items: start; flex-wrap: wrap; }
   .brand { font-size: 16px; }
@@ -156,6 +183,7 @@ article li + li { margin-top: 8px; }
   :root { background: white; }
   body { padding: 0; }
   main { border: 0; box-shadow: none; }
+  .report-nav { display: none; }
   header { background: white; color: #142b40; padding: 16px 12px; }
   header dt, header dd, .brand small, .report-tag, .subtitle { color: #29465d; }
   header dl { border-color: #dce5ed; }
@@ -229,6 +257,7 @@ export function renderLoadHtml(
     ['Duración total (ms)', run.elapsedMs],
     ['Exportado (UTC)', evidence.exportedAt],
   ])}</dl></header>
+<nav class="report-nav" aria-label="Contenido del informe técnico"><a href="#results">01 Resultados</a><a href="#latency">02 Latencias</a><a href="#plan">03 Configuración</a><a href="#stages">04 Etapas</a><a href="#methodology">05 Metodología</a><a href="#operations">06 Operaciones</a></nav>
 <p class="notice">${escapeHtml(evidence.notice)}</p>
 <section aria-labelledby="results"><h2 id="results"><span class="section-number" aria-hidden="true">01</span>Resultados de ejecución</h2>
 ${
