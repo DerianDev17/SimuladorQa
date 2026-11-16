@@ -165,6 +165,9 @@ y guardado. Adaptadores gestionan SQLite, diálogo nativo y reemplazo de archivo
 Renderer no proporciona rutas ni contenidos. Ver [ADR-033](docs/adr/ADR-033-LOAD-HISTORY-EXPORT.md).
 HTML reutiliza la proyección pública CSV/JSON y el mismo guardado; presenta un
 informe estático imprimible, con contenido escapado y sin recursos externos.
+La audiencia se valida en Main: negocio presenta hechos y próximos pasos sin
+detalle individual; técnico incluye correlación y tiempos por etapa. Comparten
+fuente y referencia de corrida, pero se guardan como archivos independientes.
 
 La pantalla Transacciones separa `useTransactionPreparation` de las vistas de
 preparación e inspección. `transaction-inspection` proyecta etapas y filtros

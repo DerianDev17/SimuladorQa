@@ -6,9 +6,11 @@ import { loadTestAtms } from './load-test';
 import { renderLoadHtml } from './load-export-html';
 
 export type LoadExportFormat = 'CSV' | 'JSON' | 'HTML';
+export type LoadReportAudience = 'BUSINESS' | 'TECHNICAL';
 export interface LoadExportRequest {
   runId: string;
   format: LoadExportFormat;
+  audience?: LoadReportAudience;
 }
 export type LoadExportStatus = 'SAVED' | 'CANCELLED';
 export interface LoadExportDocument {
@@ -19,11 +21,19 @@ export interface LoadExportDocument {
 export function parseLoadExportRequest(value: unknown): LoadExportRequest | undefined {
   if (
     !isRecord(value) ||
-    Object.keys(value).length !== 2 ||
+    Object.keys(value).some((key) => !['runId', 'format', 'audience'].includes(key)) ||
     !isUuid(value.runId) ||
     (value.format !== 'CSV' && value.format !== 'JSON' && value.format !== 'HTML')
   )
     return;
+  if ('audience' in value) {
+    if (
+      value.format !== 'HTML' ||
+      (value.audience !== 'BUSINESS' && value.audience !== 'TECHNICAL')
+    )
+      return;
+    return { runId: value.runId, format: value.format, audience: value.audience };
+  }
   return { runId: value.runId, format: value.format };
 }
 
@@ -109,13 +119,14 @@ export function createLoadExport(
   run: LoadRunSnapshot,
   format: LoadExportFormat,
   exportedAt: string,
+  audience: LoadReportAudience = 'TECHNICAL',
 ): LoadExportDocument {
   const evidence = loadRunEvidence(run, exportedAt);
   if (format === 'HTML')
     return {
-      filename: `carga-${run.runId}.html`,
+      filename: `carga-${audience === 'BUSINESS' ? 'negocio' : 'tecnico'}-${run.runId}.html`,
       format,
-      contents: renderLoadHtml(evidence),
+      contents: renderLoadHtml(evidence, audience),
     };
   const base = {
     schemaVersion: evidence.schemaVersion,

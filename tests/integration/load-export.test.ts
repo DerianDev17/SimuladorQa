@@ -20,6 +20,72 @@ afterEach(async () => {
 const now = () => '2026-11-03T01:00:00.000Z';
 
 describe('exportación de carga desde Main', () => {
+  it.each(['BUSINESS', 'TECHNICAL'] as const)(
+    'guarda HTML %s separado desde Main y conserva errores y timeout',
+    async (audience) => {
+      const run = historyRun();
+      const destination = join(directory, `${audience}.html`);
+      const service = new LoadExportService(
+        async () => ({ ok: true, value: run }),
+        new FileLoadExportSink(
+          {
+            choose: async (document) => {
+              expect(document.filename).toContain(audience === 'BUSINESS' ? 'negocio' : 'tecnico');
+              return destination;
+            },
+          },
+          protectedDirectory,
+        ),
+        now,
+      );
+      expect(await service.export({ runId: run.runId, format: 'HTML', audience })).toEqual({
+        ok: true,
+        value: 'SAVED',
+      });
+      expect(await readFile(destination, 'utf8')).toContain(
+        audience === 'BUSINESS' ? 'Informe de negocio' : 'Informe técnico',
+      );
+      const broken = new LoadExportService(
+        async () => ({ ok: true, value: run }),
+        {
+          save: async () => {
+            throw Error('private path');
+          },
+        },
+        now,
+      );
+      expect(await broken.export({ runId: run.runId, format: 'HTML', audience })).toMatchObject({
+        ok: false,
+        error: { code: 'STORAGE_UNAVAILABLE' },
+      });
+      let release!: () => void;
+      let saved = false;
+      const pending = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const slow = new LoadExportService(
+        async () => {
+          await pending;
+          return { ok: true, value: run };
+        },
+        {
+          save: async () => {
+            saved = true;
+            return 'SAVED';
+          },
+        },
+        now,
+        10,
+      );
+      expect(await slow.export({ runId: run.runId, format: 'HTML', audience })).toMatchObject({
+        ok: false,
+        error: { code: 'TIMEOUT' },
+      });
+      release();
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      expect(saved).toBe(false);
+    },
+  );
   it.each(['CSV', 'JSON', 'HTML'] as const)(
     'guarda %s con nombre elegido sin devolver rutas ni contenido por IPC',
     async (format) => {

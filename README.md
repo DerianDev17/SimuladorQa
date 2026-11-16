@@ -84,7 +84,8 @@ En retiro, indicar el monto **por operación**. La corrida se detiene al primer
 rechazo/error y solicita PIN una vez. Detalles en la [guía de carga](docs/implementation/LOAD_TEST.md).
 
 Para recuperar evidencia: **Ver historial de carga → Ver detalle → Exportar CSV /
-Exportar JSON / Exportar HTML**. El archivo se guarda mediante el diálogo nativo; ver
+Exportar JSON / Informe de negocio / Informe técnico**. Cada informe HTML se
+guarda por separado mediante el diálogo nativo; ver
 [formatos y alcance](docs/REPORTING.md).
 
 **Pruebas de estrés** ofrece rampas de 20 segundos hacia 3 o 5 TPS, ajustables en

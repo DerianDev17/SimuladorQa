@@ -63,6 +63,16 @@ contratos IPC ni esquema. Ejemplos y pruebas visuales usan solo fixtures sintét
 
 ## Validación
 
+Ampliación por audiencia, 2026-11-16: a petición del usuario se generan dos HTML
+independientes. `audience` es opcional en el IPC de exportación y se valida solo
+para HTML; sin él se genera técnico. CSV/JSON conservan esquema v1. Los nombres
+incluyen `negocio` o `tecnico` y el mismo UUID de corrida. El informe de negocio
+excluye el detalle individual y presenta una narrativa determinista, sin inferir
+certificación. El técnico añade cobertura y agregados de etapas con fórmulas.
+TODO-DATA LOAD-REPORT-ACCEPTANCE bloquea únicamente el veredicto de aceptación.
+Pruebas cubren selección, separación de contenido, datos ausentes, incertidumbre,
+rechazos, estrés, HTML escapado, guardado/error/timeout y ambas acciones en Electron.
+
 Unitarias: payloads, proyección permitida, fechas, nulos, importes y CSV.
 Integración: SQLite real, cursor bajo inserciones, filtros, recuperación,
 bloqueo/corrupción y guardado de archivos, cancelación y timeout.

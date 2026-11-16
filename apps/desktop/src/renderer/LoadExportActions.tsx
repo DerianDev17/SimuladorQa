@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import type { LoadRunSnapshot } from '../../../../packages/domain/src/load-run';
-import type { LoadExportFormat } from '../../../../packages/domain/src/load-export';
+import type {
+  LoadExportFormat,
+  LoadReportAudience,
+} from '../../../../packages/domain/src/load-export';
 import { DesktopClient } from './desktop-client';
 const client = new DesktopClient(window.desktop);
 export function LoadExportActions({ run }: { run: LoadRunSnapshot }) {
@@ -14,13 +17,13 @@ export function LoadExportActions({ run }: { run: LoadRunSnapshot }) {
     },
     [],
   );
-  async function save(format: LoadExportFormat) {
+  async function save(format: LoadExportFormat, audience?: LoadReportAudience) {
     const id = ++generation.current;
     setBusy(true);
     setMessage('');
     setError('');
     const result = await client.call(
-      (api) => api.exportLoadRun({ runId: run.runId, format }),
+      (api) => api.exportLoadRun({ runId: run.runId, format, ...(audience ? { audience } : {}) }),
       125_000,
       'No llegó la confirmación de exportación. Revisa la ubicación elegida y cierra el diálogo antes de repetir.',
     );
@@ -39,10 +42,17 @@ export function LoadExportActions({ run }: { run: LoadRunSnapshot }) {
         <button disabled={busy || active} onClick={() => void save('JSON')}>
           Exportar JSON
         </button>
-        <button disabled={busy || active} onClick={() => void save('HTML')}>
-          Exportar HTML
+        <button disabled={busy || active} onClick={() => void save('HTML', 'BUSINESS')}>
+          Informe de negocio
+        </button>
+        <button disabled={busy || active} onClick={() => void save('HTML', 'TECHNICAL')}>
+          Informe técnico
         </button>
       </div>
+      <p>
+        Informes HTML separados: negocio resume resultados y pendientes; técnico incluye métricas y
+        trazabilidad. Ambos se pueden imprimir.
+      </p>
       {active && (
         <p>La exportación estará disponible al cerrar la corrida. Actualiza el detalle después.</p>
       )}

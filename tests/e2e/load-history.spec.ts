@@ -52,9 +52,12 @@ test('informe HTML: ejemplos visuales, barras proporcionales y aviso de incertid
     await expect(report.getByLabel('Envíos sin respuesta', { exact: true })).toHaveCount(
       uncertain ? 1 : 0,
     );
-    await expect(report.getByRole('table').locator('tr.unconfirmed')).toHaveCount(
-      uncertain ? 1 : 0,
-    );
+    await expect(
+      report
+        .getByRole('region', { name: 'Detalle por operación' })
+        .getByRole('table')
+        .locator('tr.unconfirmed'),
+    ).toHaveCount(uncertain ? 1 : 0);
     await expect(report.getByRole('list', { name: 'Percentiles de latencia' })).toContainText(
       uncertain ? '140.00 ms' : '245.00 ms',
     );
@@ -85,6 +88,51 @@ test.afterEach(async () => {
   await app?.close();
   app = undefined;
   await removeTestDirectory(directory, 'load-history-e2e-');
+});
+test('informe de negocio separado: narrativa, trazabilidad común y presentación sin detalle técnico', async () => {
+  await launch();
+  const run = loadReportExample(true);
+  const file = resolve('artifacts/load-report-business.html');
+  await mkdir('artifacts', { recursive: true });
+  await writeFile(
+    file,
+    createLoadExport(run, 'HTML', '2026-11-16T15:00:00.000Z', 'BUSINESS').contents.replace(
+      '<h1>',
+      '<p class="subtitle">EJEMPLO · DATOS SINTÉTICOS</p><h1>',
+    ),
+  );
+  const opened = app!.waitForEvent('window');
+  await app!.evaluate(async ({ BrowserWindow }, filePath) => {
+    const reportWindow = new BrowserWindow({
+      show: false,
+      width: 1280,
+      height: 1100,
+      webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
+    });
+    await reportWindow.loadFile(filePath);
+  }, file);
+  const report = await opened;
+  await expect(
+    report.getByRole('heading', { name: 'Informe de negocio', exact: true }),
+  ).toBeVisible();
+  await expect(report.getByRole('heading', { name: 'Próximos pasos sugeridos' })).toBeVisible();
+  await expect(report.locator('body')).toContainText('6 envíos y 5 respuestas');
+  await expect(report.locator('body')).toContainText(run.runId);
+  await expect(report.locator('body')).not.toContainText(run.items[0]!.transactionId!);
+  await expect(report.getByRole('table')).toHaveCount(0);
+  await report
+    .locator('.report-overview')
+    .screenshot({ path: 'artifacts/load-report-business.png' });
+  await report.setViewportSize({ width: 390, height: 844 });
+  expect(await report.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+    true,
+  );
+  await report.emulateMedia({ media: 'print' });
+  await report.setViewportSize({ width: 1120, height: 790 });
+  expect(await report.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+    true,
+  );
+  await report.close();
 });
 async function launch() {
   const env = Object.fromEntries(
@@ -311,16 +359,25 @@ test('historial de carga: exporta CSV, JSON y HTML por Main, permite cancelar y 
       name: 'Detalle de corrida guardada',
       exact: true,
     });
-    for (const format of ['CSV', 'JSON', 'HTML'] as const) {
-      const file = join(output, 'result.' + format.toLowerCase());
+    for (const option of [
+      { format: 'CSV', button: 'Exportar CSV', file: 'result.csv' },
+      { format: 'JSON', button: 'Exportar JSON', file: 'result.json' },
+      { format: 'HTML', button: 'Informe técnico', file: 'result.html' },
+      { format: 'HTML', button: 'Informe de negocio', file: 'negocio.html' },
+    ]) {
+      const { format } = option;
+      const file = join(output, option.file);
       await app!.evaluate(({ dialog }, filePath) => {
         dialog.showSaveDialog = async () => ({ canceled: false, filePath });
       }, file);
-      await detail.getByRole('button', { name: `Exportar ${format}`, exact: true }).click();
+      await detail.getByRole('button', { name: option.button, exact: true }).click();
       await expect(detail.getByRole('status')).toHaveText('Evidencia guardada.');
       const content = await readFile(file, 'utf8');
       expect(content).toContain(run.runId);
-      expect(content).toContain(run.items[0]!.transactionId!);
+      if (option.button === 'Informe de negocio') {
+        expect(content).not.toContain(run.items[0]!.transactionId!);
+        expect(content).toContain('Resumen para decisión');
+      } else expect(content).toContain(run.items[0]!.transactionId!);
       if (format === 'JSON')
         expect(JSON.parse(content)).toMatchObject({
           evidence: 'LOCAL_LOAD_RUN',
@@ -350,9 +407,14 @@ test('historial de carga: exporta CSV, JSON y HTML por Main, permite cancelar y 
       if (/^https?:/.test(request.url())) externalRequests.push(request.url());
     });
     await report.reload();
-    await expect(report.getByRole('heading', { name: 'Informe de carga y estrés' })).toBeVisible();
-    await expect(report.getByRole('table')).toContainText(run.items[0]!.transactionId!);
-    await expect(report.getByRole('table')).toContainText('000123');
+    await expect(
+      report.getByRole('heading', { name: 'Informe técnico de carga y estrés' }),
+    ).toBeVisible();
+    const operations = report
+      .getByRole('region', { name: 'Detalle por operación' })
+      .getByRole('table');
+    await expect(operations).toContainText(run.items[0]!.transactionId!);
+    await expect(operations).toContainText('000123');
     await expect(report.locator('body')).toContainText('USD 25.50');
     expect(await report.locator('script, iframe, img, link, form').count()).toBe(0);
     await report.screenshot({ path: 'artifacts/load-report-html.png', fullPage: true });

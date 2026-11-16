@@ -44,7 +44,7 @@ export class LoadExportService {
         const run = result.value;
         if (run.state === 'RUNNING' || run.state === 'STOPPING')
           return failure('CONFLICT', 'Espera al cierre de la corrida antes de exportarla.');
-        const document = createLoadExport(run, request.format, this.now());
+        const document = createLoadExport(run, request.format, this.now(), request.audience);
         return { ok: true, value: await this.sink.save(document, abort.signal) };
       } catch {
         return failure(

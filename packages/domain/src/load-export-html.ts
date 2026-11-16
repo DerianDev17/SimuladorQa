@@ -1,25 +1,10 @@
-import type { loadRunEvidence } from './load-export';
+import type { loadRunEvidence, LoadReportAudience } from './load-export';
+import { decimal, escapeHtml, fields } from './load-export-html-format';
+import { renderLoadBusinessHtml } from './load-export-business';
+import { loadStageSummary } from './load-report-summary';
 
 // Only the public evidence projection may reach this presentation function.
 type Evidence = ReturnType<typeof loadRunEvidence>;
-function escapeHtml(value: string | number | null | undefined): string {
-  return String(value ?? 'Sin dato')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-}
-function fields(entries: [string, string | number | null | undefined][]): string {
-  return entries
-    .map(
-      ([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`,
-    )
-    .join('');
-}
-function decimal(value: number | null): string | null {
-  return value === null ? null : value > 0 && value < 0.01 ? '<0.01' : value.toFixed(2);
-}
 function barChart(
   title: string,
   unit: string,
@@ -135,6 +120,21 @@ td dt { font-size: 9px; margin-bottom: 3px; }
 td:nth-child(2) dd, td:nth-child(3) dd, td:nth-child(5) dd { font-family: ui-monospace, Consolas, monospace; font-size: 10px; }
 footer { color: #526679; font-size: 10px; padding: 18px 36px; background: #f7fafb; }
 footer p { margin: 0; }
+.business-conclusion { border-left: 3px solid #16837b; padding: 12px 18px; background: #f1f7f7; margin-bottom: 20px; }
+.business-conclusion p { margin: 0; font-size: 16px; line-height: 1.6; }
+.business-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-top: 24px; }
+.business-grid article, .next-steps { border: 1px solid #dce5ec; border-radius: 6px; padding: 20px; }
+h3 { font-size: 14px; margin: 0 0 14px; }
+article p, article li { font-size: 12px; line-height: 1.7; }
+article ul, article ol { padding-left: 18px; margin: 0; }
+article li + li { margin-top: 8px; }
+.next-steps { margin-top: 24px; background: #f7fafb; }
+.business-report header dl > div { grid-column: auto; }
+.business-report header dl dd { font-family: inherit; }
+.business-report .metrics dd { color: #153d50; }
+.business-report .metrics > div:last-child dd { color: #78470c; }
+.methodology { font-size: 12px; line-height: 1.7; padding-left: 18px; }
+.stage-table td { font-variant-numeric: tabular-nums; }
 @media (max-width: 760px) {
   body { padding: 12px; }
   header, section { padding: 22px; }
@@ -143,7 +143,7 @@ footer p { margin: 0; }
   .metrics, .counters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .metrics > div:nth-child(2) { border-right: 0; }
   .metrics > div:nth-child(-n+2) { border-bottom: 1px solid #d7e2e9; }
-  .charts { grid-template-columns: 1fr; }
+  .charts, .business-grid { grid-template-columns: 1fr; }
   .latencies { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .brand-row { align-items: start; flex-wrap: wrap; }
   .brand { font-size: 16px; }
@@ -164,12 +164,16 @@ footer p { margin: 0; }
   .table-wrap { overflow: visible; }
   table { min-width: 0; font-size: 10px; }
   thead { display: table-header-group; }
-  tr, dl > div, .metrics, .uncertainty { break-inside: avoid; }
-  h2 { break-after: avoid; }
+  tr, dl > div, .metrics, .uncertainty, .business-grid article, .next-steps { break-inside: avoid; }
+  h2, h3 { break-after: avoid; }
 }
 `;
 
-export function renderLoadHtml(evidence: Evidence): string {
+export function renderLoadHtml(
+  evidence: Evidence,
+  audience: LoadReportAudience = 'TECHNICAL',
+): string {
+  if (audience === 'BUSINESS') return renderLoadBusinessHtml(evidence, styles);
   const { run } = evidence;
   const { plan, metrics } = run;
   const rows = run.operations
@@ -215,7 +219,7 @@ export function renderLoadHtml(evidence: Evidence): string {
 <body><main>
 <div class="report-overview">
 <header><div class="brand-row"><div class="brand">COONECTA<small>ATM TRANSACTION SIMULATOR</small></div><span class="report-tag">QA · ${escapeHtml(run.state)}</span></div>
-<h1>Informe de carga y estrés</h1>
+<h1>Informe técnico de carga y estrés</h1>
 <p class="subtitle">${plan.operation === 'WITHDRAWAL' ? 'Retiro' : 'Consulta de saldo'} · ${plan.mode === 'STRESS' ? 'Prueba de estrés' : 'Prueba de carga'} · Evidencia local de ejecución</p>
 <dl>${fields([
     ['Corrida (runId)', run.runId],
@@ -278,7 +282,25 @@ en estrés el objetivo corresponde al pico de la rampa.</p></section>
       atm.atmId,
     ]),
   ])}</dl></section>
-<section aria-labelledby="operations"><h2 id="operations"><span class="section-number" aria-hidden="true">04</span>Detalle por operación</h2>
+<section aria-labelledby="stages"><h2 id="stages"><span class="section-number" aria-hidden="true">04</span>Tiempos por etapa</h2>
+<p class="method-note">Cada fila usa solo las operaciones con esa medición registrada. No se asignan ceros a datos ausentes. Las sumas de operaciones concurrentes pueden superar el tiempo total de la corrida; las filas no deben sumarse entre sí.</p>
+<div class="table-wrap"><table class="stage-table"><caption>Cobertura y tiempos por etapa (ms)</caption>
+<thead><tr><th scope="col">Etapa</th><th scope="col">Muestras / operaciones</th><th scope="col">Promedio</th><th scope="col">Mínimo</th><th scope="col">Máximo</th><th scope="col">Suma registrada</th></tr></thead><tbody>
+${loadStageSummary(evidence)
+  .map(
+    (stage) =>
+      `<tr><th scope="row">${escapeHtml(stage.label)}</th><td>${stage.samples} / ${run.operations.length}</td><td>${escapeHtml(decimal(stage.avg))}</td><td>${escapeHtml(decimal(stage.min))}</td><td>${escapeHtml(decimal(stage.max))}</td><td>${escapeHtml(decimal(stage.sum))}</td></tr>`,
+  )
+  .join('')}
+</tbody></table></div></section>
+<section aria-labelledby="methodology"><h2 id="methodology"><span class="section-number" aria-hidden="true">05</span>Metodología y límites de interpretación</h2>
+<ul class="methodology"><li>Fuente: registro local persistido de esta corrida; no se consulta Switch/Core al generar el informe.</li>
+<li>TPS = envíos × 1000 / duración total en milisegundos. Incluye preparación, esperas y cierre. En estrés, el objetivo es un pico de rampa.</li>
+<li>Latencias: duración de transporte de respuestas recibidas. Percentil p = valor ordenado en la posición techo(n × p), con posiciones desde 1. Sin respuestas, el valor es «Sin dato».</li>
+<li>Errores incluye timeouts y excluye cancelaciones locales. Enviadas sin respuesta puede coincidir con errores; los contadores no se suman como categorías excluyentes.</li>
+<li>Resultados, códigos de respuesta y correlación se conservan sin remapeo. La finalización de la corrida no certifica su resultado financiero ni el cumplimiento de un SLA.</li>
+</ul></section>
+<section aria-labelledby="operations"><h2 id="operations"><span class="section-number" aria-hidden="true">06</span>Detalle por operación</h2>
 <p class="method-note">Identificadores y resultados conservados tal como fueron registrados. «Sin dato» indica
 información ausente; no se infiere un ATM cuando un registro antiguo tiene varios perfiles.</p>
 ${

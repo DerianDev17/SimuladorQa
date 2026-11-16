@@ -1,5 +1,11 @@
 # Registro de TODO-DATA
 
+Reportería por audiencia, 2026-11-16: **LOAD-REPORT-ACCEPTANCE** requiere criterios
+aprobados de aceptación por escenario: metas sostenidas, latencia, tolerancia de
+errores, muestra y evidencia financiera. Bloquea solo emitir un veredicto de
+aceptación de negocio; los informes técnico y de negocio presentan hechos,
+incertidumbre y límites. Ver [REPORTING](REPORTING.md).
+
 Asistente ATM, 2026-11-12: **ATM-ENTITY-BALANCE-PROFILES** requiere fuentes
 aprobadas para saldo de entidades distintas de 205. El alta y diagnóstico
 administrativos están disponibles; la prueba financiera depende de esos perfiles.
@@ -72,6 +78,7 @@ que depende de ella; no toda la funcionalidad del módulo.
 | ISO-SPEC                          | `docs/INPUT_CHECKLIST.md`, `docs/protocols/VCP_LITE_450_REVIEW.md`                                |
 | LOAD-3TPS-PHYSICAL                | `docs/INPUT_CHECKLIST.md`, `docs/adr/ADR-027-CONCURRENT-ATM-LOAD.md`, `docs/adr/ADR-028-LOAD-PREPARATION-REUSE.md` |
 | LOAD-LIMITS                       | `docs/INPUT_CHECKLIST.md`                                                                         |
+| LOAD-REPORT-ACCEPTANCE | `docs/REPORTING.md`, `docs/adr/ADR-033-LOAD-HISTORY-EXPORT.md` |
 | LOAD-PERSISTENT-TCP               | `docs/INPUT_CHECKLIST.md`, `docs/implementation/LOAD_TEST.md`, `docs/adr/ADR-027-CONCURRENT-ATM-LOAD.md`, `docs/adr/ADR-029-QA-SINGLE-FINANCIAL-CONNECTION.md` |
 | LOAD-VIRTUAL-PROVIDER             | `docs/INPUT_CHECKLIST.md`, `docs/implementation/LOAD_TEST.md`, `docs/BACKLOG.md`, `docs/adr/ADR-020-PHYSICAL-CARD-LOAD.md` |
 | LOAD-WITHDRAWAL-QA-ACCEPTANCE      | `docs/INPUT_CHECKLIST.md`, `docs/implementation/LOAD_TEST.md`, `docs/adr/ADR-031-WITHDRAWAL-LOAD.md` |

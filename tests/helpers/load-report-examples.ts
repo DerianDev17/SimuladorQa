@@ -27,6 +27,20 @@ export function loadReportExample(uncertain: boolean): LoadRunSnapshot {
       sent: true,
       received: !timeout,
       elapsedMs: timeout ? 20_000 : 80 + index * 15,
+      ...(index % 2 === 0
+        ? {
+            timings: {
+              cardReadMs: 20,
+              inspectMs: 5,
+              contextMs: 10,
+              validationMs: 2,
+              journalMs: 3,
+              transportMs: 80 + index * 15,
+              otherMs: 2,
+              totalMs: 122 + index * 15,
+            },
+          }
+        : {}),
       responseCode: timeout ? null : '00',
       correlation: {
         stan: String(index + 1).padStart(6, '0'),

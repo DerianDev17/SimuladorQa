@@ -94,9 +94,17 @@ describe('evidencia pública de carga', () => {
       { runId, format: 'PDF' },
       { runId, format: 'JSON', path: 'private' },
       { runId, format: 'HTML', contents: '<html>forged</html>' },
+      { runId, format: 'HTML', audience: 'ADMIN' },
+      { runId, format: 'HTML', audience: null },
+      { runId, format: 'JSON', audience: 'BUSINESS' },
     ])
       expect(parseLoadExportRequest(value)).toBeUndefined();
     expect(() => loadRunEvidence(historyRun(), 'not-utc')).toThrow('LOAD_EXPORT_INVALID');
+    expect(parseLoadExportRequest({ runId, format: 'HTML', audience: 'BUSINESS' })).toEqual({
+      runId,
+      format: 'HTML',
+      audience: 'BUSINESS',
+    });
   });
   it.each(['CSV', 'JSON', 'HTML'] as const)(
     '%s excluye mensajes y propiedades privadas de ATM adicionales, operaciones y tiempos',
@@ -116,7 +124,7 @@ describe('evidencia pública de carga', () => {
     run.draft = { ...run.draft, operation: 'WITHDRAWAL', amount: '25.50' };
     run.items.push({ ...run.items[0]!, outcome: 'NOT_APPROVED', responseCode: '05' });
     const file = createLoadExport(run, 'HTML', now);
-    expect(file.filename).toBe(`carga-${run.runId}.html`);
+    expect(file.filename).toBe(`carga-tecnico-${run.runId}.html`);
     for (const text of [
       run.runId,
       run.requestId,

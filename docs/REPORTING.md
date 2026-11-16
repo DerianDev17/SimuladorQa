@@ -3,7 +3,8 @@
 ## Disponible
 
 En QA, abrir **Carga y estrés → Ver historial de carga → Ver detalle** y elegir
-**Exportar CSV**, **Exportar JSON** o **Exportar HTML**. El diálogo nativo permite elegir el destino
+**Exportar CSV**, **Exportar JSON**, **Informe de negocio** o **Informe técnico**.
+Los informes son archivos HTML independientes. El diálogo nativo permite elegir el destino
 y confirmar la sustitución de un archivo. Cancelar no escribe nada.
 
 Solo se exportan corridas cerradas: completadas, detenidas, fallidas o interrumpidas.
@@ -18,7 +19,7 @@ rutas, contenidos ni datos transaccionales para la exportación.
 - CSV UTF-8 con BOM, separador coma, cabecera y CRLF. Una fila por operación repite
   el resumen de la corrida. Si no hay operaciones, se conserva una fila de tipo
   `RUN`; las demás tienen tipo `TRANSACTION`. No sumar métricas repetidas por fila.
-- HTML UTF-8 autónomo e imprimible: resumen, configuración, latencias y detalle
+- HTML técnico UTF-8 autónomo e imprimible: resumen, configuración, latencias y detalle
   de todas las operaciones con UUID/STAN/RRN disponibles. No necesita conexión
   ni ejecuta scripts; usa estilos locales y una política que bloquea recursos
   externos. Abrir el archivo en un navegador y usar **Imprimir** para papel o PDF.
@@ -27,6 +28,11 @@ rutas, contenidos ni datos transaccionales para la exportación.
   los valores sin ese redondeo. Un valor positivo menor que 0,01 se muestra como
   **<0.01**, para no confundirse con cero. Los montos conservan su texto decimal exacto.
   Los datos ausentes se muestran como **Sin dato**, sin convertirlos en cero.
+- HTML de negocio: propósito y alcance, conclusión basada en hechos registrados,
+  envíos/respuestas/aprobaciones, incertidumbre, velocidad en lenguaje común y
+  próximos pasos sugeridos. No contiene tablas de operaciones ni sus UUID/STAN/RRN.
+  Conserva la referencia común de corrida y la fecha de exportación para localizar
+  el informe técnico correspondiente. No representa autorización ni certificación.
 - El plan conserva operación, monto por retiro como texto decimal, moneda USD
   cuando aplica, ATM/revisión (JSON/HTML), límites, rampa y concurrencia.
 - UUID de corrida/solicitud/transacción, STAN, RRN y terminal se incluyen cuando
@@ -40,6 +46,33 @@ TPS usa envíos sobre tiempo total. Percentiles usan respuestas recibidas; sin
 respuestas permanecen nulos/vacíos. Errores incluye timeouts, y los contadores no
 son categorías excluyentes. Se preservan resultados inciertos: el archivo no
 certifica débito, saldo final ni conciliación en Core.
+
+## Informes separados por audiencia
+
+| Audiencia | Contenido para presentación | Archivo sugerido |
+| --- | --- | --- |
+| Negocio | Qué se probó, qué ocurrió, qué falta confirmar y próximos pasos; estado en español, límites de la prueba y mediciones explicadas | `carga-negocio-<runId>.html` |
+| Técnica | Configuración, tasas y percentiles, tiempos por etapa con cobertura, fórmulas y límites de interpretación, detalle de cada operación | `carga-tecnico-<runId>.html` |
+
+La narrativa se deriva de la evidencia pública: distingue ausencia de envíos,
+rechazos/errores, resultados inciertos, cierre de corrida y rampa de estrés.
+El máximo de operaciones es un límite, no una meta de cobertura ni un porcentaje
+de avance. Comparar promedio con objetivo no determina capacidad sostenida.
+
+Los tiempos por etapa muestran muestras / operaciones, promedio, mínimo, máximo
+y suma, usando solo mediciones presentes. Una ausencia no cuenta como cero.
+Las filas no se suman entre sí; concurrencia puede hacer que los tiempos acumulados
+superen la duración de pared. Se explican TPS y percentiles sin inventar SLA.
+
+El IPC admite `audience: BUSINESS | TECHNICAL` únicamente con `format: HTML`;
+si falta, conserva compatibilidad generando el informe técnico. Main rechaza otras
+audiencias o su combinación con CSV/JSON. Ambos informes utilizan el mismo
+guardado, validación QA, exclusión de diálogos, cancelación y timeout.
+
+**TODO-DATA LOAD-REPORT-ACCEPTANCE:** faltan criterios aprobados de aceptación
+por escenario (objetivos sostenidos, latencia, tolerancia de errores, muestra y
+evidencia financiera requerida). Solo queda bloqueado emitir un veredicto de
+aceptación de negocio; la presentación de hechos y ambos informes están disponibles.
 
 ## Lectura visual del informe HTML
 
@@ -64,6 +97,7 @@ certifica débito, saldo final ni conciliación en Core.
 La prueba E2E de `load-history.spec.ts` genera ejemplos HTML y PNG en `artifacts/`
 (`load-report-completed` y `load-report-uncertain`). Están marcados como datos
 sintéticos y no provienen de operaciones reales ni validan capacidad del host.
+`load-report-business.html/.png` muestra la lectura de negocio independiente.
 
 ## Seguridad y errores
 

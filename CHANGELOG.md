@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-16 — Informes separados de negocio y técnicos
+
+- Añade dos acciones de exportación HTML con archivos independientes y referencia
+  común: negocio presenta alcance, resultados, incertidumbre y próximos pasos;
+  técnico conserva trazabilidad e incorpora metodología y tiempos por etapa.
+- Muestra cobertura de mediciones, sin convertir ausencias en cero ni sumar
+  tiempos concurrentes como si fueran duración de pared.
+- Valida audiencia en Main y mantiene guardado protegido, cancelación y timeout.
+  Registra LOAD-REPORT-ACCEPTANCE para criterios de aceptación aún no aportados.
+
 ## 2026-11-16 — Presentación profesional del informe
 
 - Reorganiza el HTML con cabecera de identidad y trazabilidad, cuatro indicadores
