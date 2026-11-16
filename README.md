@@ -54,7 +54,7 @@ La compilación genera `dist/` para ejecución local; no crea un instalador firm
 | Retiro | Monto personalizado y comprobante local opcional | USD, contrato vigente del ATM; el host determina el resultado |
 | Retiro + reverso | Reverso único después de aprobación completa y espera de 1–30 s | Flujo explícito; no confundir con reverso automático por timeout |
 | Carga y estrés | Saldo y retiro, varios ATM alternados y una tarjeta física | Saldo 1–5 operaciones en curso; retiro secuencial; hasta 5 TPS objetivo |
-| Historial de carga | Corridas paginadas, filtros, detalle y exportación CSV/JSON | Evidencia local QA de corridas cerradas; conserva resultados inciertos |
+| Historial de carga | Corridas paginadas, filtros, detalle y exportación CSV/JSON/HTML | Evidencia local QA de corridas cerradas; informe imprimible y resultados inciertos conservados |
 | Configuraciones de carga y estrés | Crear, editar, cargar y eliminar parámetros; presets de rampa a 3/5 TPS | Hasta 50 configuraciones QA, sin tarjeta/PIN; cargar no inicia la corrida |
 | Perfiles | Entidades, ATM y referencias QA de tarjetas | Los ATM QA/205 heredan la plantilla ATM20521 y su pool compartido |
 | Entidades Coonecta | Clasificación FRONT/BACK/EXTERNA/HÍBRIDA, edición y filtros | [74 entidades del listado](docs/entities/COONECTA_ENTITIES_20261112.md); tres conservan clasificación múltiple pendiente de validación |
@@ -83,8 +83,8 @@ Para carga, abrir **Carga y estrés**, seleccionar ATM, operación, límites y t
 En retiro, indicar el monto **por operación**. La corrida se detiene al primer
 rechazo/error y solicita PIN una vez. Detalles en la [guía de carga](docs/implementation/LOAD_TEST.md).
 
-Para recuperar evidencia: **Ver historial de carga → Ver detalle → Exportar CSV
-o Exportar JSON**. El archivo se guarda mediante el diálogo nativo; ver
+Para recuperar evidencia: **Ver historial de carga → Ver detalle → Exportar CSV /
+Exportar JSON / Exportar HTML**. El archivo se guarda mediante el diálogo nativo; ver
 [formatos y alcance](docs/REPORTING.md).
 
 **Pruebas de estrés** ofrece rampas de 20 segundos hacia 3 o 5 TPS, ajustables en

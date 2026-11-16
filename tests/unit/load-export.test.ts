@@ -87,13 +87,82 @@ describe('evidencia pública de carga', () => {
   it('valida solicitud, fecha y formato sin aceptar rutas ni contenido desde Renderer', () => {
     const runId = historyRun().runId;
     expect(parseLoadExportRequest({ runId, format: 'CSV' })).toEqual({ runId, format: 'CSV' });
+    expect(parseLoadExportRequest({ runId, format: 'HTML' })).toEqual({ runId, format: 'HTML' });
     for (const value of [
       null,
       { runId: '../private', format: 'JSON' },
-      { runId, format: 'HTML' },
+      { runId, format: 'PDF' },
       { runId, format: 'JSON', path: 'private' },
+      { runId, format: 'HTML', contents: '<html>forged</html>' },
     ])
       expect(parseLoadExportRequest(value)).toBeUndefined();
     expect(() => loadRunEvidence(historyRun(), 'not-utc')).toThrow('LOAD_EXPORT_INVALID');
+  });
+  it.each(['CSV', 'JSON', 'HTML'] as const)(
+    '%s excluye mensajes y propiedades privadas de ATM adicionales, operaciones y tiempos',
+    (format) => {
+      const run = historyRun({ message: 'PRIVATE-MESSAGE' });
+      run.draft.additionalAtms = [{ atmId: historyRun().draft.atmId, atmRevision: 2 }];
+      Object.assign(run.draft.additionalAtms[0]!, { secret: 'PRIVATE-ATM' });
+      Object.assign(run.items[0]!, {
+        pin: 'PRIVATE-PIN',
+        timings: { transportMs: 100, secret: 'PRIVATE-TIMING' },
+      });
+      expect(createLoadExport(run, format, now).contents).not.toContain('PRIVATE-');
+    },
+  );
+  it('HTML conserva plan, métricas, montos exactos, correlación y todas las operaciones', () => {
+    const run = historyRun();
+    run.draft = { ...run.draft, operation: 'WITHDRAWAL', amount: '25.50' };
+    run.items.push({ ...run.items[0]!, outcome: 'NOT_APPROVED', responseCode: '05' });
+    const file = createLoadExport(run, 'HTML', now);
+    expect(file.filename).toBe(`carga-${run.runId}.html`);
+    for (const text of [
+      run.runId,
+      run.requestId,
+      run.startedAt,
+      now,
+      'USD 25.50',
+      run.items[0]!.transactionId!,
+      '000123',
+      '123'.padStart(12, '0'),
+      'NOT_APPROVED',
+      '2 operaciones',
+      'no confirma débito ni conciliación',
+    ])
+      expect(file.contents).toContain(text);
+    expect(file.contents).toContain('<dt>TPS observado</dt><dd>2.00</dd>');
+    expect(file.contents).toContain('<dt>p95</dt><dd>100.00</dd>');
+    expect(file.contents).toContain('Content-Security-Policy');
+    expect(file.contents).toContain("default-src 'none'");
+    expect(file.contents).toContain('@media print');
+    expect(file.contents).not.toMatch(/<script|<iframe|<link|<img/i);
+  });
+  it('HTML escapa todo contenido dinámico sin permitir marcado activo', () => {
+    const run = historyRun();
+    run.items[0]!.correlation!.terminalId = `<img src="x" onerror='alert(1)'>&`;
+    const { contents } = createLoadExport(run, 'HTML', now);
+    expect(contents).toContain('&lt;img src=&quot;x&quot; onerror=&#39;alert(1)&#39;&gt;&amp;');
+    expect(contents).not.toContain('<img');
+  });
+  it('HTML distingue ausencia de datos y operaciones vacías de cero y de una respuesta', () => {
+    const run = historyRun({ state: 'INTERRUPTED', finishedAt: null });
+    run.draft.additionalAtms = [{ atmId: historyRun().draft.atmId, atmRevision: 1 }];
+    Object.assign(run.items[0]!, {
+      outcome: 'RESPONSE_TIMEOUT',
+      received: false,
+      responseCode: null,
+      correlation: null,
+    });
+    const { contents } = createLoadExport(run, 'HTML', now);
+    expect(contents).toContain('<dt>p95</dt><dd>Sin dato</dd>');
+    expect(contents).toContain('<dt>Enviadas sin respuesta</dt><dd>1</dd>');
+    expect(contents).toContain('<dt>Respuestas recibidas</dt><dd>0</dd>');
+    expect(contents).toContain('<dt>ATM</dt><dd>Sin dato</dd>');
+    expect(contents).toContain('RESPONSE_TIMEOUT');
+    const empty = createLoadExport(historyRun({ items: [] }), 'HTML', now).contents;
+    expect(empty).toContain('No hay operaciones registradas');
+    expect(empty).toContain('<dt>TPS observado</dt><dd>0.00</dd>');
+    expect(empty).toContain('<dt>Monto por retiro</dt><dd>No aplica</dd>');
   });
 });

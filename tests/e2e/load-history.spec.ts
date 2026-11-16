@@ -224,7 +224,7 @@ test('historial de carga: timeout, recuperación y payload inválido', async () 
   await expect(history.getByRole('alert')).toHaveCount(0);
 });
 
-test('historial de carga: exporta CSV y JSON por Main, permite cancelar y muestra fallos', async () => {
+test('historial de carga: exporta CSV, JSON y HTML por Main, permite cancelar y muestra fallos', async () => {
   test.setTimeout(60000);
   const output = await mkdtemp(join(tmpdir(), 'load-export-e2e-'));
   try {
@@ -243,7 +243,7 @@ test('historial de carga: exporta CSV y JSON por Main, permite cancelar y muestr
       name: 'Detalle de corrida guardada',
       exact: true,
     });
-    for (const format of ['CSV', 'JSON'] as const) {
+    for (const format of ['CSV', 'JSON', 'HTML'] as const) {
       const file = join(output, 'result.' + format.toLowerCase());
       await app!.evaluate(({ dialog }, filePath) => {
         dialog.showSaveDialog = async () => ({ canceled: false, filePath });
@@ -258,10 +258,47 @@ test('historial de carga: exporta CSV y JSON por Main, permite cancelar y muestr
           evidence: 'LOCAL_LOAD_RUN',
           run: { plan: { amount: '25.50' } },
         });
-      else expect(content).toContain(`"${'123'.padStart(12, '0')}"`);
+      else if (format === 'CSV') expect(content).toContain(`"${'123'.padStart(12, '0')}"`);
+      else expect(content).toContain('<!doctype html>');
     }
     await mkdir('artifacts', { recursive: true });
     await history.screenshot({ path: 'artifacts/load-history-export.png' });
+    const reportOpened = app!.waitForEvent('window');
+    await app!.evaluate(
+      async ({ BrowserWindow }, filePath) => {
+        const reportWindow = new BrowserWindow({
+          show: false,
+          width: 1280,
+          height: 1000,
+          webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
+        });
+        await reportWindow.loadFile(filePath);
+      },
+      join(output, 'result.html'),
+    );
+    const report = await reportOpened;
+    const externalRequests: string[] = [];
+    report.on('request', (request) => {
+      if (/^https?:/.test(request.url())) externalRequests.push(request.url());
+    });
+    await report.reload();
+    await expect(report.getByRole('heading', { name: 'Informe de carga y estrés' })).toBeVisible();
+    await expect(report.getByRole('table')).toContainText(run.items[0]!.transactionId!);
+    await expect(report.getByRole('table')).toContainText('000123');
+    await expect(report.locator('body')).toContainText('USD 25.50');
+    expect(await report.locator('script, iframe, img, link, form').count()).toBe(0);
+    await report.screenshot({ path: 'artifacts/load-report-html.png', fullPage: true });
+    await report.setViewportSize({ width: 390, height: 844 });
+    expect(await report.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await report.emulateMedia({ media: 'print' });
+    await report.setViewportSize({ width: 1120, height: 790 });
+    expect(await report.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    expect(externalRequests).toEqual([]);
+    await report.close();
     const existing = await readFile(join(output, 'result.json'), 'utf8');
     await app!.evaluate(({ dialog }) => {
       dialog.showSaveDialog = async () => ({ canceled: true, filePath: '' });

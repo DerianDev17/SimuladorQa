@@ -15,7 +15,7 @@ el estado actual. Alcance implementado en [README](../README.md) y
 - Carga de saldo y retiro, varios ATM alternados con una tarjeta física,
   planificación inmutable, parada, recuperación, métricas y persistencia.
   Saldo admite 1–5 operaciones en curso; retiro conserva ejecución secuencial.
-- Historial de carga paginado con filtros y detalle; exportación CSV/JSON de
+- Historial de carga paginado con filtros y detalle; exportación CSV/JSON/HTML de
   evidencia local sanitizada de corridas cerradas, sin certificación Core (ADR-033).
 - Presets de estrés gradual y configuraciones QA guardadas con revisión y auditoría;
   cargar no inicia una corrida ni conserva tarjeta/PIN (ADR-034).

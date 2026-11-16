@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-16 — Informe HTML de carga
+
+- Añade **Exportar HTML** en el detalle de corridas cerradas: resumen, parámetros,
+  latencias y correlación por operación, con impresión A4 horizontal.
+- Conserva fechas UTC, montos exactos, resultados inciertos y datos ausentes;
+  no certifica capacidad del host ni conciliación Core.
+- Reutiliza la evidencia pública y el guardado atómico con cancelación/timeout.
+  HTML no ejecuta scripts ni carga recursos externos. Los ATM secundarios se
+  proyectan por UUID/revisión explícitos en todos los formatos.
+
 ## 2026-11-12 — Historial QA completo cifrado
 
 - Guarda los campos completos de nuevas solicitudes/respuestas cifrados bajo el

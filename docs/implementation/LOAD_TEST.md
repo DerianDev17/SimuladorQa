@@ -155,7 +155,8 @@ Una página fallida se invalida y permite **Actualizar historial**; los registro
 corruptos no se omiten silenciosamente. La paginación por cursor evita duplicar
 corridas cuando se insertan nuevas; actualizar vuelve a la primera página.
 
-El detalle de una corrida cerrada permite **Exportar CSV** o **Exportar JSON**.
+El detalle de una corrida cerrada permite **Exportar CSV**, **Exportar JSON** o
+**Exportar HTML**. HTML presenta un informe autónomo con formato de impresión.
 Main recupera el registro y genera evidencia sanitizada; el operador elige el
 destino en el diálogo nativo. Cancelar no escribe. Se conserva incertidumbre y no
 se confirma resultado Core. Formatos, límites y errores en [REPORTING](../REPORTING.md).

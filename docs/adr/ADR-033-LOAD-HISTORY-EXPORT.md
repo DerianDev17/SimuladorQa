@@ -38,7 +38,22 @@ El cursor no constituye una instantánea transaccional de todas las páginas:
 una corrida activa puede cambiar de estado y dejar de coincidir con un filtro.
 Un error invalida la página; no se omiten silenciosamente registros corruptos.
 El historial no resuelve resultados financieros inciertos ni confirma Core.
-No incluye comparación, HTML, reversos automáticos ni carga distribuida.
+No incluye comparación, reversos automáticos ni carga distribuida.
+
+## Ampliación 2026-11-16: informe HTML
+
+Al continuar la reportería se incorpora HTML local imprimible sobre la misma
+proyección de evidencia v1, sin dependencias nuevas ni cambios al esquema SQLite.
+El informe presenta configuración, contadores, latencias y correlación completa
+por operación; conserva UTC, incertidumbre y ausencias de datos. Los estilos
+son locales, los valores dinámicos se escapan y CSP bloquea scripts y recursos
+externos. No se abre el archivo automáticamente ni se consulta Mensajes cifrados.
+
+El formato usa el mismo IPC, validación, bloqueo de corridas activas, diálogo,
+cancelación, timeout y guardado atómico. La proyección de ATM secundarios queda
+limitada explícitamente a UUID/revisión en todos los formatos. HTML redondea TPS
+y latencias del resumen a dos decimales para presentación; CSV/JSON mantienen
+los valores originales. No se agrega un veredicto de capacidad o resultado Core.
 
 ## Validación
 

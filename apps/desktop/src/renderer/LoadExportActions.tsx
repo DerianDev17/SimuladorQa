@@ -39,6 +39,9 @@ export function LoadExportActions({ run }: { run: LoadRunSnapshot }) {
         <button disabled={busy || active} onClick={() => void save('JSON')}>
           Exportar JSON
         </button>
+        <button disabled={busy || active} onClick={() => void save('HTML')}>
+          Exportar HTML
+        </button>
       </div>
       {active && (
         <p>La exportación estará disponible al cerrar la corrida. Actualiza el detalle después.</p>

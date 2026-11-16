@@ -163,6 +163,8 @@ Historial y exportación usan los registros locales existentes. Dominio proyecta
 campos permitidos; Main valida consulta/ambiente y coordina los puertos de lectura
 y guardado. Adaptadores gestionan SQLite, diálogo nativo y reemplazo de archivos.
 Renderer no proporciona rutas ni contenidos. Ver [ADR-033](docs/adr/ADR-033-LOAD-HISTORY-EXPORT.md).
+HTML reutiliza la proyección pública CSV/JSON y el mismo guardado; presenta un
+informe estático imprimible, con contenido escapado y sin recursos externos.
 
 La pantalla Transacciones separa `useTransactionPreparation` de las vistas de
 preparación e inspección. `transaction-inspection` proyecta etapas y filtros

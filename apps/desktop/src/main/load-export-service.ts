@@ -29,7 +29,7 @@ export class LoadExportService {
   async export(payload: unknown): Promise<Result<LoadExportStatus>> {
     const request = parseLoadExportRequest(payload);
     if (!request)
-      return failure('VALIDATION_ERROR', 'Selecciona una corrida y formato CSV o JSON.');
+      return failure('VALIDATION_ERROR', 'Selecciona una corrida y formato CSV, JSON o HTML.');
     if (this.busy)
       return failure('IN_USE', 'Ya hay una exportación abierta. Cierra el diálogo anterior.');
     this.busy = true;

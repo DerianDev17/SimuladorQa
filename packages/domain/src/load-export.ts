@@ -3,8 +3,9 @@ import { isRecord } from './index';
 import type { LoadRunSnapshot } from './load-run';
 import { loadRunMetrics } from './load-run';
 import { loadTestAtms } from './load-test';
+import { renderLoadHtml } from './load-export-html';
 
-export type LoadExportFormat = 'CSV' | 'JSON';
+export type LoadExportFormat = 'CSV' | 'JSON' | 'HTML';
 export interface LoadExportRequest {
   runId: string;
   format: LoadExportFormat;
@@ -20,7 +21,7 @@ export function parseLoadExportRequest(value: unknown): LoadExportRequest | unde
     !isRecord(value) ||
     Object.keys(value).length !== 2 ||
     !isUuid(value.runId) ||
-    (value.format !== 'CSV' && value.format !== 'JSON')
+    (value.format !== 'CSV' && value.format !== 'JSON' && value.format !== 'HTML')
   )
     return;
   return { runId: value.runId, format: value.format };
@@ -61,7 +62,7 @@ export function loadRunEvidence(run: LoadRunSnapshot, exportedAt: string) {
         amount: run.draft.operation === 'WITHDRAWAL' ? run.draft.amount : null,
         currency: run.draft.operation === 'WITHDRAWAL' ? 'USD' : null,
         mode: run.draft.mode,
-        atms: loadTestAtms(run.draft),
+        atms: loadTestAtms(run.draft).map(({ atmId, atmRevision }) => ({ atmId, atmRevision })),
         targetTps: run.draft.targetTps,
         concurrency: run.draft.concurrency,
         maxTransactions: run.draft.maxTransactions,
@@ -110,6 +111,12 @@ export function createLoadExport(
   exportedAt: string,
 ): LoadExportDocument {
   const evidence = loadRunEvidence(run, exportedAt);
+  if (format === 'HTML')
+    return {
+      filename: `carga-${run.runId}.html`,
+      format,
+      contents: renderLoadHtml(evidence),
+    };
   const base = {
     schemaVersion: evidence.schemaVersion,
     evidence: evidence.evidence,
