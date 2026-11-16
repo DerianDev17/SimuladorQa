@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-16 — Presentación profesional del informe
+
+- Reorganiza el HTML con cabecera de identidad y trazabilidad, cuatro indicadores
+  principales y contadores secundarios compactos, conservando todas las métricas.
+- Unifica escalas, tipografía y secciones; mejora la tabla con filas alternadas,
+  identificadores monoespaciados y énfasis en envíos sin respuesta.
+- Ajusta el diseño móvil y la impresión con cabecera clara; actualiza las
+  capturas reproducibles de escritorio, móvil e impresión con datos sintéticos.
+
 ## 2026-11-16 — Lectura visual de reportería
 
 - Añade gráficas locales de TPS observado/objetivo y percentiles de latencia,

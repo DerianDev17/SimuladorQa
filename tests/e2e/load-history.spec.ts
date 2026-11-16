@@ -43,7 +43,7 @@ test('informe HTML: ejemplos visuales, barras proporcionales y aviso de incertid
       await reportWindow.loadFile(filePath);
     }, file);
     const report = await opened;
-    const results = report.getByRole('region', { name: 'Resultados de ejecución' });
+    await expect(report.getByRole('region', { name: 'Resultados de ejecución' })).toBeVisible();
     const throughput = report.getByRole('list', { name: 'TPS observado y objetivo' });
     const bars = throughput.locator('.bar-fill');
     const observed = await bars.nth(0).evaluate((element) => element.getBoundingClientRect().width);
@@ -52,19 +52,32 @@ test('informe HTML: ejemplos visuales, barras proporcionales y aviso de incertid
     await expect(report.getByLabel('Envíos sin respuesta', { exact: true })).toHaveCount(
       uncertain ? 1 : 0,
     );
+    await expect(report.getByRole('table').locator('tr.unconfirmed')).toHaveCount(
+      uncertain ? 1 : 0,
+    );
     await expect(report.getByRole('list', { name: 'Percentiles de latencia' })).toContainText(
       uncertain ? '140.00 ms' : '245.00 ms',
     );
-    await results.screenshot({ path: `artifacts/load-report-${name}.png` });
+    await report
+      .locator('.report-overview')
+      .screenshot({ path: `artifacts/load-report-${name}.png` });
     await report.setViewportSize({ width: 390, height: 844 });
     expect(await report.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
+    if (uncertain)
+      await report
+        .locator('.report-overview')
+        .screenshot({ path: 'artifacts/load-report-mobile.png' });
     await report.emulateMedia({ media: 'print' });
     await report.setViewportSize({ width: 1120, height: 790 });
     expect(await report.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
+    if (uncertain)
+      await report
+        .locator('.report-overview')
+        .screenshot({ path: 'artifacts/load-report-print.png' });
     await report.close();
   }
 });

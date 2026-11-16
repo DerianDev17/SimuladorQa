@@ -43,6 +43,13 @@ certifica débito, saldo final ni conciliación en Core.
 
 ## Lectura visual del informe HTML
 
+- Cabecera con identidad de la aplicación, estado registrado, correlación de la
+  corrida y fechas UTC. El resumen prioriza envíos, respuestas, TPS observado y
+  p95; los demás contadores se conservan en una franja secundaria compacta.
+- Secciones numeradas, tipografía monoespaciada para identificadores y filas
+  alternadas en el detalle. Los envíos sin respuesta se destacan también en su
+  fila, manteniendo resultado y correlación originales. La versión de impresión
+  usa cabecera clara para reducir consumo de tinta.
 - Barras de TPS observado frente a objetivo, con origen cero y una escala común
   calculada con el mayor valor; el observado puede superar al objetivo sin recorte.
   En estrés, el objetivo se identifica como pico de rampa, no promedio esperado.
