@@ -55,6 +55,12 @@ limitada explícitamente a UUID/revisión en todos los formatos. HTML redondea T
 y latencias del resumen a dos decimales para presentación; CSV/JSON mantienen
 los valores originales. No se agrega un veredicto de capacidad o resultado Core.
 
+La mejora visual del mismo día incorpora barras estáticas de TPS y percentiles,
+escalas comunes desde cero y un aviso de envíos sin respuesta. El pico de estrés
+se identifica explícitamente. Valores positivos menores a 0,01 se muestran como
+`<0.01`; los datos ausentes siguen siendo «Sin dato». No cambia cálculos, fuentes,
+contratos IPC ni esquema. Ejemplos y pruebas visuales usan solo fixtures sintéticos.
+
 ## Validación
 
 Unitarias: payloads, proyección permitida, fechas, nulos, importes y CSV.

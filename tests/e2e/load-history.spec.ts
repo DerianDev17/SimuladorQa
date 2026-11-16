@@ -1,17 +1,72 @@
 import { _electron as electron, expect, test } from '@playwright/test';
 import type { ElectronApplication } from '@playwright/test';
-import { mkdtemp, readFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, readFile, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { SqliteLoadRunStore } from '../../apps/desktop/src/main/infrastructure/sqlite-load-run-store';
 import { SqliteCatalog } from '../../apps/desktop/src/main/infrastructure/sqlite-catalog';
 import { historyRun } from '../helpers/load-history';
+import { loadReportExample } from '../helpers/load-report-examples';
+import { createLoadExport } from '../../packages/domain/src/load-export';
 import { removeTestDirectory } from '../helpers/temporary-directory';
 
 let directory: string;
 let app: ElectronApplication | undefined;
 test.beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'load-history-e2e-'));
+});
+
+test('informe HTML: ejemplos visuales, barras proporcionales y aviso de incertidumbre', async () => {
+  await launch();
+  await mkdir('artifacts', { recursive: true });
+  for (const uncertain of [false, true]) {
+    const run = loadReportExample(uncertain);
+    const name = uncertain ? 'uncertain' : 'completed';
+    const file = resolve(`artifacts/load-report-${name}.html`);
+    const exported = createLoadExport(run, 'HTML', '2026-11-16T15:00:00.000Z');
+    // Label preview files explicitly; the application export remains unmodified.
+    await writeFile(
+      file,
+      exported.contents.replace(
+        '<h2 id="results">',
+        '<p class="eyebrow">EJEMPLO · DATOS SINTÉTICOS</p><h2 id="results">',
+      ),
+    );
+    const opened = app!.waitForEvent('window');
+    await app!.evaluate(async ({ BrowserWindow }, filePath) => {
+      const reportWindow = new BrowserWindow({
+        show: false,
+        width: 1280,
+        height: 1100,
+        webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
+      });
+      await reportWindow.loadFile(filePath);
+    }, file);
+    const report = await opened;
+    const results = report.getByRole('region', { name: 'Resultados de ejecución' });
+    const throughput = report.getByRole('list', { name: 'TPS observado y objetivo' });
+    const bars = throughput.locator('.bar-fill');
+    const observed = await bars.nth(0).evaluate((element) => element.getBoundingClientRect().width);
+    const target = await bars.nth(1).evaluate((element) => element.getBoundingClientRect().width);
+    expect(observed / target).toBeCloseTo(uncertain ? 0.08 : 2 / 3, 2);
+    await expect(report.getByLabel('Envíos sin respuesta', { exact: true })).toHaveCount(
+      uncertain ? 1 : 0,
+    );
+    await expect(report.getByRole('list', { name: 'Percentiles de latencia' })).toContainText(
+      uncertain ? '140.00 ms' : '245.00 ms',
+    );
+    await results.screenshot({ path: `artifacts/load-report-${name}.png` });
+    await report.setViewportSize({ width: 390, height: 844 });
+    expect(await report.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await report.emulateMedia({ media: 'print' });
+    await report.setViewportSize({ width: 1120, height: 790 });
+    expect(await report.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await report.close();
+  }
 });
 test.afterEach(async () => {
   await app?.close();

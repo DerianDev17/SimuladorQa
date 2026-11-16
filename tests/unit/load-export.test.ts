@@ -160,9 +160,30 @@ describe('evidencia pública de carga', () => {
     expect(contents).toContain('<dt>Respuestas recibidas</dt><dd>0</dd>');
     expect(contents).toContain('<dt>ATM</dt><dd>Sin dato</dd>');
     expect(contents).toContain('RESPONSE_TIMEOUT');
+    expect(contents).toContain('1 envío sin respuesta registrada');
+    expect(contents).toContain('Sin respuestas recibidas: no hay muestras de latencia.');
     const empty = createLoadExport(historyRun({ items: [] }), 'HTML', now).contents;
     expect(empty).toContain('No hay operaciones registradas');
     expect(empty).toContain('<dt>TPS observado</dt><dd>0.00</dd>');
     expect(empty).toContain('<dt>Monto por retiro</dt><dd>No aplica</dd>');
+    expect(empty).not.toContain('aria-label="Envíos sin respuesta"');
+    expect(empty).not.toMatch(/width:(NaN|Infinity)/);
+  });
+  it('HTML muestra TPS por encima del objetivo sin recortarlos y distingue el pico de estrés', () => {
+    const run = historyRun({ elapsedMs: 500 });
+    run.draft = { ...run.draft, mode: 'STRESS', rampUpSeconds: 10 };
+    const { contents } = createLoadExport(run, 'HTML', now);
+    expect(contents).toContain('Objetivo · pico de rampa');
+    expect(contents).toContain('bar-0" style="width:100.0000%"');
+    expect(contents).toContain('bar-1" style="width:50.0000%"');
+    expect(contents).toContain('2.00 TPS');
+    expect(contents).toContain('1.00 TPS');
+    expect(contents).not.toContain('aria-label="Envíos sin respuesta"');
+  });
+  it('HTML no redondea un TPS positivo muy bajo como si no hubiera envíos', () => {
+    const { contents } = createLoadExport(historyRun({ elapsedMs: 300_000 }), 'HTML', now);
+    expect(contents).toContain('<dt>TPS observado</dt><dd>&lt;0.01</dd>');
+    expect(contents).toContain('&lt;0.01 TPS');
+    expect(contents).not.toContain('<dt>TPS observado</dt><dd>0.00</dd>');
   });
 });

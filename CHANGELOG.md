@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-16 — Lectura visual de reportería
+
+- Añade gráficas locales de TPS observado/objetivo y percentiles de latencia,
+  con escalas desde cero, valores explícitos y diseño adaptable e imprimible.
+- Destaca envíos sin respuesta y evita mostrar TPS positivos muy bajos como cero.
+- Genera ejemplos reproducibles HTML/PNG con datos sintéticos, con cobertura de
+  proporciones de barras, incertidumbre y diseños estrecho/de impresión.
+
 ## 2026-11-16 — Informe HTML de carga
 
 - Añade **Exportar HTML** en el detalle de corridas cerradas: resumen, parámetros,

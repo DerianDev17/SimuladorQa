@@ -24,7 +24,8 @@ rutas, contenidos ni datos transaccionales para la exportación.
   externos. Abrir el archivo en un navegador y usar **Imprimir** para papel o PDF.
   Los estilos de impresión usan A4 horizontal y repiten la cabecera de la tabla.
   TPS y latencias del resumen se presentan con dos decimales; CSV/JSON conservan
-  los valores sin ese redondeo. Los montos conservan su texto decimal exacto.
+  los valores sin ese redondeo. Un valor positivo menor que 0,01 se muestra como
+  **<0.01**, para no confundirse con cero. Los montos conservan su texto decimal exacto.
   Los datos ausentes se muestran como **Sin dato**, sin convertirlos en cero.
 - El plan conserva operación, monto por retiro como texto decimal, moneda USD
   cuando aplica, ATM/revisión (JSON/HTML), límites, rampa y concurrencia.
@@ -39,6 +40,23 @@ TPS usa envíos sobre tiempo total. Percentiles usan respuestas recibidas; sin
 respuestas permanecen nulos/vacíos. Errores incluye timeouts, y los contadores no
 son categorías excluyentes. Se preservan resultados inciertos: el archivo no
 certifica débito, saldo final ni conciliación en Core.
+
+## Lectura visual del informe HTML
+
+- Barras de TPS observado frente a objetivo, con origen cero y una escala común
+  calculada con el mayor valor; el observado puede superar al objetivo sin recorte.
+  En estrés, el objetivo se identifica como pico de rampa, no promedio esperado.
+- Barras de p50/p90/p95/p99 con origen cero y escala común en milisegundos.
+  Se calculan solo con respuestas recibidas; no hay barras de latencia cuando
+  faltan muestras. El texto conserva los valores y el número de muestras.
+- Un aviso visible destaca la cantidad de envíos sin respuesta registrada y
+  mantiene su incertidumbre financiera. No equipara timeout con ausencia de débito.
+- Las gráficas funcionan sin JavaScript, tienen etiquetas de texto y se adaptan
+  a pantalla estrecha e impresión. El color no es la única forma de leerlas.
+
+La prueba E2E de `load-history.spec.ts` genera ejemplos HTML y PNG en `artifacts/`
+(`load-report-completed` y `load-report-uncertain`). Están marcados como datos
+sintéticos y no provienen de operaciones reales ni validan capacidad del host.
 
 ## Seguridad y errores
 

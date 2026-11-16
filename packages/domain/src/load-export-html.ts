@@ -18,7 +18,51 @@ function fields(entries: [string, string | number | null | undefined][]): string
     .join('');
 }
 function decimal(value: number | null): string | null {
-  return value === null ? null : value.toFixed(2);
+  return value === null ? null : value > 0 && value < 0.01 ? '<0.01' : value.toFixed(2);
+}
+function barChart(
+  title: string,
+  unit: string,
+  values: readonly [string, number | null][],
+  note: string,
+): string {
+  const maximum = Math.max(0, ...values.map(([, value]) => value ?? 0));
+  const rows = values.map(([label, value], index) => {
+    const width = value === null || maximum === 0 ? 0 : (value / maximum) * 100;
+    return `<li><div class="bar-label"><span>${escapeHtml(label)}</span><strong>${escapeHtml(decimal(value))}${value === null ? '' : ` ${escapeHtml(unit)}`}</strong></div>
+<div class="bar-track" aria-hidden="true"><span class="bar-fill bar-${index % 2}" style="width:${width.toFixed(4)}%"></span></div></li>`;
+  });
+  return `<figure class="chart"><figcaption>${escapeHtml(title)}</figcaption>
+<ul aria-label="${escapeHtml(title)}">${rows.join('')}</ul>
+<p class="chart-note">${escapeHtml(note)}</p></figure>`;
+}
+
+function visualSummary(evidence: Evidence): string {
+  const { metrics, plan } = evidence.run;
+  return `<div class="charts">${barChart(
+    'TPS observado y objetivo',
+    'TPS',
+    [
+      ['Observado · promedio total', metrics.tps],
+      [
+        plan.mode === 'STRESS' ? 'Objetivo · pico de rampa' : 'Objetivo configurado',
+        plan.targetTps,
+      ],
+    ],
+    'Escala común desde cero. La comparación no certifica capacidad ni cumplimiento sostenido.',
+  )}${barChart(
+    'Percentiles de latencia',
+    'ms',
+    [
+      ['p50', metrics.p50],
+      ['p90', metrics.p90],
+      ['p95', metrics.p95],
+      ['p99', metrics.p99],
+    ],
+    metrics.received === 0
+      ? 'Sin respuestas recibidas: no hay muestras de latencia.'
+      : `${metrics.received} ${metrics.received === 1 ? 'respuesta recibida' : 'respuestas recibidas'}. Escala común desde cero; no incluye timeouts sin respuesta.`,
+  )}</div>`;
 }
 const styles = `
 :root { color-scheme: light; font-family: system-ui, sans-serif; color: #172b42; background: #eef2f6; }
@@ -32,6 +76,20 @@ h2 { margin: 0 0 16px; font-size: 20px; }
 p { line-height: 1.6; }
 .eyebrow { color: #126c67; font-weight: 700; letter-spacing: .08em; }
 .notice { background: #fff4d9; border-left: 4px solid #956300; padding: 12px 16px; }
+.uncertainty { border: 1px solid #a56415; border-left: 5px solid #a56415; background: #fff8eb; border-radius: 6px; padding: 12px 16px; margin: 0 0 22px; }
+.uncertainty strong { display: block; color: #70420a; }
+.uncertainty p { margin: 6px 0 0; }
+.charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-top: 24px; }
+.chart { margin: 0; padding: 20px; background: #f7fafb; border: 1px solid #dce5ec; border-radius: 8px; break-inside: avoid; }
+.chart figcaption { font-weight: 700; margin-bottom: 20px; }
+.chart ul { margin: 0; padding: 0; list-style: none; }
+.chart li { margin-bottom: 16px; }
+.bar-label { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; margin-bottom: 8px; }
+.bar-label strong { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bar-track { height: 12px; background: #e1e9ef; border-radius: 3px; overflow: hidden; }
+.bar-fill { display: block; height: 100%; background: #126c67; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+.bar-1 { background: #4067a4; }
+.chart-note { font-size: 12px; color: #495d73; margin: 16px 0 0; }
 dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; margin: 0; }
 dt { font-size: 13px; color: #495d73; margin-bottom: 6px; }
 dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
@@ -45,7 +103,7 @@ td dl { display: block; }
 td dl div { margin-bottom: 8px; }
 td dt { font-size: 11px; }
 footer { color: #495d73; font-size: 12px; padding: 0 8px; }
-@media (max-width: 600px) { body { padding: 12px; } header, section { padding: 16px; } }
+@media (max-width: 600px) { body { padding: 12px; } header, section { padding: 16px; } .charts { grid-template-columns: 1fr; } }
 @media print {
   @page { size: A4 landscape; margin: 12mm; }
   :root { background: white; }
@@ -113,6 +171,11 @@ export function renderLoadHtml(evidence: Evidence): string {
     ['Exportado (UTC)', evidence.exportedAt],
   ])}</dl></header>
 <section aria-labelledby="results"><h2 id="results">Resultados de ejecución</h2>
+${
+  metrics.unconfirmed > 0
+    ? `<aside class="uncertainty" aria-label="Envíos sin respuesta"><strong>${metrics.unconfirmed} ${metrics.unconfirmed === 1 ? 'envío sin respuesta registrada' : 'envíos sin respuesta registrada'}</strong><p>Resultado financiero incierto. Revisa la correlación de estas operaciones; el informe no determina si hubo débito ni confirma conciliación en Core.</p></aside>`
+    : ''
+}
 <dl class="metrics">${fields([
     ['Operaciones registradas', run.operations.length],
     ['Enviadas', metrics.sent],
@@ -128,7 +191,8 @@ export function renderLoadHtml(evidence: Evidence): string {
   ])}</dl>
 <p>Los contadores no son categorías excluyentes. TPS observado = envíos / tiempo total,
 incluida preparación y cierre. El objetivo y la finalización no acreditan capacidad del host;
-en estrés el objetivo corresponde al pico de la rampa.</p></section>
+en estrés el objetivo corresponde al pico de la rampa.</p>
+${visualSummary(evidence)}</section>
 <section aria-labelledby="latency"><h2 id="latency">Latencia de respuestas (ms)</h2>
 <dl>${fields([
     ['Mínima', decimal(metrics.min)],
