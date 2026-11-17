@@ -29,55 +29,109 @@ export function LoadHistoryDetail({ run }: { run: LoadRunSnapshot }) {
   const metrics = loadRunMetrics(run);
   return (
     <section className="load-history-detail" aria-label="Detalle de corrida guardada">
-      <LoadExportActions key={run.runId} run={run} />
-      <h3>
-        {loadStateLabels[run.state]} · {run.draft.operation === 'WITHDRAWAL' ? 'Retiro' : 'Saldo'}
-      </h3>
-      <p>Run ID: {run.runId}</p>
-      <p>
-        Inicio: {localDate(run.startedAt)} · Fin: {localDate(run.finishedAt)}
+      <div className="load-detail-header">
+        <div>
+          <span className="load-report-eyebrow">EVIDENCIA DE EJECUCIÓN · QA</span>
+          <h3>
+            {run.draft.operation === 'WITHDRAWAL' ? 'Retiro' : 'Consulta de saldo'}
+            <span> / {run.draft.mode === 'STRESS' ? 'Estrés' : 'Carga'}</span>
+          </h3>
+        </div>
+        <span className="load-history-state" data-state={run.state}>
+          {loadStateLabels[run.state]}
+        </span>
+      </div>
+      <p className="load-detail-reference">
+        Referencia de corrida <code>{run.runId}</code>
       </p>
-      <p>
-        QA · {run.draft.mode} · {run.draft.maxTransactions} operaciones como máximo ·{' '}
-        {run.draft.durationSeconds} s · {run.draft.concurrency} en curso · Rampa:{' '}
-        {run.draft.rampUpSeconds} s
-      </p>
+      <dl className="load-detail-metadata">
+        <div>
+          <dt>Inicio · hora local</dt>
+          <dd>{localDate(run.startedAt)}</dd>
+        </div>
+        <div>
+          <dt>Fin · hora local</dt>
+          <dd>{localDate(run.finishedAt)}</dd>
+        </div>
+        <div>
+          <dt>Límite de operaciones</dt>
+          <dd>{run.draft.maxTransactions}</dd>
+        </div>
+        <div>
+          <dt>Duración máxima</dt>
+          <dd>{run.draft.durationSeconds} s</dd>
+        </div>
+        <div>
+          <dt>Concurrencia máxima</dt>
+          <dd>{run.draft.concurrency}</dd>
+        </div>
+        <div>
+          <dt>Rampa</dt>
+          <dd>{run.draft.rampUpSeconds} s</dd>
+        </div>
+      </dl>
       {run.draft.operation === 'WITHDRAWAL' && <p>Monto por retiro: USD {run.draft.amount}</p>}
-      <p>
-        ATM (UUID):{' '}
-        {loadTestAtms(run.draft)
-          .map((atm) => atm.atmId)
-          .join(', ')}
-      </p>
-      <div className="load-metrics">
+      <details className="load-detail-atms">
+        <summary>Perfiles ATM · {loadTestAtms(run.draft).length}</summary>
+        <p>
+          ATM (UUID):{' '}
+          {loadTestAtms(run.draft)
+            .map((atm) => atm.atmId)
+            .join(', ')}
+        </p>
+      </details>
+      <LoadExportActions key={run.runId} run={run} />
+      <div className="load-detail-section-heading">
+        <h4>Resultados de la corrida</h4>
+        <span>Operaciones registradas: {run.items.length}</span>
+      </div>
+      <dl className="load-history-metrics">
         {Object.entries({
           'TPS objetivo': run.draft.targetTps.toFixed(2),
-          'TPS real': metrics.tps.toFixed(2),
+          'TPS observado': metrics.tps > 0 && metrics.tps < 0.01 ? '<0.01' : metrics.tps.toFixed(2),
           Enviadas: metrics.sent,
           Respuestas: metrics.received,
           Aprobadas: metrics.approved,
-          Rechazadas: metrics.declined,
+          'No aprobadas': metrics.declined,
           Timeouts: metrics.timeouts,
           Errores: metrics.errors,
           Canceladas: metrics.cancelled,
           'Enviadas sin respuesta': metrics.unconfirmed,
         }).map(([label, value]) => (
           <div key={label}>
-            <span>{label}</span>
-            <strong>{value}</strong>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
           </div>
         ))}
+      </dl>
+      <div className="load-detail-section-heading">
+        <h4>Latencia de respuestas</h4>
+        <span>Solo respuestas registradas</span>
       </div>
-      <p>
-        Latencias: mín. {milliseconds(metrics.min)} · promedio {milliseconds(metrics.avg)} · p50{' '}
-        {milliseconds(metrics.p50)} · p90 {milliseconds(metrics.p90)} · p95{' '}
-        {milliseconds(metrics.p95)} · p99 {milliseconds(metrics.p99)} · máx.{' '}
-        {milliseconds(metrics.max)}
+      <dl className="load-history-latencies">
+        {Object.entries({
+          Mínima: metrics.min,
+          Promedio: metrics.avg,
+          p50: metrics.p50,
+          p90: metrics.p90,
+          p95: metrics.p95,
+          p99: metrics.p99,
+          Máxima: metrics.max,
+        }).map(([label, value]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{milliseconds(value)}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="load-detail-footnote">
+        TPS observado incluye preparación y cierre. Los errores incluyen timeouts; los contadores no
+        son categorías excluyentes. Este registro no confirma débitos ni conciliación en Core.
       </p>
-      <p>
-        TPS real incluye preparación y cierre. Los errores incluyen timeouts; los contadores no son
-        categorías excluyentes. Este registro no confirma débitos ni conciliación en Core.
-      </p>
+      <div className="load-detail-section-heading">
+        <h4>Detalle de operaciones</h4>
+        <span>Resultados y correlación originales</span>
+      </div>
       <div
         className="table-wrap"
         tabIndex={0}
@@ -195,7 +249,13 @@ export function LoadHistoryView({ atms }: { atms: readonly AtmProfile[] }) {
   }
   return (
     <section className="panel load-history" aria-label="Historial de carga">
-      <h2>Historial de carga</h2>
+      <div className="load-history-heading">
+        <div>
+          <span className="load-report-eyebrow">CARGA Y ESTRÉS</span>
+          <h2>Historial de carga</h2>
+        </div>
+        <span className="load-report-badge">Evidencia local · QA</span>
+      </div>
       <p>
         Corridas guardadas en QA, de la más reciente a la más antigua. Fechas en hora local; hasta
         20 corridas por página.
@@ -290,14 +350,23 @@ export function LoadHistoryView({ atms }: { atms: readonly AtmProfile[] }) {
                 </thead>
                 <tbody>
                   {page.entries.map((entry) => (
-                    <tr key={entry.runId}>
+                    <tr
+                      key={entry.runId}
+                      className={
+                        detail?.runId === entry.runId ? 'load-history-selected' : undefined
+                      }
+                    >
                       <td>{localDate(entry.startedAt)}</td>
                       <td>
                         {entry.draft.operation === 'WITHDRAWAL'
                           ? `Retiro · USD ${entry.draft.amount}`
                           : 'Saldo'}
                       </td>
-                      <td>{loadStateLabels[entry.state]}</td>
+                      <td>
+                        <span className="load-history-state" data-state={entry.state}>
+                          {loadStateLabels[entry.state]}
+                        </span>
+                      </td>
                       <td>
                         {entry.draft.targetTps.toFixed(2)} / {entry.metrics.tps.toFixed(2)}
                       </td>
@@ -307,6 +376,7 @@ export function LoadHistoryView({ atms }: { atms: readonly AtmProfile[] }) {
                           disabled={busy}
                           onClick={() => void show(entry.runId)}
                           aria-label={`Ver corrida ${entry.runId}`}
+                          aria-pressed={detail?.runId === entry.runId}
                         >
                           Ver detalle
                         </button>

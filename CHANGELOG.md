@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-16 — Interfaz de reportería y evidencia
+
+- Presenta negocio y técnico en tarjetas con propósito, contenido y acción propia;
+  separa CSV/JSON como datos para análisis y destaca los estados de exportación.
+- Ordena el detalle con cabecera, referencia, configuración, indicadores y latencias;
+  incorpora etiquetas de estado y selección visible en el historial.
+- Adapta tarjetas a ventanas estrechas y conserva foco de teclado, mensajes accesibles,
+  guardado nativo y protección de corridas activas.
+
 ## 2026-11-16 — Interpretación de negocio por servicio
 
 - Distingue respuesta y exactitud en consulta de saldo; autorización, efectivo y

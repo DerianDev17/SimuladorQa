@@ -384,6 +384,15 @@ test('historial de carga: exporta CSV, JSON y HTML por Main, permite cancelar y 
       name: 'Detalle de corrida guardada',
       exact: true,
     });
+    const exports = detail.getByRole('region', { name: 'Exportar evidencia de carga' });
+    await expect(
+      exports.getByRole('heading', { name: 'Elige el informe para tu audiencia' }),
+    ).toBeVisible();
+    await expect(exports.locator('.load-report-option')).toHaveCount(2);
+    await exports.getByRole('button', { name: 'Informe de negocio', exact: true }).focus();
+    await expect(
+      exports.getByRole('button', { name: 'Informe de negocio', exact: true }),
+    ).toBeFocused();
     for (const option of [
       { format: 'CSV', button: 'Exportar CSV', file: 'result.csv' },
       { format: 'JSON', button: 'Exportar JSON', file: 'result.json' },
@@ -412,6 +421,19 @@ test('historial de carga: exporta CSV, JSON y HTML por Main, permite cancelar y 
       else expect(content).toContain('<!doctype html>');
     }
     await mkdir('artifacts', { recursive: true });
+    await exports.screenshot({ path: 'artifacts/load-reporting-ui.png' });
+    await window.setViewportSize({ width: 1280, height: 2200 });
+    await detail.evaluate((element) => element.scrollIntoView({ block: 'start' }));
+    await detail.screenshot({ path: 'artifacts/load-history-detail-ui.png' });
+    await window.setViewportSize({ width: 900, height: 900 });
+    expect(await window.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    const cards = exports.locator('.load-report-option');
+    const firstCard = await cards.nth(0).boundingBox();
+    const secondCard = await cards.nth(1).boundingBox();
+    expect(secondCard!.y).toBeGreaterThan(firstCard!.y + firstCard!.height);
+    await exports.screenshot({ path: 'artifacts/load-reporting-ui-narrow.png' });
     await history.screenshot({ path: 'artifacts/load-history-export.png' });
     const reportOpened = app!.waitForEvent('window');
     await app!.evaluate(

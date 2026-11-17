@@ -7,6 +7,15 @@ En QA, abrir **Carga y estrés → Ver historial de carga → Ver detalle** y el
 Los informes son archivos HTML independientes. El diálogo nativo permite elegir el destino
 y confirmar la sustitución de un archivo. Cancelar no escribe nada.
 
+El detalle muestra primero la identidad y configuración de la corrida. La sección
+**Reportería** presenta dos tarjetas por audiencia, con su alcance y acción de
+guardado; CSV/JSON quedan en **Datos para análisis**. Los estados de guardado,
+cancelación, error y corrida activa aparecen dentro de esa sección. Las tarjetas
+se apilan en ventanas estrechas y sus acciones mantienen navegación por teclado.
+El resultado se organiza en indicadores, latencias y tabla de operaciones; los
+UUID de perfiles ATM se consultan en un bloque desplegable. El estado visual de
+la corrida no representa aprobación financiera ni aceptación de negocio.
+
 Solo se exportan corridas cerradas: completadas, detenidas, fallidas o interrumpidas.
 Una corrida activa requiere terminar y actualizar el detalle. Main vuelve a leer
 el registro guardado, valida UUID/formato y genera el archivo; Renderer no aporta
