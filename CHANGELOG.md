@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-11-16 — Interpretación de negocio por servicio
+
+- Distingue respuesta y exactitud en consulta de saldo; autorización, efectivo y
+  efecto contable en retiro. Una no aprobación no se interpreta como defecto sin
+  contrastarla con el escenario esperado.
+- Separa operaciones sin envío, aprobadas, no aprobadas y por revisar; incluye
+  respuestas no concluyentes en la conclusión de negocio y el detalle técnico.
+- Añade importes solicitados de retiro por grupo, calculados en centavos exactos,
+  y acciones con área sugerida y evidencia necesaria. Conserva CSV/JSON y códigos
+  históricos; no infiere débitos, reversos, pérdidas ni aceptación de negocio.
+
 ## 2026-11-16 — Acabado de presentación por audiencia
 
 - Ordena el informe de negocio en cuatro secciones con conclusión destacada,

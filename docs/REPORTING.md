@@ -74,6 +74,67 @@ por escenario (objetivos sostenidos, latencia, tolerancia de errores, muestra y
 evidencia financiera requerida). Solo queda bloqueado emitir un veredicto de
 aceptación de negocio; la presentación de hechos y ambos informes están disponibles.
 
+## Interpretación por servicio y revisión operativa
+
+El propósito del simulador es producir evidencia de pruebas ATM controladas en
+QA. Una ejecución local completada no equivale a aprobar un servicio de negocio.
+Los informes distinguen las siguientes comprobaciones:
+
+| Servicio | Qué permite observar la corrida | Qué requiere evidencia adicional |
+| --- | --- | --- |
+| Consulta de saldo | Solicitudes y respuestas registradas; resultados locales y tiempos | Exactitud del saldo frente a una fuente esperada aprobada. La proyección de carga no incluye valores de saldo ni un oráculo de comparación; contrastar con el diario financiero y la entidad |
+| Retiro | Solicitudes de autorización, monto del plan y resultados locales | Entrega de efectivo, débito, comisiones y saldo posterior. El simulador de carga no opera un dispensador ni ejecuta reversos automáticos |
+
+Estas distinciones siguen [Retiro](transactions/WITHDRAWAL.md),
+[ADR-031](adr/ADR-031-WITHDRAWAL-LOAD.md),
+[ejecución de saldo](implementation/BALANCE_EXECUTION.md) y la proyección pública
+de `loadRunEvidence`. No agregan interpretaciones de códigos ISO ni reglas de Core.
+Sigue pendiente TODO-DATA WITHDRAWAL-DEBIT-AND-REMAINING para confirmar efectos
+contables; los montos solicitados descritos abajo no resuelven ese pendiente.
+
+`LoadRunService` registra `sent` cuando el transporte reporta bytes encolados;
+esto no demuestra recepción por el host. Registra `received` cuando hay código
+de respuesta; esto no equivale a respuesta funcional válida. Pueden haber llegado
+bytes y conservarse `received=false` por un error de interpretación.
+
+La separación operativa nueva usa **cuatro grupos excluyentes y exhaustivos**:
+
+| Grupo | Condición del registro |
+| --- | --- |
+| Sin envío registrado | `sent=false`, cualquiera que sea el resultado |
+| Enviadas y aprobadas | `sent=true`, `received=true`, `outcome=APPROVED` |
+| Enviadas y no aprobadas | `sent=true`, `received=true`, `outcome=NOT_APPROVED` |
+| Enviadas por revisar | Cualquier otro registro con `sent=true` |
+
+La suma de los últimos tres grupos coincide con los envíos. «Por revisar con
+respuesta» es un subconjunto del cuarto, no un quinto grupo que deba sumarse.
+Incluye, por ejemplo, REQUIRES_REVIEW, INVALID_RESPONSE y STORAGE_ERROR con código
+registrado. Se preservan resultado y código originales, también en registros
+históricos: el reporte no remapea RC 91 ni deduce causas desde códigos aislados.
+Una no aprobación debe contrastarse con el resultado esperado del caso; puede ser
+una negativa prevista y no implica por sí sola un defecto.
+
+Los contadores históricos de errores, timeouts, cancelaciones y aprobaciones de
+CSV/JSON y del resumen técnico **siguen sin cambiar** y pueden solaparse. No deben
+sumarse ni confundirse con la separación operativa. El detalle técnico destaca
+todos los envíos por revisar, incluidos los que tienen respuesta registrada.
+
+Solo en retiro, negocio presenta importes **solicitados**: monto del plan por el
+número de envíos, aprobaciones, no aprobaciones y envíos por revisar. Se usa el
+validador de monto existente y aritmética entera en centavos, sin coma flotante.
+Los tres subtotales forman el total enviado; el total no se suma a los subtotales.
+Se excluyen operaciones sin envío. No representan efectivo entregado, débito,
+comisiones, pérdida ni devolución. Ejemplo sintético: 6 envíos de USD 25.50,
+5 aprobados y 1 por revisar producen USD 153.00 solicitados, distribuidos en
+USD 127.50, USD 0.00 y USD 25.50 respectivamente.
+
+Los próximos pasos identifican un **área sugerida**, una acción y la evidencia
+necesaria: preparación local si no hubo envío, QA funcional para resultados no
+concluyentes o no aprobaciones, conciliación para retiros por revisar y rendimiento
+para diferencias con el objetivo de carga. No asignan responsables reales ni
+autorizan retransmisiones. La aceptación por servicio sigue bloqueada solo por
+TODO-DATA LOAD-REPORT-ACCEPTANCE; no se inventan SLA ni criterios financieros.
+
 ## Lectura visual del informe HTML
 
 - Negocio se organiza en cuatro secciones numeradas: resumen para decisión,
@@ -86,7 +147,7 @@ aceptación de negocio; la presentación de hechos y ambos informes están dispo
   corrida y fechas UTC. El resumen prioriza envíos, respuestas, TPS observado y
   p95; los demás contadores se conservan en una franja secundaria compacta.
 - Secciones numeradas, tipografía monoespaciada para identificadores y filas
-  alternadas en el detalle. Los envíos sin respuesta se destacan también en su
+  alternadas en el detalle. Los envíos por revisar se destacan también en su
   fila, manteniendo resultado y correlación originales. La versión de impresión
   usa cabecera clara para reducir consumo de tinta.
 - Barras de TPS observado frente a objetivo, con origen cero y una escala común
@@ -103,7 +164,8 @@ aceptación de negocio; la presentación de hechos y ambos informes están dispo
 La prueba E2E de `load-history.spec.ts` genera ejemplos HTML y PNG en `artifacts/`
 (`load-report-completed` y `load-report-uncertain`). Están marcados como datos
 sintéticos y no provienen de operaciones reales ni validan capacidad del host.
-`load-report-business.html/.png` muestra la lectura de negocio independiente.
+`load-report-business.html/.png` muestra un retiro sintético con importes solicitados
+y lectura de negocio independiente.
 
 ## Seguridad y errores
 

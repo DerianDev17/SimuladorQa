@@ -1,5 +1,6 @@
 import type { loadRunEvidence } from './load-export';
 import { loadBusinessSummary } from './load-report-summary';
+import { loadBusinessContext } from './load-report-business-context';
 import { decimal, escapeHtml, fields } from './load-export-html-format';
 
 export function renderLoadBusinessHtml(
@@ -9,6 +10,7 @@ export function renderLoadBusinessHtml(
   const { run } = evidence;
   const { plan, metrics: m } = run;
   const summary = loadBusinessSummary(evidence);
+  const context = loadBusinessContext(evidence);
   const list = (items: string[]) => items.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
   return `<!doctype html>
 <html lang="es"><head><meta charset="utf-8">
@@ -26,14 +28,15 @@ export function renderLoadBusinessHtml(
   ])}</dl></header>
 <nav class="report-nav" aria-label="Contenido del informe de negocio"><a href="#business-results">01 Resumen ejecutivo</a><a href="#business-context">02 Alcance y hallazgos</a><a href="#business-performance">03 Rendimiento y pendientes</a><a href="#business-actions">04 Próximos pasos</a></nav>
 <section aria-labelledby="business-results"><h2 id="business-results"><span class="section-number" aria-hidden="true">01</span>Resumen para decisión</h2>
-<div class="business-conclusion${m.unconfirmed > 0 ? ' needs-review' : ''}"><p class="conclusion-label">Lectura de la evidencia</p><p>${escapeHtml(summary.conclusion)}</p></div>
+<div class="business-conclusion${context.counts.review > 0 ? ' needs-review' : ''}"><p class="conclusion-label">Lectura de la evidencia</p><p>${escapeHtml(summary.conclusion)}</p></div>
 <dl class="metrics">${fields([
     ['Operaciones enviadas', m.sent],
-    ['Respuestas recibidas', m.received],
-    ['Aprobaciones registradas', m.approved],
-    ['Enviadas sin respuesta', m.unconfirmed],
+    [context.approvalLabel, context.counts.approved],
+    ['No aprobadas por el host', context.counts.notApproved],
+    ['Enviadas por revisar', context.counts.review],
   ])}</dl>
-<p class="method-note">Aprobación registrada describe la respuesta local. No acredita débito, saldo final ni conciliación en el sistema contable.</p>
+<p class="method-note">Operaciones sin envío registrado: ${context.counts.notSent}. Quedan fuera del total enviado. Las enviadas se separan en aprobadas, no aprobadas y por revisar, sin duplicarlas. «Por revisar» incluye resultados no concluyentes aunque tengan respuesta. El registro de envío no asegura recepción por el host.</p>
+<p class="method-note">${escapeHtml(context.purpose)}</p>
 </section>
 <section aria-labelledby="business-context"><h2 id="business-context"><span class="section-number" aria-hidden="true">02</span>Alcance y hallazgos</h2>
 <div class="business-grid"><article><h3>Qué se probó</h3>
@@ -57,14 +60,23 @@ export function renderLoadBusinessHtml(
     ['Tiempo medio de respuesta (segundos)', m.avg === null ? null : decimal(m.avg / 1000)],
     ['Respuestas usadas para medir el tiempo', m.received],
   ])}</dl><p class="method-note">El promedio de envíos incluye preparación y cierre. El tiempo de respuesta solo usa respuestas recibidas; los envíos sin respuesta quedan fuera de ese promedio.</p></article>
-<article><h3>Qué falta confirmar</h3><ul>
-<li>Criterios de aceptación: no están registrados en esta evidencia. No se emite un veredicto de aprobado/reprobado para negocio.</li>
-<li>Conciliación contable y resultado financiero final: requieren evidencia adicional del sistema responsable.</li>
-<li>Capacidad sostenida, disponibilidad y preparación para producción: una corrida local no las certifica.</li>
-</ul></article></div>
+<article><h3>Qué falta confirmar</h3><dl class="service-checks">${fields(context.checks)}</dl>
+<p class="method-note">No hay criterios de aceptación registrados para emitir un veredicto de negocio. Una corrida local tampoco acredita disponibilidad ni capacidad sostenida.</p></article></div>
+${
+  context.amounts
+    ? `<article class="requested-amounts"><h3>Importes solicitados en retiro (USD)</h3><dl>${fields(
+        [
+          ['Total solicitado en envíos', context.amounts.sent],
+          ['Solicitado en autorizaciones registradas', context.amounts.approved],
+          ['Solicitado en no aprobaciones registradas', context.amounts.notApproved],
+          ['Solicitado en envíos por revisar', context.amounts.review],
+        ],
+      )}</dl><p class="method-note">Monto del plan × número de solicitudes de cada grupo, calculado en centavos. Son importes solicitados, no dinero dispensado, débito confirmado, pérdida ni devolución; no incluyen comisiones. El total contiene los otros grupos: no deben sumarse entre sí.</p></article>`
+    : ''
+}
 </section>
 <section aria-labelledby="business-actions"><h2 id="business-actions"><span class="section-number" aria-hidden="true">04</span>Próximos pasos sugeridos</h2>
-<article class="next-steps"><ol>${list(summary.nextSteps)}</ol>
+<article class="next-steps"><ol>${context.actions.map((item) => `<li><strong>${escapeHtml(item.action)}</strong><p>Área sugerida: ${escapeHtml(item.area)}. Evidencia para revisar: ${escapeHtml(item.evidence)}</p></li>`).join('')}</ol>
 <p class="method-note">Estas acciones requieren revisión del equipo responsable; no implican reenvío automático ni autorización de nuevas operaciones.</p></article>
 </section></div>
 <footer><p>Referencia de corrida: ${escapeHtml(run.runId)} · Exportado (UTC): ${escapeHtml(evidence.exportedAt)}.</p>

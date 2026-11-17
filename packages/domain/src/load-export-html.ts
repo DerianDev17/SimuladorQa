@@ -2,6 +2,7 @@ import type { loadRunEvidence, LoadReportAudience } from './load-export';
 import { decimal, escapeHtml, fields } from './load-export-html-format';
 import { renderLoadBusinessHtml } from './load-export-business';
 import { loadStageSummary } from './load-report-summary';
+import { loadBusinessContext } from './load-report-business-context';
 
 // Only the public evidence projection may reach this presentation function.
 type Evidence = ReturnType<typeof loadRunEvidence>;
@@ -157,6 +158,14 @@ article li + li { margin-top: 8px; }
 .business-report .metrics > div:last-child dd { color: #78470c; }
 .methodology { font-size: 12px; line-height: 1.7; padding-left: 18px; }
 .stage-table td { font-variant-numeric: tabular-nums; }
+.review-heading { margin-top: 24px; }
+.service-checks { display: block; }
+.service-checks > div { margin-bottom: 14px; }
+.service-checks dt { font-size: 12px; font-weight: 650; color: #29465d; }
+.service-checks dd { font-size: 12px; line-height: 1.6; }
+.requested-amounts { margin-top: 24px; border-top: 1px solid #dce5ed; padding-top: 20px; }
+.next-steps li strong { font-weight: 600; }
+.next-steps li p { color: #526679; margin: 5px 0 0; font-size: 11px; }
 @media (max-width: 760px) {
   body { padding: 12px; }
   header, section { padding: 22px; }
@@ -204,12 +213,13 @@ export function renderLoadHtml(
   if (audience === 'BUSINESS') return renderLoadBusinessHtml(evidence, styles);
   const { run } = evidence;
   const { plan, metrics } = run;
+  const context = loadBusinessContext(evidence);
   const rows = run.operations
     .map(
       (
         item,
         index,
-      ) => `<tr${item.sent && !item.received ? ' class="unconfirmed"' : ''}><th scope="row">${index + 1}</th>
+      ) => `<tr${item.sent && (!item.received || !['APPROVED', 'NOT_APPROVED'].includes(item.outcome)) ? ' class="unconfirmed"' : ''}><th scope="row">${index + 1}</th>
 <td><dl>${fields([
         ['Transacción', item.transactionId],
         ['Solicitud', item.requestId],
@@ -262,9 +272,10 @@ export function renderLoadHtml(
 <section aria-labelledby="results"><h2 id="results"><span class="section-number" aria-hidden="true">01</span>Resultados de ejecución</h2>
 ${
   metrics.unconfirmed > 0
-    ? `<aside class="uncertainty" aria-label="Envíos sin respuesta"><strong>${metrics.unconfirmed} ${metrics.unconfirmed === 1 ? 'envío sin respuesta registrada' : 'envíos sin respuesta registrada'}</strong><p>Resultado financiero incierto. Revisa la correlación de estas operaciones; el informe no determina si hubo débito ni confirma conciliación en Core.</p></aside>`
+    ? `<aside class="uncertainty" aria-label="Envíos sin respuesta"><strong>${metrics.unconfirmed} ${metrics.unconfirmed === 1 ? 'envío sin respuesta registrada' : 'envíos sin respuesta registrada'}</strong><p>${plan.operation === 'WITHDRAWAL' ? 'Resultado financiero incierto. Revisa la correlación de estas operaciones; el informe no determina si hubo débito ni confirma conciliación en Core.' : 'Consulta sin respuesta registrada. Revisa resultado y correlación; este informe no permite validar el saldo esperado.'}</p></aside>`
     : ''
 }
+${context.counts.reviewWithResponse > 0 ? `<aside class="uncertainty" aria-label="Respuestas por revisar"><strong>${context.counts.reviewWithResponse} respuestas con resultado local por revisar</strong><p>Un código registrado no asegura una respuesta válida ni un resultado concluyente. Consulta las filas destacadas y conserva la correlación para su verificación.</p></aside>` : ''}
 <dl class="metrics">${fields([
     ['Enviadas', metrics.sent],
     ['Respuestas recibidas', metrics.received],
@@ -274,7 +285,7 @@ ${
 <dl class="counters">${fields([
     ['Operaciones registradas', run.operations.length],
     ['Aprobadas', metrics.approved],
-    ['Rechazadas', metrics.declined],
+    ['No aprobadas', metrics.declined],
     ['Timeouts', metrics.timeouts],
     ['Errores (incluye timeouts)', metrics.errors],
     ['Canceladas', metrics.cancelled],
@@ -282,7 +293,14 @@ ${
     ['TPS objetivo', plan.targetTps],
   ])}</dl>
 ${visualSummary(evidence)}
-<p class="method-note">Los contadores no son categorías excluyentes. TPS observado = envíos / tiempo total,
+<h3 class="review-heading">Separación para revisión operativa</h3><dl class="counters">${fields([
+    ['Sin envío registrado', context.counts.notSent],
+    ['Enviadas y aprobadas', context.counts.approved],
+    ['Enviadas y no aprobadas', context.counts.notApproved],
+    ['Enviadas por revisar', context.counts.review],
+    ['Por revisar con respuesta', context.counts.reviewWithResponse],
+  ])}</dl><p class="method-note">Los primeros cuatro grupos particionan las operaciones registradas. «Por revisar con respuesta» es un subconjunto, no se suma al total. La tabla conserva outcome y código originales; no se reclasifican códigos históricos.</p>
+<p class="method-note">Los contadores generales de errores, timeouts y cancelaciones pueden solaparse. TPS observado = envíos / tiempo total,
 incluida preparación y cierre. El objetivo y la finalización no acreditan capacidad del host;
 en estrés el objetivo corresponde al pico de la rampa.</p></section>
 </div>
@@ -326,12 +344,14 @@ ${loadStageSummary(evidence)
 <ul class="methodology"><li>Fuente: registro local persistido de esta corrida; no se consulta Switch/Core al generar el informe.</li>
 <li>TPS = envíos × 1000 / duración total en milisegundos. Incluye preparación, esperas y cierre. En estrés, el objetivo es un pico de rampa.</li>
 <li>Latencias: duración de transporte de respuestas recibidas. Percentil p = valor ordenado en la posición techo(n × p), con posiciones desde 1. Sin respuestas, el valor es «Sin dato».</li>
+<li>En este registro, sent indica bytes encolados por el transporte; no acredita recepción en Core. received indica código de respuesta registrado; no implica aprobación ni respuesta funcional válida. Un error de interpretación puede conservar received=false aun si llegaron bytes.</li>
 <li>Errores incluye timeouts y excluye cancelaciones locales. Enviadas sin respuesta puede coincidir con errores; los contadores no se suman como categorías excluyentes.</li>
 <li>Resultados, códigos de respuesta y correlación se conservan sin remapeo. La finalización de la corrida no certifica su resultado financiero ni el cumplimiento de un SLA.</li>
 </ul></section>
 <section aria-labelledby="operations"><h2 id="operations"><span class="section-number" aria-hidden="true">06</span>Detalle por operación</h2>
 <p class="method-note">Identificadores y resultados conservados tal como fueron registrados. «Sin dato» indica
 información ausente; no se infiere un ATM cuando un registro antiguo tiene varios perfiles.</p>
+<p class="method-note">Las filas destacadas corresponden a envíos sin respuesta registrada o con resultado distinto de APPROVED/NOT_APPROVED, incluidos REQUIRES_REVIEW, INVALID_RESPONSE y STORAGE_ERROR. Se mantienen para revisión, sin afirmar débito ni ausencia de débito.</p>
 ${
   rows
     ? `<div class="table-wrap"><table><caption>${run.operations.length} ${run.operations.length === 1 ? 'operación' : 'operaciones'} · fechas UTC</caption>

@@ -33,10 +33,11 @@ describe('informes por audiencia', () => {
   });
   it('negocio conserva incertidumbre y recomienda verificación sin reenviar', () => {
     const run = loadReportExample(true);
+    run.draft = { ...run.draft, operation: 'WITHDRAWAL', amount: '25.50', concurrency: 1 };
     const summary = loadBusinessSummary(loadRunEvidence(run, now));
     expect(summary.state).toBe('Finalizada con fallo');
     expect(summary.conclusion).toContain('pendiente de verificación');
-    expect(summary.nextSteps.join(' ')).toContain('no asumir ausencia de débito');
+    expect(summary.nextSteps.join(' ')).toContain('ausencia de débito');
     expect(summary.findings.join(' ')).toContain('6 envíos y 5 respuestas');
   });
   it('distingue corridas vacías, rechazos, interrupciones y estrés sin inventar aceptación', () => {
@@ -48,7 +49,7 @@ describe('informes por audiencia', () => {
     const rejected = historyRun();
     rejected.items[0]!.outcome = 'NOT_APPROVED';
     summary = loadBusinessSummary(loadRunEvidence(rejected, now));
-    expect(summary.conclusion).toContain('rechazos o errores');
+    expect(summary.conclusion).toContain('no aprobadas o errores');
     rejected.draft = { ...rejected.draft, mode: 'STRESS', rampUpSeconds: 10 };
     summary = loadBusinessSummary(loadRunEvidence(rejected, now));
     expect(summary.findings.join(' ')).toContain('pico de una rampa');
@@ -59,7 +60,7 @@ describe('informes por audiencia', () => {
     run.draft = { ...run.draft, operation: 'WITHDRAWAL', amount: '25.50' };
     for (const audience of ['BUSINESS', 'TECHNICAL'] as const)
       expect(createLoadExport(run, 'HTML', now, audience).contents).toContain('USD 25.50');
-    run.draft.amount = '<img src=x>';
+    run.startedAt = '<img src=x>';
     const html = createLoadExport(run, 'HTML', now, 'BUSINESS').contents;
     expect(html).toContain('&lt;img src=x&gt;');
     expect(html).not.toContain('<img');

@@ -24,6 +24,8 @@ describe('exportación de carga desde Main', () => {
     'guarda HTML %s separado desde Main y conserva errores y timeout',
     async (audience) => {
       const run = historyRun();
+      run.draft = { ...run.draft, operation: 'WITHDRAWAL', amount: '25.50' };
+      run.items[0]!.outcome = 'REQUIRES_REVIEW';
       const destination = join(directory, `${audience}.html`);
       const service = new LoadExportService(
         async () => ({ ok: true, value: run }),
@@ -42,9 +44,15 @@ describe('exportación de carga desde Main', () => {
         ok: true,
         value: 'SAVED',
       });
-      expect(await readFile(destination, 'utf8')).toContain(
-        audience === 'BUSINESS' ? 'Informe de negocio' : 'Informe técnico',
-      );
+      const html = await readFile(destination, 'utf8');
+      expect(html).toContain(audience === 'BUSINESS' ? 'Informe de negocio' : 'Informe técnico');
+      if (audience === 'BUSINESS') {
+        expect(html).toContain('Con respuesta registrada: 1.');
+        expect(html).toContain('<dt>Solicitado en envíos por revisar</dt><dd>25.50</dd>');
+      } else {
+        expect(html).toContain('aria-label="Respuestas por revisar"');
+        expect(html).toContain('REQUIRES_REVIEW');
+      }
       const broken = new LoadExportService(
         async () => ({ ok: true, value: run }),
         {

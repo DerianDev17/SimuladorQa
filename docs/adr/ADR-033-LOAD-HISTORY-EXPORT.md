@@ -63,6 +63,21 @@ contratos IPC ni esquema. Ejemplos y pruebas visuales usan solo fixtures sintét
 
 ## Validación
 
+Ampliación de interpretación de negocio, 2026-11-16: se distinguen consulta de
+saldo (respuesta frente a exactitud del saldo) y retiro (autorización frente a
+efectivo y contabilidad), conforme a WITHDRAWAL.md, ADR-031 y la evidencia pública
+persistida. Una respuesta registrada no cierra por sí sola la revisión funcional.
+La proyección de presentación incorpora grupos excluyentes: no enviado, enviado
+aprobado, enviado no aprobado y enviado por revisar; conserva los resultados
+históricos sin remapear códigos y no modifica métricas CSV/JSON ni el esquema.
+En retiro muestra importes solicitados por grupo con centavos enteros y validación
+de monto existente; nunca los denomina débito, efectivo ni pérdida. Las acciones
+incluyen área sugerida y evidencia necesaria, sin asignación ni reenvío automático.
+El contrato detallado y sus fuentes están en [REPORTING](../REPORTING.md).
+Las pruebas cubren partición, respuesta con resultado no concluyente, no envío,
+cancelación, montos inválidos, extremos y precisión de centavos, y presentación
+de retiro en Electron. Se mantienen las pruebas de guardado/error/timeout.
+
 Ampliación por audiencia, 2026-11-16: a petición del usuario se generan dos HTML
 independientes. `audience` es opcional en el IPC de exportación y se valida solo
 para HTML; sin él se genera técnico. CSV/JSON conservan esquema v1. Los nombres

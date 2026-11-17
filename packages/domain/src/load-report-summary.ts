@@ -1,4 +1,5 @@
 import type { loadRunEvidence } from './load-export';
+import { loadBusinessContext } from './load-report-business-context';
 type Evidence = ReturnType<typeof loadRunEvidence>;
 
 const states: Record<Evidence['run']['state'], string> = {
@@ -12,17 +13,18 @@ const states: Record<Evidence['run']['state'], string> = {
 export function loadBusinessSummary(evidence: Evidence) {
   const { run } = evidence;
   const { metrics: m, plan } = run;
+  const context = loadBusinessContext(evidence);
   const conclusion =
     m.sent === 0
       ? 'No hay envíos registrados. Esta corrida no aporta evidencia de respuesta del sistema.'
-      : m.unconfirmed > 0
-        ? 'Hay operaciones enviadas sin respuesta registrada. Su resultado financiero sigue pendiente de verificación.'
+      : context.counts.review > 0
+        ? `Hay ${context.counts.review} ${context.counts.review === 1 ? 'operación enviada' : 'operaciones enviadas'} con resultado local por revisar. ${context.counts.reviewWithResponse > 0 ? `Con respuesta registrada: ${context.counts.reviewWithResponse}. ` : ''}${plan.operation === 'WITHDRAWAL' ? 'Su resultado financiero sigue pendiente de verificación.' : 'La consulta y su saldo requieren verificación funcional.'}`
         : m.errors > 0 || m.declined > 0
-          ? 'Se registraron rechazos o errores que requieren revisión antes de valorar el resultado de la prueba.'
+          ? 'Se registraron respuestas no aprobadas o errores. Deben contrastarse con el resultado esperado de la prueba.'
           : 'La corrida registra respuestas sin envíos pendientes de respuesta. Esto describe la ejecución local; no constituye una aprobación para producción.';
   const findings = [
     `Se registraron ${run.operations.length} operaciones: ${m.sent} envíos y ${m.received} respuestas.`,
-    `El registro clasifica ${m.approved} operaciones como aprobadas y ${m.declined} como rechazadas.`,
+    `El registro clasifica ${m.approved} operaciones como aprobadas y ${m.declined} como no aprobadas. Una no aprobación no identifica por sí sola un defecto.`,
     `Errores registrados: ${m.errors}; vencimientos de plazo incluidos: ${m.timeouts}; cancelaciones locales: ${m.cancelled}. Estos contadores pueden solaparse.`,
   ];
   if (plan.mode === 'STRESS')
@@ -39,26 +41,7 @@ export function loadBusinessSummary(evidence: Evidence) {
     findings.push(
       `Estado registrado: «${states[run.state]}». La corrida no alcanzó el estado completado.`,
     );
-  const nextSteps: string[] = [];
-  if (m.sent === 0)
-    nextSteps.push(
-      'Revisar la preparación y las dependencias antes de planificar una nueva prueba autorizada.',
-    );
-  if (m.unconfirmed > 0)
-    nextSteps.push(
-      'Verificar las operaciones sin respuesta con su correlación en Switch/Core antes de decidir nuevas acciones; no asumir ausencia de débito.',
-    );
-  if (m.errors > 0 || m.declined > 0)
-    nextSteps.push(
-      'Revisar los resultados y códigos del informe técnico con el equipo responsable; el reporte no atribuye una causa automáticamente.',
-    );
-  if (m.sent > 0 && plan.mode === 'LOAD' && m.tps < plan.targetTps)
-    nextSteps.push(
-      'Analizar los tiempos por etapa del informe técnico para explicar la diferencia frente a la velocidad objetivo.',
-    );
-  nextSteps.push(
-    'Acordar criterios de aceptación y contrastar la evidencia con ellos antes de emitir un veredicto de negocio.',
-  );
+  const nextSteps = context.actions.map((item) => item.action);
   return { state: states[run.state], conclusion, findings, nextSteps };
 }
 

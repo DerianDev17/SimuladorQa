@@ -101,6 +101,7 @@ test.afterEach(async () => {
 test('informe de negocio separado: narrativa, trazabilidad común y presentación sin detalle técnico', async () => {
   await launch();
   const run = loadReportExample(true);
+  run.draft = { ...run.draft, operation: 'WITHDRAWAL', amount: '25.50', concurrency: 1 };
   const file = resolve('artifacts/load-report-business.html');
   await mkdir('artifacts', { recursive: true });
   await writeFile(
@@ -129,6 +130,9 @@ test('informe de negocio separado: narrativa, trazabilidad común y presentació
   await expect(report.locator('body')).toContainText(run.runId);
   await expect(report.locator('body')).not.toContainText(run.items[0]!.transactionId!);
   await expect(report.getByRole('table')).toHaveCount(0);
+  await expect(report.locator('.requested-amounts')).toContainText('153.00');
+  await expect(report.locator('.requested-amounts')).toContainText('127.50');
+  await expect(report.locator('.requested-amounts')).toContainText('25.50');
   await report
     .getByRole('navigation', { name: 'Contenido del informe de negocio' })
     .getByRole('link', { name: '04 Próximos pasos' })
