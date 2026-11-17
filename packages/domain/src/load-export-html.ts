@@ -55,23 +55,25 @@ const styles = `
 :root { color-scheme: light; font-family: "Segoe UI", system-ui, sans-serif; color: #203348; background: #e9eef3; font-size: 14px; }
 * { box-sizing: border-box; }
 body { margin: 0; padding: 36px 24px; }
-main { max-width: 1180px; margin: auto; background: white; border: 1px solid #d5dfe8; box-shadow: 0 8px 36px #172b4210; }
-header { background: #142b40; color: #fff; padding: 28px 36px 24px; border-top: 5px solid #24aa9f; }
+main { max-width: 1180px; margin: auto; background: white; border: 1px solid #d5dfe8; border-radius: 8px; overflow: hidden; box-shadow: 0 8px 36px #172b4210; }
+header { background: #fff; color: #142b40; padding: 32px 36px 24px; border-top: 6px solid #235d91; }
 .brand-row { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-bottom: 28px; }
 .brand { font-size: 19px; font-weight: 750; letter-spacing: .14em; }
-.brand small { display: block; font-size: 9px; letter-spacing: .17em; font-weight: 500; margin-top: 5px; color: #c0d0de; }
-.report-tag { padding: 7px 12px; border: 1px solid #6b8396; border-radius: 4px; font-size: 10px; letter-spacing: .12em; color: #e4edf5; }
+.brand small { display: block; font-size: 9px; letter-spacing: .17em; font-weight: 500; margin-top: 5px; color: #61768a; }
+.report-tag { padding: 7px 12px; border: 1px solid #cbdbe9; border-radius: 4px; font-size: 10px; letter-spacing: .12em; color: #315d83; background: #f3f7fb; }
 .report-nav { display: flex; flex-wrap: wrap; gap: 4px 20px; padding: 13px 36px; border-bottom: 1px solid #dce5ed; background: #f7fafb; }
 .report-nav a { padding: 5px 0; color: #37546a; font-size: 11px; text-decoration: none; border-bottom: 2px solid transparent; }
 .report-nav a:hover { color: #126c67; border-bottom-color: #126c67; }
 .report-nav a:focus-visible { outline: 2px solid #126c67; outline-offset: 4px; }
 h2[id] { scroll-margin-top: 20px; }
-h1 { margin: 0 0 8px; font-size: 30px; line-height: 1.25; font-weight: 650; letter-spacing: -.025em; }
-.subtitle { margin: 0 0 22px; color: #c5d5e2; font-size: 13px; }
-header dl { border-top: 1px solid #496073; padding-top: 18px; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px 24px; }
+h1 { margin: 0 0 12px; font-size: 36px; line-height: 1.2; font-weight: 650; letter-spacing: -.035em; }
+.subtitle { margin: 0 0 12px; color: #506c83; font-size: 13px; }
+.cover-kicker { font-size: 10px; font-weight: 700; letter-spacing: .13em; color: #286497; margin: 0 0 14px; }
+.cover-description { max-width: 650px; color: #526a7f; font-size: 14px; margin: 0 0 24px; }
+header dl { border-top: 1px solid #dce5ed; padding-top: 20px; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px 24px; }
 header dl > div:nth-child(-n+2) { grid-column: span 2; }
-header dt { color: #bdd0de; font-size: 10px; }
-header dd { font-size: 12px; color: #fff; }
+header dt { color: #61768a; font-size: 10px; }
+header dd { font-size: 12px; color: #243e55; }
 header dl > div:nth-child(-n+2) dd { font-family: ui-monospace, Consolas, monospace; font-size: 11px; }
 section { padding: 28px 36px; border-bottom: 1px solid #dce5ed; }
 h2 { margin: 0 0 20px; font-size: 18px; letter-spacing: -.02em; font-weight: 650; }
@@ -155,6 +157,7 @@ article li + li { margin-top: 8px; }
 .business-report header dl > div { grid-column: auto; }
 .business-report header dl > div:nth-child(-n+2) dd { font-family: inherit; }
 .business-report .metrics dd { color: #153d50; }
+.business-report .metrics > div:nth-child(3) dd { color: #153d50; }
 .business-report .metrics > div:last-child dd { color: #78470c; }
 .methodology { font-size: 12px; line-height: 1.7; padding-left: 18px; }
 .stage-table td { font-variant-numeric: tabular-nums; }
@@ -164,9 +167,33 @@ article li + li { margin-top: 8px; }
 .service-checks dt { font-size: 12px; font-weight: 650; color: #29465d; }
 .service-checks dd { font-size: 12px; line-height: 1.6; }
 .requested-amounts { margin-top: 24px; border-top: 1px solid #dce5ed; padding-top: 20px; }
-.next-steps li strong { font-weight: 600; }
-.next-steps li p { color: #526679; margin: 5px 0 0; font-size: 11px; }
-@media (max-width: 760px) {
+.next-steps { background: transparent; padding: 0; border: 0; }
+.next-steps li { background: #f7fafc; border: 1px solid #dce5ec; border-radius: 6px; padding: 18px 20px 18px 60px; }
+.next-steps li::before { left: 16px; top: 18px; }
+.next-steps li strong { display: block; font-weight: 600; line-height: 1.7; }
+.next-steps li p { color: #526679; margin: 10px 0 0; font-size: 11px; border-top: 1px solid #e0e8ee; padding-top: 10px; }
+.action-area { display: block; color: #2e6188; font-size: 10px; font-weight: 650; margin-bottom: 6px; }
+.action-evidence-label { display: block; font-weight: 600; color: #354f65; margin-bottom: 4px; }
+.document-reference { display: flex; flex-wrap: wrap; gap: 5px 12px; padding-top: 16px; margin: 20px 0 0; border-top: 1px solid #e3eaf0; font-size: 10px; color: #61768a; }
+.document-reference code { color: #3b5870; overflow-wrap: anywhere; }
+.document-reference > span:last-child { margin-left: auto; }
+.operation-distribution { margin: 24px 0 0; padding: 20px; background: #f7fafc; border: 1px solid #dce5ec; border-radius: 6px; break-inside: avoid; }
+.operation-distribution figcaption { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; color: #29465d; font-size: 12px; font-weight: 650; }
+.operation-distribution figcaption > span { font-size: 10px; font-weight: 400; color: #526679; }
+.distribution-track { display: flex; height: 14px; margin: 16px 0; overflow: hidden; border-radius: 3px; }
+.distribution-track > span { display: block; min-width: 0; }
+.distribution-approved { background: #315f8c; }
+.distribution-declined { background: #7e7099; }
+.distribution-review { background: #b77722; }
+.distribution-not-sent { background: #9daab5; }
+.distribution-key { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.operation-distribution ul { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 0; margin: 0; list-style: none; }
+.operation-distribution li { display: flex; gap: 7px; align-items: center; font-size: 11px; }
+.operation-distribution li strong { margin-left: auto; font-variant-numeric: tabular-nums; }
+.distribution-empty { font-size: 12px; color: #526679; padding: 10px 0; }
+.requested-amounts dl > div { padding: 14px; background: #f5f8fb; border: 1px solid #dce5ed; border-radius: 5px; }
+.requested-amounts dd { color: #294e70; font-size: 20px; font-weight: 600; }
+@media screen and (max-width: 760px) {
   body { padding: 12px; }
   header, section { padding: 22px; }
   .notice, footer { padding: 14px 22px; }
@@ -186,12 +213,19 @@ article li + li { margin-top: 8px; }
   .brand small { font-size: 8px; }
   .report-tag { font-size: 9px; white-space: nowrap; }
   h1 { font-size: 25px; }
+  .operation-distribution ul { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .document-reference > span:last-child { margin-left: 0; width: 100%; }
 }
 @media print {
-  @page { size: A4 landscape; margin: 12mm; }
+  @page { size: A4 landscape; margin: 12mm;
+    @bottom-left { content: "COONECTA · QA · Evidencia local"; font-family: "Segoe UI", sans-serif; font-size: 8pt; color: #526679; }
+    @bottom-right { content: counter(page) " / " counter(pages); font-family: "Segoe UI", sans-serif; font-size: 8pt; color: #526679; }
+  }
+  @page business { size: A4 portrait; margin: 14mm; }
+  .business-report { page: business; }
   :root { background: white; }
   body { padding: 0; }
-  main { border: 0; box-shadow: none; }
+  main { border: 0; border-radius: 0; overflow: visible; box-shadow: none; }
   .report-nav { display: none; }
   header { background: white; color: #142b40; padding: 16px 12px; }
   header dt, header dd, .brand small, .report-tag, .subtitle { color: #29465d; }
@@ -200,8 +234,20 @@ article li + li { margin-top: 8px; }
   .notice, footer { padding: 10px 12px; }
   .table-wrap { overflow: visible; }
   table { min-width: 0; font-size: 10px; }
-  thead { display: table-header-group; }
-  tr, dl > div, .metrics, .uncertainty, .business-grid article, .next-steps { break-inside: avoid; }
+  thead { display: table-header-group; break-after: avoid; }
+  tr, dl > div, .metrics, .uncertainty, .business-grid article, .next-steps li { break-inside: avoid; }
+  .next-steps { break-inside: auto; }
+  .technical-report section[aria-labelledby="operations"] { break-before: page; }
+  td dl div { margin-bottom: 5px; }
+  .business-report .metrics > div { padding: 14px 12px; }
+  .business-report .metrics dd { font-size: 26px; }
+  .business-report header { padding: 12px; }
+  .business-report .brand-row { margin-bottom: 18px; }
+  .business-report .business-grid { gap: 20px; }
+  .business-report .business-grid article { padding-right: 0; }
+  .business-report .business-grid article + article { padding-left: 16px; }
+  .business-report .requested-amounts dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .distribution-track, .distribution-key { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   h2, h3 { break-after: avoid; }
 }
 `;
@@ -254,11 +300,13 @@ export function renderLoadHtml(
 <title>Informe de carga · ${escapeHtml(run.runId)}</title>
 <style>${styles}</style>
 </head>
-<body><main>
+<body><main class="technical-report">
 <div class="report-overview">
 <header><div class="brand-row"><div class="brand">COONECTA<small>ATM TRANSACTION SIMULATOR</small></div><span class="report-tag">QA · ${escapeHtml(run.state)}</span></div>
+<p class="cover-kicker">EVIDENCIA TÉCNICA · CARGA Y ESTRÉS</p>
 <h1>Informe técnico de carga y estrés</h1>
 <p class="subtitle">${plan.operation === 'WITHDRAWAL' ? 'Retiro' : 'Consulta de saldo'} · ${plan.mode === 'STRESS' ? 'Prueba de estrés' : 'Prueba de carga'} · Evidencia local de ejecución</p>
+<p class="cover-description">Configuración, rendimiento y trazabilidad para revisar cada resultado.</p>
 <dl>${fields([
     ['Corrida (runId)', run.runId],
     ['Solicitud de corrida', run.requestId],

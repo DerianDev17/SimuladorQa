@@ -9,6 +9,25 @@ import { loadReportExample } from '../helpers/load-report-examples';
 const now = '2026-11-16T15:00:00.000Z';
 
 describe('informes por audiencia', () => {
+  it('representa grupos excluyentes y conserva un estado vacío sin porcentajes inválidos', () => {
+    const run = historyRun();
+    const item = run.items[0]!;
+    run.items = [
+      item,
+      { ...item, outcome: 'NOT_APPROVED' },
+      { ...item, outcome: 'REQUIRES_REVIEW' },
+      { ...item, sent: false, received: false, outcome: 'CONTEXT_ERROR' },
+    ];
+    const html = createLoadExport(run, 'HTML', now, 'BUSINESS').contents;
+    expect(html.match(/style="width:25\.0000%"/g)).toHaveLength(4);
+    expect(html).toContain('Base: 4 registros');
+    expect(html).toContain('no es un porcentaje de aceptación');
+    expect(html).toContain('document-reference');
+    const empty = createLoadExport(historyRun({ items: [] }), 'HTML', now, 'BUSINESS').contents;
+    expect(empty).toContain('Sin operaciones registradas para representar.');
+    expect(empty).not.toContain('class="distribution-track"');
+    expect(empty).not.toMatch(/width:(NaN|Infinity)/);
+  });
   it('negocio resume hechos y próximos pasos sin mezclar la tabla técnica ni certificar producción', () => {
     const run = loadReportExample(false);
     Object.assign(run, { message: 'PRIVATE-MESSAGE', secret: 'PRIVATE-KEY' });

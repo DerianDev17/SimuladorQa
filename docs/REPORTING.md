@@ -42,6 +42,7 @@ rutas, contenidos ni datos transaccionales para la exportación.
   próximos pasos sugeridos. No contiene tablas de operaciones ni sus UUID/STAN/RRN.
   Conserva la referencia común de corrida y la fecha de exportación para localizar
   el informe técnico correspondiente. No representa autorización ni certificación.
+  Su impresión usa A4 vertical, mientras el técnico conserva A4 horizontal.
 - El plan conserva operación, monto por retiro como texto decimal, moneda USD
   cuando aplica, ATM/revisión (JSON/HTML), límites, rampa y concurrencia.
 - UUID de corrida/solicitud/transacción, STAN, RRN y terminal se incluyen cuando
@@ -146,6 +147,19 @@ TODO-DATA LOAD-REPORT-ACCEPTANCE; no se inventan SLA ni criterios financieros.
 
 ## Lectura visual del informe HTML
 
+- Portada clara con audiencia, propósito, fechas y referencia de corrida. Negocio
+  incorpora también la referencia y fecha de emisión antes del resumen, sin
+  exponer identificadores de operaciones individuales.
+- Negocio representa la distribución de operaciones con una barra proporcional
+  y una leyenda de cuatro grupos excluyentes: aprobadas, no aprobadas, por revisar
+  y sin envío. La base son los registros observados, no el límite del plan ni una
+  meta de aceptación. Sin operaciones se muestra un estado vacío, sin barra.
+- Las acciones se presentan en fichas numeradas con área sugerida, acción y
+  evidencia necesaria. Los importes solicitados se distinguen de sus notas de
+  interpretación. La impresión conserva cada ficha y permite saltos entre ellas.
+- Impresión con folio y referencia QA en los márgenes; el detalle técnico empieza
+  en página nueva y repite la cabecera de su tabla. Las reglas de pantalla estrecha
+  no se aplican al imprimir, para mantener las columnas y evitar páginas innecesarias.
 - Negocio se organiza en cuatro secciones numeradas: resumen para decisión,
   alcance y hallazgos, rendimiento y pendientes, y próximos pasos. La conclusión
   precede a los indicadores; los resultados inciertos se destacan sin asignar
@@ -175,6 +189,9 @@ La prueba E2E de `load-history.spec.ts` genera ejemplos HTML y PNG en `artifacts
 sintéticos y no provienen de operaciones reales ni validan capacidad del host.
 `load-report-business.html/.png` muestra un retiro sintético con importes solicitados
 y lectura de negocio independiente.
+Los ejemplos `load-report-business-print.pdf` y `load-report-technical-print.pdf`
+permiten revisar la paginación real generada por Chromium con los tamaños CSS.
+Son evidencia de prueba de la plantilla, no nuevas opciones de exportación IPC.
 
 ## Seguridad y errores
 

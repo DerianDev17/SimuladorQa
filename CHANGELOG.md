@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-17 — Plantillas de informes para presentación
+
+- Renueva las portadas con audiencia, propósito y trazabilidad visible; reduce
+  fondos oscuros para una lectura e impresión más claras.
+- Añade distribución visual de operaciones en negocio, con base explícita,
+  grupos excluyentes y estado vacío. Separa área, acción y evidencia en fichas.
+- Diferencia impresión A4 vertical para negocio y horizontal para técnico;
+  genera ejemplos PDF sintéticos para revisar paginación, además de HTML/PNG.
+
 ## 2026-11-16 — Interfaz de reportería y evidencia
 
 - Presenta negocio y técnico en tarjetas con propósito, contenido y acción propia;

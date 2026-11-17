@@ -1,5 +1,5 @@
 import { _electron as electron, expect, test } from '@playwright/test';
-import type { ElectronApplication } from '@playwright/test';
+import type { ElectronApplication, Page } from '@playwright/test';
 import { mkdtemp, readFile, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -82,6 +82,11 @@ test('informe HTML: ejemplos visuales, barras proporcionales y aviso de incertid
         .locator('.report-overview')
         .screenshot({ path: 'artifacts/load-report-mobile.png' });
     await report.emulateMedia({ media: 'print' });
+    expect(
+      await report
+        .locator('.charts')
+        .evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length),
+    ).toBe(2);
     await report.setViewportSize({ width: 1120, height: 790 });
     expect(await report.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
@@ -90,6 +95,7 @@ test('informe HTML: ejemplos visuales, barras proporcionales y aviso de incertid
       await report
         .locator('.report-overview')
         .screenshot({ path: 'artifacts/load-report-print.png' });
+    if (uncertain) await printReport(report, 'artifacts/load-report-technical-print.pdf');
     await report.close();
   }
 });
@@ -133,6 +139,17 @@ test('informe de negocio separado: narrativa, trazabilidad común y presentació
   await expect(report.locator('.requested-amounts')).toContainText('153.00');
   await expect(report.locator('.requested-amounts')).toContainText('127.50');
   await expect(report.locator('.requested-amounts')).toContainText('25.50');
+  const distribution = report.getByRole('list', { name: 'Distribución de operaciones' });
+  await expect(distribution.getByRole('listitem')).toHaveCount(4);
+  await expect(distribution).toContainText('Por revisar1');
+  const segments = report.locator('.distribution-track > span');
+  const approvedWidth = await segments
+    .nth(0)
+    .evaluate((element) => element.getBoundingClientRect().width);
+  const reviewWidth = await segments
+    .nth(2)
+    .evaluate((element) => element.getBoundingClientRect().width);
+  expect(approvedWidth / reviewWidth).toBeCloseTo(5, 1);
   await report
     .getByRole('navigation', { name: 'Contenido del informe de negocio' })
     .getByRole('link', { name: '04 Próximos pasos' })
@@ -150,6 +167,11 @@ test('informe de negocio separado: narrativa, trazabilidad común y presentació
     true,
   );
   await report.emulateMedia({ media: 'print' });
+  expect(
+    await report
+      .locator('.metrics')
+      .evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length),
+  ).toBe(4);
   await expect(
     report.getByRole('navigation', { name: 'Contenido del informe de negocio' }),
   ).toBeHidden();
@@ -157,8 +179,23 @@ test('informe de negocio separado: narrativa, trazabilidad común y presentació
   expect(await report.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
     true,
   );
+  await printReport(report, 'artifacts/load-report-business-print.pdf');
   await report.close();
 });
+async function printReport(report: Page, destination: string) {
+  const encoded = await app!.evaluate(async ({ BrowserWindow }, url) => {
+    const reportWindow = BrowserWindow.getAllWindows().find(
+      (item) => item.webContents.getURL() === url,
+    );
+    if (!reportWindow) throw Error('REPORT_WINDOW_MISSING');
+    const pdf = await reportWindow.webContents.printToPDF({
+      preferCSSPageSize: true,
+      printBackground: true,
+    });
+    return pdf.toString('base64');
+  }, report.url());
+  await writeFile(destination, Buffer.from(encoded, 'base64'));
+}
 async function launch() {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
