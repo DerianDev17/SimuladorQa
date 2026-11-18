@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-17 — Acceso a reportes desde el menú
+
+- Añade **Reportes** al menú lateral para consultar directamente las corridas de
+  carga y estrés y guardar sus informes de negocio, técnicos o datos CSV/JSON.
+- Conserva el acceso al mismo historial desde Carga y estrés y sus validaciones.
+
 ## 2026-11-17 — Plantillas de informes para presentación
 
 - Renueva las portadas con audiencia, propósito y trazabilidad visible; reduce

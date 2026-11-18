@@ -2,8 +2,9 @@
 
 ## Disponible
 
-En QA, abrir **Carga y estrés → Ver historial de carga → Ver detalle** y elegir
+En QA, abrir **Reportes → Ver detalle** desde el menú lateral y elegir
 **Exportar CSV**, **Exportar JSON**, **Informe de negocio** o **Informe técnico**.
+El acceso **Carga y estrés → Ver historial de carga** conserva el mismo historial.
 Los informes son archivos HTML independientes. El diálogo nativo permite elegir el destino
 y confirmar la sustitución de un archivo. Cancelar no escribe nada.
 

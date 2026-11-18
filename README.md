@@ -83,7 +83,7 @@ Para carga, abrir **Carga y estrés**, seleccionar ATM, operación, límites y t
 En retiro, indicar el monto **por operación**. La corrida se detiene al primer
 rechazo/error y solicita PIN una vez. Detalles en la [guía de carga](docs/implementation/LOAD_TEST.md).
 
-Para recuperar evidencia: **Ver historial de carga → Ver detalle → Exportar CSV /
+Para recuperar evidencia desde el menú lateral: **Reportes → Ver detalle → Exportar CSV /
 Exportar JSON / Informe de negocio / Informe técnico**. Cada informe HTML se
 guarda por separado mediante el diálogo nativo; ver
 [formatos y alcance](docs/REPORTING.md).

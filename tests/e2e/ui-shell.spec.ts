@@ -48,6 +48,7 @@ test('navegación compacta: nombres, teclado, foco y contenido sin desbordar', a
       'Inicio',
       'Transacciones',
       'Carga y estrés',
+      'Reportes',
       'Perfiles ATM',
       'Tarjetas',
       'Entidades',
@@ -63,13 +64,16 @@ test('navegación compacta: nombres, teclado, foco y contenido sin desbordar', a
       'Perfiles ATM',
       'Tarjetas',
       'Carga y estrés',
+      'Reportes',
       'Observación',
       'Monitor',
       'Configuración',
       'Inicio',
     ]) {
       const button = navigation().getByRole('button', { name, exact: true });
+      await expect(button).toBeEnabled();
       await button.focus();
+      await expect(button).toBeFocused();
       await window.keyboard.press('Enter');
       await expect(button).toHaveAttribute('aria-current', 'page');
       await expect(window.getByRole('main')).toHaveAttribute('aria-label', name);

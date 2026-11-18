@@ -17,12 +17,14 @@ import { DashboardView } from './DashboardView';
 import type { IconName } from './Icon';
 import type { AtmSelection } from './transaction-setup';
 import { LoadTestView } from './LoadTestView';
+import { LoadHistoryView } from './LoadHistoryView';
 import { VirtualCardGeneratorView } from './VirtualCardGeneratorView';
 
 const navigation: { id: string; label: string; icon: IconName; group: string }[] = [
   { id: 'dashboard', label: 'Inicio', icon: 'dashboard', group: 'ESTACIÓN DE PRUEBAS' },
   { id: 'transactions', label: 'Transacciones', icon: 'transaction', group: '' },
   { id: 'load', label: 'Carga y estrés', icon: 'load', group: '' },
+  { id: 'reports', label: 'Reportes', icon: 'file', group: '' },
   { id: 'atms', label: 'Perfiles ATM', icon: 'atm', group: 'CATÁLOGOS' },
   { id: 'cards', label: 'Tarjetas', icon: 'card', group: '' },
   { id: 'entities', label: 'Entidades', icon: 'entity', group: '' },
@@ -345,6 +347,12 @@ export function App() {
             <div className="page-heading">
               <div>
                 <h1>{current?.label}</h1>
+                {page === 'reports' && (
+                  <p>
+                    Consulta las corridas de carga y estrés y abre su detalle para guardar informes
+                    de negocio, informes técnicos o datos CSV/JSON.
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -507,6 +515,13 @@ export function App() {
               disabled={busy || !snapshot}
             />
           )}
+
+          {page === 'reports' &&
+            (environment === 'QA' ? (
+              <LoadHistoryView key={environment} atms={catalog?.atms ?? []} />
+            ) : (
+              <p role="status">No se pudo verificar el ambiente Qa para consultar los reportes.</p>
+            ))}
 
           {page === 'cards' && snapshot?.environment && (
             <>

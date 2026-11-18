@@ -209,8 +209,12 @@ async function launch() {
   });
   const window = await app.firstWindow();
   await expect(window.getByRole('heading', { name: 'Estación de pruebas' })).toBeVisible();
-  await window.getByRole('button', { name: 'Carga y estrés', exact: true }).click();
-  await window.getByRole('button', { name: 'Ver historial de carga', exact: true }).click();
+  const reports = window
+    .getByRole('navigation', { name: 'Navegación principal' })
+    .getByRole('button', { name: 'Reportes', exact: true });
+  await reports.click();
+  await expect(reports).toHaveAttribute('aria-current', 'page');
+  await expect(window.getByRole('heading', { name: 'Reportes', exact: true })).toBeVisible();
   return window;
 }
 
