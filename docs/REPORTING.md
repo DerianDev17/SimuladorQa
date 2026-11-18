@@ -2,7 +2,13 @@
 
 ## Disponible
 
-En QA, abrir **Reportes → Ver detalle** desde el menú lateral y elegir
+**Reportes y auditoría** sustituye a **Observación** en el menú lateral y reúne
+las vistas existentes: **Informes de carga**, **Auditoría de envío**,
+**Auditoría de catálogos** y **Consulta de Mediator**. Las auditorías conservan
+los mismos registros y límites de Configuración y los catálogos. Los accesos
+a Mediator desde Transacciones y Configuración abren directamente su consulta.
+
+En QA, abrir **Reportes y auditoría → Informes de carga → Ver detalle** desde el menú lateral y elegir
 **Exportar CSV**, **Exportar JSON**, **Informe de negocio** o **Informe técnico**.
 El acceso **Carga y estrés → Ver historial de carga** conserva el mismo historial.
 Los informes son archivos HTML independientes. El diálogo nativo permite elegir el destino

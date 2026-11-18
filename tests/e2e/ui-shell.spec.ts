@@ -34,6 +34,121 @@ function navigation() {
   return window.getByRole('navigation', { name: 'Navegación principal' });
 }
 
+test('reportes y auditoría reemplaza Observación y reúne las vistas existentes', async () => {
+  await expect(navigation().getByRole('button', { name: 'Observación', exact: true })).toHaveCount(
+    0,
+  );
+  await expect(navigation().getByRole('button', { name: 'Reportes', exact: true })).toHaveCount(0);
+  await navigation().getByRole('button', { name: 'Reportes y auditoría', exact: true }).click();
+  await expect(
+    window.getByRole('region', { name: 'Historial de carga', exact: true }),
+  ).toBeVisible();
+  const sections = window.getByRole('navigation', { name: 'Secciones de reportes y auditoría' });
+  await expect(sections.getByRole('button')).toHaveCount(4);
+  for (const width of [1280, 480]) {
+    await window.setViewportSize({ width, height: 800 });
+    for (const name of [
+      'Auditoría de envío',
+      'Auditoría de catálogos',
+      'Consulta de Mediator',
+      'Informes de carga',
+    ]) {
+      const button = sections.getByRole('button', { name, exact: true });
+      await button.press('Enter');
+      await expect(button).toHaveAttribute('aria-current', 'page');
+      await expect(
+        window.getByRole('region', { name: `Reportes: ${name}`, exact: true }),
+      ).toBeFocused();
+      expect(await window.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+    }
+  }
+  await sections.getByRole('button', { name: 'Auditoría de envío', exact: true }).click();
+  const audit = window.getByRole('region', { name: 'Auditoría de envío', exact: true });
+  await expect(audit).toContainText('No hay configuraciones de envío guardadas');
+  const saved = await window.evaluate(() =>
+    globalThis.window.desktop!.saveSendConfiguration({
+      environment: 'QA',
+      revision: null,
+      endpoint: { host: '127.0.0.1', port: 16104 },
+      values: {
+        evidenceId: null,
+        trigger: 'ON_CLICK',
+        connectDeadlineMs: 1300,
+        observationWindowMs: 2300,
+      },
+    }),
+  );
+  expect(saved.ok).toBe(true);
+  await audit.getByRole('button', { name: 'Actualizar auditoría' }).click();
+  await expect(audit.getByRole('table')).toContainText('127.0.0.1:16104');
+  await window.setViewportSize({ width: 1280, height: 800 });
+  await window.screenshot({ path: 'artifacts/reports-audit.png' });
+
+  await navigation().getByRole('button', { name: 'Entidades', exact: true }).click();
+  await window.getByRole('button', { name: 'Nueva entidad', exact: true }).click();
+  await window.getByLabel('Código de entidad', { exact: true }).fill('RPT');
+  await window.getByLabel('Nombre de entidad', { exact: true }).fill('Entidad de reportería');
+  await window.getByLabel('Red de entidad').selectOption('COONECTA');
+  await window.getByRole('button', { name: 'Guardar borrador', exact: true }).click();
+  const activity = window.getByRole('region', { name: 'Actividad del catálogo', exact: true });
+  await expect(activity.getByRole('table')).toContainText('Creado');
+  const records = await activity.getByRole('table').innerText();
+  await navigation().getByRole('button', { name: 'Reportes y auditoría', exact: true }).click();
+  await sections.getByRole('button', { name: 'Auditoría de catálogos', exact: true }).click();
+  await expect(activity.getByRole('table')).toHaveText(records, { useInnerText: true });
+  await navigation().getByRole('button', { name: 'Configuración', exact: true }).click();
+  await window.getByRole('button', { name: 'Dispositivos y perfiles', exact: true }).click();
+  await window.getByRole('button', { name: /Consultar evidencia Mediator/ }).click();
+  await expect(
+    sections.getByRole('button', { name: 'Consulta de Mediator', exact: true }),
+  ).toHaveAttribute('aria-current', 'page');
+  await expect(
+    window.getByRole('region', { name: 'Consulta de Mediator', exact: true }),
+  ).toBeVisible();
+});
+
+test('auditoría de catálogos en reportes distingue fallo, timeout y recuperación', async () => {
+  await navigation().getByRole('button', { name: 'Reportes y auditoría', exact: true }).click();
+  await window
+    .getByRole('navigation', { name: 'Secciones de reportes y auditoría' })
+    .getByRole('button', { name: 'Auditoría de catálogos', exact: true })
+    .click();
+  const content = window.getByRole('region', {
+    name: 'Reportes: Auditoría de catálogos',
+    exact: true,
+  });
+  await app!.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('catalog:list');
+    ipcMain.handle('catalog:list', () => ({
+      ok: false,
+      error: { code: 'SERVICE_UNAVAILABLE', message: 'Catálogo no disponible.' },
+    }));
+  });
+  await content.getByRole('button', { name: 'Actualizar auditoría de catálogos' }).click();
+  await expect(content.getByRole('alert')).toContainText('Catálogo no disponible');
+  await expect(content).not.toContainText('Sin cambios registrados');
+  await app!.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('catalog:list');
+    ipcMain.handle('catalog:list', () => new Promise(() => {}));
+  });
+  await content.getByRole('button', { name: 'Actualizar auditoría de catálogos' }).click();
+  await expect(content.getByRole('alert')).toContainText('no respondió a tiempo', {
+    timeout: 10000,
+  });
+  await app!.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('catalog:list');
+    ipcMain.handle('catalog:list', () => ({
+      ok: true,
+      value: { environment: 'QA', entities: [], atms: [], cases: [], audit: [] },
+    }));
+  });
+  await content.getByRole('button', { name: 'Actualizar auditoría de catálogos' }).click();
+  await expect(content).toContainText('Sin cambios registrados');
+  await expect(content.getByRole('alert')).toHaveCount(0);
+});
+
 test('navegación compacta: nombres, teclado, foco y contenido sin desbordar', async () => {
   await window.keyboard.press('Tab');
   await expect(window.getByRole('button', { name: 'Ir al contenido' })).toBeFocused();
@@ -48,12 +163,11 @@ test('navegación compacta: nombres, teclado, foco y contenido sin desbordar', a
       'Inicio',
       'Transacciones',
       'Carga y estrés',
-      'Reportes',
       'Perfiles ATM',
       'Tarjetas',
       'Entidades',
       'Monitor',
-      'Observación',
+      'Reportes y auditoría',
       'Configuración',
     ]) {
       await expect(navigation().getByRole('button', { name, exact: true })).toHaveCount(1);
@@ -64,8 +178,7 @@ test('navegación compacta: nombres, teclado, foco y contenido sin desbordar', a
       'Perfiles ATM',
       'Tarjetas',
       'Carga y estrés',
-      'Reportes',
-      'Observación',
+      'Reportes y auditoría',
       'Monitor',
       'Configuración',
       'Inicio',

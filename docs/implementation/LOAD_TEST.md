@@ -137,7 +137,7 @@ antiguos sin desglose o tiempo monotónico conservan su información disponible.
 
 ## Consultar corridas anteriores
 
-Desde **Reportes** en el menú lateral, o **Carga y estrés → Ver historial de carga**,
+Desde **Reportes y auditoría → Informes de carga** en el menú lateral, o **Carga y estrés → Ver historial de carga**,
 se consultan las corridas QA
 guardadas, en páginas de 20 y por orden de registro descendente. Se puede filtrar
 por inicio (desde inclusive, hasta exclusivo), operación, estado y UUID de ATM,

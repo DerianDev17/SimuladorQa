@@ -6,6 +6,14 @@
   carga y estrés y guardar sus informes de negocio, técnicos o datos CSV/JSON.
 - Conserva el acceso al mismo historial desde Carga y estrés y sus validaciones.
 
+### Corrección de ubicación y alcance
+
+- Sustituye **Observación** por **Reportes y auditoría**, sin un acceso adicional
+  junto a Carga y estrés. Reúne informes, auditoría de envío, actividad de catálogos
+  y consulta de Mediator mediante las vistas existentes.
+- Conserva los accesos contextuales a Mediator y las fuentes de auditoría;
+  la navegación interna enfoca el contenido y admite ventanas compactas.
+
 ## 2026-11-17 — Plantillas de informes para presentación
 
 - Renueva las portadas con audiencia, propósito y trazabilidad visible; reduce

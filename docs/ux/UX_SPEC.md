@@ -1,5 +1,15 @@
 # UX Specification
 
+## Reportes y auditoría — 2026-11-17
+
+Una única entrada **Reportes y auditoría** ocupa el lugar de **Observación**.
+Agrupa los informes de carga, la auditoría de envío (incluido el historial de
+ambientes), la actividad de catálogos y la consulta de Mediator existentes.
+La navegación interna muestra una sección a la vez y enfoca su contenido al
+cambiar con teclado. Los accesos contextuales a Mediator mantienen su destino.
+Los errores o timeouts no se muestran como auditorías vacías. Ver
+[reportería](../REPORTING.md).
+
 ## Navegación y ventanas compactas — 2026-11-10
 
 Nombres accesibles en el menú de iconos, acceso por teclado al contenido,

@@ -211,10 +211,12 @@ async function launch() {
   await expect(window.getByRole('heading', { name: 'Estación de pruebas' })).toBeVisible();
   const reports = window
     .getByRole('navigation', { name: 'Navegación principal' })
-    .getByRole('button', { name: 'Reportes', exact: true });
+    .getByRole('button', { name: 'Reportes y auditoría', exact: true });
   await reports.click();
   await expect(reports).toHaveAttribute('aria-current', 'page');
-  await expect(window.getByRole('heading', { name: 'Reportes', exact: true })).toBeVisible();
+  await expect(
+    window.getByRole('heading', { name: 'Reportes y auditoría', exact: true }),
+  ).toBeVisible();
   return window;
 }
 

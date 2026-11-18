@@ -2985,7 +2985,11 @@ test('formulario directo: lectura selecciona la tarjeta, revisión opcional e in
     window.getByRole('button', { name: 'Ejecutar Transacción', exact: true }),
   ).toBeDisabled();
   await expect(window.locator('.transaction-steps')).toHaveCount(0);
-  await window.getByRole('button', { name: 'Observación', exact: true }).click();
+  await window.getByRole('button', { name: 'Reportes y auditoría', exact: true }).click();
+  await window
+    .getByRole('navigation', { name: 'Secciones de reportes y auditoría' })
+    .getByRole('button', { name: 'Consulta de Mediator', exact: true })
+    .click();
   await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
   await expect(window.getByLabel('Monto de prueba')).toHaveValue('100.50');
   await expect(preview).toContainText(transactionIdentity.panMasked!);
@@ -3140,7 +3144,11 @@ test('evidencia de red corrupta muestra error seguro sin impedir usar el shell',
 
 test('Observación Qa: consulta validada y dependencia no configurada', async () => {
   const window = await launch();
-  await window.getByRole('button', { name: 'Observación', exact: false }).click();
+  await window.getByRole('button', { name: 'Reportes y auditoría', exact: true }).click();
+  await window
+    .getByRole('navigation', { name: 'Secciones de reportes y auditoría' })
+    .getByRole('button', { name: 'Consulta de Mediator', exact: true })
+    .click();
   const observer = window.getByLabel('Consulta de Mediator', { exact: true });
   await expect(
     observer.getByRole('heading', { name: 'Transacciones y mensajes de Mediator' }),
@@ -3196,7 +3204,11 @@ test('Historial muestra mandatorios CMS y variantes sin exponer valores', async 
       value: { ...value, queryId: 'synthetic-cms-review', queriedAt: '2026-10-08T22:00:00.000Z' },
     }));
   }, decoded.value);
-  await window.getByRole('button', { name: 'Observación', exact: false }).click();
+  await window.getByRole('button', { name: 'Reportes y auditoría', exact: true }).click();
+  await window
+    .getByRole('navigation', { name: 'Secciones de reportes y auditoría' })
+    .getByRole('button', { name: 'Consulta de Mediator', exact: true })
+    .click();
   const observer = window.getByLabel('Consulta de Mediator', { exact: true });
   await observer.getByRole('button', { name: 'Consultar Mediator' }).click();
   await observer.getByRole('button', { name: `Ver mensajes de ${batch.rows[0]!.traceId}` }).click();
@@ -3261,7 +3273,7 @@ test('dashboard real, aislamiento, navegación y gate transaccional', async () =
     'Tarjetas',
     'Carga y estrés',
     'Monitor',
-    'Observación',
+    'Reportes y auditoría',
     'Configuración',
   ]) {
     await window.getByRole('button', { name, exact: true }).click();
@@ -4664,8 +4676,14 @@ test('mejoras UI: revisión ocupada mantiene los controles bloqueados al salir d
   await reviewDraft(window);
   await expect(window.getByRole('button', { name: 'Revisando…', exact: true })).toBeDisabled();
   await expect(window.getByLabel('Ambiente', { exact: true })).toBeVisible();
-  await window.getByRole('button', { name: 'Observación', exact: true }).click();
-  await expect(window.getByRole('heading', { name: 'Observación', exact: true })).toBeVisible();
+  await window.getByRole('button', { name: 'Reportes y auditoría', exact: true }).click();
+  await window
+    .getByRole('navigation', { name: 'Secciones de reportes y auditoría' })
+    .getByRole('button', { name: 'Consulta de Mediator', exact: true })
+    .click();
+  await expect(
+    window.getByRole('heading', { name: 'Reportes y auditoría', exact: true }),
+  ).toBeVisible();
   await expect(window.getByLabel('Ambiente', { exact: true })).toBeVisible();
   await app!.evaluate(() => {
     const state = globalThis as typeof globalThis & { finishUiReview?: () => void };
