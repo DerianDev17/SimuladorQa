@@ -5,7 +5,8 @@ carga controlada y consultar evidencia de Mediator. Electron, TypeScript strict
 y React; hardware, secretos, TCP y persistencia se ejecutan fuera del Renderer.
 
 Transacciones presenta Flujo, Mensajes y Evidencia para cada ejecución. Su
-historial local combina saldos, retiros y depósitos y permite seleccionar una operación
+historial local, en **Reportería y auditoría → Reportes → Transacciones**, combina
+saldos, retiros y depósitos y permite seleccionar una operación
 sin modificar el borrador. Ver [preparación](docs/implementation/TRANSACTION_PREPARATION.md)
 y [ADR-036](docs/adr/ADR-036-TRANSACTION-INSPECTION.md).
 
@@ -89,7 +90,7 @@ Para carga, abrir **Carga y estrés**, seleccionar ATM, operación, límites y t
 En retiro, indicar el monto **por operación**. La corrida se detiene al primer
 rechazo/error y solicita PIN una vez. Detalles en la [guía de carga](docs/implementation/LOAD_TEST.md).
 
-Para recuperar evidencia desde el menú lateral: **Reportes y auditoría → Informes de carga → Ver detalle → Exportar CSV /
+Para recuperar evidencia: **Reportería y auditoría → Reportes → Carga y estrés → Ver detalle → Exportar CSV /
 Exportar JSON / Informe de negocio / Informe técnico**. Cada informe HTML se
 guarda por separado mediante el diálogo nativo; ver
 [formatos y alcance](docs/REPORTING.md).

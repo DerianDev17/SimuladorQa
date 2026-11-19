@@ -66,6 +66,7 @@ const api: DesktopApi = Object.freeze<DesktopApi>({
   getMediatorLive: (request) => invoke(channels.mediatorLive, request),
   startLoadRun: (request) => invoke(channels.startLoadRun, request),
   getLoadConfigurations: () => invoke(channels.loadConfigurations),
+  getLoadConfigurationAudit: () => invoke(channels.loadConfigurationAudit),
   saveLoadConfiguration: (request) => invoke(channels.saveLoadConfiguration, request),
   deleteLoadConfiguration: (request) => invoke(channels.deleteLoadConfiguration, request),
   exportLoadRun: (request) => invoke(channels.exportLoadRun, request),

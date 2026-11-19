@@ -8,7 +8,6 @@ import { Icon } from './Icon';
 import { TransactionComposer } from './TransactionComposer';
 import { TransactionDocumentation } from './TransactionDocumentation';
 import { TransactionError } from './TransactionError';
-import { TransactionHistoryView } from './TransactionHistoryView';
 import { TransactionInspection } from './TransactionInspection';
 import { mergeExecutionHistory } from './transaction-inspection';
 import { useTransactionHistory } from './useTransactionHistory';
@@ -18,7 +17,12 @@ import {
 } from './useTransactionPreparation';
 import { WithdrawalReceiptDialog } from './WithdrawalReceiptDialog';
 
-export function TransactionWorkspace(props: TransactionPreparationProps) {
+export function TransactionWorkspace(
+  props: TransactionPreparationProps & {
+    onOpenReports(): void;
+    onSessionExecutionsChange(items: readonly BalanceExecution[]): void;
+  },
+) {
   const preparation = useTransactionPreparation(props);
   const {
     snapshot,
@@ -43,6 +47,14 @@ export function TransactionWorkspace(props: TransactionPreparationProps) {
     discardDialog,
   } = preparation;
   const [focus, setFocus] = useState(false);
+  const { onSessionExecutionsChange } = props;
+  useEffect(() => {
+    onSessionExecutionsChange(
+      snapshot?.environment === 'QA'
+        ? mergeExecutionHistory(sessionExecutions, balanceExecution ? [balanceExecution] : [])
+        : [],
+    );
+  }, [onSessionExecutionsChange, sessionExecutions, balanceExecution, snapshot?.environment]);
   const [selection, setSelection] = useState<{
     id: string;
     context: string;
@@ -129,9 +141,12 @@ export function TransactionWorkspace(props: TransactionPreparationProps) {
       <div className="transaction-heading">
         <div>
           <h1>Nueva transacción</h1>
-          <p>Prepara una operación o explora su evidencia en el historial local.</p>
+          <p>Prepara una operación y revisa su resultado.</p>
         </div>
         <div className="transaction-toolbar">
+          <button className="secondary" onClick={props.onOpenReports}>
+            Abrir historial de transacciones
+          </button>
           <button
             className="secondary preparation-toggle"
             aria-expanded={!focus}
@@ -278,7 +293,7 @@ export function TransactionWorkspace(props: TransactionPreparationProps) {
                     ? 'La transacción está en curso. Conserva esta ventana abierta.'
                     : balanceRequestId
                       ? 'Recupera el resultado del intento antes de volver a enviar.'
-                      : 'Ejecuta una operación o selecciona una del historial.'}
+                      : 'Ejecuta una operación para consultar su resultado.'}
                 </p>
               </div>
             }
@@ -293,24 +308,6 @@ export function TransactionWorkspace(props: TransactionPreparationProps) {
           />
         </section>
       </div>
-      {snapshot?.environment === 'QA' ? (
-        <TransactionHistoryView
-          client={client}
-          onSelectArchived={(item) => selectExecution(item, undefined, true)}
-          key={snapshot.environment}
-          items={records}
-          selectedId={inspected?.requestId}
-          catalog={catalog}
-          history={history}
-          onRefresh={() => void history.refresh()}
-          onSelect={selectExecution}
-        />
-      ) : (
-        <p className="form-note">
-          El historial local de ejecución está disponible en QA. La observación de Mediator se
-          consulta por separado.
-        </p>
-      )}
       {receipt && (
         <WithdrawalReceiptDialog
           key={receipt.requestId}

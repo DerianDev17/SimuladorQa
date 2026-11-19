@@ -24,6 +24,7 @@ const sharedReadChannels = new Set<string>([
   channels.observations,
   channels.loadRun,
   channels.loadConfigurations,
+  channels.loadConfigurationAudit,
   channels.loadHistory,
   channels.loadHistoryDetail,
 ]);

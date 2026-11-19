@@ -1,7 +1,6 @@
 import { LoadResultsView } from './LoadResultsView';
 import { LoadConfigurationsView } from './LoadConfigurationsView';
 import { stressPreset } from '../../../../packages/domain/src/load-configurations';
-import { LoadHistoryView } from './LoadHistoryView';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AtmProfile } from '../../../../packages/domain/src/catalogs';
 import type { Environment } from '../../../../packages/domain/src/index';
@@ -33,6 +32,7 @@ interface Props {
   atms: readonly AtmProfile[];
   disabled: boolean;
   onBusyChange(busy: boolean): void;
+  onOpenReports(): void;
 }
 type Preset = 'QUICK' | 'ONE' | 'THREE' | 'FIVE' | 'CUSTOM';
 const presets = [
@@ -69,7 +69,7 @@ const presets = [
     count: 100,
   },
 ] as const;
-export function LoadTestView({ environment, atms, disabled, onBusyChange }: Props) {
+export function LoadTestView({ environment, atms, disabled, onBusyChange, onOpenReports }: Props) {
   const available = useMemo(
     () => atms.filter((atm) => atm.active && atm.environment === 'QA'),
     [atms],
@@ -77,7 +77,6 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
   const [atmIds, setAtmIds] = useState<string[]>([]);
   const [preset, setPreset] = useState<Preset>('QUICK');
   const [configurationsOpen, setConfigurationsOpen] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
   const [advanced, setAdvanced] = useState(false);
   const [mode, setMode] = useState<LoadTestMode>('LOAD');
   const [operation, setOperation] = useState<LoadTestOperation>('BALANCE');
@@ -319,9 +318,7 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
         </div>
       </header>
       <div className="load-history-actions">
-        <button aria-expanded={historyOpen} onClick={() => setHistoryOpen(!historyOpen)}>
-          {historyOpen ? 'Ocultar historial de carga' : 'Ver historial de carga'}
-        </button>
+        <button onClick={onOpenReports}>Abrir reportes de carga</button>
         <button
           aria-expanded={configurationsOpen}
           onClick={() => setConfigurationsOpen(!configurationsOpen)}
@@ -329,12 +326,6 @@ export function LoadTestView({ environment, atms, disabled, onBusyChange }: Prop
           {configurationsOpen ? 'Ocultar configuraciones' : 'Configuraciones guardadas'}
         </button>
       </div>
-      {historyOpen &&
-        (environment === 'QA' ? (
-          <LoadHistoryView atms={atms} />
-        ) : (
-          <p>Selecciona QA para consultar el historial de carga.</p>
-        ))}
       {configurationsOpen &&
         (environment === 'QA' ? (
           <LoadConfigurationsView

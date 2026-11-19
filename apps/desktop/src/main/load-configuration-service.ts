@@ -2,7 +2,10 @@ import {
   parseSaveLoadConfiguration,
   parseDeleteLoadConfiguration,
 } from '../../../../packages/domain/src/load-configurations';
-import type { SavedLoadConfiguration } from '../../../../packages/domain/src/load-configurations';
+import type {
+  SavedLoadConfiguration,
+  LoadConfigurationAudit,
+} from '../../../../packages/domain/src/load-configurations';
 import type { Result } from '../../../../packages/shared/src/contracts';
 import { failure } from '../../../../packages/shared/src/contracts';
 import type { PreferencesStore } from './ports';
@@ -14,10 +17,7 @@ export class LoadConfigurationService {
     private readonly preferences: Pick<PreferencesStore, 'read'>,
     private readonly busy: () => boolean,
   ) {}
-  private async access(
-    action: () => Promise<SavedLoadConfiguration[]>,
-    mutation = false,
-  ): Promise<Result<SavedLoadConfiguration[]>> {
+  private async access<T>(action: () => Promise<T>, mutation = false): Promise<Result<T>> {
     try {
       if ((await this.preferences.read()).environment !== 'QA')
         return failure('FORBIDDEN', 'Las configuraciones de carga pertenecen a QA.');
@@ -43,6 +43,11 @@ export class LoadConfigurationService {
     if (payload !== undefined)
       return Promise.resolve(failure('VALIDATION_ERROR', 'Consulta de configuraciones inválida.'));
     return this.access(() => this.store.list());
+  }
+  audit(payload: unknown): Promise<Result<LoadConfigurationAudit[]>> {
+    if (payload !== undefined)
+      return Promise.resolve(failure('VALIDATION_ERROR', 'Consulta de auditoría inválida.'));
+    return this.access(() => this.store.listAudit());
   }
   save(payload: unknown): Promise<Result<SavedLoadConfiguration[]>> {
     const request = parseSaveLoadConfiguration(payload);

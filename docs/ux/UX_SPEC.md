@@ -1,14 +1,17 @@
 # UX Specification
 
-## Reportes y auditoría — 2026-11-17
+## Reportería y auditoría central — 2026-11-19
 
-Una única entrada **Reportes y auditoría** ocupa el lugar de **Observación**.
-Agrupa los informes de carga, la auditoría de envío (incluido el historial de
-ambientes), la actividad de catálogos y la consulta de Mediator existentes.
-La navegación interna muestra una sección a la vez y enfoca su contenido al
-cambiar con teclado. Los accesos contextuales a Mediator mantienen su destino.
-Los errores o timeouts no se muestran como auditorías vacías. Ver
-[reportería](../REPORTING.md).
+Reemplaza Observación con las pestañas Resumen, Reportes, Auditoría y Mediator.
+Se trasladan los historiales de Transacciones/Carga y los paneles de auditoría de
+Catálogos/Configuración; sus pantallas conservan ejecución y edición. Navegación
+por teclado en pestañas, filtros validados, estados vacíos y errores por fuente.
+Los detalles de transacciones conservan Mensajes y su limpieza al ocultarse,
+sin modificar el borrador operativo. Los contadores describen únicamente los
+registros consultados. Alcance y límites en [Reportería](../REPORTING.md).
+
+Esta sección sustituye las ubicaciones de historial/auditoría de las descripciones
+históricas siguientes. La consulta de Mediator conserva su comportamiento.
 
 ## Navegación y ventanas compactas — 2026-11-10
 

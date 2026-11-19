@@ -2,6 +2,7 @@ import type {
   SavedLoadConfiguration,
   SaveLoadConfiguration,
   DeleteLoadConfiguration,
+  LoadConfigurationAudit,
 } from '../../domain/src/load-configurations';
 import type { LoadExportRequest, LoadExportStatus } from '../../domain/src/load-export';
 import type { LoadHistoryQuery, LoadHistoryPage } from '../../domain/src/load-history';
@@ -121,6 +122,7 @@ export const channels = {
   startLoadRun: 'load:run:start',
   loadRun: 'load:run:status',
   loadConfigurations: 'load:configurations:list',
+  loadConfigurationAudit: 'load:configurations:audit',
   saveLoadConfiguration: 'load:configurations:save',
   deleteLoadConfiguration: 'load:configurations:delete',
   exportLoadRun: 'load:history:export',
@@ -266,6 +268,7 @@ export interface DesktopApi {
   getMediatorLive(request: MediatorLiveRequest): Promise<Result<MediatorLiveSnapshot>>;
   startLoadRun(request: LoadRunRequest): Promise<Result<LoadRunSnapshot>>;
   getLoadConfigurations(): Promise<Result<SavedLoadConfiguration[]>>;
+  getLoadConfigurationAudit(): Promise<Result<LoadConfigurationAudit[]>>;
   saveLoadConfiguration(request: SaveLoadConfiguration): Promise<Result<SavedLoadConfiguration[]>>;
   deleteLoadConfiguration(
     request: DeleteLoadConfiguration,

@@ -39,6 +39,63 @@ afterEach(async () => {
 });
 
 describe('biblioteca persistente de carga y estrés', () => {
+  it('consulta auditoría persistida de recursos eliminados, valida acceso y protege errores', async () => {
+    const service = new LoadConfigurationService(store, preferences, () => true);
+    const saved = (await store.save(request()))[0]!;
+    await store.delete({ id: saved.id, revision: saved.revision });
+    await store.close();
+    const result = await service.audit(undefined);
+    expect(result).toMatchObject({
+      ok: true,
+      value: [
+        {
+          action: 'DELETED',
+          configurationId: saved.id,
+          revision: 1,
+          user: 'tester',
+          machine: 'local',
+        },
+        { action: 'CREATED', configurationId: saved.id },
+      ],
+    });
+    expect(await service.audit({})).toMatchObject({
+      ok: false,
+      error: { code: 'VALIDATION_ERROR' },
+    });
+    const forbidden = new LoadConfigurationService(
+      store,
+      { read: async () => ({ version: 1, environment: 'PREPROD', audit: [] }) },
+      () => false,
+    );
+    expect(await forbidden.audit(undefined)).toMatchObject({
+      ok: false,
+      error: { code: 'FORBIDDEN' },
+    });
+    const db = new DatabaseSync(join(directory, 'config.sqlite'));
+    try {
+      db.exec('BEGIN EXCLUSIVE');
+      expect(await service.audit(undefined)).toMatchObject({
+        ok: false,
+        error: { code: 'STORAGE_UNAVAILABLE' },
+      });
+      db.exec('ROLLBACK');
+      db.prepare('UPDATE audit SET action = ?').run('private-corrupt');
+      const failed = await service.audit(undefined);
+      expect(failed).toMatchObject({ ok: false, error: { code: 'STORAGE_UNAVAILABLE' } });
+      expect(JSON.stringify(failed)).not.toContain('private-corrupt');
+    } finally {
+      db.close();
+    }
+  });
+  it('limita la consulta a los últimos cien eventos conservando el registro completo', async () => {
+    let saved = (await store.save(request()))[0]!;
+    for (let index = 0; index < 102; index++)
+      saved = (await store.save({ ...request(), id: saved.id, revision: saved.revision }))[0]!;
+    const audit = await store.listAudit();
+    expect(audit).toHaveLength(100);
+    expect(audit[0]?.revision).toBe(103);
+    expect(audit.at(-1)?.revision).toBe(4);
+  });
   it('crea, actualiza, reabre y elimina con auditoría atómica y sin secretos', async () => {
     const first = (await store.save(request()))[0]!;
     const changed = (

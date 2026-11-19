@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-19 — Reportería y auditoría central
+
+- Reemplaza Observación por Resumen, Reportes, Auditoría y Mediator.
+- Centraliza historiales, exportaciones de carga y eventos de cambios; retira
+  los paneles duplicados de Transacciones, Carga, Catálogos y Configuración.
+- Consulta la auditoría existente de configuraciones de carga, conserva detalles,
+  filtros, límites de fuentes y errores independientes. Ver ADR-048.
+
 ## 2026-11-19 — Historial y recuperación de interfaz
 
 ### Correcciones de revisión

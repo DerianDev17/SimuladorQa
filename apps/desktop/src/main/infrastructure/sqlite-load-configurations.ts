@@ -6,11 +6,13 @@ import {
   parseSaveLoadConfiguration,
   parseDeleteLoadConfiguration,
   validSavedLoadConfiguration,
+  validLoadConfigurationAudit,
 } from '../../../../../packages/domain/src/load-configurations';
 import type {
   SavedLoadConfiguration,
   SaveLoadConfiguration,
   DeleteLoadConfiguration,
+  LoadConfigurationAudit,
 } from '../../../../../packages/domain/src/load-configurations';
 import { LoadConfigurationConflict } from '../load-configuration-ports';
 import type { LoadConfigurationStore } from '../load-configuration-ports';
@@ -77,6 +79,22 @@ export class SqliteLoadConfigurations implements LoadConfigurationStore {
   }
   list(): Promise<SavedLoadConfiguration[]> {
     return this.serial(async () => this.rows(await this.open()));
+  }
+  listAudit(): Promise<LoadConfigurationAudit[]> {
+    return this.serial(async () => {
+      const db = await this.open();
+      const rows = db
+        .prepare(
+          `SELECT id, occurred_at AS timestamp,
+        configuration_id AS configurationId, revision, action, actor AS user, machine
+        FROM audit ORDER BY occurred_at DESC, rowid DESC LIMIT 100`,
+        )
+        .all();
+      return rows.map((row) => {
+        if (!validLoadConfigurationAudit(row)) throw Error('CONFIG_AUDIT_CORRUPT');
+        return row;
+      });
+    });
   }
   save(input: SaveLoadConfiguration): Promise<SavedLoadConfiguration[]> {
     const request = parseSaveLoadConfiguration(input);

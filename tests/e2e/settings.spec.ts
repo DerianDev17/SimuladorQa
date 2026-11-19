@@ -46,7 +46,10 @@ async function launch(documented = true, page = 'Envío') {
   await expect(window.getByRole('combobox', { name: 'Ambiente', exact: true })).toHaveCount(0);
   await window.getByRole('button', { name: 'Configuración', exact: true }).click();
   await expect(window.getByRole('heading', { name: 'Configuración', exact: true })).toBeVisible();
-  await openSettingsPage(window, page);
+  if (page === 'Auditoría') {
+    await window.getByRole('button', { name: 'Reportería y auditoría', exact: true }).click();
+    await window.getByRole('tab', { name: 'Auditoría', exact: true }).click();
+  } else await openSettingsPage(window, page);
   return window;
 }
 
@@ -54,14 +57,11 @@ test('configuración general: navegación, edición, validación, guardado en Qa
   const window = await launch(true, 'Ambiente y estación');
   const form = window.getByRole('region', { name: 'Configuración de envío', exact: true });
   const menu = window.getByRole('navigation', { name: 'Páginas de configuración' });
-  await expect(menu.getByRole('button')).toHaveCount(6);
+  await expect(menu.getByRole('button')).toHaveCount(5);
   await expect(
     window.getByRole('region', { name: 'Ambiente y estación', exact: true }),
   ).toContainText('Documentada');
-  await openSettingsPage(window, 'Auditoría');
-  await expect(window.getByRole('region', { name: 'Auditoría de envío' })).toContainText(
-    'Revisión 1',
-  );
+  await expect(menu.getByRole('button', { name: 'Auditoría', exact: true })).toHaveCount(0);
   const documentUrl = window.url();
   await menu.getByRole('button', { name: 'Envío', exact: true }).focus();
   await window.keyboard.press('Enter');
@@ -92,13 +92,19 @@ test('configuración general: navegación, edición, validación, guardado en Qa
   await form.getByRole('button', { name: 'Guardar configuración de envío', exact: true }).click();
   await expect(form.getByRole('status')).toContainText('Configuración guardada');
   await expect(form.getByText('Revisión 2', { exact: true })).toBeVisible();
-  await openSettingsPage(window, 'Auditoría');
-  const audit = window.getByRole('region', { name: 'Auditoría de envío' });
+  await window.getByRole('button', { name: 'Reportería y auditoría', exact: true }).click();
+  await window.getByRole('tab', { name: 'Auditoría', exact: true }).click();
+  const audit = window.getByRole('region', { name: 'Actividad de auditoría', exact: true });
   await expect(audit.getByRole('row').nth(1)).toContainText('Revisión 2');
-  await expect(audit.getByRole('row').nth(1)).toContainText('Conexión: 1000 ms');
-  await expect(audit.getByRole('row').nth(1)).toContainText('Respuesta: 2000 ms');
+  await audit
+    .getByRole('button', { name: /^Ver evento / })
+    .first()
+    .click();
+  await expect(audit).toContainText('Conexión: 1000 ms');
+  await expect(audit).toContainText('Respuesta: 2000 ms');
   await mkdir('artifacts', { recursive: true });
   await window.screenshot({ path: 'artifacts/settings-send-audit.png' });
+  await window.getByRole('button', { name: 'Configuración', exact: true }).click();
   await openSettingsPage(window, 'Ambiente y estación');
   await expect(window.getByText('Ambiente único · Pruebas del simulador')).toBeVisible();
   await mkdir('artifacts', { recursive: true });
@@ -177,7 +183,6 @@ test('configuración por páginas: contenido exclusivo, teclado y selección con
     'Dispositivos y perfiles',
     'Evidencia de red',
     'Requisitos',
-    'Auditoría',
     'Ambiente y estación',
   ]) {
     const button = navigation.getByRole('button', { name, exact: true });
@@ -461,8 +466,8 @@ test('configuración operativa: requisitos reflejan ajustes actuales y permiten 
 
 test('configuración operativa: auditoría vacía y timeout retiran datos sin ocultar el error', async () => {
   const window = await launch(false, 'Auditoría');
-  const audit = window.getByRole('region', { name: 'Auditoría de envío' });
-  await expect(audit).toContainText('No hay configuraciones de envío guardadas');
+  const audit = window.getByRole('region', { name: 'Actividad de auditoría', exact: true });
+  await expect(audit).toContainText('No hay eventos en los registros disponibles');
   expect(
     await window.evaluate(
       async () =>
@@ -481,16 +486,21 @@ test('configuración operativa: auditoría vacía y timeout retiran datos sin oc
         ).ok,
     ),
   ).toBe(true);
-  await audit.getByRole('button', { name: 'Actualizar auditoría' }).click();
-  await expect(audit.getByRole('table')).toContainText('127.0.0.1:16104');
+  await window.getByRole('button', { name: 'Actualizar', exact: true }).click();
+  await audit
+    .getByRole('button', { name: /^Ver evento / })
+    .first()
+    .click();
+  await expect(audit).toContainText('127.0.0.1:16104');
   await app!.evaluate(({ ipcMain }) => {
     ipcMain.removeHandler('transaction:send:configuration');
     ipcMain.handle('transaction:send:configuration', () => new Promise(() => {}));
   });
-  await audit.getByRole('button', { name: 'Actualizar auditoría' }).click();
-  await expect(audit.getByRole('alert')).toContainText('no respondió a tiempo', { timeout: 10000 });
-  await expect(audit).not.toContainText('No hay configuraciones de envío guardadas');
-  await expect(audit.getByRole('table')).toHaveCount(0);
+  await window.getByRole('button', { name: 'Actualizar', exact: true }).click();
+  await expect(window.getByRole('alert')).toContainText('no respondió a tiempo', {
+    timeout: 10000,
+  });
+  await expect(audit.getByRole('button', { name: /^Ver evento / })).toHaveCount(0);
   await expect(audit).not.toContainText('127.0.0.1:16104');
-  await expect(audit.getByRole('button', { name: 'Actualizar auditoría' })).toBeEnabled();
+  await expect(window.getByRole('button', { name: 'Actualizar', exact: true })).toBeEnabled();
 });

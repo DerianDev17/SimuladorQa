@@ -1,4 +1,3 @@
-import { CatalogAuditView } from './CatalogAuditView';
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import {
@@ -940,7 +939,6 @@ export function CatalogView({
           )}
         </div>
       </section>
-      {!editor && <CatalogAuditView audit={catalog?.audit} />}
       <dialog
         className="catalog-dialog"
         ref={refreshDialog}

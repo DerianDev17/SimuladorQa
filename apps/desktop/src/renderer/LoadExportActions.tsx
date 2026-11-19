@@ -7,7 +7,7 @@ import type {
 import { DesktopClient } from './desktop-client';
 import './load-reporting.css';
 const client = new DesktopClient(window.desktop);
-export function LoadExportActions({ run }: { run: LoadRunSnapshot }) {
+export function LoadExportActions({ run }: { run: Pick<LoadRunSnapshot, 'runId' | 'state'> }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
