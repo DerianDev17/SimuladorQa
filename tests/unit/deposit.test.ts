@@ -19,7 +19,9 @@ import { QaOperationCatalog } from '../../apps/desktop/src/main/adapters/qa-oper
 import { CmsV36Catalog } from '../../apps/desktop/src/main/adapters/cms-v36-catalog';
 import { QaEmvOperation } from '../../apps/desktop/src/main/adapters/qa-emv-operation';
 import { parseCardTlv } from '../../apps/desktop/src/main/adapters/emv-card-identity';
+import { parseBalanceJournal } from '../../apps/desktop/src/main/infrastructure/balance-journal';
 import { depositFixture, depositResponse } from '../helpers/deposit';
+import { approvedWithdrawalExecution } from '../helpers/withdrawal';
 import { fakeCardSession } from '../helpers/card-identity';
 import {
   qaAcResponse,
@@ -70,18 +72,35 @@ describe('contrato de depósito QA', () => {
       parseDepositDetails({ transaction: 'DEPOSIT', account: 'SAVINGS', currency: '840', amount }),
     ).toBeDefined();
   });
-  it.each(['0.00', '-1.00', '01.00', '10', '10.0', '1e2', '1,00', '10000000000.00'])(
-    'rechaza importe %s antes de seguridad',
-    (amount) => {
-      expect(parseDepositExecutionRequest(depositFixture(amount).request)).toBeUndefined();
-    },
-  );
+  it.each([
+    '0.00',
+    '-1.00',
+    '01.00',
+    '10',
+    '10.0',
+    '1.001',
+    '1e2',
+    '1,00',
+    '10000000000.00',
+    10,
+    null,
+  ])('rechaza importe %s antes de seguridad', (amount) => {
+    const { request, lease } = depositFixture();
+    expect(
+      parseDepositExecutionRequest({ ...request, draft: { ...request.draft, amount } }),
+    ).toBeUndefined();
+    expect(() => new NewVisaDeposit().build({ ...lease, amount: amount as string })).toThrow(
+      'DEPOSIT_AMOUNT_INVALID',
+    );
+  });
   it.each([
     { environment: 'PROD' },
     { environment: 'PREPROD' },
     { scenario: 'BANRED' },
+    { scenario: 'RTC' },
     { account: 'CURRENT' },
     { transaction: 'WITHDRAWAL_APPROVED' },
+    { transaction: 'BALANCE' },
     { atmId: null, atmRevision: null },
     { atmRevision: 0 },
     { amount: null },
@@ -96,6 +115,7 @@ describe('contrato de depósito QA', () => {
     for (const changes of [
       { reversalDelaySeconds: 1 },
       { extra: true },
+      { wire: 'data' },
       { requestId: 'invalid' },
       { cardReadId: 'invalid' },
       { configurationRevision: 0 },
@@ -130,30 +150,46 @@ describe('contrato de depósito QA', () => {
 });
 
 describe('builder y seguridad de depósito', () => {
-  it('genera 0200/211000 con F4 exacto y proyección sanitizada', () => {
-    const built = new NewVisaDeposit().build(depositFixture('75.25').lease);
-    const decoder = new CapturedVisaFraming().decoder();
-    const frames = decoder.push(built.wire);
-    decoder.finish();
-    expect(frames).toHaveLength(1);
-    expect(new CapturedVisaBalance('DEPOSIT').inspect(frames[0]!.opaqueBody)).toMatchObject({
-      mti: '0200',
-      processingCode: '211000',
-      amount: '7525'.padStart(12, '0'),
-      currency: '840',
-    });
-    expect(JSON.stringify(built.message)).not.toMatch(/\b\d{16,19}\b/);
-    expect(
-      new CapturedVisaBalance('DEPOSIT').response(depositResponse(built.metadata)),
-    ).toMatchObject({
-      metadata: { mti: '0210', responseCode: '12', processingCode: '211000' },
-      balances: [],
-    });
-    expect(() => new CapturedVisaBalance().inspect(frames[0]!.opaqueBody)).toThrow();
-    expect(() => new NewVisaDeposit().build({ ...depositFixture().lease, amount: '0.00' })).toThrow(
-      'DEPOSIT_AMOUNT_INVALID',
-    );
-  });
+  it.each(['0.01', '10.00', '75.25', '9999999999.99'])(
+    'genera 0200/211000 con F4 exacto y proyección sanitizada: %s',
+    (amount) => {
+      const built = new NewVisaDeposit().build(depositFixture(amount).lease);
+      const decoder = new CapturedVisaFraming().decoder();
+      const frames = decoder.push(built.wire);
+      decoder.finish();
+      expect(frames).toHaveLength(1);
+      expect(new CapturedVisaBalance('DEPOSIT').inspect(frames[0]!.opaqueBody)).toMatchObject({
+        mti: '0200',
+        processingCode: '211000',
+        amount: amount.replace('.', '').padStart(12, '0'),
+        currency: '840',
+      });
+      expect(JSON.stringify(built.message)).not.toMatch(/\b\d{16,19}\b/);
+      expect(
+        new CapturedVisaBalance('DEPOSIT').response(depositResponse(built.metadata)),
+      ).toMatchObject({
+        metadata: { mti: '0210', responseCode: '12', processingCode: '211000' },
+        balances: [],
+      });
+      const codec = new CapturedVisaBalance('DEPOSIT');
+      const response = depositResponse(built.metadata, '12', (fields) => {
+        fields.set(2, Buffer.concat([Buffer.of(19), Buffer.from('0' + '4'.repeat(19), 'hex')]));
+        fields.set(23, Buffer.from('0001', 'hex'));
+      });
+      expect(codec.response(response)).toMatchObject({
+        metadata: { responseCode: '12', processingCode: '211000', panMask: '444444XXXXXXXXX4444' },
+        balances: [],
+      });
+      const message = codec.message(response);
+      expect(message.fields.find((field) => field.number === 23)?.value).toBe('001');
+      expect(JSON.stringify(message)).not.toContain('4'.repeat(19));
+      expect(codec.response(depositResponse(built.metadata, '00')).balances).toEqual([]);
+      expect(() => new CapturedVisaBalance().inspect(frames[0]!.opaqueBody)).toThrow();
+      expect(() =>
+        new NewVisaDeposit().build({ ...depositFixture().lease, amount: '0.00' }),
+      ).toThrow('DEPOSIT_AMOUNT_INVALID');
+    },
+  );
   it('vincula 9F02 al importe y 9C=30 en CDOL y F55 sin reutilizar AC', async () => {
     const { profile } = qaExecutionFixture();
     const counters: string[] = [];
@@ -184,15 +220,61 @@ describe('builder y seguridad de depósito', () => {
       expect(tags.get('9F02')?.toString('hex')).toBe('7525'.padStart(12, '0'));
       expect(tags.get('9C')?.toString('hex')).toBe('30');
       expect(commands[0]!.subarray(5, 11).toString('hex')).toBe('7525'.padStart(12, '0'));
+      expect(commands[0]![29]).toBe(0x30);
       counters.push(tags.get('9F36')!.toString('hex'));
       nonces.push(tags.get('9F37')!.toString('hex'));
     }
     expect(counters).toEqual(['0001', '0002']);
     expect(nonces[0]).not.toBe(nonces[1]);
   });
+  it.each(['sin monto en CDOL1', 'sin tipo en CDOL1', 'sin política de depósito'] as const)(
+    'bloquea GENERATE AC %s',
+    async (mode) => {
+      const { profile } = qaExecutionFixture();
+      const card = qaCardFields();
+      if (mode === 'sin monto en CDOL1')
+        card.set('8C', Buffer.from('9F03069F1A0295055F2A029A039C019F3704', 'hex'));
+      if (mode === 'sin tipo en CDOL1')
+        card.set('8C', Buffer.from('9F02069F03069F1A0295055F2A029A039F3704', 'hex'));
+      const fake = fakeCardSession();
+      await expect(
+        new QaEmvOperation().generate(
+          fake.session,
+          card,
+          mode === 'sin política de depósito'
+            ? profile.emv
+            : { ...profile.emv, amountSource: 'DEPOSIT_AMOUNT' },
+          qaCalendar,
+          new AbortController().signal,
+          undefined,
+          '10.00',
+        ),
+      ).rejects.toThrow('QA_EMV_PROFILE_UNSUPPORTED');
+      expect(fake.commands).toHaveLength(0);
+    },
+  );
 });
 
 describe('servicio de depósito', () => {
+  it('el diario rechaza mezclar depósito/retiro y no convierte RC12 en aprobación', () => {
+    const record = approvedWithdrawalExecution();
+    delete record.withdrawal;
+    record.deposit = {
+      transaction: 'DEPOSIT',
+      account: 'SAVINGS',
+      currency: '840',
+      amount: '10.00',
+    };
+    record.balances = [];
+    const parse = () => parseBalanceJournal({ version: 1, executions: [record] });
+    expect(parse()).toHaveLength(1);
+    record.responseCode = '12';
+    expect(parse()).toBeUndefined();
+    record.outcome = 'NOT_APPROVED';
+    expect(parse()).toHaveLength(1);
+    record.withdrawal = approvedWithdrawalExecution().withdrawal!;
+    expect(parse()).toBeUndefined();
+  });
   it('sin proveedor queda bloqueado y nunca usa seguridad de saldo', async () => {
     const f = serviceFixture();
     const { request, target } = depositFixture();
