@@ -2,6 +2,14 @@
 
 ## 2026-11-19 — Historial y recuperación de interfaz
 
+### Correcciones de revisión
+
+- Mantiene la parada de carga disponible en recuperación, con reconciliación
+  después de error/timeout y sin repetir comandos automáticamente.
+- Conserva el detalle histórico al seleccionar nuevamente su fila local.
+
+### Mejoras iniciales
+
 - Consulta completa de los diarios QA con paginación, fechas, tipo y referencias;
   acceso a operaciones antiguas y sus mensajes cifrados existentes.
 - Guardado financiero por registro y búsqueda de UUID indexada; esquema SQLite 2.

@@ -7,6 +7,7 @@ import { SqliteBalanceJournal } from '../../apps/desktop/src/main/infrastructure
 import { SqliteLoadRunStore } from '../../apps/desktop/src/main/infrastructure/sqlite-load-run-store';
 import { approvedWithdrawalExecution } from '../helpers/withdrawal';
 import { historyRun } from '../helpers/load-history';
+import type { LoadRunSnapshot } from '../../packages/domain/src/load-run';
 import { removeTestDirectory } from '../helpers/temporary-directory';
 
 let directory: string;
@@ -69,6 +70,20 @@ test('historial completo: página antigua, búsqueda, fechas y conservación ant
   await history
     .getByRole('button', { name: 'Abrir operación histórica 000000', exact: true })
     .click();
+  await expect(page.getByRole('region', { name: 'Resultado', exact: true })).toContainText(
+    '000000',
+  );
+  // The selected archive record is also visible in the local list. Selecting
+  // that row must retain its snapshot even though it is outside recent(50).
+  await page.getByRole('button', { name: 'Abrir operación 000000', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Resultado', exact: true })).toContainText(
+    '000000',
+  );
+  await page.getByRole('button', { name: 'Actualizar historial', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Actualizar historial', exact: true }),
+  ).toBeEnabled();
+  await page.getByRole('button', { name: 'Abrir operación 000000', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Resultado', exact: true })).toContainText(
     '000000',
   );
@@ -218,4 +233,126 @@ test('recupera un error de render solo tras comprobar Main y no ejecuta transacc
   await page.getByRole('button', { name: 'Recuperar interfaz y revisar historial' }).click();
   await expect(page.getByRole('heading', { name: 'Nueva transacción', exact: true })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Historial local', exact: true })).toBeVisible();
+});
+
+interface RecoveryLoadProbe {
+  run: LoadRunSnapshot | null;
+  requests: string[];
+  mode: 'timeout' | 'error' | 'success';
+  financialCommands: number;
+}
+
+test('recuperación conserva Stop con carga activa, errores y timeout sin repetir comandos', async () => {
+  test.setTimeout(60000);
+  const page = await launch();
+  const catalog = await page.evaluate(() => window.desktop!.getCatalog('QA'));
+  const run = historyRun({ state: 'RUNNING', finishedAt: null, active: 1 });
+  await app!.evaluate(({ ipcMain }, run) => {
+    const probe: RecoveryLoadProbe = { run, requests: [], mode: 'timeout', financialCommands: 0 };
+    (globalThis as typeof globalThis & { recoveryLoadProbe: RecoveryLoadProbe }).recoveryLoadProbe =
+      probe;
+    ipcMain.removeHandler('load:run:status');
+    ipcMain.handle('load:run:status', () => ({ ok: true, value: probe.run }));
+    ipcMain.removeHandler('load:run:stop');
+    ipcMain.handle('load:run:stop', (_event, request: { runId: string }) => {
+      probe.requests.push(request.runId);
+      if (probe.mode === 'timeout') return new Promise(() => {});
+      if (probe.mode === 'error')
+        return {
+          ok: false,
+          error: { code: 'SERVICE_UNAVAILABLE', message: 'Parada no disponible.' },
+        };
+      probe.run = { ...probe.run!, state: 'STOPPING' };
+      return { ok: true, value: probe.run };
+    });
+    ipcMain.removeHandler('app:renderer:recovery');
+    ipcMain.handle('app:renderer:recovery', () => ({
+      ok: false,
+      error: { code: 'STORAGE_UNAVAILABLE', message: 'Historial no disponible.' },
+    }));
+    for (const channel of [
+      'transaction:balance:execute',
+      'transaction:withdrawal:execute',
+      'transaction:deposit:execute',
+      'load:run:start',
+    ]) {
+      ipcMain.removeHandler(channel);
+      ipcMain.handle(channel, () => {
+        probe.financialCommands++;
+        return { ok: false, error: { code: 'FORBIDDEN', message: 'No se debe iniciar.' } };
+      });
+    }
+    ipcMain.removeHandler('catalog:list');
+    ipcMain.handle('catalog:list', () => ({
+      ok: true,
+      value: { environment: 'QA', atms: null, entities: [], cases: [] },
+    }));
+  }, run);
+  await page.reload();
+  await expect(
+    page.getByRole('heading', { name: 'La interfaz necesita recuperarse' }),
+  ).toBeVisible();
+  const controls = page.getByRole('region', { name: 'Carga durante recuperación' });
+  const stop = controls.getByRole('button', { name: 'Detener prueba', exact: true });
+  await expect(stop).toBeEnabled();
+  await page.getByRole('button', { name: 'Consultar estado de operaciones' }).click();
+  await expect(page.getByText('Historial no disponible.', { exact: true })).toBeVisible();
+  await expect(stop).toBeEnabled();
+  await stop.click();
+  await expect(controls.getByRole('button', { name: 'Solicitando parada…' })).toBeDisabled();
+  await expect(controls.getByRole('alert')).toContainText('Actualiza el estado de carga', {
+    timeout: 10000,
+  });
+  await expect(stop).toBeDisabled();
+  expect(
+    await app!.evaluate(
+      () =>
+        (globalThis as typeof globalThis & { recoveryLoadProbe: RecoveryLoadProbe })
+          .recoveryLoadProbe.requests,
+    ),
+  ).toEqual([run.runId]);
+  await app!.evaluate(() => {
+    (
+      globalThis as typeof globalThis & { recoveryLoadProbe: RecoveryLoadProbe }
+    ).recoveryLoadProbe.mode = 'error';
+  });
+  await controls.getByRole('button', { name: 'Actualizar estado de carga' }).click();
+  await expect(stop).toBeEnabled();
+  await stop.click();
+  await expect(controls.getByRole('alert')).toContainText('Parada no disponible.');
+  await expect(stop).toBeDisabled();
+  await app!.evaluate(() => {
+    (
+      globalThis as typeof globalThis & { recoveryLoadProbe: RecoveryLoadProbe }
+    ).recoveryLoadProbe.mode = 'success';
+  });
+  await controls.getByRole('button', { name: 'Actualizar estado de carga' }).click();
+  await stop.click();
+  await expect(
+    controls.getByRole('button', { name: 'Parada en curso', exact: true }),
+  ).toBeDisabled();
+  await app!.evaluate(({ ipcMain }, catalog) => {
+    const probe = (globalThis as typeof globalThis & { recoveryLoadProbe: RecoveryLoadProbe })
+      .recoveryLoadProbe;
+    probe.run = null;
+    ipcMain.removeHandler('app:renderer:recovery');
+    ipcMain.handle('app:renderer:recovery', () => ({
+      ok: true,
+      value: { busy: false, recent: [] },
+    }));
+    ipcMain.removeHandler('catalog:list');
+    ipcMain.handle('catalog:list', () => catalog);
+  }, catalog);
+  await controls.getByRole('button', { name: 'Actualizar estado de carga' }).click();
+  await expect(controls.getByRole('button', { name: 'Parada en curso' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Consultar estado de operaciones' }).click();
+  await page.getByRole('button', { name: 'Recuperar interfaz y revisar historial' }).click();
+  await expect(page.getByRole('heading', { name: 'Nueva transacción', exact: true })).toBeVisible();
+  expect(
+    await app!.evaluate(() => {
+      const probe = (globalThis as typeof globalThis & { recoveryLoadProbe: RecoveryLoadProbe })
+        .recoveryLoadProbe;
+      return { requests: probe.requests, financialCommands: probe.financialCommands };
+    }),
+  ).toEqual({ requests: [run.runId, run.runId, run.runId], financialCommands: 0 });
 });

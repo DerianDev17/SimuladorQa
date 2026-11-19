@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { DesktopClient } from './desktop-client';
 import { App } from './App';
 import type { RendererRecoveryStatus } from '../../../../packages/shared/src/contracts';
+import { RecoveryLoadControl } from './RecoveryLoadControl';
 
 const recoveryClient = new DesktopClient(window.desktop);
 
@@ -41,6 +42,7 @@ function Recovery({ restore }: { restore: () => void }) {
         El borrador y la lectura de tarjeta de esta pantalla se perderán. Revisa el historial antes
         de iniciar otra transacción.
       </p>
+      <RecoveryLoadControl client={recoveryClient} />
       <button disabled={busy} onClick={() => void inspect(false)}>
         {busy ? 'Comprobando…' : 'Consultar estado de operaciones'}
       </button>

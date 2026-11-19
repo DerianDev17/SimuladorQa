@@ -39,6 +39,15 @@ revisar el historial. Se pierde el borrador/lectura efímeros del Renderer; Main
 sus operaciones continúan sin reiniciar ni reenviar. Esto no recupera un proceso
 Renderer terminado por el sistema ni convierte un resultado incierto en aprobado.
 
+Corrección de revisión: la pantalla de recuperación consulta por separado la
+corrida actual y ofrece **Detener prueba** mediante el IPC de parada existente,
+incluso si no se puede consultar el historial financiero. No inicia corridas.
+Un error o timeout exige **Actualizar estado de carga** antes de repetir la
+parada; STOPPING no permite un segundo comando. Las lecturas anteriores a una
+parada no pueden sobrescribir su respuesta. Restaurar la UI sigue exigiendo
+comprobar que Main esté libre. La selección de un registro antiguo conserva su
+snapshot al volver a abrirlo desde la lista local, incluso después de actualizarla.
+
 No hay dependencias nuevas ni cambios en ISO/TCP, PIN/EMV, retención o producción.
 
 ## Ajustes de uso

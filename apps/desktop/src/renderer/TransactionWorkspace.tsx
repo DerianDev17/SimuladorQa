@@ -103,11 +103,16 @@ export function TransactionWorkspace(props: TransactionPreparationProps) {
     if (preview) preparation.setReceipt(preview);
   }
   function selectExecution(item: BalanceExecution, tab?: 'messages', archived = false) {
-    setSelection({
-      id: item.requestId,
-      context,
-      ...(tab ? { tab } : {}),
-      ...(archived ? { archived: item } : {}),
+    setSelection((current) => {
+      const keepArchived =
+        archived ||
+        (current?.context === context && current.archived?.requestId === item.requestId);
+      return {
+        id: item.requestId,
+        context,
+        ...(tab ? { tab } : {}),
+        ...(keepArchived ? { archived: item } : {}),
+      };
     });
     reviewHeading.current?.focus({ preventScroll: true });
     reviewHeading.current?.closest('.transaction-result-panel')?.scrollIntoView({
