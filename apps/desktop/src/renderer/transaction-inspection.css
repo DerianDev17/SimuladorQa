@@ -206,6 +206,35 @@
   padding: 0;
   min-width: 0;
 }
+.transaction-history > .text-button {
+  margin: 0 18px 14px;
+}
+.transaction-history > section[aria-label='Historial completo'] {
+  margin-bottom: 20px;
+  padding: 16px;
+  border-block: 1px solid var(--border);
+  background: var(--surface, #fff);
+}
+.transaction-history section[aria-label='Historial completo'] .transaction-history-filters {
+  padding: 12px;
+  min-width: 0;
+}
+.transaction-history section[aria-label='Historial completo'] table {
+  table-layout: auto;
+  min-width: 760px;
+}
+.transaction-history section[aria-label='Historial completo'] th,
+.transaction-history section[aria-label='Historial completo'] td:last-child,
+.transaction-history section[aria-label='Historial completo'] td:nth-child(3) {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.renderer-recovery {
+  margin: 40px auto;
+  width: min(720px, calc(100% - 32px));
+  overflow-wrap: anywhere;
+}
 .transaction-history .panel-heading {
   padding: 14px 18px;
   margin: 0;

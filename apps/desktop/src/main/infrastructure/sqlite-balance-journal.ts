@@ -4,6 +4,12 @@ import { DatabaseSync } from 'node:sqlite';
 import type { BalanceExecution } from '../../../../../packages/domain/src/balance-inquiry';
 import type { BalanceJournal } from '../balance-ports';
 import { FileBalanceJournal, parseBalanceJournal } from './balance-journal';
+import { isUuid } from '../../../../../packages/domain/src/catalogs';
+import {
+  parseTransactionHistoryQuery,
+  transactionHistoryPageSize,
+} from '../../../../../packages/domain/src/transaction-history';
+import type { TransactionHistoryQuery } from '../../../../../packages/domain/src/transaction-history';
 
 interface StoredRow {
   request_id: string;
@@ -72,7 +78,7 @@ export class SqliteBalanceJournal implements BalanceJournal {
           database.exec('ROLLBACK');
           throw error;
         }
-      } else if (version !== 1) throw Error('BALANCE_JOURNAL_SCHEMA_UNSUPPORTED');
+      } else if (version !== 1 && version !== 2) throw Error('BALANCE_JOURNAL_SCHEMA_UNSUPPORTED');
 
       const migration = database
         .prepare("SELECT value FROM metadata WHERE key = 'legacy_imported'")
@@ -97,6 +103,13 @@ export class SqliteBalanceJournal implements BalanceJournal {
           throw error;
         }
       }
+      if (version !== 2) {
+        database.exec(`BEGIN IMMEDIATE;
+          CREATE INDEX IF NOT EXISTS executions_started ON executions
+            (json_extract(payload, '$.startedAt') DESC, request_id DESC);
+          PRAGMA user_version = 2;
+          COMMIT;`);
+      }
       this.database = database;
       return database;
     } catch (error) {
@@ -115,6 +128,32 @@ export class SqliteBalanceJournal implements BalanceJournal {
     });
   }
 
+  async find(requestId: string): Promise<BalanceExecution | null> {
+    if (!isUuid(requestId)) throw Error('BALANCE_JOURNAL_REFERENCE_INVALID');
+    return this.serialize(async () => {
+      const database = await this.open();
+      const row = database
+        .prepare('SELECT request_id, payload FROM executions WHERE request_id = ?')
+        .get(requestId) as unknown as StoredRow | undefined;
+      return row ? this.parseRows([row])[0]! : null;
+    });
+  }
+
+  async save(execution: BalanceExecution): Promise<void> {
+    // Snapshot before queuing: callers may advance a reversal while storage waits.
+    const snapshot = this.parseItem(structuredClone(execution));
+    return this.serialize(async () => {
+      const database = await this.open();
+      // The statement is atomic; conflict updates retain the insertion sequence.
+      database
+        .prepare(
+          `INSERT INTO executions (request_id, payload) VALUES (?, ?)
+        ON CONFLICT(request_id) DO UPDATE SET payload = excluded.payload`,
+        )
+        .run(snapshot.requestId, JSON.stringify(snapshot));
+    });
+  }
+
   async recent(limit: number): Promise<BalanceExecution[]> {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50)
       throw Error('BALANCE_JOURNAL_LIMIT_INVALID');
@@ -123,6 +162,47 @@ export class SqliteBalanceJournal implements BalanceJournal {
       const rows = database
         .prepare('SELECT request_id, payload FROM executions ORDER BY sequence DESC LIMIT ?')
         .all(limit) as unknown as StoredRow[];
+      return this.parseRows(rows);
+    });
+  }
+
+  async page(input: TransactionHistoryQuery): Promise<BalanceExecution[]> {
+    const query = parseTransactionHistoryQuery(input);
+    if (!query) throw Error('BALANCE_JOURNAL_QUERY_INVALID');
+    return this.serialize(async () => {
+      const database = await this.open();
+      const where: string[] = [];
+      const parameters: (string | number)[] = [];
+      const started = "json_extract(payload, '$.startedAt')";
+      if (query.from) {
+        where.push(`${started} >= ?`);
+        parameters.push(query.from);
+      }
+      if (query.to) {
+        where.push(`${started} < ?`);
+        parameters.push(query.to);
+      }
+      if (query.before) {
+        where.push(`(${started}, request_id) < (?, ?)`);
+        parameters.push(query.before.startedAt, query.before.requestId);
+      }
+      if (query.reference) {
+        // Search only public references, never the complete message or card fields.
+        where.push(`instr(lower(request_id || ' ' ||
+          json_extract(payload, '$.transactionId') || ' ' || json_extract(payload, '$.runId') || ' ' ||
+          coalesce(json_extract(payload, '$.correlation.stan'), '') || ' ' ||
+          coalesce(json_extract(payload, '$.correlation.rrn'), '') || ' ' ||
+          coalesce(json_extract(payload, '$.correlation.terminalId'), '')), lower(?)) > 0`);
+        parameters.push(query.reference);
+      }
+      parameters.push(transactionHistoryPageSize + 1);
+      const rows = database
+        .prepare(
+          `SELECT request_id, payload FROM executions
+        ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+        ORDER BY ${started} DESC, request_id DESC LIMIT ?`,
+        )
+        .all(...parameters) as unknown as StoredRow[];
       return this.parseRows(rows);
     });
   }

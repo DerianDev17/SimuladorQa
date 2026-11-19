@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-19 — Historial y recuperación de interfaz
+
+- Consulta completa de los diarios QA con paginación, fechas, tipo y referencias;
+  acceso a operaciones antiguas y sus mensajes cifrados existentes.
+- Guardado financiero por registro y búsqueda de UUID indexada; esquema SQLite 2.
+- Historial de carga conserva resultados ante errores; depósitos tienen su propia
+  etiqueta de error. Mediator recuerda el intervalo consultado, sin fecha fija.
+- Recuperación de errores de renderizado previa consulta de actividad e historial
+  en Main, sin reinicios ni reenvíos financieros. Ver ADR-047.
+
 ## 2026-11-17 — Acceso a reportes desde el menú
 
 - Añade **Reportes** al menú lateral para consultar directamente las corridas de

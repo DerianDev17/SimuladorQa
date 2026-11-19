@@ -196,9 +196,6 @@ export function LoadHistoryView({ atms }: { atms: readonly AtmProfile[] }) {
     const id = ++generation.current;
     setBusy(true);
     setError('');
-    setPage(null);
-    setDetail(null);
-    setQuery(request);
     const result = await client.call((api) => api.listLoadHistory(request));
     if (id !== generation.current) return;
     setBusy(false);
@@ -207,6 +204,8 @@ export function LoadHistoryView({ atms }: { atms: readonly AtmProfile[] }) {
       return;
     }
     setPage(result.value);
+    setDetail(null);
+    setQuery(request);
     setCursors(history);
   }
   useEffect(() => {
@@ -219,7 +218,6 @@ export function LoadHistoryView({ atms }: { atms: readonly AtmProfile[] }) {
     const id = ++generation.current;
     setBusy(true);
     setError('');
-    setDetail(null);
     const result = await client.call((api) => api.getLoadHistory({ runId }));
     if (id !== generation.current) return;
     setBusy(false);
@@ -327,7 +325,13 @@ export function LoadHistoryView({ atms }: { atms: readonly AtmProfile[] }) {
         </fieldset>
       </form>
       {busy && <p role="status">Consultando historial…</p>}
-      {error && <p role="alert">{error}</p>}
+      {error && (
+        <p role="alert">
+          {error}
+          {page &&
+            ' Se conserva la última consulta correcta; puede estar desactualizada. Los nuevos filtros o el detalle solicitado no se han aplicado.'}
+        </p>
+      )}
       <button disabled={busy} onClick={() => void list(pageQuery(query), [undefined])}>
         Actualizar historial
       </button>

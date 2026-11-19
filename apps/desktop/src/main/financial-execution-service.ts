@@ -75,6 +75,7 @@ export class FinancialExecutionService implements FinancialExecutionPort {
   private save(record: BalanceExecution): Promise<void> {
     const snapshot = structuredClone(record);
     const write = this.journalWrites.then(async () => {
+      if (this.journal.save) return this.journal.save(snapshot);
       const current = await this.journal.read();
       await this.journal.write([
         ...current.filter((item) => item.requestId !== snapshot.requestId),
@@ -209,7 +210,9 @@ export class FinancialExecutionService implements FinancialExecutionPort {
     try {
       return {
         ok: true,
-        value: (await this.journal.read()).find((item) => item.requestId === requestId) ?? null,
+        value: this.journal.find
+          ? await this.journal.find(requestId)
+          : ((await this.journal.read()).find((item) => item.requestId === requestId) ?? null),
       };
     } catch {
       return failure('STORAGE_UNAVAILABLE', 'No se pudo leer el historial de transacciones.');

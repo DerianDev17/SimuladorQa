@@ -62,6 +62,10 @@ import type {
 } from '../../domain/src/withdrawal-receipt';
 import type { SessionMessages } from './session-messages';
 import type {
+  TransactionHistoryQuery,
+  TransactionHistoryPage,
+} from '../../domain/src/transaction-history';
+import type {
   AtmLocalInspection,
   CreateQaAtmRequest,
   InspectQaAtmRequest,
@@ -69,6 +73,8 @@ import type {
 } from '../../domain/src/atm-onboarding';
 
 export const channels = {
+  transactionHistory: 'transaction:history:page',
+  rendererRecovery: 'app:renderer:recovery',
   sessionMessages: 'transaction:messages:session',
   snapshot: 'app:snapshot',
   switchConnection: 'switch:connection:status',
@@ -186,7 +192,14 @@ export interface PreparedSendPlan {
   transmissionAttempted: false;
 }
 
+export interface RendererRecoveryStatus {
+  busy: boolean;
+  recent: readonly Pick<BalanceExecution, 'requestId' | 'outcome' | 'startedAt'>[];
+}
+
 export interface DesktopApi {
+  listTransactionHistory(request: TransactionHistoryQuery): Promise<Result<TransactionHistoryPage>>;
+  getRendererRecovery(): Promise<Result<RendererRecoveryStatus>>;
   getSessionMessages(request: {
     environment: 'QA';
     requestId: string;

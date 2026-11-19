@@ -9,6 +9,12 @@ historial local combina saldos, retiros y depósitos y permite seleccionar una o
 sin modificar el borrador. Ver [preparación](docs/implementation/TRANSACTION_PREPARATION.md)
 y [ADR-036](docs/adr/ADR-036-TRANSACTION-INSPECTION.md).
 
+**Buscar en todo el historial** permite consultar operaciones antiguas por fechas,
+tipo y referencias, con páginas de 50 registros. Los errores de actualización
+conservan los resultados anteriores. La interfaz dispone de recuperación tras
+errores de renderizado, previa comprobación de actividad en Main; ver
+[ADR-047](docs/adr/ADR-047-HISTORY-AND-RENDERER-RECOVERY.md).
+
 Mensajes guarda todos los campos de nuevas operaciones QA cifrados en este equipo,
 en texto o HEX según su codificación. El historial permite verlos completos después
 de cerrar la app, sin caducidad, con el mismo perfil Windows. Los registros antiguos

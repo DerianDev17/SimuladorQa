@@ -37,8 +37,8 @@ const navigation: { id: string; label: string; icon: IconName; group: string }[]
 ];
 const client = new DesktopClient(window.desktop);
 
-export function App() {
-  const [page, setPage] = useState('dashboard');
+export function App({ initialPage = 'dashboard' }: { initialPage?: 'dashboard' | 'transactions' }) {
+  const [page, setPage] = useState<string>(initialPage);
   const content = useRef<HTMLElement>(null);
   const previousPage = useRef(page);
   useEffect(() => {

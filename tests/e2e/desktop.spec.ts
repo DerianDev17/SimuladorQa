@@ -3156,9 +3156,8 @@ test('Observación Qa: consulta validada y dependencia no configurada', async ()
   await expect(observer.getByRole('button', { name: 'Consultar Mediator' })).toBeEnabled();
   await expect(observer.getByLabel('Entidad', { exact: true })).toHaveValue('205');
   await expect(observer.getByLabel('Canal', { exact: true })).toHaveValue('1');
-  await expect(observer.getByLabel('Desde (hora SQL)', { exact: true })).toHaveValue(
-    '2026-09-29 00:00:07.803',
-  );
+  await expect(observer.getByLabel('Desde (hora SQL)', { exact: true })).toHaveValue('');
+  await observer.getByLabel('Desde (hora SQL)', { exact: true }).fill('2026-09-29 00:00:07.803');
   await observer.getByLabel('Hasta (hora SQL)', { exact: true }).fill('2026-09-30 23:00:07.803');
   await observer.getByRole('button', { name: 'Consultar Mediator' }).click();
   await expect(observer.getByRole('alert')).toContainText('hasta 24 horas');
@@ -3210,6 +3209,8 @@ test('Historial muestra mandatorios CMS y variantes sin exponer valores', async 
     .getByRole('button', { name: 'Consulta de Mediator', exact: true })
     .click();
   const observer = window.getByLabel('Consulta de Mediator', { exact: true });
+  await observer.getByLabel('Desde (hora SQL)', { exact: true }).fill('2026-09-29 00:00:07.803');
+  await observer.getByLabel('Hasta (hora SQL)', { exact: true }).fill('2026-09-29 23:00:07.803');
   await observer.getByRole('button', { name: 'Consultar Mediator' }).click();
   await observer.getByRole('button', { name: `Ver mensajes de ${batch.rows[0]!.traceId}` }).click();
   const reviews = observer.getByLabel('Revisión de campos CMS');

@@ -44,6 +44,8 @@ import { FileQaWithdrawalPolicies } from './infrastructure/qa-withdrawal-policie
 import { WindowsQaPinEntry } from './adapters/qa-pin-entry';
 import { WindowsQaPinCipher } from './adapters/qa-pin-cipher';
 import { SqliteBalanceJournal } from './infrastructure/sqlite-balance-journal';
+import { TransactionHistoryService } from './transaction-history-service';
+import { RendererRecoveryService } from './renderer-recovery-service';
 import { BalanceTcpTransport } from './adapters/balance-tcp-transport';
 import { WithdrawalReversalTransport } from './adapters/withdrawal-reversal-transport';
 import { FileNetworkEvidence } from './adapters/file-network-evidence';
@@ -391,6 +393,24 @@ void startupReady
       readCache,
     );
     financialApplication = application;
+    const transactionHistory = new TransactionHistoryService(
+      { BALANCE: balanceJournal, WITHDRAWAL: withdrawalJournal, DEPOSIT: depositJournal },
+      preferences,
+    );
+    const rendererRecovery = new RendererRecoveryService(
+      () =>
+        !!(
+          application.isFinancialBusy() ||
+          balanceService?.isBusy() ||
+          withdrawalService?.isBusy() ||
+          depositService?.isBusy() ||
+          loadRun?.isBusy() ||
+          cardIdentity?.isBusy() ||
+          withdrawalReceipts?.isBusy()
+        ),
+      [balanceService, withdrawalService, depositService],
+      preferences,
+    );
     loadRunStore = new WorkerLoadRunStore(
       join(__dirname, 'load-store-worker.cjs'),
       join(app.getPath('userData'), 'qa-load-runs.sqlite'),
@@ -472,6 +492,10 @@ void startupReady
             'Detén la corrida de carga antes de cambiar el contexto o enviar otra operación.',
           );
         switch (channel) {
+          case channels.transactionHistory:
+            return transactionHistory.list(payload);
+          case channels.rendererRecovery:
+            return rendererRecovery.inspect(payload);
           case channels.startLoadRun:
             if (
               developmentReload ||

@@ -1,5 +1,13 @@
 # Preparacion documental de transacciones
 
+## Historial completo — 2026-11-19
+
+**Buscar en todo el historial** complementa la lista reciente y permite paginar
+todos los diarios QA, filtrar fechas locales/tipo y buscar STAN, RRN, Terminal ID
+o UUID. Abrir un registro antiguo conserva el borrador y habilita su inspección
+y mensajes cifrados existentes. Error/timeout conserva la última página sin
+avanzar el cursor. Ver [ADR-047](../adr/ADR-047-HISTORY-AND-RENDERER-RECOVERY.md).
+
 ## Historial completo cifrado — 2026-11-12
 
 Las nuevas solicitudes y respuestas QA se conservan completas en un archivo

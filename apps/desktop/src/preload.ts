@@ -9,6 +9,8 @@ const invoke: typeof ipcRenderer.invoke = (channel: string, ...args: unknown[]) 
   reads.run(channel, args, () => ipcRenderer.invoke(channel, ...args));
 
 const api: DesktopApi = Object.freeze<DesktopApi>({
+  listTransactionHistory: (request) => invoke(channels.transactionHistory, request),
+  getRendererRecovery: () => invoke(channels.rendererRecovery),
   getSessionMessages: (request) => invoke(channels.sessionMessages, request),
   getSnapshot: () => invoke(channels.snapshot),
   getSwitchConnection: (environment) => invoke(channels.switchConnection, { environment }),

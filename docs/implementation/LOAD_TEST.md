@@ -6,6 +6,11 @@ estado y parada. Se retiró el preparador virtual legado sin consumidores y su I
 
 ## Preparar e iniciar
 
+Desde 2026-11-19, un error o timeout al actualizar el historial conserva la tabla,
+el detalle y la página de la última consulta correcta, con aviso de posible
+desactualización. Los filtros y el cursor solo se aplican al recibir una respuesta
+correcta. Ver [ADR-047](../adr/ADR-047-HISTORY-AND-RENDERER-RECOVERY.md).
+
 La UI consulta el estado cada segundo durante ejecución, cierre, error o inicio
 incierto; en reposo o con corrida cerrada espera cinco segundos entre respuestas.
 Iniciar y detener solicitan actualización inmediata, sin solapar consultas ni

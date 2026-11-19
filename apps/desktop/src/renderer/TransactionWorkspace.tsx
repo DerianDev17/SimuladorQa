@@ -47,6 +47,7 @@ export function TransactionWorkspace(props: TransactionPreparationProps) {
     id: string;
     context: string;
     tab?: 'messages';
+    archived?: BalanceExecution;
   }>();
   const context = `${snapshot?.environment}:${preparation.inspectionGeneration}`;
   useEffect(() => {
@@ -66,7 +67,12 @@ export function TransactionWorkspace(props: TransactionPreparationProps) {
         ].join(':')
       : undefined,
   );
-  const persisted = mergeExecutionHistory(history.balances, history.withdrawals, history.deposits);
+  const persisted = mergeExecutionHistory(
+    history.balances,
+    history.withdrawals,
+    history.deposits,
+    selection?.context === context && selection.archived ? [selection.archived] : [],
+  );
   const records =
     snapshot?.environment === 'QA'
       ? mergeExecutionHistory(
@@ -96,8 +102,13 @@ export function TransactionWorkspace(props: TransactionPreparationProps) {
     const preview = createWithdrawalReceipt(execution);
     if (preview) preparation.setReceipt(preview);
   }
-  function selectExecution(item: BalanceExecution, tab?: 'messages') {
-    setSelection({ id: item.requestId, context, ...(tab ? { tab } : {}) });
+  function selectExecution(item: BalanceExecution, tab?: 'messages', archived = false) {
+    setSelection({
+      id: item.requestId,
+      context,
+      ...(tab ? { tab } : {}),
+      ...(archived ? { archived: item } : {}),
+    });
     reviewHeading.current?.focus({ preventScroll: true });
     reviewHeading.current?.closest('.transaction-result-panel')?.scrollIntoView({
       block: 'start',
@@ -279,6 +290,8 @@ export function TransactionWorkspace(props: TransactionPreparationProps) {
       </div>
       {snapshot?.environment === 'QA' ? (
         <TransactionHistoryView
+          client={client}
+          onSelectArchived={(item) => selectExecution(item, undefined, true)}
           key={snapshot.environment}
           items={records}
           selectedId={inspected?.requestId}

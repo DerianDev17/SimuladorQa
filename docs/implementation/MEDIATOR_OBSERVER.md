@@ -14,8 +14,11 @@ inclusivas y orden descendente por TraceId. El esquema inspeccionado confirma
 `msgRequest` y `msgResponse` de tipo XML y ambas claves bigint como PK.
 Los filtros comentados no se interpretan como reglas obligatorias.
 
-La pantalla inicia con entidad 205, canal 1 y la ventana exacta aportada:
-`2026-09-29 00:00:07.803` a `2026-09-29 23:00:07.803`. Permite cambiar entidad,
+La pantalla inicia con entidad 205, canal 1 y el último intervalo válido consultado
+en este equipo. La primera apertura deja las fechas vacías para entrada manual;
+se retiró la fecha fija de la muestra histórica. Solo se guardan `from` y `to`
+en una preferencia local versionada, sin convertir la zona SQL. Si no se puede
+guardar, se informa y la consulta continúa. Permite cambiar entidad,
 canal, fechas y limite (1 a 100); terminal exacto, TrnCode de seis digitos,
 secuencia bigint y RetCode son opcionales. No se consulta por cuenta ni PAN.
 Una ventana de hasta 24 horas es un limite tecnico de esta entrega, no una regla

@@ -10,6 +10,9 @@ import {
 } from './transaction-inspection';
 import { executionOutcomeLabel } from './transaction-outcome';
 import { Icon } from './Icon';
+import type { DesktopClient } from './desktop-client';
+import { ArchivedTransactionHistory } from './ArchivedTransactionHistory';
+const sourceLabels = { balances: 'Saldos', withdrawals: 'Retiros', deposits: 'Depósitos' };
 
 const outcomes = [
   ['all', 'Todos los resultados'],
@@ -26,7 +29,11 @@ export function TransactionHistoryView({
   history,
   onRefresh,
   onSelect,
+  client,
+  onSelectArchived,
 }: {
+  client: DesktopClient;
+  onSelectArchived: (item: BalanceExecution) => void;
   items: readonly BalanceExecution[];
   selectedId: string | undefined;
   catalog: CatalogSnapshot | undefined;
@@ -35,6 +42,7 @@ export function TransactionHistoryView({
   onSelect: (item: BalanceExecution) => void;
 }) {
   const [filters, setFilters] = useState<HistoryFilters>({ query: '', atmId: '', outcome: 'all' });
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const visible = filterExecutionHistory(items, filters, catalog);
   const atms = [...new Set(items.map((item) => item.atmId))];
   return (
@@ -46,6 +54,21 @@ export function TransactionHistoryView({
           {history.loading ? 'Actualizando…' : 'Actualizar historial'}
         </button>
       </div>
+      <button
+        className="text-button"
+        aria-expanded={archiveOpen}
+        onClick={() => setArchiveOpen(!archiveOpen)}
+      >
+        {archiveOpen ? 'Ocultar historial completo' : 'Buscar en todo el historial'}
+      </button>
+      {archiveOpen && (
+        <ArchivedTransactionHistory
+          client={client}
+          catalog={catalog}
+          selectedId={selectedId}
+          onSelect={onSelectArchived}
+        />
+      )}
       <div className="transaction-history-filters">
         <label>
           <span className="visually-hidden">Buscar operación, ATM o referencia</span>
@@ -110,7 +133,7 @@ export function TransactionHistoryView({
           <strong>Historial incompleto; se conserva la última información disponible.</strong>
           {history.issues.map((issue) => (
             <p key={issue.source}>
-              {issue.source === 'balances' ? 'Saldos' : 'Retiros'}: {issue.message}
+              {sourceLabels[issue.source]}: {issue.message}
             </p>
           ))}
         </div>

@@ -7,6 +7,7 @@ import type {
   MessageContractReview,
 } from '../../../../packages/domain/src/observations';
 import { DesktopClient } from './desktop-client';
+import { readObservationInterval, saveObservationInterval } from './observation-interval';
 
 const observerClient = new DesktopClient(window.desktop, 20_000);
 export function ObservationView({
@@ -16,17 +17,17 @@ export function ObservationView({
   environment: Environment | undefined;
   disabled: boolean;
 }) {
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useState(() => ({
     entityId: '205',
     channelId: '1',
-    from: '2026-09-29 00:00:07.803',
-    to: '2026-09-29 23:00:07.803',
+    ...readObservationInterval(() => window.localStorage),
     terminalId: '',
     transactionCode: '',
     terminalSequence: '',
     returnCode: '',
     limit: '50',
-  });
+  }));
+  const [intervalWarning, setIntervalWarning] = useState('');
   const [result, setResult] = useState<ObservationSearch>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -75,6 +76,11 @@ export function ObservationView({
       return;
     }
     const current = ++generation.current;
+    setIntervalWarning(
+      saveObservationInterval(() => window.localStorage, { from: filters.from, to: filters.to })
+        ? ''
+        : 'No se pudo recordar el intervalo en este equipo. La consulta puede continuar.',
+    );
     setBusy(true);
     setResult(undefined);
     setSelected(undefined);
@@ -142,9 +148,11 @@ export function ObservationView({
         </fieldset>
       </form>
       <p className="observation-note">
-        Intervalo inclusivo, hasta 24 horas. La zona horaria SQL está pendiente de confirmar.
-        Journal usa NOLOCK: puede incluir lecturas sin confirmar.
+        Se recuerda el último intervalo válido consultado. Si es la primera consulta, ingresa las
+        fechas en hora SQL. Intervalo inclusivo, hasta 24 horas. La zona horaria SQL está pendiente
+        de confirmar. Journal usa NOLOCK: puede incluir lecturas sin confirmar.
       </p>
+      {intervalWarning && <p role="status">{intervalWarning}</p>}
       {busy && <p role="status">Consultando Mediator…</p>}
       {error && (
         <p role="alert" className="observation-error">

@@ -57,6 +57,14 @@ imports de tipos, reexports e imports dinámicos.
 
 ## Ejecución y persistencia
 
+ADR-047 incorpora guardado SQLite por registro y consulta paginada de los tres
+diarios mediante `TransactionHistoryService`. El esquema financiero 2 añade un
+índice fecha/UUID; conserva preflight, registro previo al envío e idempotencia.
+`RendererRecoveryService` comprueba actividad y referencias guardadas antes de
+restaurar la interfaz tras un error de renderizado. Ambos servicios consumen
+puertos y exponen únicamente consultas públicas; ver
+[ADR-047](docs/adr/ADR-047-HISTORY-AND-RENDERER-RECOVERY.md).
+
 Main deriva el destino desde configuración y vuelve a validar el ATM y la
 seguridad antes de transmitir. El motor registra PENDING antes del envío y
 conserva `runId`, `transactionId`, `requestId`, STAN/RRN cuando existen. La misma

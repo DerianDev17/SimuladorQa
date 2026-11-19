@@ -3,6 +3,8 @@ import { channels } from '../../../packages/shared/src/contracts';
 // Only queries may share an IPC request. Commands keep their existing Main-side
 // validation, locks and financial idempotency.
 const sharedReadChannels = new Set<string>([
+  channels.transactionHistory,
+  channels.rendererRecovery,
   channels.snapshot,
   channels.catalog,
   channels.reader,

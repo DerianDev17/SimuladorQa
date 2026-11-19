@@ -73,6 +73,8 @@ export interface BalanceTransport {
   exchange(request: BalanceExchangeRequest): Promise<BalanceExchangeResult>;
 }
 export interface BalanceJournal {
+  save?(execution: BalanceExecution): Promise<void>;
+  find?(requestId: string): Promise<BalanceExecution | null>;
   read(): Promise<BalanceExecution[]>;
   recent?(limit: number): Promise<BalanceExecution[]>;
   write(executions: readonly BalanceExecution[]): Promise<void>;
