@@ -17,7 +17,6 @@ import './balance-execution.css';
 import { Icon } from './Icon';
 
 import { balanceOutcomeLabels, executionOutcomeLabel } from './transaction-outcome';
-export { executionOutcomeLabel } from './transaction-outcome';
 export function BalanceExecutionView({
   execution,
   onReceipt,
@@ -36,6 +35,18 @@ export function BalanceExecutionView({
   }, [execution.reversal?.outcome]);
   const fullyApproved =
     approved && (!execution.reversal || execution.reversal.outcome === 'APPROVED');
+  const blockers = execution.blockers.length > 0 && (
+    <ul>
+      {execution.blockers.map((item) => (
+        <li key={item.id}>{item.label}</li>
+      ))}
+    </ul>
+  );
+  const receiptButton = onReceipt && createWithdrawalReceipt(execution) && (
+    <button className="secondary receipt-preview-button" onClick={() => onReceipt(execution)}>
+      <Icon name="printer" size={17} /> Ver comprobante
+    </button>
+  );
   const hostBalances = approved && (
     <section className="host-balances" aria-label="Saldos recibidos">
       <h3>
@@ -130,13 +141,7 @@ export function BalanceExecutionView({
         </p>
       )}
       {(!compact || execution.withdrawal) && hostBalances}
-      {execution.blockers.length > 0 && (
-        <ul>
-          {execution.blockers.map((item) => (
-            <li key={item.id}>{item.label}</li>
-          ))}
-        </ul>
-      )}
+      {blockers}
       {balanceDeliveryUncertain(execution) ? (
         <p>
           {canStartAfterUnconfirmedWithdrawal(execution)
@@ -176,11 +181,7 @@ export function BalanceExecutionView({
           </div>
         </dl>
       )}
-      {!compact && onReceipt && createWithdrawalReceipt(execution) && (
-        <button className="secondary receipt-preview-button" onClick={() => onReceipt(execution)}>
-          <Icon name="printer" size={17} /> Ver comprobante
-        </button>
-      )}
+      {!compact && receiptButton}
       <details className="inline-details">
         <summary>Referencia de ejecución</summary>
         {execution.responseCode && <p>Código de respuesta: {execution.responseCode}</p>}
@@ -333,15 +334,7 @@ export function BalanceExecutionView({
               {execution.elapsedMs} ms de transporte
             </p>
           </div>
-          {onReceipt && createWithdrawalReceipt(execution) && (
-            <button
-              className="secondary receipt-preview-button"
-              onClick={() => onReceipt(execution)}
-            >
-              <Icon name="printer" size={17} />
-              Ver comprobante
-            </button>
-          )}
+          {receiptButton}
         </div>
       )}
       {compact && balanceDeliveryUncertain(execution) && (
@@ -351,13 +344,7 @@ export function BalanceExecutionView({
         </p>
       )}
       {compact && !execution.withdrawal && hostBalances}
-      {compact && execution.blockers.length > 0 && (
-        <ul>
-          {execution.blockers.map((item) => (
-            <li key={item.id}>{item.label}</li>
-          ))}
-        </ul>
-      )}
+      {compact && blockers}
       {compact ? (
         <details className="inline-details execution-full-details">
           <summary>Importes y detalle técnico</summary>

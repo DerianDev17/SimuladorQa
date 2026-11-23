@@ -2,22 +2,14 @@ import { scenarios, transactions } from '../../../../packages/domain/src/index';
 import { accountTypes, needsOriginal } from '../../../../packages/domain/src/transaction-draft';
 import type { ReviewedDraft } from '../../../../packages/shared/src/contracts';
 
-export function DraftSummary({
-  review,
-  compact = false,
-}: {
-  review: ReviewedDraft;
-  compact?: boolean;
-}) {
+export function DraftSummary({ review }: { review: ReviewedDraft }) {
   return (
     <section className="draft-summary" aria-label="Contexto revisado">
       <div className="panel-heading">
         <h3>Contexto revisado</h3>
-        <span className={compact ? 'pill neutral' : 'pill amber'}>
-          {compact ? 'Revisión local' : 'Envío bloqueado'}
-        </span>
+        <span className="pill neutral">Revisión local</span>
       </div>
-      <details className="review-context-details" open={!compact}>
+      <details className="review-context-details">
         <summary>Ver revisión detallada</summary>
         <dl>
           {[

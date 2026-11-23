@@ -586,7 +586,7 @@ export function TransactionComposer({ preparation }: { preparation: TransactionP
           {review && (
             <>
               <p role="status">Revisión documental · {review.environment}</p>
-              <DraftSummary review={review} compact />
+              <DraftSummary review={review} />
             </>
           )}
           {review?.destinationCompatibility && (

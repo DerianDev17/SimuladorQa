@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-19 — Limpieza de código y archivos obsoletos
+
+- Centraliza el arranque y el entorno de Electron en las pruebas de interfaz.
+- Reutiliza el detalle de bloqueos y el botón de comprobante; retira una variante
+  sin uso de la revisión local y estilos de pantallas antiguas.
+- Elimina el manifiesto inicial desactualizado, sin modificar reglas transaccionales.
+
 ## 2026-11-19 — Historial y recuperación de interfaz
 
 ### Correcciones de revisión

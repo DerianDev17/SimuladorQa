@@ -1,4 +1,5 @@
-import { _electron as electron, expect, test } from '@playwright/test';
+import { launchTestDesktop, electronEnvironment } from '../helpers/electron-launch';
+import { expect, test } from '@playwright/test';
 import type { ElectronApplication, Page } from '@playwright/test';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -1385,20 +1386,10 @@ for (const recovery of ['POLL', 'LATE_REJECTION'] as const) {
 }
 
 async function launch(developmentPort?: number, extraArgs: string[] = []) {
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined && key !== 'ELECTRON_RUN_AS_NODE') env[key] = value;
-  }
-  app = await electron.launch({
-    args: [
-      resolve('dist/main.cjs'),
-      `--user-data-dir=${directory}`,
-      '--simulate-reader',
-      ...extraArgs,
-      ...(developmentPort === undefined ? [] : ['--dev', `--dev-port=${developmentPort}`]),
-    ],
-    env,
-  });
+  app = await launchTestDesktop(directory, [
+    ...extraArgs,
+    ...(developmentPort === undefined ? [] : ['--dev', `--dev-port=${developmentPort}`]),
+  ]);
   const window = await app.firstWindow();
   await expect(window.getByRole('heading', { name: 'Estación de pruebas' })).toBeVisible();
   return window;
@@ -1625,10 +1616,7 @@ test('impide una segunda instancia sobre el mismo diario financiero', async () =
       app!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.isMinimized()),
     )
     .toBe(true);
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined && key !== 'ELECTRON_RUN_AS_NODE') env[key] = value;
-  }
+  const env = electronEnvironment();
   const binary = createRequire(import.meta.url)('electron') as string;
   const duplicate = spawn(binary, [resolve('dist/main.cjs'), `--user-data-dir=${directory}`], {
     env,

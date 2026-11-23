@@ -349,65 +349,6 @@ main {
   padding: 0;
   font-size: 12px;
 }
-.account-options {
-  border: 0;
-  padding: 0;
-  margin: 0;
-  min-width: 0;
-}
-.account-options legend {
-  font-size: 13px;
-  color: #344b6c;
-  padding: 0;
-  margin-bottom: 7px;
-}
-.account-segments {
-  display: flex;
-}
-.transaction-fields .account-segments label {
-  display: block;
-  position: relative;
-  flex: 1;
-  cursor: pointer;
-}
-.transaction-fields .account-segments input {
-  position: absolute;
-  opacity: 0;
-  width: 1px;
-  height: 1px;
-  min-height: 0;
-  padding: 0;
-}
-.account-segments span {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 40px;
-  border: 1px solid #ccd6e3;
-  font-size: 13px;
-  color: #465e7a;
-}
-.account-segments label:first-child span {
-  border-radius: 6px 0 0 6px;
-}
-.account-segments label:last-child span {
-  border-radius: 0 6px 6px 0;
-  margin-left: -1px;
-}
-.account-segments input:checked + span {
-  background: #eaf2ff;
-  border-color: #367be1;
-  color: #145cc4;
-  position: relative;
-}
-.account-segments input:focus-visible + span {
-  outline: 3px solid #55a7ff;
-  outline-offset: 2px;
-  z-index: 1;
-}
-.account-options:disabled {
-  opacity: 0.5;
-}
 .transaction-composer .transaction-fields label {
   font-size: 13px;
   gap: 7px;

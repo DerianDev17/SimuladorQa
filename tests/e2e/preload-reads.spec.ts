@@ -1,3 +1,4 @@
+import { electronEnvironment } from '../helpers/electron-launch';
 import { _electron as electron, expect, test } from '@playwright/test';
 import type { ElectronApplication } from '@playwright/test';
 import { mkdtemp, writeFile } from 'node:fs/promises';
@@ -35,9 +36,7 @@ app.whenReady().then(() => {
   window.loadURL('about:blank');
 });`,
   );
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env))
-    if (value !== undefined && key !== 'ELECTRON_RUN_AS_NODE') env[key] = value;
+  const env = electronEnvironment();
   let app: ElectronApplication | undefined;
   try {
     app = await electron.launch({ args: [harness, `--user-data-dir=${directory}`], env });

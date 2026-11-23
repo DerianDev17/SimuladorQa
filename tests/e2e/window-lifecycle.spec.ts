@@ -1,3 +1,4 @@
+import { electronEnvironment } from '../helpers/electron-launch';
 import { expect, test } from '@playwright/test';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -18,8 +19,7 @@ for (const state of ['minimized', 'hidden']) {
       await server.listen();
       const address = server.httpServer!.address();
       if (!address || typeof address === 'string') throw Error('NO_SERVER');
-      const env = { ...process.env };
-      delete env.ELECTRON_RUN_AS_NODE;
+      const env = electronEnvironment();
       const binary = createRequire(import.meta.url)('electron') as string;
       const child = spawn(
         binary,

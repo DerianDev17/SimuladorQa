@@ -1,4 +1,5 @@
-import { _electron as electron, expect, test } from '@playwright/test';
+import { launchTestDesktop } from '../helpers/electron-launch';
+import { expect, test } from '@playwright/test';
 import type { ElectronApplication, Page } from '@playwright/test';
 import { mkdtemp, readFile, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -197,16 +198,7 @@ async function printReport(report: Page, destination: string) {
   await writeFile(destination, Buffer.from(encoded, 'base64'));
 }
 async function launch() {
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      (entry): entry is [string, string] =>
-        entry[1] !== undefined && entry[0] !== 'ELECTRON_RUN_AS_NODE',
-    ),
-  );
-  app = await electron.launch({
-    args: [resolve('dist/main.cjs'), `--user-data-dir=${directory}`, '--simulate-reader'],
-    env,
-  });
+  app = await launchTestDesktop(directory);
   const window = await app.firstWindow();
   await expect(window.getByRole('heading', { name: 'Estación de pruebas' })).toBeVisible();
   const reports = window

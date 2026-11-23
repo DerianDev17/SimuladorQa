@@ -1,3 +1,4 @@
+import { electronEnvironment } from '../helpers/electron-launch';
 import { _electron as electron, expect, test } from '@playwright/test';
 import type { ElectronApplication } from '@playwright/test';
 import { createServer } from 'node:net';
@@ -29,12 +30,7 @@ test('el indicador sigue un socket real y ofrece conexión independiente del PIN
     const evidence = networkEvidence();
     evidence.ingress = { host: '127.0.0.1', port: (server.address() as AddressInfo).port };
     await writeFile(join(directory, 'network-evidence.json'), JSON.stringify(evidence));
-    const env = Object.fromEntries(
-      Object.entries(process.env).filter(
-        (entry): entry is [string, string] =>
-          entry[1] !== undefined && entry[0] !== 'ELECTRON_RUN_AS_NODE',
-      ),
-    );
+    const env = electronEnvironment();
     app = await electron.launch({
       args: [resolve('dist/main.cjs'), `--user-data-dir=${directory}`],
       env,

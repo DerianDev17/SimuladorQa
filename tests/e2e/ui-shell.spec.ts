@@ -1,8 +1,9 @@
-import { _electron as electron, expect, test } from '@playwright/test';
+import { launchTestDesktop } from '../helpers/electron-launch';
+import { expect, test } from '@playwright/test';
 import type { ElectronApplication, Page } from '@playwright/test';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { removeTestDirectory } from '../helpers/temporary-directory';
 
 let directory: string;
@@ -11,14 +12,7 @@ let window: Page;
 
 test.beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'coonecta-ui-shell-'));
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined && key !== 'ELECTRON_RUN_AS_NODE') env[key] = value;
-  }
-  app = await electron.launch({
-    args: [resolve('dist/main.cjs'), `--user-data-dir=${directory}`, '--simulate-reader'],
-    env,
-  });
+  app = await launchTestDesktop(directory);
   window = await app.firstWindow();
   await expect(window.getByRole('heading', { name: 'Estación de pruebas' })).toBeVisible();
   await expect(navigation().getByRole('button', { name: 'Transacciones' })).toBeEnabled();

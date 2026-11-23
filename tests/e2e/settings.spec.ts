@@ -1,8 +1,9 @@
-import { _electron as electron, expect, test } from '@playwright/test';
+import { launchTestDesktop } from '../helpers/electron-launch';
+import { expect, test } from '@playwright/test';
 import type { ElectronApplication, Page } from '@playwright/test';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { createServer } from 'node:net';
 import type { AddressInfo, Socket } from 'node:net';
 import { networkEvidence } from '../helpers/network-evidence';
@@ -33,14 +34,7 @@ async function openSettingsPage(window: Page, name: string) {
 async function launch(documented = true, page = 'Envío') {
   if (documented)
     await writeFile(join(directory, 'network-evidence.json'), JSON.stringify(networkEvidence()));
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined && key !== 'ELECTRON_RUN_AS_NODE') env[key] = value;
-  }
-  app = await electron.launch({
-    args: [resolve('dist/main.cjs'), `--user-data-dir=${directory}`, '--simulate-reader'],
-    env,
-  });
+  app = await launchTestDesktop(directory);
   const window = await app.firstWindow();
   await expect(window.getByLabel('Ambiente', { exact: true })).toHaveText('Qa');
   await expect(window.getByRole('combobox', { name: 'Ambiente', exact: true })).toHaveCount(0);

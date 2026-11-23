@@ -1,8 +1,9 @@
-import { _electron as electron, test, expect } from '@playwright/test';
+import { launchTestDesktop } from '../helpers/electron-launch';
+import { test, expect } from '@playwright/test';
 import type { ElectronApplication, Page } from '@playwright/test';
 import { mkdtemp, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { SqliteBalanceJournal } from '../../apps/desktop/src/main/infrastructure/sqlite-balance-journal';
 import { SqliteLoadRunStore } from '../../apps/desktop/src/main/infrastructure/sqlite-load-run-store';
 import { approvedWithdrawalExecution } from '../helpers/withdrawal';
@@ -21,16 +22,7 @@ test.afterEach(async () => {
   await removeTestDirectory(directory, 'app-improvements-');
 });
 async function launch(): Promise<Page> {
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      (entry): entry is [string, string] =>
-        entry[1] !== undefined && entry[0] !== 'ELECTRON_RUN_AS_NODE',
-    ),
-  );
-  app = await electron.launch({
-    args: [resolve('dist/main.cjs'), `--user-data-dir=${directory}`, '--simulate-reader'],
-    env,
-  });
+  app = await launchTestDesktop(directory);
   const page = await app.firstWindow();
   await expect(page.getByRole('heading', { name: 'Estación de pruebas' })).toBeVisible();
   return page;

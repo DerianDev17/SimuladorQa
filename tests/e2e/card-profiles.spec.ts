@@ -1,4 +1,5 @@
-import { _electron as electron, expect, test } from '@playwright/test';
+import { launchTestDesktop } from '../helpers/electron-launch';
+import { expect, test } from '@playwright/test';
 import type { ElectronApplication } from '@playwright/test';
 import { build } from 'esbuild';
 import { mkdtemp, mkdir, readFile } from 'node:fs/promises';
@@ -21,16 +22,7 @@ test.beforeAll(async () => {
 });
 test.beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'coonecta-card-ui-'));
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      (entry): entry is [string, string] =>
-        entry[1] !== undefined && entry[0] !== 'ELECTRON_RUN_AS_NODE',
-    ),
-  );
-  app = await electron.launch({
-    args: [resolve('dist/main.cjs'), `--user-data-dir=${directory}`, '--simulate-reader'],
-    env,
-  });
+  app = await launchTestDesktop(directory);
   const window = await app.firstWindow();
   await expect(
     window.getByRole('heading', { name: 'Estación de pruebas', exact: true }),
