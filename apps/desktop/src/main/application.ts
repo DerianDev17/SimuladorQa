@@ -45,6 +45,7 @@ import { parseSaveSendConfiguration } from '../../../../packages/domain/src/send
 import type { SendConfigurationSnapshot } from '../../../../packages/domain/src/send-configuration';
 import type { PreparedSendPlan } from '../../../../packages/shared/src/contracts';
 import type { SendConfigurationPort } from './send-configuration-port';
+import { SerialTaskQueue } from './serial-task-queue';
 import {
   parseBalanceContextRequest,
   parseBalanceExecutionRequest,
@@ -75,7 +76,7 @@ import {
 } from '../../../../packages/domain/src/deposit';
 
 export class DesktopApplication {
-  private queue: Promise<unknown> = Promise.resolve();
+  private readonly queue = new SerialTaskQueue();
   private environmentRevision = 0;
   private observationSearchBusy = false;
   private observationLiveBusy = false;
@@ -110,12 +111,6 @@ export class DesktopApplication {
     private readonly readCache?: ReadCachePort,
   ) {}
 
-  private serialize<T>(operation: () => Promise<T>): Promise<T> {
-    const result = this.queue.then(operation);
-    this.queue = result.catch(() => undefined);
-    return result;
-  }
-
   private snapshot(preferences: Preferences): AppSnapshot {
     return {
       version: this.identity.version,
@@ -140,7 +135,7 @@ export class DesktopApplication {
   }
 
   getSnapshot(): Promise<Result<AppSnapshot>> {
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       try {
         return { ok: true, value: this.snapshot(await this.store.read()) };
       } catch {
@@ -153,7 +148,7 @@ export class DesktopApplication {
   }
 
   setEnvironment(payload: unknown): Promise<Result<AppSnapshot>> {
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       if (this.balanceBusy)
         return failure(
           'CONFLICT',
@@ -199,7 +194,7 @@ export class DesktopApplication {
   }
 
   prepare(payload: unknown): Promise<Result<Preparation>> {
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       const request = parsePreparationRequest(payload);
       if (!request)
         return failure('VALIDATION_ERROR', 'Selecciona una transacción y un escenario válidos.');
@@ -223,7 +218,7 @@ export class DesktopApplication {
       return failure('CONFLICT', 'Ya hay una consulta de Mediator en curso.');
     this.observationSearchBusy = true;
     try {
-      const initial = await this.serialize(async () => ({
+      const initial = await this.queue.run(async () => ({
         preferences: await this.store.read(),
         revision: this.environmentRevision,
       }));
@@ -232,7 +227,7 @@ export class DesktopApplication {
       if (!this.observer)
         return failure('SERVICE_UNAVAILABLE', 'El observador de Mediator no está configurado.');
       const result = await this.observer.search(request);
-      const current = await this.serialize(async () => ({
+      const current = await this.queue.run(async () => ({
         preferences: await this.store.read(),
         revision: this.environmentRevision,
       }));
@@ -268,7 +263,7 @@ export class DesktopApplication {
       return failure('CONFLICT', 'Ya hay una consulta de Mediator en curso.');
     this.observationLiveBusy = true;
     try {
-      const initial = await this.serialize(async () => ({
+      const initial = await this.queue.run(async () => ({
         preferences: await this.store.read(),
         revision: this.environmentRevision,
       }));
@@ -290,7 +285,7 @@ export class DesktopApplication {
               load,
             )
           : await load();
-      const current = await this.serialize(async () => ({
+      const current = await this.queue.run(async () => ({
         preferences: await this.store.read(),
         revision: this.environmentRevision,
       }));
@@ -311,7 +306,7 @@ export class DesktopApplication {
   }
 
   reviewDraft(payload: unknown): Promise<Result<ReviewedDraft>> {
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       const request = parseDraftRequest(payload);
       if (!request)
         return failure(
@@ -358,7 +353,7 @@ export class DesktopApplication {
   }
 
   getSendConfiguration(payload: unknown): Promise<Result<SendConfigurationSnapshot>> {
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       const environment = parseEnvironmentRequest(payload);
       if (!environment) return failure('VALIDATION_ERROR', 'El ambiente disponible es Qa.');
       try {
@@ -377,7 +372,7 @@ export class DesktopApplication {
     action: 'status' | 'connect' | 'disconnect',
     payload: unknown,
   ): Promise<Result<SwitchConnectionSnapshot>> {
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       if (parseEnvironmentRequest(payload) !== 'QA')
         return failure('FORBIDDEN', 'La conexión al Switch está disponible en QA.');
       if (action !== 'status' && this.balanceBusy)
@@ -424,7 +419,7 @@ export class DesktopApplication {
     });
   }
   saveSendConfiguration(payload: unknown): Promise<Result<SendConfigurationSnapshot>> {
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       if (this.balanceBusy)
         return failure(
           'CONFLICT',
@@ -460,7 +455,7 @@ export class DesktopApplication {
       );
     const review = await this.reviewDraft(payload.draft);
     if (!review.ok) return review;
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       try {
         const preferences = await this.store.read();
         if (preferences.environment !== review.value.environment)
@@ -511,7 +506,7 @@ export class DesktopApplication {
   private balanceTarget(
     request: BalanceContextRequest,
   ): Promise<Result<{ target: BalanceTarget; connect: number | null; response: number | null }>> {
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       try {
         if ((await this.store.read()).environment !== 'QA')
           return failure('CONFLICT', 'La ejecución requiere el ambiente QA activo.');
@@ -765,7 +760,7 @@ export class DesktopApplication {
     payload: unknown,
     operation: 'BALANCE' | 'WITHDRAWAL' | 'DEPOSIT' = 'BALANCE',
   ): Promise<Result<BalanceExecution | null>> {
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       if (
         !isRecord(payload) ||
         Object.keys(payload).length !== 2 ||
@@ -792,7 +787,7 @@ export class DesktopApplication {
   }
 
   getSessionMessages(payload: unknown): Promise<Result<SessionMessages | null>> {
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       if (
         !isRecord(payload) ||
         Object.keys(payload).length !== 2 ||
@@ -819,7 +814,7 @@ export class DesktopApplication {
     payload: unknown,
     operation: 'BALANCE' | 'WITHDRAWAL' | 'DEPOSIT' = 'BALANCE',
   ): Promise<Result<readonly BalanceExecution[]>> {
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       if (parseEnvironmentRequest(payload) !== 'QA')
         return failure('VALIDATION_ERROR', 'El historial de este perfil corresponde a QA.');
       try {
@@ -899,7 +894,7 @@ export class DesktopApplication {
     payload: unknown,
     forDisplay = false,
   ): Promise<Result<CatalogSnapshot>> {
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       if (this.balanceBusy && kind !== 'list')
         return failure(
           'CONFLICT',

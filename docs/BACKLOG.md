@@ -75,3 +75,15 @@ fechadas; prevalece la decisión posterior aplicable, sin borrar la evidencia.
 
 Producción permanece bloqueada por arquitectura y no forma parte de este backlog
 operativo de QA.
+
+## Deuda reducida — 2026-11-23
+
+- Consolidada la secuenciación asíncrona duplicada en seis consumidores mediante
+  `SerialTaskQueue`: aplicación, preferencias QA, diario JSON, ambos adaptadores
+  SQLite y escrituras del motor financiero. Conserva FIFO, errores por operación
+  y cierre ordenado; cada consumidor mantiene su cola independiente.
+- Añadidas pruebas de orden, fallo síncrono/asíncrono, dependencia pendiente y
+  timeout del consumidor, junto con regresiones SQLite de rechazo intermedio,
+  cierre y reapertura. No se generalizan las colas que tienen políticas distintas
+  de cancelación o seguimiento de fallos. Ver
+  [contrato y alcance](implementation/SERIAL_TASK_QUEUE.md).

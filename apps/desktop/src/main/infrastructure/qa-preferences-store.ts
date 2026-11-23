@@ -2,24 +2,20 @@ import { copyFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import type { Preferences, PreferencesStore, RuntimeIdentity } from '../ports';
 import { FilePreferencesStore } from './preferences-store';
+import { SerialTaskQueue } from '../serial-task-queue';
 
 // Keep the legacy reader for historical files; the desktop always operates in Qa.
 export class QaPreferencesStore implements PreferencesStore {
   private readonly store: FilePreferencesStore;
-  private queue: Promise<unknown> = Promise.resolve();
+  private readonly queue = new SerialTaskQueue();
   constructor(
     private readonly file: string,
     private readonly identity: RuntimeIdentity,
   ) {
     this.store = new FilePreferencesStore(file);
   }
-  private serialize<T>(action: () => Promise<T>): Promise<T> {
-    const result = this.queue.then(action);
-    this.queue = result.catch(() => undefined);
-    return result;
-  }
   read(): Promise<Preferences> {
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       const current = await this.store.read();
       if (current.environment === 'QA') return current;
       await copyFile(
@@ -47,7 +43,7 @@ export class QaPreferencesStore implements PreferencesStore {
     });
   }
   write(preferences: Preferences): Promise<void> {
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       if (preferences.environment !== 'QA') throw Error('VALIDATION_ERROR');
       await this.store.write(preferences);
     });

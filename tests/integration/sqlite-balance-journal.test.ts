@@ -26,6 +26,43 @@ function balanceRecord(): BalanceExecution {
 }
 
 describe('diario financiero SQLite', () => {
+  it('drena escrituras en orden y cierra incluso con una operación intermedia inválida', async () => {
+    const databasePath = join(directory, 'queued.sqlite');
+    const legacyPath = join(directory, 'queued.json');
+    const journal = new SqliteBalanceJournal(databasePath, legacyPath);
+    const first = balanceRecord();
+    const second = balanceRecord();
+    try {
+      const results = await Promise.allSettled([
+        journal.save(first),
+        journal.write([]), // Cannot remove the record queued just before this call.
+        journal.save(second),
+        journal.read(),
+        journal.close(),
+      ]);
+      expect(results.map((result) => result.status)).toEqual([
+        'fulfilled',
+        'rejected',
+        'fulfilled',
+        'fulfilled',
+        'fulfilled',
+      ]);
+      expect(results[1]).toMatchObject({
+        status: 'rejected',
+        reason: { message: 'BALANCE_JOURNAL_HISTORY_REMOVAL' },
+      });
+      expect(results[3]).toEqual({ status: 'fulfilled', value: [first, second] });
+      const reopened = new SqliteBalanceJournal(databasePath, legacyPath);
+      try {
+        expect(await reopened.read()).toEqual([first, second]);
+      } finally {
+        await reopened.close();
+      }
+    } finally {
+      await journal.close();
+    }
+  });
+
   it('migra 200 entradas sin borrarlas y permite la operación 201 con idempotencia tras reinicio', async () => {
     const legacyPath = join(directory, 'balance-executions.json');
     const databasePath = join(directory, 'balance-executions.sqlite');

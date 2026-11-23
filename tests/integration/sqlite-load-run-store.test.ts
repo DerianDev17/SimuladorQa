@@ -43,6 +43,44 @@ function snapshot(): LoadRunSnapshot {
 }
 
 describe('historial de carga SQLite', () => {
+  it('continúa tras rechazar un request duplicado y drena el cierre sin perder corridas', async () => {
+    const databasePath = join(directory, 'queued.sqlite');
+    const legacyPath = join(directory, 'queued.json');
+    const store = new SqliteLoadRunStore(databasePath, legacyPath);
+    const first = snapshot();
+    const second = snapshot();
+    try {
+      const results = await Promise.allSettled([
+        store.write(first),
+        store.write({ ...first, runId: randomUUID() }),
+        store.write(second),
+        store.read(),
+        store.close(),
+      ]);
+      expect(results.map((result) => result.status)).toEqual([
+        'fulfilled',
+        'rejected',
+        'fulfilled',
+        'fulfilled',
+        'fulfilled',
+      ]);
+      expect(results[1]).toMatchObject({
+        status: 'rejected',
+        reason: { message: 'LOAD_RUN_DUPLICATE_REQUEST' },
+      });
+      expect(results[3]).toEqual({ status: 'fulfilled', value: second });
+      const reopened = new SqliteLoadRunStore(databasePath, legacyPath);
+      try {
+        expect(await reopened.get(first.runId)).toEqual(first);
+        expect(await reopened.get(second.runId)).toEqual(second);
+      } finally {
+        await reopened.close();
+      }
+    } finally {
+      await store.close();
+    }
+  });
+
   it('persiste tiempos monotónicos, conserva compatibilidad y rechaza offsets inválidos', async () => {
     const databasePath = join(directory, 'qa-load-runs.sqlite');
     const legacyPath = join(directory, 'qa-load-runs.json');

@@ -33,6 +33,7 @@ import { balanceContextErrorLabels } from './balance-context-errors';
 import { parseWithdrawalReversal } from '../../../../packages/domain/src/withdrawal-reversal';
 import { parseIsoMessage } from '../../../../packages/domain/src/iso-message';
 import type { SessionMessagePort } from './session-message-port';
+import { SerialTaskQueue } from './serial-task-queue';
 
 import {
   parseDepositExecutionRequest,
@@ -56,7 +57,7 @@ export class FinancialExecutionService implements FinancialExecutionPort {
     string,
     { fingerprint: string; scope: string | undefined; result: Promise<Result<BalanceExecution>> }
   >();
-  private journalWrites: Promise<void> = Promise.resolve();
+  private readonly journalWrites = new SerialTaskQueue();
   constructor(
     private readonly journal: BalanceJournal,
     private readonly transport: BalanceTransport,
@@ -74,7 +75,7 @@ export class FinancialExecutionService implements FinancialExecutionPort {
 
   private save(record: BalanceExecution): Promise<void> {
     const snapshot = structuredClone(record);
-    const write = this.journalWrites.then(async () => {
+    return this.journalWrites.run(async () => {
       if (this.journal.save) return this.journal.save(snapshot);
       const current = await this.journal.read();
       await this.journal.write([
@@ -82,8 +83,6 @@ export class FinancialExecutionService implements FinancialExecutionPort {
         snapshot,
       ]);
     });
-    this.journalWrites = write.catch(() => undefined);
-    return write;
   }
 
   async inspect(target: BalanceTarget): Promise<BalanceReadiness> {

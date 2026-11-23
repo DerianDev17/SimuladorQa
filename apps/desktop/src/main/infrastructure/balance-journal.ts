@@ -9,6 +9,7 @@ import {
   hasWithdrawalQaContinuation,
 } from '../../../../../packages/domain/src/balance-inquiry';
 import type { BalanceJournal } from '../balance-ports';
+import { SerialTaskQueue } from '../serial-task-queue';
 import { parseWithdrawalDetails } from '../../../../../packages/domain/src/withdrawal';
 import { parseWithdrawalReversal } from '../../../../../packages/domain/src/withdrawal-reversal';
 import { parseTransactionMessages } from '../../../../../packages/domain/src/iso-message';
@@ -195,16 +196,8 @@ export function parseBalanceJournal(value: unknown): BalanceExecution[] | undefi
 }
 // No card payloads, PIN/EMV or RAW. No automatic eviction of idempotency records.
 export class FileBalanceJournal implements BalanceJournal {
-  private pending: Promise<void> = Promise.resolve();
   // Progress polling must not hold a Windows read handle across atomic rename.
-  private serialize<T>(operation: () => Promise<T>): Promise<T> {
-    const result = this.pending.then(operation);
-    this.pending = result.then(
-      () => undefined,
-      () => undefined,
-    );
-    return result;
-  }
+  private readonly queue = new SerialTaskQueue();
   constructor(
     private readonly path: string,
     private readonly operation: 'BALANCE' | 'WITHDRAWAL' | 'DEPOSIT' = 'BALANCE',
@@ -219,7 +212,7 @@ export class FileBalanceJournal implements BalanceJournal {
     );
   }
   async read(): Promise<BalanceExecution[]> {
-    return this.serialize(() => this.readFile());
+    return this.queue.run(() => this.readFile());
   }
   private async readFile(): Promise<BalanceExecution[]> {
     let handle;
@@ -253,7 +246,7 @@ export class FileBalanceJournal implements BalanceJournal {
   }
   async write(executions: readonly BalanceExecution[]): Promise<void> {
     const snapshot = structuredClone(executions);
-    return this.serialize(() => this.writeFile(snapshot));
+    return this.queue.run(() => this.writeFile(snapshot));
   }
   private async writeFile(executions: readonly BalanceExecution[]): Promise<void> {
     const document = { version: 1, executions };

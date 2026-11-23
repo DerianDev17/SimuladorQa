@@ -14,6 +14,7 @@ import type {
 import { loadRunMetrics } from '../../../../../packages/domain/src/load-run';
 import type { LoadHistoryStore } from '../load-history-ports';
 import type { LoadRunStore } from '../load-ports';
+import { SerialTaskQueue } from '../serial-task-queue';
 import { readLegacyLoadRuns, validLoadRunSnapshot } from './load-run-store';
 
 interface StoredRun {
@@ -31,21 +32,12 @@ const startedExpression =
 
 export class SqliteLoadRunStore implements LoadRunStore, LoadHistoryStore {
   private database: DatabaseSync | undefined;
-  private pending: Promise<void> = Promise.resolve();
+  private readonly queue = new SerialTaskQueue();
 
   constructor(
     private readonly path: string,
     private readonly legacyPath: string,
   ) {}
-
-  private serialize<T>(operation: () => Promise<T>): Promise<T> {
-    const result = this.pending.then(operation);
-    this.pending = result.then(
-      () => undefined,
-      () => undefined,
-    );
-    return result;
-  }
 
   private async open(): Promise<DatabaseSync> {
     if (this.database) return this.database;
@@ -125,7 +117,7 @@ export class SqliteLoadRunStore implements LoadRunStore, LoadHistoryStore {
   }
 
   async read(): Promise<LoadRunSnapshot | null> {
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       const database = await this.open();
       const row = database
         .prepare('SELECT run_id, request_id, payload FROM runs ORDER BY sequence DESC LIMIT 1')
@@ -147,7 +139,7 @@ export class SqliteLoadRunStore implements LoadRunStore, LoadHistoryStore {
   }
 
   async get(id: string): Promise<LoadRunSnapshot | null> {
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       if (!isUuid(id)) throw Error('LOAD_RUN_INVALID');
       const row = (await this.open())
         .prepare('SELECT run_id, request_id, payload FROM runs WHERE run_id = ?')
@@ -160,7 +152,7 @@ export class SqliteLoadRunStore implements LoadRunStore, LoadHistoryStore {
     // Snapshot the caller's filters before entering the serialized queue.
     const query = parseLoadHistoryQuery(input);
     if (!query) throw Error('LOAD_HISTORY_INVALID');
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       const clauses: string[] = [];
       const values: (string | number)[] = [];
       if (query.before !== undefined) {
@@ -222,7 +214,7 @@ export class SqliteLoadRunStore implements LoadRunStore, LoadHistoryStore {
   }
 
   async hasRequest(id: string): Promise<boolean> {
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       if (!isUuid(id)) throw Error('LOAD_RUN_INVALID');
       return !!(await this.open())
         .prepare('SELECT 1 FROM runs WHERE request_id = ? LIMIT 1')
@@ -231,7 +223,7 @@ export class SqliteLoadRunStore implements LoadRunStore, LoadHistoryStore {
   }
 
   async write(run: LoadRunSnapshot): Promise<void> {
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       if (!validLoadRunSnapshot(run)) throw Error('LOAD_RUN_INVALID');
       const database = await this.open();
       database.exec('BEGIN IMMEDIATE');
@@ -260,7 +252,7 @@ export class SqliteLoadRunStore implements LoadRunStore, LoadHistoryStore {
   }
 
   async close(): Promise<void> {
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       this.database?.close();
       this.database = undefined;
     });

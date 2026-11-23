@@ -1,6 +1,7 @@
 {
   "protectedMainFiles": [
     "application.ts",
+    "serial-task-queue.ts",
     "ports.ts",
     "catalog-port.ts",
     "financial-execution-service.ts",

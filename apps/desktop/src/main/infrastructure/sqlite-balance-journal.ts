@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import type { BalanceExecution } from '../../../../../packages/domain/src/balance-inquiry';
 import type { BalanceJournal } from '../balance-ports';
 import type { TransactionHistoryReader } from '../transaction-history-port';
+import { SerialTaskQueue } from '../serial-task-queue';
 import { FileBalanceJournal, parseBalanceJournal } from './balance-journal';
 import { isUuid } from '../../../../../packages/domain/src/catalogs';
 import {
@@ -21,22 +22,13 @@ interface StoredRow {
 // is evicted, and request_id stays unique across the lifetime of this database.
 export class SqliteBalanceJournal implements BalanceJournal, TransactionHistoryReader {
   private database: DatabaseSync | undefined;
-  private pending: Promise<void> = Promise.resolve();
+  private readonly queue = new SerialTaskQueue();
 
   constructor(
     private readonly path: string,
     private readonly legacyPath: string,
     private readonly operation: 'BALANCE' | 'WITHDRAWAL' | 'DEPOSIT' = 'BALANCE',
   ) {}
-
-  private serialize<T>(operation: () => Promise<T>): Promise<T> {
-    const result = this.pending.then(operation);
-    this.pending = result.then(
-      () => undefined,
-      () => undefined,
-    );
-    return result;
-  }
 
   private accepts(item: BalanceExecution): boolean {
     return this.operation === 'DEPOSIT'
@@ -120,7 +112,7 @@ export class SqliteBalanceJournal implements BalanceJournal, TransactionHistoryR
   }
 
   async read(): Promise<BalanceExecution[]> {
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       const database = await this.open();
       const rows = database
         .prepare('SELECT request_id, payload FROM executions ORDER BY sequence')
@@ -131,7 +123,7 @@ export class SqliteBalanceJournal implements BalanceJournal, TransactionHistoryR
 
   async find(requestId: string): Promise<BalanceExecution | null> {
     if (!isUuid(requestId)) throw Error('BALANCE_JOURNAL_REFERENCE_INVALID');
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       const database = await this.open();
       const row = database
         .prepare('SELECT request_id, payload FROM executions WHERE request_id = ?')
@@ -143,7 +135,7 @@ export class SqliteBalanceJournal implements BalanceJournal, TransactionHistoryR
   async save(execution: BalanceExecution): Promise<void> {
     // Snapshot before queuing: callers may advance a reversal while storage waits.
     const snapshot = this.parseItem(structuredClone(execution));
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       const database = await this.open();
       // The statement is atomic; conflict updates retain the insertion sequence.
       database
@@ -158,7 +150,7 @@ export class SqliteBalanceJournal implements BalanceJournal, TransactionHistoryR
   async recent(limit: number): Promise<BalanceExecution[]> {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50)
       throw Error('BALANCE_JOURNAL_LIMIT_INVALID');
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       const database = await this.open();
       const rows = database
         .prepare('SELECT request_id, payload FROM executions ORDER BY sequence DESC LIMIT ?')
@@ -170,7 +162,7 @@ export class SqliteBalanceJournal implements BalanceJournal, TransactionHistoryR
   async page(input: TransactionHistoryQuery): Promise<BalanceExecution[]> {
     const query = parseTransactionHistoryQuery(input);
     if (!query) throw Error('BALANCE_JOURNAL_QUERY_INVALID');
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       const database = await this.open();
       const where: string[] = [];
       const parameters: (string | number)[] = [];
@@ -219,7 +211,7 @@ export class SqliteBalanceJournal implements BalanceJournal, TransactionHistoryR
   }
 
   async write(executions: readonly BalanceExecution[]): Promise<void> {
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       const snapshot = executions.map((item) => this.parseItem(item));
       const requests = new Set(snapshot.map((item) => item.requestId));
       if (requests.size !== snapshot.length) throw Error('BALANCE_JOURNAL_INVALID');
@@ -250,7 +242,7 @@ export class SqliteBalanceJournal implements BalanceJournal, TransactionHistoryR
   }
 
   async close(): Promise<void> {
-    return this.serialize(async () => {
+    return this.queue.run(async () => {
       this.database?.close();
       this.database = undefined;
     });

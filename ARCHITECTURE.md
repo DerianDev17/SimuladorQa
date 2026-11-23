@@ -115,6 +115,13 @@ su bloqueo. Ver [ADR-025](docs/adr/ADR-025-QA-WITHDRAWAL-AFTER-ERROR.md).
 
 ## Concurrencia y recursos
 
+`SerialTaskQueue` concentra la secuenciación FIFO de operaciones locales en
+DesktopApplication, preferencias QA, diario JSON, diarios SQLite y escrituras
+del motor financiero. Cada propietario mantiene su propia cola; un error se
+propaga al llamador y permite ejecutar las tareas siguientes. El cierre SQLite
+se encola detrás del trabajo aceptado. Contrato y límites en
+[serialización local](docs/implementation/SERIAL_TASK_QUEUE.md).
+
 Las consultas de presentación de catálogo y feed Mediator usan opcionalmente
 `ReadCachePort`, implementado por Redis en Main sobre loopback. TTL de 30 s/2 s,
 invalidación en comandos de catálogo y fallback acotado a la fuente original.
