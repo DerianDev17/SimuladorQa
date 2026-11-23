@@ -5,7 +5,7 @@ import type {
   LoadExportDocument,
   LoadExportStatus,
 } from '../../../../../packages/domain/src/load-export';
-import type { LoadExportSink, ExportSaveDialog } from '../load-export-service';
+import type { LoadExportSink, ExportSaveDialog } from '../load-export-ports';
 function within(path: string, root: string): boolean {
   const part = relative(root, path);
   return part === '' || (!part.startsWith('..' + sep) && part !== '..' && !isAbsolute(part));

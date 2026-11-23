@@ -1,0 +1,41 @@
+{
+  "protectedMainFiles": [
+    "application.ts",
+    "ports.ts",
+    "catalog-port.ts",
+    "financial-execution-service.ts",
+    "financial-execution-context.ts",
+    "financial-message-contract.ts",
+    "financial-execution-port.ts",
+    "balance-ports.ts",
+    "load-ports.ts",
+    "load-run-service.ts",
+    "load-history-service.ts",
+    "load-history-ports.ts",
+    "load-export-service.ts",
+    "load-export-ports.ts",
+    "load-configuration-service.ts",
+    "load-configuration-ports.ts",
+    "send-configuration-service.ts",
+    "send-configuration-port.ts",
+    "transaction-history-service.ts",
+    "transaction-history-port.ts",
+    "renderer-recovery-service.ts",
+    "atm-inspection-service.ts",
+    "atm-inspection-port.ts",
+    "session-message-port.ts",
+    "read-cache-port.ts"
+  ],
+  "concreteMainModules": [
+    "application",
+    "balance-inquiry-service",
+    "withdrawal-service",
+    "deposit-service",
+    "card-identity-service",
+    "send-configuration-service",
+    "transaction-history-service",
+    "renderer-recovery-service",
+    "load-export-service",
+    "atm-inspection-service"
+  ]
+}

@@ -3,6 +3,7 @@ import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { BalanceExecution } from '../../../../../packages/domain/src/balance-inquiry';
 import type { BalanceJournal } from '../balance-ports';
+import type { TransactionHistoryReader } from '../transaction-history-port';
 import { FileBalanceJournal, parseBalanceJournal } from './balance-journal';
 import { isUuid } from '../../../../../packages/domain/src/catalogs';
 import {
@@ -18,7 +19,7 @@ interface StoredRow {
 
 // The legacy JSON remains untouched as a migration backup. No financial record
 // is evicted, and request_id stays unique across the lifetime of this database.
-export class SqliteBalanceJournal implements BalanceJournal {
+export class SqliteBalanceJournal implements BalanceJournal, TransactionHistoryReader {
   private database: DatabaseSync | undefined;
   private pending: Promise<void> = Promise.resolve();
 

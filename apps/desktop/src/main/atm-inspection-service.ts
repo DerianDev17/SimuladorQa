@@ -4,14 +4,14 @@ import type {
 } from '../../../../packages/domain/src/atm-onboarding';
 import { qaAtmEntityChecks } from '../../../../packages/domain/src/atm-onboarding';
 import type { CatalogSnapshot } from '../../../../packages/domain/src/catalogs';
-import type { SendConfigurationSnapshot } from '../../../../packages/domain/src/send-configuration';
 import { failure, type Result } from '../../../../packages/shared/src/contracts';
 import type { AtmConfigurationInspectionPort, AtmInspectionPort } from './atm-inspection-port';
+import type { SendConfigurationPort } from './send-configuration-port';
 
 export class AtmInspectionService implements AtmInspectionPort {
   constructor(
     private readonly configuration: AtmConfigurationInspectionPort,
-    private readonly send: { read(environment: 'QA'): Promise<Result<SendConfigurationSnapshot>> },
+    private readonly send: Pick<SendConfigurationPort, 'read'>,
     private readonly now: () => string,
     private readonly catalog: () => Promise<CatalogSnapshot>,
     private readonly timeoutMs = 4000,

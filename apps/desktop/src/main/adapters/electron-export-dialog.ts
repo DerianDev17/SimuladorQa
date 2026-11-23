@@ -1,7 +1,7 @@
 import { app, dialog } from 'electron';
 import type { BrowserWindow } from 'electron';
 import { join } from 'node:path';
-import type { ExportSaveDialog } from '../load-export-service';
+import type { ExportSaveDialog } from '../load-export-ports';
 import type { LoadExportDocument } from '../../../../../packages/domain/src/load-export';
 export class ElectronExportDialog implements ExportSaveDialog {
   constructor(private readonly parent: () => BrowserWindow | null) {}

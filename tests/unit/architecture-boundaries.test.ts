@@ -3,6 +3,7 @@ import { dirname, resolve, relative, sep } from 'node:path';
 import { builtinModules } from 'node:module';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
+import boundaries from '../../tooling/architecture-boundaries.json';
 
 const domain = resolve('packages/domain/src');
 const shared = resolve('packages/shared/src');
@@ -86,37 +87,34 @@ describe('límites de arquitectura', () => {
     expect(violations).toEqual([]);
   });
   it('motores y contratos no conocen adaptadores, almacenamiento ni fachadas concretas', () => {
-    const protectedFiles = [
-      'financial-execution-service.ts',
-      'financial-execution-context.ts',
-      'financial-message-contract.ts',
-      'financial-execution-port.ts',
-      'balance-ports.ts',
-      'load-ports.ts',
-      'load-run-service.ts',
-      'load-history-service.ts',
-      'load-history-ports.ts',
-      'load-export-service.ts',
-      'load-configuration-service.ts',
-      'load-configuration-ports.ts',
-    ];
-    const concrete = [
-      'balance-inquiry-service',
-      'withdrawal-service',
-      'application',
-      'card-identity-service',
-    ];
     const violations: string[] = [];
-    for (const name of protectedFiles)
+    for (const name of boundaries.protectedMainFiles)
       for (const dependency of imports(readFileSync(resolve(main, name), 'utf8'))) {
-        const target = resolve(main, dependency);
+        const target = resolve(main, dependency).replace(/\.[cm]?[jt]sx?$/, '');
         const allowed = dependency.startsWith('.')
           ? [domain, shared].some((directory) => within(target, directory)) ||
-            (dirname(target) === main && !concrete.some((name) => target === resolve(main, name)))
+            (dirname(target) === main &&
+              !boundaries.concreteMainModules.some((name) => target === resolve(main, name)))
           : dependency === 'node:perf_hooks';
         if (!allowed || (builtinModules.includes(dependency) && dependency !== 'node:perf_hooks'))
           violations.push(`${name} -> ${dependency}`);
       }
+    expect(violations).toEqual([]);
+  });
+  it('adaptadores de exportación e historial no importan servicios de aplicación', () => {
+    const violations: string[] = [];
+    for (const name of [
+      'adapters/electron-export-dialog.ts',
+      'infrastructure/file-load-export.ts',
+      'infrastructure/sqlite-balance-journal.ts',
+    ]) {
+      const file = resolve(main, name);
+      for (const dependency of imports(readFileSync(file, 'utf8'))) {
+        const target = resolve(dirname(file), dependency).replace(/\.[cm]?[jt]sx?$/, '');
+        if (dirname(target) === main && target.endsWith('-service'))
+          violations.push(`${name} -> ${dependency}`);
+      }
+    }
     expect(violations).toEqual([]);
   });
 });

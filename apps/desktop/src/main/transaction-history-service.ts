@@ -3,18 +3,12 @@ import {
   parseTransactionHistoryQuery,
   transactionHistoryPageSize,
 } from '../../../../packages/domain/src/transaction-history';
-import type {
-  TransactionHistoryQuery,
-  TransactionHistoryPage,
-} from '../../../../packages/domain/src/transaction-history';
-import type { BalanceExecution } from '../../../../packages/domain/src/balance-inquiry';
+import type { TransactionHistoryPage } from '../../../../packages/domain/src/transaction-history';
 import { failure } from '../../../../packages/shared/src/contracts';
 import type { Result } from '../../../../packages/shared/src/contracts';
 import type { PreferencesStore } from './ports';
+import type { TransactionHistoryReader } from './transaction-history-port';
 
-export interface TransactionHistoryReader {
-  page(query: TransactionHistoryQuery): Promise<readonly BalanceExecution[]>;
-}
 export class TransactionHistoryService {
   constructor(
     private readonly journals: Record<

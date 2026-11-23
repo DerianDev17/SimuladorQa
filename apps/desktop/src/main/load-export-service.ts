@@ -2,20 +2,12 @@ import {
   createLoadExport,
   parseLoadExportRequest,
 } from '../../../../packages/domain/src/load-export';
-import type {
-  LoadExportDocument,
-  LoadExportStatus,
-} from '../../../../packages/domain/src/load-export';
+import type { LoadExportStatus } from '../../../../packages/domain/src/load-export';
 import type { LoadRunSnapshot } from '../../../../packages/domain/src/load-run';
 import { failure } from '../../../../packages/shared/src/contracts';
 import type { Result } from '../../../../packages/shared/src/contracts';
+import type { LoadExportSink } from './load-export-ports';
 
-export interface ExportSaveDialog {
-  choose(document: Pick<LoadExportDocument, 'filename' | 'format'>): Promise<string | null>;
-}
-export interface LoadExportSink {
-  save(document: LoadExportDocument, signal: AbortSignal): Promise<LoadExportStatus>;
-}
 export class LoadExportService {
   private busy = false;
   constructor(

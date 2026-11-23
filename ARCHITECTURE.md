@@ -13,6 +13,7 @@ componentes actuales; la arquitectura objetivo distribuida sigue siendo una prop
 | UI | `apps/desktop/src/renderer` | Formularios y resultados; consume el puente de preload |
 | Preload | `apps/desktop/src/preload.ts` | API mínima bajo context isolation |
 | Aplicación | `apps/desktop/src/main/application.ts` | Valida contexto, ambiente y revisiones; coordina exclusión financiera |
+| Configuración de envío | `send-configuration-service.ts`, `send-configuration-port.ts` | Lectura y guardado mediante un puerto de aplicación; persistencia mediante un puerto separado |
 | Motor financiero | `financial-execution-service.ts` en Main | Idempotencia, contexto, diario previo al envío, transporte, cierre y limpieza |
 | Carga | `load-run-service.ts`, `physical-card-load-driver.ts` | Coordina corrida, tarjeta, ritmo, cancelación, métricas y resultados |
 | Evidencia de carga | `load-history-service.ts`, `load-export-service.ts` | Consulta paginada y exportación mediante puertos separados del control de ejecución |
@@ -26,6 +27,11 @@ flowchart TD
   UI[Renderer] --> Public[Contratos públicos / preload]
   Public --> App[DesktopApplication en Main]
   App --> Port[FinancialExecutionPort]
+  App --> SendPort[SendConfigurationPort]
+  Inspection[AtmInspectionService] --> SendPort
+  Send[SendConfigurationService] -. implementa .-> SendPort
+  Send --> SendStore[SendConfigurationStore]
+  SendFile[Adaptador de archivo] -. implementa .-> SendStore
   Balance[Fachada de saldo] -. implementa .-> Port
   Withdrawal[Fachada de retiro] -. implementa .-> Port
   Deposit[Fachada de depósito] -. implementa .-> Port
@@ -38,6 +44,12 @@ flowchart TD
   Driver[PhysicalCardLoadDriver] -. implementa .-> LoadPorts
   Driver --> App
   Worker[Scheduler worker y almacenamiento] -. implementan .-> LoadPorts
+  History[TransactionHistoryService] --> HistoryPort[TransactionHistoryReader]
+  Journal[Diario SQLite] -. implementa .-> HistoryPort
+  Export[LoadExportService] --> ExportPort[LoadExportSink]
+  ExportFile[FileLoadExportSink] -. implementa .-> ExportPort
+  ExportFile --> DialogPort[ExportSaveDialog]
+  Dialog[Diálogo Electron] -. implementa .-> DialogPort
 ```
 
 Las fachadas de saldo, retiro y depósito inyectan su builder y configuración al mismo motor.
@@ -54,6 +66,19 @@ lee el PIN. Ver [ADR-032](docs/adr/ADR-032-FINANCIAL-EXECUTION-PORTS.md).
 Lint y las pruebas de `architecture-boundaries.test.ts` protegen dominio,
 contratos públicos, Renderer y motores frente a imports indebidos, incluyendo
 imports de tipos, reexports e imports dinámicos.
+
+`tooling/architecture-boundaries.json` comparte entre lint y pruebas la lista de
+módulos Main protegidos y dependencias concretas prohibidas. Incluye aplicación,
+configuración, inspección ATM, historial, recuperación y exportación, además de
+los motores. Lint rechaza módulos nativos con y sin prefijo `node:` (excepto el
+reloj `node:perf_hooks`); las pruebas AST verifican también imports dinámicos.
+
+`DesktopApplication` consume `SendConfigurationPort`; la inspección ATM recibe
+solo su operación `read`. La inicialización documentada permanece en la composición
+de Main. `TransactionHistoryReader` y los contratos de exportación viven en archivos
+de puertos independientes, compartidos por servicios y adaptadores. Los adaptadores
+no necesitan importar las clases de estos servicios. Ver
+[ADR-048](docs/adr/ADR-048-APPLICATION-PORT-BOUNDARIES.md).
 
 ## Ejecución y persistencia
 

@@ -28,6 +28,12 @@ tarjeta y seguridad vigentes. Producción permanece bloqueada.
 
 ## Persistencia y contratos
 
+`DesktopApplication` consume `SendConfigurationPort` (`read`/`save`) y la
+inspección ATM recibe únicamente `read`. `SendConfigurationService` implementa
+ese puerto y usa `SendConfigurationStore` para persistir. La inicialización
+desde evidencia queda en el arranque de Main, fuera del contrato de los consumidores.
+Ver [ADR-048](../adr/ADR-048-APPLICATION-PORT-BOUNDARIES.md).
+
 `send-configuration.json` vive en userData, fuera del repositorio. Mantiene
 formato versión 1, UUID, revisión, timestamps UTC y hasta 100 eventos de auditoría
 con usuario/equipo. `evidenceId` admite null para un destino explícito del operador.

@@ -44,7 +44,7 @@ import { isRevision, isUuid, selectableAtms } from '../../../../packages/domain/
 import { parseSaveSendConfiguration } from '../../../../packages/domain/src/send-configuration';
 import type { SendConfigurationSnapshot } from '../../../../packages/domain/src/send-configuration';
 import type { PreparedSendPlan } from '../../../../packages/shared/src/contracts';
-import type { SendConfigurationService } from './send-configuration-service';
+import type { SendConfigurationPort } from './send-configuration-port';
 import {
   parseBalanceContextRequest,
   parseBalanceExecutionRequest,
@@ -100,7 +100,7 @@ export class DesktopApplication {
     private readonly observer?: TransactionObserver,
     private readonly networkEvidence?: NetworkEvidenceCatalog,
     private readonly readerAdapter?: CardReaderAdapter,
-    private readonly sendConfiguration?: SendConfigurationService,
+    private readonly sendConfiguration?: SendConfigurationPort,
     private readonly balanceInquiry?: FinancialExecutionPort,
     private readonly switchConnection?: SwitchConnectionPort,
     private readonly withdrawalService?: FinancialExecutionPort,

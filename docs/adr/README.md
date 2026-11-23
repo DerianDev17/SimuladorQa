@@ -53,3 +53,4 @@ Cuando una decisión reemplaza a otra, ambas se conservan para trazabilidad.
 | [045](ADR-045-OPTIONAL-REDIS-READ-CACHE.md) | Caché Redis local opcional para consultas de presentación | Implementado; funcionamiento sin Redis |
 | [046](ADR-046-ENCRYPTED-QA-MESSAGE-HISTORY.md) | Historial QA completo cifrado, sin caducidad | Implementado; excepción solicitada por el operador |
 | [047](ADR-047-HISTORY-AND-RENDERER-RECOVERY.md) | Historial completo, guardado por registro y recuperación de interfaz | Implementado |
+| [048](ADR-048-APPLICATION-PORT-BOUNDARIES.md) | Puertos de configuración, historial y exportación; controles compartidos de dependencias | Implementado |

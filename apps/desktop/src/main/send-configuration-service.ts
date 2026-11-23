@@ -8,10 +8,10 @@ import type { NetworkEvidenceCatalog } from '../../../../packages/domain/src/net
 import { failure } from '../../../../packages/shared/src/contracts';
 import type { Result } from '../../../../packages/shared/src/contracts';
 import type { RuntimeIdentity } from './ports';
-import type { SendConfigurationStore } from './send-configuration-port';
+import type { SendConfigurationPort, SendConfigurationStore } from './send-configuration-port';
 
 // Read/save/preflight only. This service has no transport or socket dependency.
-export class SendConfigurationService {
+export class SendConfigurationService implements SendConfigurationPort {
   constructor(
     private readonly store: SendConfigurationStore,
     private readonly evidence: NetworkEvidenceCatalog,

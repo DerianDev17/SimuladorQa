@@ -1,6 +1,16 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import { builtinModules } from 'node:module';
+import boundaries from './tooling/architecture-boundaries.json' with { type: 'json' };
+
+const nativeModules = [
+  ...new Set(
+    builtinModules.flatMap((name) => {
+      const bare = name.replace(/^node:/, '');
+      return [bare, `node:${bare}`];
+    }),
+  ),
+];
 
 export default tseslint.config(
   { ignores: ['node_modules/**', 'dist/**', 'test-results/**', 'artifacts/**'] },
@@ -23,35 +33,18 @@ export default tseslint.config(
     },
   },
   {
-    files: [
-      'apps/desktop/src/main/financial-execution-service.ts',
-      'apps/desktop/src/main/financial-execution-context.ts',
-      'apps/desktop/src/main/financial-message-contract.ts',
-      'apps/desktop/src/main/financial-execution-port.ts',
-      'apps/desktop/src/main/balance-ports.ts',
-      'apps/desktop/src/main/load-ports.ts',
-      'apps/desktop/src/main/load-run-service.ts',
-    ],
+    files: boundaries.protectedMainFiles.map((name) => `apps/desktop/src/main/${name}`),
     rules: {
       'no-restricted-imports': [
         'error',
         {
+          paths: nativeModules.filter((name) => name !== 'node:perf_hooks'),
           patterns: [
             '**/adapters/**',
             '**/infrastructure/**',
             '**/renderer/**',
             'electron',
-            './application',
-            './balance-inquiry-service',
-            './withdrawal-service',
-            './card-identity-service',
-            'node:net',
-            'node:tls',
-            'node:fs',
-            'node:fs/*',
-            'node:child_process',
-            'node:sqlite',
-            'node:worker_threads',
+            ...boundaries.concreteMainModules.flatMap((name) => [`**/${name}`, `**/${name}.*`]),
           ],
         },
       ],
