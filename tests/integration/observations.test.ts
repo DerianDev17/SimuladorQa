@@ -283,25 +283,40 @@ describe('observador y ambiente persistido', () => {
     ).toMatchObject({ ok: false });
   });
   it.runIf(process.platform === 'win32')(
-    'ejecuta el adaptador real: configuración ausente y timeout del proceso',
+    'ejecuta el adaptador real con configuración ausente',
     async () => {
+      // This checks configuration validation, not the production response SLA.
+      // A cold Windows PowerShell start needs its own bounded CI allowance.
       const observer = new MediatorObserver(
         resolve('apps/desktop/src/main/adapters/mediator-query.ps1'),
         join(directory, 'missing.json'),
+        30_000,
       );
-      const result = await observer.search(observationRequest);
-      expect(result).toMatchObject({ ok: false, error: { code: 'SERVICE_UNAVAILABLE' } });
-      observer.close();
+      try {
+        const result = await observer.search(observationRequest);
+        expect(result).toMatchObject({ ok: false, error: { code: 'SERVICE_UNAVAILABLE' } });
+      } finally {
+        observer.close();
+      }
+    },
+    35_000,
+  );
+  it.runIf(process.platform === 'win32')(
+    'agota el plazo del proceso y rechaza consultas tras cerrar el adaptador',
+    async () => {
       const short = new MediatorObserver(
         resolve('apps/desktop/src/main/adapters/mediator-query.ps1'),
         join(directory, 'missing.json'),
         1,
       );
-      expect(await short.search(observationRequest)).toMatchObject({
-        ok: false,
-        error: { code: 'TIMEOUT' },
-      });
-      short.close();
+      try {
+        expect(await short.search(observationRequest)).toMatchObject({
+          ok: false,
+          error: { code: 'TIMEOUT' },
+        });
+      } finally {
+        short.close();
+      }
       expect(await short.search(observationRequest)).toMatchObject({
         ok: false,
         error: { code: 'SERVICE_UNAVAILABLE' },

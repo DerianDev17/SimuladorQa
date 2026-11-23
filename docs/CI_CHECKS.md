@@ -29,5 +29,11 @@ La variante Node 22.20.0 añade cobertura y E2E. Si falla, se intenta adjuntar
 `test-results/` cuando existe. El workflow no publica instaladores ni compila un
 Control Plane: ese componente sigue propuesto.
 
+La integración de configuración ausente de Mediator concede 30 s al arranque
+en frío de Windows PowerShell y 35 s al caso, con cierre en `finally`. El caso
+de timeout del adaptador se ejecuta separado con un plazo de 1 ms. Evita que el
+timeout global del runner gane al del proceso y oculte el resultado del caso;
+no cambia el plazo operativo de Mediator ni añade reintentos.
+
 Las pruebas automatizadas no certifican hardware ni resultados financieros del
 host/Core. Ver [estrategia de pruebas](testing/TEST_STRATEGY.md).
