@@ -1,11 +1,34 @@
 # Changelog
 
+## 2026-11-23 — Integración y estabilización de CI
+
+- Integra reportería y pruebas de depósito con los refactors de puertos y colas.
+- Resuelve la numeración duplicada de ADR: reportería conserva ADR-048 y puertos
+  pasa a ADR-049, con sus referencias actualizadas.
+- Mantiene la navegación bloqueada durante el arranque de configuración y
+  catálogo; añade regresiones con respuestas demoradas y fallo de catálogo.
+
 ## 2026-11-19 — Limpieza de código y archivos obsoletos
 
 - Centraliza el arranque y el entorno de Electron en las pruebas de interfaz.
 - Reutiliza el detalle de bloqueos y el botón de comprobante; retira una variante
   sin uso de la revisión local y estilos de pantallas antiguas.
 - Elimina el manifiesto inicial desactualizado, sin modificar reglas transaccionales.
+## 2026-11-19 — Recuperación del stash de depósito
+
+- Completa la cobertura de depósito con perfil/pool, PIN/AC, TCP y SQLite
+  reabierto, incluidos respuesta ajena, timeout e idempotencia sin otro envío.
+- Recupera pruebas de F23/PAN19, límites de F4, validación EMV y separación del
+  diario; documenta los pendientes originales y la retención vigente de ADR-046.
+- Concilia los 13 archivos del stash con la implementación actual; ver ADR-038.
+
+## 2026-11-19 — Reportería y auditoría central
+
+- Reemplaza Observación por Resumen, Reportes, Auditoría y Mediator.
+- Centraliza historiales, exportaciones de carga y eventos de cambios; retira
+  los paneles duplicados de Transacciones, Carga, Catálogos y Configuración.
+- Consulta la auditoría existente de configuraciones de carga, conserva detalles,
+  filtros, límites de fuentes y errores independientes. Ver ADR-048.
 
 ## 2026-11-19 — Historial y recuperación de interfaz
 

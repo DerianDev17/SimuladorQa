@@ -509,6 +509,8 @@ void startupReady
             return loadRun!.start(payload);
           case channels.loadConfigurations:
             return loadConfigurations!.list(payload);
+          case channels.loadConfigurationAudit:
+            return loadConfigurations!.audit(payload);
           case channels.saveLoadConfiguration:
             return loadConfigurations!.save(payload);
           case channels.deleteLoadConfiguration:

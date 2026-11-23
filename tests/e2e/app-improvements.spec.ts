@@ -28,11 +28,8 @@ async function launch(): Promise<Page> {
   return page;
 }
 async function mediator(page: Page) {
-  await page.getByRole('button', { name: 'Reportes y auditoría', exact: true }).click();
-  await page
-    .getByRole('navigation', { name: 'Secciones de reportes y auditoría' })
-    .getByRole('button', { name: 'Consulta de Mediator', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Reportería y auditoría', exact: true }).click();
+  await page.getByRole('tab', { name: 'Mediator', exact: true }).click();
   return page.getByRole('region', { name: 'Consulta de Mediator', exact: true });
 }
 
@@ -53,7 +50,11 @@ test('historial completo: página antigua, búsqueda, fechas y conservación ant
   await journal.write(items);
   await journal.close();
   const page = await launch();
-  await page.getByRole('button', { name: 'Transacciones', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Navegación principal' })
+    .getByRole('button', { name: 'Transacciones', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Abrir historial de transacciones', exact: true }).click();
   await page.getByRole('button', { name: 'Buscar en todo el historial', exact: true }).click();
   const history = page.getByRole('region', { name: 'Historial completo', exact: true });
   await expect(history.locator('tbody tr')).toHaveCount(50);
@@ -62,23 +63,23 @@ test('historial completo: página antigua, búsqueda, fechas y conservación ant
   await history
     .getByRole('button', { name: 'Abrir operación histórica 000000', exact: true })
     .click();
-  await expect(page.getByRole('region', { name: 'Resultado', exact: true })).toContainText(
-    '000000',
-  );
+  await expect(
+    page.getByRole('region', { name: 'Detalle de transacción guardada', exact: true }),
+  ).toContainText('000000');
   // The selected archive record is also visible in the local list. Selecting
   // that row must retain its snapshot even though it is outside recent(50).
   await page.getByRole('button', { name: 'Abrir operación 000000', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Resultado', exact: true })).toContainText(
-    '000000',
-  );
+  await expect(
+    page.getByRole('region', { name: 'Detalle de transacción guardada', exact: true }),
+  ).toContainText('000000');
   await page.getByRole('button', { name: 'Actualizar historial', exact: true }).click();
   await expect(
     page.getByRole('button', { name: 'Actualizar historial', exact: true }),
   ).toBeEnabled();
   await page.getByRole('button', { name: 'Abrir operación 000000', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Resultado', exact: true })).toContainText(
-    '000000',
-  );
+  await expect(
+    page.getByRole('region', { name: 'Detalle de transacción guardada', exact: true }),
+  ).toContainText('000000');
   await history.getByLabel('Referencia en todo el historial').fill(items[0]!.requestId);
   await history.getByRole('button', { name: 'Buscar historial completo' }).click();
   await expect(history.locator('tbody tr')).toHaveCount(1);
@@ -112,7 +113,11 @@ test('un fallo de depósitos se identifica correctamente', async () => {
       error: { code: 'STORAGE_UNAVAILABLE', message: 'Fuente no disponible.' },
     }));
   });
-  await page.getByRole('button', { name: 'Transacciones', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Navegación principal' })
+    .getByRole('button', { name: 'Transacciones', exact: true })
+    .click();
+  await page.getByRole('button', { name: 'Abrir historial de transacciones', exact: true }).click();
   await expect(page.locator('.history-warning')).toContainText('Depósitos: Fuente no disponible.');
 });
 
@@ -126,7 +131,8 @@ test('carga conserva tabla, detalle y cursor tras error y timeout de actualizaci
   await store.write(run);
   await store.close();
   const page = await launch();
-  await page.getByRole('button', { name: 'Reportes y auditoría', exact: true }).click();
+  await page.getByRole('button', { name: 'Reportería y auditoría', exact: true }).click();
+  await page.getByRole('tab', { name: 'Reportes', exact: true }).click();
   const history = page.getByRole('region', { name: 'Historial de carga', exact: true });
   await history.getByRole('button', { name: `Ver corrida ${run.runId}`, exact: true }).click();
   const detail = history.getByRole('region', { name: 'Detalle de corrida guardada', exact: true });
@@ -154,6 +160,8 @@ test('carga conserva tabla, detalle y cursor tras error y timeout de actualizaci
 });
 
 test('Mediator recuerda el intervalo SQL después de reiniciar', async () => {
+  // Two Electron launches and graceful shutdown share this test's deadline.
+  test.setTimeout(60000);
   let page = await launch();
   let view = await mediator(page);
   await expect(view.getByLabel('Desde (hora SQL)', { exact: true })).toHaveValue('');
@@ -224,6 +232,7 @@ test('recupera un error de render solo tras comprobar Main y no ejecuta transacc
   await page.getByRole('button', { name: 'Consultar estado de operaciones' }).click();
   await page.getByRole('button', { name: 'Recuperar interfaz y revisar historial' }).click();
   await expect(page.getByRole('heading', { name: 'Nueva transacción', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Abrir historial de transacciones', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Historial local', exact: true })).toBeVisible();
 });
 

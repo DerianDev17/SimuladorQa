@@ -1,4 +1,4 @@
-# ADR-048: Puertos de aplicación y controles compartidos de dependencias
+# ADR-049: Puertos de aplicación y controles compartidos de dependencias
 
 Fecha: 2026-11-23. Estado: implementado.
 

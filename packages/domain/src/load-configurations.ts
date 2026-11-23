@@ -5,6 +5,30 @@ import { parseLoadRunDraft } from './load-run';
 import type { LoadTestDraft } from './load-test';
 
 export const LOAD_CONFIGURATION_LIMIT = 50;
+export interface LoadConfigurationAudit {
+  id: string;
+  timestamp: string;
+  configurationId: string;
+  revision: number;
+  action: 'CREATED' | 'UPDATED' | 'DELETED';
+  user: string;
+  machine: string;
+}
+export function validLoadConfigurationAudit(value: unknown): value is LoadConfigurationAudit {
+  return (
+    isRecord(value) &&
+    Object.keys(value).length === 7 &&
+    isUuid(value.id) &&
+    isUtcTimestamp(value.timestamp) &&
+    isUuid(value.configurationId) &&
+    isRevision(value.revision) &&
+    ['CREATED', 'UPDATED', 'DELETED'].includes(String(value.action)) &&
+    typeof value.user === 'string' &&
+    !!catalogText(value.user, 128) &&
+    typeof value.machine === 'string' &&
+    !!catalogText(value.machine, 128)
+  );
+}
 export interface SavedLoadConfiguration {
   id: string;
   revision: number;

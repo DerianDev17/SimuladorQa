@@ -13,6 +13,16 @@ function deferred<T>() {
 }
 
 describe('lecturas IPC en curso', () => {
+  it('comparte la auditoría de carga sin invalidar las otras consultas del resumen', async () => {
+    const reads = new IpcReadRequests();
+    const pending = deferred<string>();
+    const catalog = reads.run(channels.catalog, [], () => pending.promise);
+    const audit = reads.run(channels.loadConfigurationAudit, [], () => pending.promise);
+    expect(reads.run(channels.catalog, [], async () => 'duplicate')).toBe(catalog);
+    expect(reads.run(channels.loadConfigurationAudit, [], async () => 'duplicate')).toBe(audit);
+    pending.resolve('result');
+    await Promise.all([catalog, audit]);
+  });
   it.each([channels.inspectQaAtm, channels.mediatorLive])(
     '%s consulta independientemente sin invalidar lecturas compartidas',
     async (channel) => {

@@ -11,8 +11,7 @@ import { SettingsReaderStatus } from './SettingsReaderStatus';
 import { SettingsConfigurationDetails } from './SettingsConfigurationDetails';
 import './settings.css';
 
-export type SettingsPage =
-  'environment' | 'send' | 'operations' | 'network' | 'requirements' | 'audit';
+export type SettingsPage = 'environment' | 'send' | 'operations' | 'network' | 'requirements';
 
 const sections: { id: SettingsPage; label: string; icon: IconName }[] = [
   { id: 'environment', label: 'Ambiente y estación', icon: 'monitor' },
@@ -20,7 +19,6 @@ const sections: { id: SettingsPage; label: string; icon: IconName }[] = [
   { id: 'operations', label: 'Dispositivos y perfiles', icon: 'reader' },
   { id: 'network', label: 'Evidencia de red', icon: 'database' },
   { id: 'requirements', label: 'Requisitos', icon: 'shield' },
-  { id: 'audit', label: 'Auditoría', icon: 'history' },
 ];
 
 export type SettingsDestination =
@@ -237,7 +235,7 @@ export function SettingsView({
                   <Icon name="history" />
                   <span>
                     <strong>Consultar evidencia Mediator</strong>
-                    <small>Observación e historial remoto</small>
+                    <small>Reportería y auditoría · Mediator</small>
                   </span>
                   <Icon name="arrow" size={16} />
                 </button>
@@ -266,28 +264,24 @@ export function SettingsView({
             <NetworkEvidenceView state={snapshot?.networkEvidence} environment={environment} />
           </div>
 
-          {(['requirements', 'audit'] as const).map((mode) => (
-            <div key={mode} id={`settings-${mode}`} hidden={page !== mode} tabIndex={-1}>
-              {page === mode && (
-                <SettingsConfigurationDetails
-                  mode={mode}
-                  environment={environment}
-                  client={client}
-                  disabled={actionDisabled}
-                  activeAtms={activeAtms}
-                  catalogBusy={catalogBusy}
-                  catalogError={catalogError}
-                  connection={link.connection}
-                  connectionError={link.error}
-                  environmentAudit={snapshot?.audit ?? []}
-                  onRefreshCatalog={onRefreshCatalog}
-                  onOpenSend={() => onPageChange('send')}
-                  onOpenDevices={() => onPageChange('operations')}
-                  onOpenAtms={() => onNavigate('atms')}
-                />
-              )}
-            </div>
-          ))}
+          <div id="settings-requirements" hidden={page !== 'requirements'} tabIndex={-1}>
+            {page === 'requirements' && (
+              <SettingsConfigurationDetails
+                environment={environment}
+                client={client}
+                disabled={actionDisabled}
+                activeAtms={activeAtms}
+                catalogBusy={catalogBusy}
+                catalogError={catalogError}
+                connection={link.connection}
+                connectionError={link.error}
+                onRefreshCatalog={onRefreshCatalog}
+                onOpenSend={() => onPageChange('send')}
+                onOpenDevices={() => onPageChange('operations')}
+                onOpenAtms={() => onNavigate('atms')}
+              />
+            )}
+          </div>
         </div>
       </div>
     </div>

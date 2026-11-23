@@ -1,9 +1,6 @@
 # Consulta de Mediator en Qa
 
-Acceso vigente: **Reportes y auditoría → Consulta de Mediator**. Esta agrupación
-sustituye la entrada **Observación** del menú; conserva la consulta y sus reglas.
-
-Historial permite consultar transacciones externas y la estructura protegida de
+Reportería y auditoría → Mediator permite consultar transacciones externas y la estructura protegida de
 sus mensajes. No son ejecuciones del simulador ni resultados PASS/FAIL.
 
 ## Fuente y comportamiento

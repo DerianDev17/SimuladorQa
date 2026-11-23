@@ -39,6 +39,24 @@ import { NewVisaDeposit } from '../../apps/desktop/src/main/adapters/new-visa-de
 let directory: string;
 let app: ElectronApplication | undefined;
 
+async function openTransactionReports(window: Page) {
+  await window
+    .getByRole('navigation', { name: 'Navegación principal' })
+    .getByRole('button', { name: 'Reportería y auditoría', exact: true })
+    .click();
+  await window.getByRole('tab', { name: 'Reportes', exact: true }).click();
+  await window
+    .getByRole('navigation', { name: 'Tipo de reporte' })
+    .getByRole('button', { name: 'Transacciones', exact: true })
+    .click();
+}
+async function backToTransactions(window: Page) {
+  await window
+    .getByRole('navigation', { name: 'Navegación principal' })
+    .getByRole('button', { name: 'Transacciones', exact: true })
+    .click();
+}
+
 async function prepareAtmWizard() {
   await writeFile(join(directory, 'network-evidence.json'), JSON.stringify(networkEvidence()));
   const window = await launch();
@@ -515,10 +533,11 @@ test('depósito QA: monto, canal propio, RC12, mensajes e historial sin opciones
   await expect(window.getByRole('tabpanel', { name: 'Mensajes', exact: true })).toContainText(
     '211000',
   );
+  await expect(send).toBeDisabled();
+  await openTransactionReports(window);
   const history = window.getByRole('region', { name: 'Historial local', exact: true });
   await expect(history).toContainText('Depósito');
   await expect(history).toContainText('USD 10.00');
-  await expect(send).toBeDisabled();
   expect(
     await app!.evaluate(
       () => (globalThis as typeof globalThis & { depositSends?: number }).depositSends,
@@ -572,24 +591,20 @@ test('inspección interactiva: historial independiente, flujo, evidencia y fallo
     },
     { balance, withdrawal, timeout },
   );
-  await window.getByRole('button', { name: 'Actualizar historial', exact: true }).click();
-  const history = window.getByRole('region', { name: 'Historial local', exact: true });
-  await expect(history.locator('tbody tr')).toHaveCount(3);
   await window.getByLabel('Transacción', { exact: true }).selectOption('WITHDRAWAL_APPROVED');
   await window.getByLabel('Monto de prueba').fill('75.25');
   await window.getByRole('button', { name: 'Leer tarjeta', exact: true }).click();
   const send = window.getByRole('button', { name: 'Ejecutar Transacción', exact: true });
   await expect(send).toBeEnabled();
+  await openTransactionReports(window);
+  const history = window.getByRole('region', { name: 'Historial local', exact: true });
+  await expect(history.locator('tbody tr')).toHaveCount(3);
   await history.getByRole('button', { name: 'Abrir operación 000123', exact: true }).click();
-  const result = window.getByRole('region', { name: 'Resultado', exact: true });
+  const result = window.getByRole('region', {
+    name: 'Detalle de transacción guardada',
+    exact: true,
+  });
   await expect(result).toContainText('Monto solicitado: USD 20.00');
-  await expect(window.getByLabel('Monto de prueba')).toHaveValue('75.25');
-  await expect(send).toBeEnabled();
-  await window.getByRole('button', { name: 'Ocultar preparación', exact: true }).click();
-  await expect(window.getByLabel('Monto de prueba')).not.toBeVisible();
-  await window.getByRole('button', { name: 'Mostrar preparación', exact: true }).click();
-  await expect(window.getByLabel('Monto de prueba')).toHaveValue('75.25');
-  await expect(send).toBeEnabled();
   await result.getByRole('button', { name: 'Respuesta: Con evidencia', exact: true }).click();
   await result.getByRole('button', { name: 'Abrir mensaje', exact: false }).click();
   const inspector = window.getByRole('region', {
@@ -642,7 +657,6 @@ test('inspección interactiva: historial independiente, flujo, evidencia y fallo
     'true',
   );
   await expect(inspector.getByLabel('Trama en texto legible')).toContainText('RESP · ISO8583');
-  await expect(window.getByLabel('Monto de prueba')).toHaveValue('75.25');
   await history.getByRole('button', { name: 'Abrir operación 000123', exact: true }).click();
   await window.evaluate(() => globalThis.window.scrollTo(0, 0));
   await mkdir('artifacts', { recursive: true });
@@ -666,6 +680,9 @@ test('inspección interactiva: historial independiente, flujo, evidencia y fallo
   expect(await window.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
     true,
   );
+  await backToTransactions(window);
+  await expect(window.getByLabel('Monto de prueba')).toHaveValue('75.25');
+  await expect(send).toBeEnabled();
   expect(
     await app!.evaluate(
       () => (globalThis as typeof globalThis & { inspectionSends: number }).inspectionSends,
@@ -791,7 +808,7 @@ test('mensajes completos de sesión: valores, máscaras, expiración y fallo de 
     },
     { sample, complete },
   );
-  await window.getByRole('button', { name: 'Actualizar historial', exact: true }).click();
+  await openTransactionReports(window);
   await window.getByRole('button', { name: 'Abrir operación 000123', exact: true }).click();
   await window.getByRole('tab', { name: 'Mensajes', exact: true }).click();
   const inspector = window.getByRole('region', {
@@ -825,7 +842,8 @@ test('mensajes completos de sesión: valores, máscaras, expiración y fallo de 
   expect(
     await window.evaluate(() => document.body.textContent!.includes('411111' + '0'.repeat(10))),
   ).toBe(false);
-  await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
+  await openTransactionReports(window);
+  await window.getByRole('button', { name: 'Abrir operación 000123', exact: true }).click();
   await window.getByRole('tab', { name: 'Mensajes', exact: true }).click();
   await expect(inspector).toContainText('Valores completos de QA');
   await inspector.getByRole('tab', { name: 'Solicitud (0200)', exact: true }).click();
@@ -897,7 +915,7 @@ test('historial completo cifrado: reinicio real, sin caducidad, ocultación y ar
   const window = await launch();
   // A day later the persisted DTO still has no expiry in Main or Renderer.
   await window.clock.install({ time: new Date(Date.now() + 24 * 60 * 60 * 1000) });
-  await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
+  await openTransactionReports(window);
   await window.getByRole('button', { name: 'Abrir operación 000123', exact: true }).click();
   await window.getByRole('tab', { name: 'Mensajes', exact: true }).click();
   const inspector = window.getByRole('region', {
@@ -2011,7 +2029,7 @@ test('interfaz minimalista: acción principal, requisitos y detalles accesibles'
     BrowserWindow.getAllWindows()[0]?.setContentSize(1536, 1024),
   );
   await window.screenshot({ path: 'artifacts/redesign-transaction-desktop.png', scale: 'css' });
-  await expect(window.getByRole('region', { name: 'Historial local' })).toBeVisible();
+  await expect(window.getByRole('region', { name: 'Historial local' })).toHaveCount(0);
   await expect(window.getByRole('button', { name: 'Ver historial', exact: true })).toHaveCount(0);
 });
 
@@ -2135,10 +2153,12 @@ test('consulta terminada sin respuesta permite retiro de monto personalizado con
   ).toHaveCount(0);
   await expect(send).toBeDisabled(); // requires a fresh card read
   await expect(window.getByLabel('Monto de prueba')).toHaveValue('75.25');
+  await openTransactionReports(window);
   await expect(window.locator('.transaction-history tbody tr')).toHaveCount(1);
   await expect(window.locator('.transaction-history')).toContainText(
     'El destino cerró la conexión',
   );
+  await backToTransactions(window);
   const nextReadId = randomUUID();
   await installTransactionReader(false, nextReadId);
   await window.getByRole('button', { name: 'Buscar lector', exact: true }).click();
@@ -2147,10 +2167,12 @@ test('consulta terminada sin respuesta permite retiro de monto personalizado con
   await send.click();
   await expect(result).toContainText('Retiro autorizado por el host');
   await expect(result).toContainText('Monto solicitado: USD 75.25');
+  await openTransactionReports(window);
   await expect(window.locator('.transaction-history tbody tr')).toHaveCount(2);
   await expect(window.locator('.transaction-history')).toContainText(
     'El destino cerró la conexión',
   );
+  await backToTransactions(window);
   const sent = await app!.evaluate(
     () =>
       (
@@ -2285,8 +2307,10 @@ test('retiro 91 historico y actual finalizan sin paso de conciliacion y permiten
   expect(requests[0]).toMatchObject({ cardReadId: readId });
   expect(requests[0]).not.toMatchObject({ requestId: previous.requestId });
   // The unified history includes the persisted record and the new session result.
+  await openTransactionReports(window);
   await expect(window.locator('.transaction-history tbody tr')).toHaveCount(2);
   await expect(window.locator('.transaction-history')).toContainText('Retiro no aprobado');
+  await backToTransactions(window);
 });
 
 test('retiro RC 59 histórico no ocupa el formulario y un error nuevo permite otro retiro', async () => {
@@ -2409,8 +2433,10 @@ test('retiro RC 59 histórico no ocupa el formulario y un error nuevo permite ot
   expect(sent[1]).toMatchObject({ cardReadId: nextReadId, amount: '100.00' });
   expect(new Set([previous.requestId, ...sent.map((item) => item.requestId)]).size).toBe(3);
   expect(sent[0]!.cardReadId).not.toBe(sent[1]!.cardReadId);
+  await openTransactionReports(window);
   await expect(window.locator('.transaction-history tbody tr')).toHaveCount(3);
   expect(await readWithdrawalJournal()).toEqual([previous]);
+  await backToTransactions(window);
   await mkdir('artifacts', { recursive: true });
   await window.screenshot({ path: 'artifacts/withdrawal-after-error.png', fullPage: true });
 });
@@ -2652,7 +2678,7 @@ test('consulta de saldo: envío directo, dependencia ausente y resultado mediant
   );
   await window.evaluate(() => globalThis.window.scrollTo(0, 0));
   await window.screenshot({ path: 'artifacts/redesign-prepared-desktop.png', scale: 'css' });
-  await expect(window.getByRole('region', { name: 'Historial local' })).toBeVisible();
+  await expect(window.getByRole('region', { name: 'Historial local' })).toHaveCount(0);
   await window.getByRole('combobox', { name: 'Cuenta', exact: true }).selectOption('CURRENT');
   await expect(send).toBeDisabled();
   await window.getByRole('combobox', { name: 'Cuenta', exact: true }).selectOption('SAVINGS');
@@ -2668,8 +2694,10 @@ test('consulta de saldo: envío directo, dependencia ausente y resultado mediant
   await expect(blocked).toContainText('Consulta bloqueada');
   await expect(blocked).toContainText('No se transmitió la consulta.');
   await expect(blocked).toContainText('No está disponible la plantilla ATM20521');
+  await openTransactionReports(window);
   await expect(window.locator('.transaction-history tbody tr')).toHaveCount(1);
   await expect(window.locator('.transaction-history')).toContainText('Consulta bloqueada');
+  await backToTransactions(window);
   // Main's completion event reports its empty simulated hardware, independently
   // of the reader IPC fixture. Restore that fixture before another UI attempt.
   await installTransactionReader();
@@ -2769,8 +2797,10 @@ test('consulta de saldo: envío directo, dependencia ausente y resultado mediant
   ).toHaveCount(0);
   await expect(window.locator('#send-blocked-note')).toContainText('Operación finalizada');
   await expect(result).toContainText('Código de respuesta: 00');
+  await openTransactionReports(window);
   await expect(window.locator('.transaction-history tbody tr')).toHaveCount(2);
   await expect(window.locator('.transaction-history')).toContainText('Consulta aprobada');
+  await backToTransactions(window);
   await result.scrollIntoViewIfNeeded();
   await mkdir('artifacts', { recursive: true });
   await window.screenshot({ path: 'artifacts/balance-inquiry-result.png' });
@@ -2973,11 +3003,8 @@ test('formulario directo: lectura selecciona la tarjeta, revisión opcional e in
     window.getByRole('button', { name: 'Ejecutar Transacción', exact: true }),
   ).toBeDisabled();
   await expect(window.locator('.transaction-steps')).toHaveCount(0);
-  await window.getByRole('button', { name: 'Reportes y auditoría', exact: true }).click();
-  await window
-    .getByRole('navigation', { name: 'Secciones de reportes y auditoría' })
-    .getByRole('button', { name: 'Consulta de Mediator', exact: true })
-    .click();
+  await window.getByRole('button', { name: 'Reportería y auditoría', exact: true }).click();
+  await window.getByRole('tab', { name: 'Mediator', exact: true }).click();
   await window.getByRole('button', { name: 'Transacciones', exact: true }).click();
   await expect(window.getByLabel('Monto de prueba')).toHaveValue('100.50');
   await expect(preview).toContainText(transactionIdentity.panMasked!);
@@ -3132,11 +3159,8 @@ test('evidencia de red corrupta muestra error seguro sin impedir usar el shell',
 
 test('Observación Qa: consulta validada y dependencia no configurada', async () => {
   const window = await launch();
-  await window.getByRole('button', { name: 'Reportes y auditoría', exact: true }).click();
-  await window
-    .getByRole('navigation', { name: 'Secciones de reportes y auditoría' })
-    .getByRole('button', { name: 'Consulta de Mediator', exact: true })
-    .click();
+  await window.getByRole('button', { name: 'Reportería y auditoría', exact: false }).click();
+  await window.getByRole('tab', { name: 'Mediator', exact: true }).click();
   const observer = window.getByLabel('Consulta de Mediator', { exact: true });
   await expect(
     observer.getByRole('heading', { name: 'Transacciones y mensajes de Mediator' }),
@@ -3191,11 +3215,8 @@ test('Historial muestra mandatorios CMS y variantes sin exponer valores', async 
       value: { ...value, queryId: 'synthetic-cms-review', queriedAt: '2026-10-08T22:00:00.000Z' },
     }));
   }, decoded.value);
-  await window.getByRole('button', { name: 'Reportes y auditoría', exact: true }).click();
-  await window
-    .getByRole('navigation', { name: 'Secciones de reportes y auditoría' })
-    .getByRole('button', { name: 'Consulta de Mediator', exact: true })
-    .click();
+  await window.getByRole('button', { name: 'Reportería y auditoría', exact: false }).click();
+  await window.getByRole('tab', { name: 'Mediator', exact: true }).click();
   const observer = window.getByLabel('Consulta de Mediator', { exact: true });
   await observer.getByLabel('Desde (hora SQL)', { exact: true }).fill('2026-09-29 00:00:07.803');
   await observer.getByLabel('Hasta (hora SQL)', { exact: true }).fill('2026-09-29 23:00:07.803');
@@ -3262,7 +3283,7 @@ test('dashboard real, aislamiento, navegación y gate transaccional', async () =
     'Tarjetas',
     'Carga y estrés',
     'Monitor',
-    'Reportes y auditoría',
+    'Reportería y auditoría',
     'Configuración',
   ]) {
     await window.getByRole('button', { name, exact: true }).click();
@@ -3625,8 +3646,14 @@ test('casos locales en Qa: validación, reinicio, carga y eliminación', async (
   await dialog.getByRole('button', { name: 'Confirmar eliminación', exact: true }).click();
   await expect(dialog.getByText('Aún no hay casos guardados en este ambiente.')).toBeVisible();
   await dialog.getByRole('button', { name: 'Cerrar', exact: true }).click();
-  await window.getByRole('button', { name: 'Entidades', exact: true }).click();
-  await expect(window.getByRole('cell', { name: 'Caso', exact: true })).toHaveCount(2);
+  await window.getByRole('button', { name: 'Reportería y auditoría', exact: true }).click();
+  await window.getByRole('tab', { name: 'Auditoría', exact: true }).click();
+  await window.getByRole('combobox', { name: 'Origen', exact: true }).selectOption('CASE');
+  await window.getByRole('button', { name: 'Aplicar', exact: true }).click();
+  const audit = window.getByRole('region', { name: 'Actividad de auditoría', exact: true });
+  await expect(audit.getByRole('cell', { name: 'Caso', exact: true })).toHaveCount(2);
+  await expect(audit).toContainText('Creación');
+  await expect(audit).toContainText('Eliminación');
 });
 
 test('un caso con ATM editado conserva cuenta/monto y exige seleccionar el perfil actual', async () => {
@@ -4178,15 +4205,16 @@ test('preferencias antiguas migran a Qa y el puente rechaza PREPROD', async () =
   });
   for (const result of results)
     expect(result).toMatchObject({ ok: false, error: { code: 'VALIDATION_ERROR' } });
-  await window.getByRole('button', { name: 'Configuración', exact: true }).click();
+  await window.getByRole('button', { name: 'Reportería y auditoría', exact: true }).click();
+  await window.getByRole('tab', { name: 'Auditoría', exact: true }).click();
   await window
-    .getByRole('navigation', { name: 'Páginas de configuración' })
-    .getByRole('button', { name: 'Auditoría', exact: true })
+    .getByRole('row')
+    .filter({ hasText: 'Ambiente de la estación' })
+    .getByRole('button', { name: /^Ver evento / })
     .click();
-  await window.getByText('Cambios históricos de ambiente', { exact: true }).click();
-  await expect(
-    window.getByRole('cell', { name: 'Configuración anterior → Qa', exact: true }),
-  ).toBeVisible();
+  await expect(window.getByRole('region', { name: 'Detalle del evento' })).toContainText(
+    'Configuración anterior → Qa',
+  );
   expect(JSON.parse(await readFile(join(directory, 'preferences.json'), 'utf8'))).toMatchObject({
     environment: 'QA',
     audit: [{ previousEnvironment: 'PREPROD', environment: 'QA' }],
@@ -4665,13 +4693,10 @@ test('mejoras UI: revisión ocupada mantiene los controles bloqueados al salir d
   await reviewDraft(window);
   await expect(window.getByRole('button', { name: 'Revisando…', exact: true })).toBeDisabled();
   await expect(window.getByLabel('Ambiente', { exact: true })).toBeVisible();
-  await window.getByRole('button', { name: 'Reportes y auditoría', exact: true }).click();
-  await window
-    .getByRole('navigation', { name: 'Secciones de reportes y auditoría' })
-    .getByRole('button', { name: 'Consulta de Mediator', exact: true })
-    .click();
+  await window.getByRole('button', { name: 'Reportería y auditoría', exact: true }).click();
+  await window.getByRole('tab', { name: 'Mediator', exact: true }).click();
   await expect(
-    window.getByRole('heading', { name: 'Reportes y auditoría', exact: true }),
+    window.getByRole('heading', { name: 'Reportería y auditoría', exact: true }),
   ).toBeVisible();
   await expect(window.getByLabel('Ambiente', { exact: true })).toBeVisible();
   await app!.evaluate(() => {

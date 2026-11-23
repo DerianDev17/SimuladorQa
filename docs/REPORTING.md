@@ -1,16 +1,54 @@
-# Evidencia y exportación de carga
+# Reportería y auditoría
+
+## Centro de consulta — 2026-11-19
+
+**Reportería y auditoría** reemplaza Observación en el menú. Sus pestañas son:
+
+- **Resumen:** operaciones locales, corridas cerradas, eventos e incertidumbre;
+  accesos a los historiales y exportación de las tres corridas cerradas recientes
+  que coincidan con los filtros.
+- **Reportes:** historial de carga con paginación, detalle y exportaciones;
+  historial de transacciones con Flujo, Mensajes, Evidencia y comprobante cuando
+  corresponde. Abrir una operación no cambia el borrador ni transmite solicitudes.
+- **Auditoría:** eventos de envío, entidades, perfiles ATM, casos, ambiente y
+  configuraciones de carga; detalle por evento y páginas de 15.
+- **Mediator:** conserva su consulta externa, filtros, límites y hora SQL.
+
+Catálogos deja de mostrar Actividad del catálogo; Configuración elimina su página
+Auditoría. Transacciones y Carga y estrés sustituyen sus paneles de historial por
+accesos a Reportes. Los formularios, el resultado operativo y el control de la
+corrida se conservan en sus pantallas de ejecución.
+
+El resumen y la auditoría filtran por fecha local (desde inclusive, hasta
+exclusivo), origen, ATM y búsqueda. Son proyecciones de los registros disponibles:
+últimas 50 transacciones por operación más la actividad pública de la sesión,
+últimas 20 corridas y hasta 100 eventos por fuente. No son totales históricos;
+un filtro no amplía esas ventanas. Los historiales de carga y de transacciones
+completas conservan sus consultas paginadas independientes, incluidas las operaciones
+anteriores a la ventana reciente. Un filtro ATM solo incluye eventos vinculados
+directamente al perfil, sin inferir relaciones antiguas desde el catálogo actual.
+
+Actualizar vuelve a consultar las fuentes. Un fallo retira la auditoría obsoleta
+de esa fuente y muestra el error; los contadores incompletos muestran un guion.
+El historial transaccional conserva su última lectura ante fallos parciales,
+identificándola como incompleta. Salir descarta respuestas tardías; cambiar de
+pestaña desmonta el visor de mensajes completos.
+
+La auditoría es local operativa. No reconstruye nombres, valores ni relaciones
+históricas que no se guardaron. El nuevo IPC `load:configurations:audit` consulta
+hasta 100 eventos existentes, incluidos recursos eliminados, por fecha y orden
+de inserción descendentes. Main valida ambiente Qa y ausencia de payload; el
+adaptador proyecta columnas explícitas, valida UUID/fecha/revisión/acción y
+devuelve errores públicos sin contenido corrupto. No modifica esquema ni retención.
+
+ADR-046 sigue limitado al visor Mensajes: el resumen, auditoría, diarios públicos
+y exportaciones no reciben los campos completos cifrados.
 
 ## Disponible
 
-**Reportes y auditoría** sustituye a **Observación** en el menú lateral y reúne
-las vistas existentes: **Informes de carga**, **Auditoría de envío**,
-**Auditoría de catálogos** y **Consulta de Mediator**. Las auditorías conservan
-los mismos registros y límites de Configuración y los catálogos. Los accesos
-a Mediator desde Transacciones y Configuración abren directamente su consulta.
-
-En QA, abrir **Reportes y auditoría → Informes de carga → Ver detalle** desde el menú lateral y elegir
+En QA, abrir **Reportería y auditoría → Reportes → Carga y estrés → Ver detalle** y elegir
 **Exportar CSV**, **Exportar JSON**, **Informe de negocio** o **Informe técnico**.
-El acceso **Carga y estrés → Ver historial de carga** conserva el mismo historial.
+El acceso **Carga y estrés → Abrir reportes de carga** abre el mismo historial.
 Los informes son archivos HTML independientes. El diálogo nativo permite elegir el destino
 y confirmar la sustitución de un archivo. Cancelar no escribe nada.
 

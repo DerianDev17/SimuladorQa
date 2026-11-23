@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Environment } from '../../../../packages/domain/src/index';
+import type { BalanceExecution } from '../../../../packages/domain/src/balance-inquiry';
 import type { AppSnapshot, ErrorCode, Result } from '../../../../packages/shared/src/contracts';
 import type { AtmProfile, CatalogSnapshot } from '../../../../packages/domain/src/catalogs';
 import { AtmOnboardingWizard } from './AtmOnboardingWizard';
@@ -7,7 +8,7 @@ import { SettingsView } from './SettingsView';
 import type { SettingsPage } from './SettingsView';
 import { CatalogView } from './CatalogView';
 import { TransactionWorkspace } from './TransactionWorkspace';
-import { ObservationView } from './ObservationView';
+import { ReportingView, type ReportingDestination } from './ReportingView';
 import type { CatalogMutation } from './CatalogView';
 import { DesktopClient } from './desktop-client';
 import { Icon } from './Icon';
@@ -17,11 +18,6 @@ import { DashboardView } from './DashboardView';
 import type { IconName } from './Icon';
 import type { AtmSelection } from './transaction-setup';
 import { LoadTestView } from './LoadTestView';
-import { LoadHistoryView } from './LoadHistoryView';
-import { ReportsView } from './ReportsView';
-import type { ReportsPage } from './ReportsView';
-import { SettingsConfigurationDetails } from './SettingsConfigurationDetails';
-import { CatalogAuditView } from './CatalogAuditView';
 import { VirtualCardGeneratorView } from './VirtualCardGeneratorView';
 
 const navigation: { id: string; label: string; icon: IconName; group: string }[] = [
@@ -32,13 +28,21 @@ const navigation: { id: string; label: string; icon: IconName; group: string }[]
   { id: 'cards', label: 'Tarjetas', icon: 'card', group: '' },
   { id: 'entities', label: 'Entidades', icon: 'entity', group: '' },
   { id: 'monitor', label: 'Monitor', icon: 'monitor', group: 'OBSERVABILIDAD' },
-  { id: 'history', label: 'Reportes y auditoría', icon: 'file', group: '' },
+  { id: 'history', label: 'Reportería y auditoría', icon: 'history', group: '' },
   { id: 'settings', label: 'Configuración', icon: 'settings', group: '' },
 ];
 const client = new DesktopClient(window.desktop);
 
 export function App({ initialPage = 'dashboard' }: { initialPage?: 'dashboard' | 'transactions' }) {
   const [page, setPage] = useState<string>(initialPage);
+  const [reportSessionExecutions, setReportSessionExecutions] = useState<
+    readonly BalanceExecution[]
+  >([]);
+  const [reportingDestination, setReportingDestination] = useState<ReportingDestination>('summary');
+  function openReporting(destination: ReportingDestination) {
+    setReportingDestination(destination);
+    setPage('history');
+  }
   const content = useRef<HTMLElement>(null);
   const previousPage = useRef(page);
   useEffect(() => {
@@ -51,13 +55,13 @@ export function App({ initialPage = 'dashboard' }: { initialPage?: 'dashboard' |
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   }, [page]);
   const [settingsPage, setSettingsPage] = useState<SettingsPage>('environment');
-  const [reportsPage, setReportsPage] = useState<ReportsPage>('load');
   const [snapshot, setSnapshot] = useState<AppSnapshot>();
   const [error, setError] = useState<{ code: string; message: string }>();
   const [busy, setBusy] = useState(true);
   const [catalog, setCatalog] = useState<CatalogSnapshot>();
   const [catalogError, setCatalogError] = useState<{ code: ErrorCode; message: string }>();
-  const [catalogBusy, setCatalogBusy] = useState(false);
+  // Keep navigation disabled across both initial snapshot and catalog requests.
+  const [catalogBusy, setCatalogBusy] = useState(true);
   const [catalogEditing, setCatalogEditing] = useState(false);
   const [transactionBusy, setTransactionBusy] = useState(false);
   const [sendConfigurationEditing, setSendConfigurationEditing] = useState(false);
@@ -212,7 +216,7 @@ export function App({ initialPage = 'dashboard' }: { initialPage?: 'dashboard' |
     setPage('transactions');
   }
   function navigateFromTransaction(next: 'entities' | 'atms' | 'settings' | 'history') {
-    if (next === 'history') setReportsPage('mediator');
+    if (next === 'history') setReportingDestination('mediator');
     if (next === 'settings') setSettingsPage('send');
     if ((next === 'entities' || next === 'atms') && environment) {
       setTransactionSetup({ environment, stage: next });
@@ -251,7 +255,7 @@ export function App({ initialPage = 'dashboard' }: { initialPage?: 'dashboard' |
                 disabled={catalogEditing || catalogBusy || sendConfigurationEditing}
                 onClick={() => {
                   setTransactionSetup(undefined);
-                  if (item.id === 'history') setReportsPage('load');
+                  if (item.id === 'history') setReportingDestination('summary');
                   setPage(item.id);
                 }}
               >
@@ -396,6 +400,8 @@ export function App({ initialPage = 'dashboard' }: { initialPage?: 'dashboard' |
               pendingAtmSelection={pendingAtmSelection}
               onAtmSelectionApplied={() => setPendingAtmSelection(undefined)}
               onCatalogChange={setCatalog}
+              onOpenReports={() => openReporting('transactions')}
+              onSessionExecutionsChange={setReportSessionExecutions}
             />
           </div>
 
@@ -416,8 +422,8 @@ export function App({ initialPage = 'dashboard' }: { initialPage?: 'dashboard' |
               onRefreshCatalog={() => void refreshCatalog()}
               onNavigate={(destination) => {
                 if (busy || transactionBusy || sendConfigurationEditing || catalogBusy) return;
-                if (destination === 'history') setReportsPage('mediator');
                 setTransactionSetup(undefined);
+                if (destination === 'history') setReportingDestination('mediator');
                 setPage(destination);
               }}
             />
@@ -510,66 +516,14 @@ export function App({ initialPage = 'dashboard' }: { initialPage?: 'dashboard' |
           )}
 
           {page === 'history' && (
-            <ReportsView page={reportsPage} onPageChange={setReportsPage}>
-              {reportsPage === 'load' &&
-                (environment === 'QA' ? (
-                  <LoadHistoryView key={environment} atms={catalog?.atms ?? []} />
-                ) : (
-                  <p role="status">
-                    No se pudo verificar el ambiente Qa para consultar los reportes.
-                  </p>
-                ))}
-              {reportsPage === 'send-audit' && (
-                <SettingsConfigurationDetails
-                  mode="audit"
-                  environment={environment}
-                  client={client}
-                  disabled={busy || !snapshot}
-                  activeAtms={undefined}
-                  catalogBusy={catalogBusy}
-                  catalogError={catalogError?.message}
-                  connection={link.connection}
-                  connectionError={link.error}
-                  environmentAudit={snapshot?.audit ?? []}
-                  onRefreshCatalog={() => void refreshCatalog()}
-                  onOpenSend={() => {
-                    setSettingsPage('send');
-                    setPage('settings');
-                  }}
-                  onOpenDevices={() => {
-                    setSettingsPage('operations');
-                    setPage('settings');
-                  }}
-                  onOpenAtms={() => setPage('atms')}
-                />
-              )}
-              {reportsPage === 'catalog-audit' && (
-                <>
-                  <button
-                    disabled={busy || catalogBusy || !snapshot}
-                    onClick={() => void refreshCatalog()}
-                  >
-                    Actualizar auditoría de catálogos
-                  </button>
-                  {catalogBusy ? (
-                    <p role="status">Consultando actividad del catálogo…</p>
-                  ) : catalogError ? (
-                    <p role="alert">{catalogError.message}</p>
-                  ) : catalog ? (
-                    <CatalogAuditView audit={catalog.audit} />
-                  ) : (
-                    <p role="status">Catálogo sin verificar.</p>
-                  )}
-                </>
-              )}
-              {reportsPage === 'mediator' && (
-                <ObservationView
-                  key={environment ?? 'unavailable'}
-                  environment={environment}
-                  disabled={busy || !snapshot}
-                />
-              )}
-            </ReportsView>
+            <ReportingView
+              key={`${environment ?? 'unavailable'}:${reportingDestination}`}
+              snapshot={snapshot}
+              catalog={catalog}
+              client={client}
+              initial={reportingDestination}
+              sessionExecutions={reportSessionExecutions}
+            />
           )}
 
           {page === 'cards' && snapshot?.environment && (
@@ -588,6 +542,7 @@ export function App({ initialPage = 'dashboard' }: { initialPage?: 'dashboard' |
               atms={catalog?.atms ?? []}
               disabled={busy || catalogBusy || transactionBusy || !snapshot}
               onBusyChange={setTransactionBusy}
+              onOpenReports={() => openReporting('loads')}
             />
           )}
 

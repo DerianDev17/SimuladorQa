@@ -58,7 +58,8 @@ ver `SAVED_CASES.md`. El Worker
 usa queries parametrizadas; la UI nunca abre SQLite ni recibe el objeto DatabaseSync.
 
 Guardar/eliminar y su evento de auditoría se confirman juntos. Se conservan los últimos
-1000 eventos y se devuelven hasta 100; la UI muestra los últimos diez. Es auditoría local
+1000 eventos y se devuelven hasta 100; Reportería y auditoría los presenta en páginas de 15.
+El catálogo ya no duplica el panel de actividad. Es auditoría local
 operativa, editable externamente, sin garantía de evidencia certificada. Registra UUID,
 fecha UTC, usuario, equipo, recurso, acción y ambiente, sin los valores de los formularios.
 

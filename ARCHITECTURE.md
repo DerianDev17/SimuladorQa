@@ -78,7 +78,7 @@ solo su operación `read`. La inicialización documentada permanece en la compos
 de Main. `TransactionHistoryReader` y los contratos de exportación viven en archivos
 de puertos independientes, compartidos por servicios y adaptadores. Los adaptadores
 no necesitan importar las clases de estos servicios. Ver
-[ADR-048](docs/adr/ADR-048-APPLICATION-PORT-BOUNDARIES.md).
+[ADR-049](docs/adr/ADR-049-APPLICATION-PORT-BOUNDARIES.md).
 
 ## Ejecución y persistencia
 
@@ -188,6 +188,13 @@ la entidad nuevamente al autorizar el envío. Reutiliza exclusión, diario y
 transporte financieros existentes. Ver [ADR-044](docs/adr/ADR-044-ATM-ENTITY-ONBOARDING.md).
 
 ## Observación y alcance pendiente
+
+Desde 2026-11-19 el Renderer agrupa lecturas públicas existentes en Reportería y
+auditoría. No introduce persistencia paralela ni un servicio remoto de agregación.
+El IPC de auditoría de configuraciones de carga lee la tabla existente mediante
+el puerto de almacenamiento en Main, con proyección y validación. Los datos
+completos de mensajes siguen recuperándose únicamente en Mensajes bajo ADR-046.
+Ver [ADR-048](docs/adr/ADR-048-CENTRAL-REPORTING.md) y [reportería](docs/REPORTING.md).
 
 Mediator tiene adaptador SQL fuera de Renderer para Inicio e Historial. El feed
 no garantiza captura completa bajo carga y no sustituye un asiento Core validado.

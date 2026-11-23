@@ -2,6 +2,9 @@
 
 ## Historial completo — 2026-11-19
 
+Acceso: **Reportería y auditoría → Reportes → Transacciones**, o **Abrir historial
+de transacciones** desde el formulario operativo. Ver [ADR-048](../adr/ADR-048-CENTRAL-REPORTING.md).
+
 **Buscar en todo el historial** complementa la lista reciente y permite paginar
 todos los diarios QA, filtrar fechas locales/tipo y buscar STAN, RRN, Terminal ID
 o UUID. Abrir un registro antiguo conserva el borrador y habilita su inspección
