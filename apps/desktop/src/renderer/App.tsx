@@ -74,6 +74,9 @@ export function App({ initialPage = 'dashboard' }: { initialPage?: 'dashboard' |
   const [atmWizard, setAtmWizard] = useState<{ atm: AtmProfile | null }>();
 
   function applySnapshot(result: Result<AppSnapshot>) {
+    // A failed initial snapshot never starts a catalog request. Release navigation
+    // on failure, and hold it again if a retry can now load the first catalog.
+    if (!snapshot) setCatalogBusy(result.ok);
     if (result.ok) {
       setSnapshot(result.value);
       setError(undefined);

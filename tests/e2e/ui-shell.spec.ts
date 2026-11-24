@@ -121,6 +121,35 @@ for (const catalogFails of [false, true]) {
   });
 }
 
+test('fallo de configuración inicial libera navegación y permite reintentar', async () => {
+  const snapshot = await window.evaluate(() => globalThis.window.desktop!.getSnapshot());
+  await app!.evaluate(({ ipcMain }, initial) => {
+    let attempts = 0;
+    ipcMain.removeHandler('app:snapshot');
+    ipcMain.handle('app:snapshot', () =>
+      attempts++ === 0
+        ? {
+            ok: false,
+            error: { code: 'TIMEOUT', message: 'Configuración inicial no disponible.' },
+          }
+        : initial,
+    );
+  }, snapshot);
+  await window.reload();
+  await expect(window.getByRole('alert')).toContainText('Configuración inicial no disponible.');
+  await expect(navigation().getByRole('button', { name: 'Transacciones' })).toBeEnabled();
+  await expect(
+    window.getByRole('button', { name: 'Nueva transacción', exact: true }),
+  ).toBeDisabled();
+  await window.getByRole('button', { name: 'Reintentar', exact: true }).click();
+  await expect(window.getByLabel('Ambiente', { exact: true })).toHaveText('Qa');
+  await expect(
+    window.getByRole('button', { name: 'Nueva transacción', exact: true }),
+  ).toBeEnabled();
+  await navigation().getByRole('button', { name: 'Entidades', exact: true }).click();
+  await expect(window.getByRole('button', { name: 'Nueva entidad' })).toBeVisible();
+});
+
 test('reportería central conserva teclado, auditorías y acceso contextual a Mediator', async () => {
   await expect(navigation().getByRole('button', { name: 'Observación', exact: true })).toHaveCount(
     0,

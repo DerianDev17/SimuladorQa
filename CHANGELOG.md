@@ -7,6 +7,8 @@
   pasa a ADR-049, con sus referencias actualizadas.
 - Mantiene la navegación bloqueada durante el arranque de configuración y
   catálogo; añade regresiones con respuestas demoradas y fallo de catálogo.
+- Libera la navegación cuando falla la configuración inicial y conserva el
+  bloqueo de preparación hasta recuperar una configuración válida.
 
 ## 2026-11-19 — Limpieza de código y archivos obsoletos
 
