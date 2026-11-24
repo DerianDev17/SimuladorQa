@@ -35,5 +35,12 @@ de timeout del adaptador se ejecuta separado con un plazo de 1 ms. Evita que el
 timeout global del runner gane al del proceso y oculte el resultado del caso;
 no cambia el plazo operativo de Mediator ni añade reintentos.
 
+Los casos concurrentes de éxito de `physical-card-load-run.test.ts` conceden
+5 s de respuesta al servidor TCP sintético, que demora hasta 1,5 s para comprobar
+la cola de conexiones. Ese margen absorbe variaciones de planificación en Windows;
+los casos de timeout conservan sus plazos cortos y un servidor sin respuesta.
+Ante fallo se incluyen resultados y tiempos por operación, sin campos financieros.
+No cambia la configuración TCP de la aplicación ni los límites de carga.
+
 Las pruebas automatizadas no certifican hardware ni resultados financieros del
 host/Core. Ver [estrategia de pruebas](testing/TEST_STRATEGY.md).

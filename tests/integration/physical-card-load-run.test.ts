@@ -259,7 +259,10 @@ it.each([
             { ...target, draft: request.draft, cardReadId: request.cardReadId },
             {
               connect: 1000,
-              response: stopping ? 5000 : concurrent ? (approved ? 2000 : 500) : 200,
+              // Successful concurrent fixtures deliberately delay a reply by up
+              // to 1.5 s. Leave scheduling headroom on Windows CI; timeout cases
+              // retain their short deadlines and a peer that never responds.
+              response: stopping ? 5000 : concurrent ? (approved ? 5000 : 500) : 200,
             },
             async () => true,
             execution,
@@ -329,7 +332,18 @@ it.each([
       await service.whenIdle();
       const run = await store.read();
       // Stopping after a write preserves delivery uncertainty, as does timeout.
-      expect(run?.state).toBe(approved ? 'COMPLETED' : 'FAILED');
+      expect(
+        run?.state,
+        JSON.stringify(
+          run?.items.map(({ outcome, sent, received, elapsedMs, timings }) => ({
+            outcome,
+            sent,
+            received,
+            elapsedMs,
+            timings,
+          })),
+        ),
+      ).toBe(approved ? 'COMPLETED' : 'FAILED');
       expect(run?.draft).toEqual(request.draft);
       if (mode === 'WITHDRAWAL_DECLINED')
         expect(run?.items.at(-1)).toMatchObject({ outcome: 'NOT_APPROVED', responseCode: '91' });
