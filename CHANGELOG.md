@@ -8,6 +8,8 @@
   selección por imports y ejemplos de pruebas focalizadas.
 - Añade un hook pre-commit de activación explícita por clon para ejecutar los
   controles obligatorios y bloquear commits cuando falle una validación.
+- Tolera bloqueos transitorios de archivos en la limpieza de pruebas Windows,
+  con reintentos acotados del borrado y propagación de errores persistentes.
 
 ## 2026-11-23 — Duración de las validaciones
 

@@ -11,5 +11,7 @@ export async function removeTestDirectory(directory: string, prefix: string): Pr
     !basename(absolute).startsWith(prefix)
   )
     throw new Error('UNSAFE_TEST_DIRECTORY');
-  await rm(absolute, { recursive: true, force: true });
+  // Windows may briefly retain a PowerShell/SQLite handle after process shutdown.
+  // Retry only filesystem cleanup; persistent errors still fail the test.
+  await rm(absolute, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
 }

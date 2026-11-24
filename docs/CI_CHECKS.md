@@ -126,5 +126,10 @@ los casos de timeout conservan sus plazos cortos y un servidor sin respuesta.
 Ante fallo se incluyen resultados y tiempos por operación, sin campos financieros.
 No cambia la configuración TCP de la aplicación ni los límites de carga.
 
+La limpieza de directorios temporales admite cinco reintentos de `fs.rm`, con
+espera incremental de 50 ms, para bloqueos transitorios de archivos en Windows
+tras cerrar PowerShell o SQLite. Conserva la validación de ruta/prefijo y propaga
+el error si el archivo sigue bloqueado; no reejecuta casos ni oculta aserciones.
+
 Las pruebas automatizadas no certifican hardware ni resultados financieros del
 host/Core. Ver [estrategia de pruebas](testing/TEST_STRATEGY.md).
