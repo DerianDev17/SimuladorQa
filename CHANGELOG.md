@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-23 — Duración de las validaciones
+
+- Ejecuta unitarias e integración una sola vez con cobertura en Node 22.
+- Distribuye Electron por caso entre tres runners independientes, con un worker
+  por escritorio y reportes JSON de duración; conserva todas las pruebas.
+- Cancela ejecuciones anteriores de la misma rama/PR y expone `check:static`
+  para comprobaciones locales rápidas.
+
 ## 2026-11-23 — Integración y estabilización de CI
 
 - Integra reportería y pruebas de depósito con los refactors de puertos y colas.

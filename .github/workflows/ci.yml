@@ -1,5 +1,8 @@
 name: Validación
 on: [push, pull_request]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   desktop:
     strategy:
@@ -14,15 +17,34 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
-      - run: npm run check
-      - run: npm audit --audit-level=high
+      - run: npm run check:static
       - if: matrix.node == '22.20.0'
         run: npm run test:coverage
-      - if: matrix.node == '22.20.0'
-        run: npm run test:e2e
-      - if: failure()
+      - if: matrix.node != '22.20.0'
+        run: npm test
+      - run: npm run build
+      - run: npm audit --audit-level=high
+  e2e:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.20.0'
+          cache: npm
+      - run: npm ci
+      # Shard individual cases across machines, keeping one Electron worker on each.
+      - run: npm run test:e2e -- --fully-parallel --workers=1 --shard=${{ matrix.shard }}/3 --reporter=list,json
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: test-results/results.json
+      - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-results-node-${{ matrix.node }}
+          name: playwright-results-shard-${{ matrix.shard }}
           path: test-results/
           if-no-files-found: ignore
+          retention-days: 7

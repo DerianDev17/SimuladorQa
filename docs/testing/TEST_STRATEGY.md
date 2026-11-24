@@ -16,6 +16,15 @@ Las suites usan datos de prueba y directorios temporales. No necesitan ejecutar
 transacciones contra el host QA ni reemplazan una prueba de lector físico.
 La preparación de Electron y el build están incluidos en `test:e2e`.
 
+En CI, Electron se distribuye por caso entre tres máquinas, con un worker en cada
+una. Mantener cada caso independiente: preparar datos en `beforeEach`, usar un
+directorio temporal propio y cerrar Electron/servidores en `afterEach` o `finally`.
+No depender del resultado ni de los archivos de otro caso. `beforeAll` puede
+ejecutarse en varios shards y debe limitarse a preparar fixtures independientes.
+Se conserva ejecución serial local y no se paralelizan ventanas en un escritorio.
+Los informes JSON de cada shard permiten identificar casos lentos antes de
+modificar sus esperas; no recortar los escenarios de error o timeout para ganar tiempo.
+
 ## Criterios de regresión
 
 Cada función nueva incluye camino correcto, entradas inválidas, errores y

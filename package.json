@@ -26,7 +26,8 @@
     "prepare:electron": "node tooling/prepare-electron.mjs",
     "test:e2e": "npm run prepare:electron && npm run build && playwright test",
     "check:security": "node tooling/check-security.mjs",
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run check:security && npm run build"
+    "check:static": "npm run format:check && npm run lint && npm run typecheck && npm run check:security",
+    "check": "npm run check:static && npm test && npm run build"
   },
   "dependencies": {
     "@redis/client": "6.3.1",

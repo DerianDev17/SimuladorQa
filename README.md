@@ -120,6 +120,7 @@ usan dependencias sintéticas, TCP local y directorios temporales cuando aplica.
 | `npm run dev` | Desarrollo con recarga coordinada de React, Main y preload |
 | `npm run build` / `npm start` | Compilar y ejecutar la app local |
 | `npm run lint` / `npm run typecheck` | Revisar código y contratos TypeScript |
+| `npm run check:static` | Formato, lint, tipos y detección de secretos sin ejecutar tests |
 | `npm run test:unit` / `npm run test:integration` | Ejecutar suites por nivel |
 | `npm run test:e2e` | Preparar Electron, compilar y probar recorridos de escritorio |
 | `npm run test:coverage` | Obtener cobertura de unitarias e integración |
