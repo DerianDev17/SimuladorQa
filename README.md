@@ -121,9 +121,18 @@ usan dependencias sintéticas, TCP local y directorios temporales cuando aplica.
 | `npm run build` / `npm start` | Compilar y ejecutar la app local |
 | `npm run lint` / `npm run typecheck` | Revisar código y contratos TypeScript |
 | `npm run check:static` | Formato, lint, tipos y detección de secretos sin ejecutar tests |
+| `npm run check:commit` | Validación del hook: chequeos estáticos, unitarias e integración |
 | `npm run test:unit` / `npm run test:integration` | Ejecutar suites por nivel |
+| `npm run test:changed` | Probar los cambios locales detectables por imports |
+| `npm run test:file -- tests/unit/desktop-client.test.ts` | Ejecutar un archivo concreto |
+| `npm run test:watch -- tests/unit/desktop-client.test.ts` | Reejecutar al editar el test o sus dependencias |
 | `npm run test:e2e` | Preparar Electron, compilar y probar recorridos de escritorio |
 | `npm run test:coverage` | Obtener cobertura de unitarias e integración |
+
+Para automatizar la validación antes de cada commit en un clon, comprobar primero
+`git config --show-origin --get core.hooksPath` y cualquier hook de `.git/hooks/`.
+Si no hay otro gestor de hooks, activar el hook versionado con
+`git config --local core.hooksPath .githooks`. Ver [automatización local](docs/CI_CHECKS.md#automatización-local).
 
 ## Estructura del repositorio
 

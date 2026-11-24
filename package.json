@@ -20,13 +20,17 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "npm run test:unit && npm run test:integration",
-    "test:unit": "vitest run tests/unit",
+    "test:unit": "vitest run tests/unit --maxWorkers=2",
     "test:integration": "vitest run tests/integration",
+    "test:file": "vitest run",
+    "test:changed": "vitest run --changed",
+    "test:watch": "vitest watch",
     "test:coverage": "vitest run --coverage",
     "prepare:electron": "node tooling/prepare-electron.mjs",
     "test:e2e": "npm run prepare:electron && npm run build && playwright test",
     "check:security": "node tooling/check-security.mjs",
     "check:static": "npm run format:check && npm run lint && npm run typecheck && npm run check:security",
+    "check:commit": "npm run check:static && npm test",
     "check": "npm run check:static && npm test && npm run build"
   },
   "dependencies": {

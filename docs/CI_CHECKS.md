@@ -19,6 +19,64 @@ de secretos. `npm run check` añade unitarias, integración y compilación deskt
 de `check`. Antes de cada commit se requieren lint, tipos, unitarias e integración
 del módulo afectado, conforme a [AGENTS.md](../AGENTS.md).
 
+### Ciclo local durante la edición
+
+| Necesidad | Comando |
+| --- | --- |
+| Comprobar cambios sin commit | `npm run test:changed` |
+| Comparar con el commit anterior | `npm run test:changed -- HEAD~1` |
+| Probar un archivo concreto | `npm run test:file -- tests/unit/desktop-client.test.ts` |
+| Repetir al guardar cambios | `npm run test:watch -- tests/unit/desktop-client.test.ts` |
+| Comprobar la interfaz afectada | `npm run test:e2e -- tests/e2e/ui-shell.spec.ts` |
+
+`test:watch` mantiene Vitest abierto y reutiliza las transformaciones entre
+ejecuciones; admite filtros de archivo o carpeta. Sin filtro inicia toda la suite
+de unitarias e integración. Salir con `q` o Ctrl+C. `test:file` también admite
+archivos de integración; sin filtros ejecuta toda la suite.
+
+`test:changed` utiliza Git y el grafo de imports estáticos de Vitest. No garantiza
+detectar lecturas de archivos mediante `fs`, imports con rutas calculadas, scripts
+PowerShell ni los recorridos de Electron. Ante esos cambios, elegir explícitamente
+las pruebas afectadas o ejecutar la suite completa. Cambiar configuración o
+`package.json` puede seleccionar todas las pruebas. Si no encuentra pruebas,
+conserva el aviso y código de salida de Vitest: no acredita una suite completa.
+
+No añadir un filtro a `test:unit` para intentar aislar un archivo: su filtro de
+carpeta ya incluye todas las unitarias. Usar `test:file` para esa selección.
+Estos comandos agilizan la edición; antes del commit siguen siendo obligatorios
+lint, tipos, todas las unitarias e integración del módulo afectado.
+
+`test:unit` usa dos workers con aislamiento entre archivos. Integración y cobertura
+conservan un worker en Windows, y Electron conserva uno por escritorio. Medición
+local orientativa: las mismas 1.451 unitarias pasaron de 26,46 s con un worker a
+12,94 s con dos. Una selección de cinco casos de `desktop-client.test.ts` tardó
+1,38 s. Son tiempos de esa ejecución, no garantías para otros equipos ni para la
+suite completa. Se conservan plazos, casos y umbrales de cobertura.
+
+### Automatización local
+
+- **Al guardar:** mantener `npm run test:watch -- tests/unit/desktop-client.test.ts`
+  en una terminal. El archivo es un ejemplo: usar la prueba o carpeta del módulo
+  que se está editando. No inicia procesos ocultos ni queda instalado como servicio.
+- **Antes de cada commit:** `.githooks/pre-commit` ejecuta `npm run check:commit`
+  y bloquea el commit si falla. Este comando reúne formato, lint, tipos, seguridad,
+  todas las unitarias e integración completa. No vuelve a compilar ni ejecuta E2E.
+- **En GitHub:** cada push/PR mantiene las validaciones completas descritas abajo.
+
+El hook se activa por clon, explícitamente, después de comprobar que no exista
+otro gestor en `git config --show-origin --get core.hooksPath` ni un hook propio en
+`.git/hooks/pre-commit`. Si existe, integrar ambos en ese gestor; no sustituirlo.
+Sin hooks previos: `git config --local core.hooksPath .githooks`. Git no instala
+esta configuración al clonar y `npm install` tampoco la modifica.
+
+El hook valida el árbol de trabajo, como los comandos manuales: revisar los
+archivos staged antes del commit, especialmente si se prepararon cambios parciales.
+No se almacenan marcas de "validación aprobada" ni se omiten pruebas por un resultado
+anterior. La selección rápida es para iterar; el commit ejecuta el control completo.
+Las pruebas de integración del hook comprueban su invocación por Git y los caminos
+de éxito, fallo y dependencia no disponible, con un comando sintético y repositorios
+temporales para evitar recursión de la suite.
+
 ## CI vigente
 
 El workflow se ejecuta en push y pull request, sobre Windows. Un nuevo commit

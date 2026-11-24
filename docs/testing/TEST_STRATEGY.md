@@ -16,6 +16,13 @@ Las suites usan datos de prueba y directorios temporales. No necesitan ejecutar
 transacciones contra el host QA ni reemplazan una prueba de lector físico.
 La preparación de Electron y el build están incluidos en `test:e2e`.
 
+Durante la edición local, `test:watch`, `test:changed` y `test:file` permiten
+feedback acotado al módulo. Sus límites y ejemplos están en
+[CI_CHECKS](../CI_CHECKS.md#ciclo-local-durante-la-edición). La selección por imports
+no sustituye las pruebas de archivos externos, procesos o Electron, ni las
+validaciones obligatorias antes del commit. Las unitarias usan dos workers con
+aislamiento; integración conserva su límite de un worker en Windows.
+
 En CI, Electron se distribuye por caso entre tres máquinas, con un worker en cada
 una. Mantener cada caso independiente: preparar datos en `beforeEach`, usar un
 directorio temporal propio y cerrar Electron/servidores en `afterEach` o `finally`.

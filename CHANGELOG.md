@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-24 — Ciclo de pruebas local
+
+- Ejecuta las unitarias con dos workers aislados; mantiene integración y Electron
+  seriales en Windows.
+- Añade `test:file`, `test:changed` y `test:watch`, con límites explícitos de la
+  selección por imports y ejemplos de pruebas focalizadas.
+- Añade un hook pre-commit de activación explícita por clon para ejecutar los
+  controles obligatorios y bloquear commits cuando falle una validación.
+
 ## 2026-11-23 — Duración de las validaciones
 
 - Ejecuta unitarias e integración una sola vez con cobertura en Node 22.
