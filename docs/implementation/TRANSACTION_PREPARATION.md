@@ -1,5 +1,31 @@
 # Preparacion documental de transacciones
 
+## Comparador de transacciones — 2026-11-24
+
+En **Mensajes → Comparar transacciones**, elegir una operación de referencia del
+historial cargado. Disponible tanto en Nueva transacción como en Reportes de
+transacciones. La operación abierta es la actual; no se permite compararla consigo
+misma. La selección identifica tipo, STAN, fecha local y UUID. El alcance del selector
+es el historial ya cargado, no una consulta adicional a todos los diarios.
+
+Presenta solicitud, respuesta y reverso cuando existe, con MTI, campos y tags EMV
+lado a lado. Distingue iguales, diferentes, añadidos, ausentes y no verificables;
+el filtro inicial conserva diferencias y valores no verificables. STAN/RRN se
+señalan como variables sin ignorarlos. Compara literalmente, incluidos espacios;
+no interpreta subcampos privados ni certifica aprobación, débito o dispensación.
+Muestra tiempo registrado en ms y código de respuesta de ambas operaciones.
+
+**Mostrar valores completos** controla también el comparador. La referencia se
+consulta por el IPC cifrado existente; error o timeout permiten **Actualizar
+referencia**, sin reenviar operaciones. Si falta el original se usan las máscaras
+públicas, cuya igualdad no acredita igualdad de datos. Si falta un mensaje, sus
+campos quedan no verificables, no se presentan como eliminados por el host.
+Salir de Mensajes desmonta el comparador y libera su referencia; desactivar los
+valores completos retira los originales. No se crean archivos ni exportaciones.
+
+Validación: comparación pura, máscaras, tags, mensajes ausentes, selección válida,
+Electron con dos operaciones, ocultación, errores/timeout y recuperación de consulta.
+
 ## Historial completo — 2026-11-19
 
 Acceso: **Reportería y auditoría → Reportes → Transacciones**, o **Abrir historial

@@ -8,13 +8,18 @@ export function useSessionMessages(
   execution: BalanceExecution,
   visible: boolean,
 ) {
-  const [state, setState] = useState<{ value?: SessionMessages; error?: string }>({});
+  const [state, setState] = useState<{
+    value?: SessionMessages;
+    error?: string;
+    loading?: boolean;
+  }>({});
   const [revision, setRevision] = useState(0);
   useEffect(() => {
     let active = true;
     let expiry: ReturnType<typeof setTimeout> | undefined;
     setState({});
     if (visible && client && execution.environment === 'QA') {
+      setState({ loading: true });
       void client
         .call((api) =>
           api.getSessionMessages({ environment: 'QA', requestId: execution.requestId }),
@@ -33,7 +38,7 @@ export function useSessionMessages(
           if (result.value && result.value.requestId === execution.requestId && remaining > 0) {
             setState({ value: result.value });
             if (Number.isFinite(remaining)) expiry = setTimeout(() => setState({}), remaining);
-          }
+          } else setState({});
         });
     }
     return () => {
@@ -58,6 +63,7 @@ export function useSessionMessages(
         ? state.value
         : undefined,
     error: state.error,
+    loading: visible && !!state.loading,
     refresh: () => setRevision((value) => value + 1),
   };
 }

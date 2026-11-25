@@ -80,6 +80,7 @@ export function ReportingTransactionsView({
           <TransactionInspection
             key={execution.requestId}
             execution={execution}
+            comparisonCandidates={items}
             snapshot={snapshot}
             persisted={
               !history.issues.length &&

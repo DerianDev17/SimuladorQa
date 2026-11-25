@@ -26,6 +26,7 @@ export function TransactionInspection({
   messageAlternative,
   client,
   visible = true,
+  comparisonCandidates,
 }: {
   execution: BalanceExecution | undefined;
   snapshot: AppSnapshot | undefined;
@@ -38,6 +39,7 @@ export function TransactionInspection({
   messageAlternative?: { label: string; open: () => void } | undefined;
   client?: DesktopClient | undefined;
   visible?: boolean;
+  comparisonCandidates?: readonly BalanceExecution[] | undefined;
 }) {
   const [tab, setTab] = useState<Tab>(initialTab ?? 'flow');
   const [message, setMessage] = useState<InspectionMessage>();
@@ -116,6 +118,7 @@ export function TransactionInspection({
             messageAlternative={messageAlternative}
             client={client}
             visible={visible && tab === 'messages'}
+            comparisonCandidates={comparisonCandidates ?? []}
           />
         ) : (
           <p className="inspection-empty">

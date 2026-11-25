@@ -10,6 +10,7 @@ import type { InspectionMessage } from './transaction-inspection';
 import { formatIsoMessageText } from './transaction-message-text';
 import type { DesktopClient } from './desktop-client';
 import { useSessionMessages } from './useSessionMessages';
+import { TransactionComparison } from './TransactionComparison';
 
 export function TransactionMessageView({
   execution,
@@ -18,6 +19,7 @@ export function TransactionMessageView({
   messageAlternative,
   client,
   visible = true,
+  comparisonCandidates = [],
 }: {
   execution: BalanceExecution;
   selectedMessage?: InspectionMessage | undefined;
@@ -25,6 +27,7 @@ export function TransactionMessageView({
   messageAlternative?: { label: string; open: () => void } | undefined;
   client?: DesktopClient | undefined;
   visible?: boolean;
+  comparisonCandidates?: readonly BalanceExecution[];
 }) {
   const tabs: {
     key: InspectionMessage;
@@ -350,6 +353,16 @@ export function TransactionMessageView({
       <p className="message-correlation">
         STAN {execution.correlation?.stan ?? '—'} · RRN {execution.correlation?.rrn ?? '—'}
       </p>
+      {visible && (
+        <TransactionComparison
+          key={execution.requestId}
+          execution={execution}
+          candidates={comparisonCandidates}
+          client={client}
+          complete={complete}
+          currentSession={session.value}
+        />
+      )}
     </section>
   );
 }

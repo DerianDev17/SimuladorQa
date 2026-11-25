@@ -245,6 +245,7 @@ export function TransactionWorkspace(
           <TransactionInspection
             key={inspected?.requestId ?? `empty-${snapshot?.environment}`}
             execution={inspected}
+            comparisonCandidates={records}
             snapshot={snapshot}
             persisted={saved}
             onReceipt={onReceipt}
