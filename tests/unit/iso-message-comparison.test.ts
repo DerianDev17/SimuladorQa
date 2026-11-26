@@ -128,7 +128,7 @@ describe('comparación literal de mensajes', () => {
         currentSession: undefined,
       }),
     );
-    expect(html).toContain('No hay otra operación cargada');
+    expect(html).toContain('Empieza eligiendo la transacción A');
     expect(html).not.toContain(`value="${execution.requestId}"`);
     expect(html).not.toContain('Diferencias de solicitud');
   });

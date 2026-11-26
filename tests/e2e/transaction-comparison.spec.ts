@@ -79,10 +79,11 @@ async function openComparison() {
     .click();
   await window.getByRole('button', { name: 'Abrir operación 000123', exact: true }).click();
   await window.getByRole('tab', { name: 'Mensajes', exact: true }).click();
+  await window.getByRole('button', { name: 'Comparar transacciones', exact: true }).click();
   return window.getByRole('region', { name: 'Comparador de transacciones', exact: true });
 }
-test('compara dos operaciones, filtra y retira los valores completos al ocultar Mensajes', async () => {
-  const data = fixtures();
+
+async function seed(data: ReturnType<typeof fixtures>) {
   await app!.evaluate(({ ipcMain }, data) => {
     ipcMain.removeHandler('transaction:balance:history');
     ipcMain.handle('transaction:balance:history', () => ({
@@ -92,65 +93,71 @@ test('compara dos operaciones, filtra y retira los valores completos al ocultar 
     ipcMain.removeHandler('transaction:messages:session');
     ipcMain.handle('transaction:messages:session', (_event, request) => ({
       ok: true,
-      value: request.requestId === data.reference.requestId ? data.referenceFull : data.currentFull,
+      value:
+        request.requestId === data.reference.requestId
+          ? data.referenceFull
+          : request.requestId === data.current.requestId
+            ? data.currentFull
+            : null,
     }));
   }, data);
-  const comparison = await openComparison();
-  const select = comparison.getByLabel('Operación de referencia');
-  await expect(select.locator('option')).toHaveCount(2);
-  const referenceSearch = comparison.getByRole('searchbox', {
-    name: 'Buscar referencia',
-    exact: true,
-  });
-  await referenceSearch.fill('inexistente');
-  await expect(select.locator('option')).toHaveCount(1);
-  await expect(comparison).toContainText('Sin coincidencias');
-  await referenceSearch.fill(data.reference.requestId);
-  await expect(select.locator('option')).toHaveCount(2);
-  await select.selectOption(data.reference.requestId);
-  await referenceSearch.fill('inexistente');
-  await expect(select).toHaveValue(data.reference.requestId);
-  await expect(comparison).toContainText('Se conserva la referencia seleccionada');
-  await referenceSearch.fill('000124');
-  await expect(comparison).toContainText('Referencia: valores completos disponibles.');
-  await expect(comparison).toContainText('referencia 250 ms · actual 650 ms');
-  const response = comparison.getByRole('table', { name: 'Diferencias de respuesta', exact: true });
-  const code = response.getByRole('row').filter({ hasText: 'F39 · Código de respuesta' });
-  await expect(code).toContainText('00');
-  await expect(code).toContainText('96');
-  await expect(code).toContainText('Diferente');
-  const responseSummary = comparison.getByLabel('Resumen de respuesta', { exact: true });
-  await expect(responseSummary).toContainText('2 diferentes');
-  const summaryBefore = await responseSummary.textContent();
-  const fieldSearch = comparison.getByRole('searchbox', {
-    name: 'Buscar campo o tag',
-    exact: true,
-  });
-  await fieldSearch.fill('CODIGO DE RESPUESTA');
-  await expect(response.getByRole('row')).toHaveCount(2);
-  await expect(responseSummary).toContainText('2 diferentes');
-  await expect(responseSummary).toContainText('Mostrando 1 de');
-  await fieldSearch.fill('inexistente');
-  await expect(response).toHaveCount(0);
+}
+async function chooseReference(comparison: ReturnType<Page['getByRole']>) {
+  await comparison.getByRole('button', { name: 'Elegir transacción A', exact: true }).click();
+  await comparison.getByRole('button', { name: 'Usar en A STAN 000124', exact: true }).click();
   await expect(
-    comparison.getByText('No hay filas que coincidan con los filtros.', { exact: false }),
-  ).toHaveCount(2);
-  await fieldSearch.fill('');
-  await expect(responseSummary).toHaveText(summaryBefore!);
-  await expect(response.getByRole('row').filter({ hasText: 'F11 · STAN' })).toContainText(
-    'Identificador variable',
-  );
-  await expect(response.getByRole('row').filter({ hasText: 'MTI' })).toHaveCount(0);
+    comparison.getByRole('region', { name: 'Transacción A', exact: true }),
+  ).toContainText('000124');
+}
+
+test('selección A/B, tabla completa, diferencias por caracteres, intercambio y privacidad', async () => {
+  await seed(fixtures());
+  const comparison = await openComparison();
+  await comparison
+    .getByText('Cómo elegir las transacciones y leer las diferencias', { exact: true })
+    .click();
+  await expect(comparison).toContainText('A y B deben ser distintas');
+  await comparison
+    .getByText('Cómo elegir las transacciones y leer las diferencias', { exact: true })
+    .click();
+  await comparison.getByRole('button', { name: 'Elegir transacción A', exact: true }).click();
+  await comparison
+    .getByRole('searchbox', { name: 'Buscar transacción', exact: true })
+    .fill('inexistente');
+  await expect(comparison).toContainText('No hay coincidencias en Recientes');
+  await comparison
+    .getByRole('searchbox', { name: 'Buscar transacción', exact: true })
+    .fill('000124');
+  await expect(
+    comparison.getByRole('button', { name: 'Usar en A STAN 000123', exact: true }),
+  ).toHaveCount(0);
+  await comparison.getByRole('button', { name: 'Usar en A STAN 000124', exact: true }).click();
+  await expect(comparison).toContainText('A: Valores completos disponibles.');
+  const request = comparison.getByRole('table', { name: 'Diferencias de solicitud', exact: true });
+  await expect(request.getByRole('row').filter({ hasText: 'MTI' })).toContainText('Igual');
+  await expect(request.getByRole('row').filter({ hasText: 'PIN Block' })).toContainText('HEX');
+  await comparison.getByRole('tab', { name: /^Respuesta\s/ }).click();
+  const response = comparison.getByRole('table', { name: 'Diferencias de respuesta', exact: true });
+  const code = response.getByRole('row').filter({ hasText: 'Código de respuesta' });
+  await expect(code.locator('mark.diff-A')).toHaveText('00');
+  await expect(code.locator('mark.diff-B')).toHaveText('96');
+  await comparison
+    .getByRole('searchbox', { name: 'Buscar campo o tag' })
+    .fill('CODIGO DE RESPUESTA');
+  await expect(response.getByRole('row')).toHaveCount(2);
+  await comparison.getByRole('button', { name: 'Siguiente diferencia' }).click();
+  await expect(code).toBeFocused();
+  await expect(comparison).toContainText('Diferencia 1 de 1');
+  await comparison.getByRole('searchbox', { name: 'Buscar campo o tag' }).fill('sin coincidencias');
+  await expect(response).toHaveCount(0);
+  await comparison.getByRole('searchbox', { name: 'Buscar campo o tag' }).fill('');
   await comparison
     .getByRole('checkbox', { name: 'Solo diferencias y valores no verificables' })
-    .uncheck();
-  await expect(response.getByRole('row').filter({ hasText: 'MTI' })).toContainText('Igual');
-  const request = comparison.getByRole('table', { name: 'Diferencias de solicitud', exact: true });
-  await expect(request.getByRole('row').filter({ hasText: 'F52 · PIN Block' })).toContainText(
-    'HEX',
-  );
+    .check();
+  await expect(response.getByRole('row').filter({ hasText: 'MTI' })).toHaveCount(0);
   await window.getByRole('checkbox', { name: 'Mostrar valores completos' }).uncheck();
-  await expect(request.getByRole('row').filter({ hasText: 'F52 · PIN Block' })).toContainText(
+  await comparison.getByRole('tab', { name: /^Solicitud\s/ }).click();
+  await expect(request.getByRole('row').filter({ hasText: 'PIN Block' })).toContainText(
     'No verificable',
   );
   expect(
@@ -159,7 +166,21 @@ test('compara dos operaciones, filtra y retira los valores completos al ocultar 
     ),
   ).toBe(false);
   await window.getByRole('checkbox', { name: 'Mostrar valores completos' }).check();
-  await expect(comparison).toContainText('Referencia: valores completos disponibles.');
+  await expect(comparison).toContainText('A: Valores completos disponibles.');
+  await comparison.getByRole('button', { name: 'Intercambiar A y B' }).click();
+  await expect(
+    comparison.getByRole('region', { name: 'Transacción A', exact: true }),
+  ).toContainText('000123');
+  await expect(
+    comparison.getByRole('region', { name: 'Transacción B', exact: true }),
+  ).toContainText('000124');
+  await expect(comparison).toContainText('B: Valores completos disponibles.');
+  await comparison.getByRole('tab', { name: /^Respuesta\s/ }).click();
+  await expect(code.locator('mark.diff-A')).toHaveText('96');
+  await expect(code.locator('mark.diff-B')).toHaveText('00');
+  await comparison
+    .getByRole('checkbox', { name: 'Solo diferencias y valores no verificables' })
+    .check();
   await app!.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0]!.setContentSize(1024, 768),
   );
@@ -167,58 +188,101 @@ test('compara dos operaciones, filtra y retira los valores completos al ocultar 
     true,
   );
   await mkdir('artifacts', { recursive: true });
-  await comparison
-    .getByRole('checkbox', { name: 'Solo diferencias y valores no verificables' })
-    .check();
-  await comparison.screenshot({ path: 'artifacts/transaction-comparison.png' });
+  await window.screenshot({
+    path: 'artifacts/transaction-comparison-redesign.png',
+    fullPage: true,
+  });
   await window.getByRole('tab', { name: 'Flujo', exact: true }).click();
   await expect(comparison).toHaveCount(0);
   expect(
     await window.evaluate(() => document.body.textContent!.includes('411111' + '0'.repeat(10))),
   ).toBe(false);
-  await window.getByRole('tab', { name: 'Mensajes', exact: true }).click();
-  await expect(select).toHaveValue('');
-  await select.selectOption(data.reference.requestId);
-  await select.selectOption('');
-  await expect(comparison.getByRole('table')).toHaveCount(0);
+  await window
+    .getByRole('navigation', { name: 'Navegación principal' })
+    .getByRole('button', { name: 'Ayuda interna', exact: true })
+    .click();
+  await expect(window.getByRole('heading', { name: 'Ayuda interna', exact: true })).toBeVisible();
+  await expect(window.getByRole('article', { name: 'Contenido de ayuda' })).toContainText(
+    'Elige A, la referencia',
+  );
+  await expect(
+    window.getByRole('article', { name: 'Contenido de ayuda' }).getByRole('link'),
+  ).toHaveCount(0);
+  await window.getByRole('searchbox', { name: 'Buscar en la ayuda' }).fill('cifrado');
+  await window.getByRole('button', { name: 'Historial y mensajes', exact: true }).click();
+  await expect(window.getByRole('article', { name: 'Contenido de ayuda' })).toContainText(
+    'archivo cifrado local',
+  );
 });
 
-test('referencia: consulta fallida, timeout y reintento sin inventar respuesta ausente', async () => {
+test('selecciona B desde todo el historial, rechaza A duplicada y conserva la pareja al cancelar', async () => {
+  const data = fixtures();
+  await seed(data);
+  const archived = {
+    ...data.current,
+    requestId: approvedWithdrawalExecution().requestId,
+    correlation: { ...data.current.correlation!, stan: '000125' },
+  };
+  await app!.evaluate(
+    ({ ipcMain }, data) => {
+      ipcMain.removeHandler('transaction:history:page');
+      ipcMain.handle('transaction:history:page', () => ({
+        ok: true,
+        value: { entries: [data.reference, data.archived], next: null },
+      }));
+    },
+    { reference: data.reference, archived },
+  );
+  const comparison = await openComparison();
+  await chooseReference(comparison);
+  await comparison.getByRole('button', { name: 'Cambiar transacción B' }).click();
+  await comparison.getByRole('button', { name: 'Todo el historial', exact: true }).click();
+  await comparison
+    .getByRole('button', { name: 'Abrir operación histórica 000124', exact: true })
+    .click();
+  await expect(comparison.getByRole('alert')).toContainText('A y B deben ser distintas');
+  await comparison
+    .getByRole('button', { name: 'Abrir operación histórica 000125', exact: true })
+    .click();
+  await expect(
+    comparison.getByRole('region', { name: 'Transacción B', exact: true }),
+  ).toContainText('000125');
+  await expect(comparison).toContainText('B: Original completo no disponible');
+  await comparison.getByRole('button', { name: 'Cambiar transacción A' }).click();
+  await comparison.getByRole('button', { name: 'Cancelar selección' }).click();
+  await expect(
+    comparison.getByRole('region', { name: 'Transacción A', exact: true }),
+  ).toContainText('000124');
+  await expect(comparison.getByRole('button', { name: 'Cambiar transacción A' })).toBeFocused();
+});
+
+test('referencia: error, timeout y recuperación sin inventar mensajes ausentes', async () => {
   const data = fixtures();
   delete data.reference.messages!.response;
   data.reference.responseCode = null;
   data.reference.outcome = 'RESPONSE_TIMEOUT';
-  await app!.evaluate(({ ipcMain }, data) => {
-    ipcMain.removeHandler('transaction:balance:history');
-    ipcMain.handle('transaction:balance:history', () => ({
-      ok: true,
-      value: [data.reference, data.current],
-    }));
+  await seed(data);
+  await app!.evaluate(({ ipcMain }) => {
     ipcMain.removeHandler('transaction:messages:session');
     ipcMain.handle('transaction:messages:session', () => ({
       ok: false,
-      error: {
-        code: 'SERVICE_UNAVAILABLE',
-        message: 'Archivo de prueba no disponible',
-      },
+      error: { code: 'SERVICE_UNAVAILABLE', message: 'Archivo de prueba no disponible' },
     }));
-  }, data);
+  });
   const comparison = await openComparison();
-  await comparison.getByLabel('Operación de referencia').selectOption(data.reference.requestId);
+  await chooseReference(comparison);
   await expect(comparison).toContainText('Archivo de prueba no disponible');
-  await expect(comparison).toContainText('Mensaje no disponible en la referencia');
-  const code = comparison
-    .getByRole('table', { name: 'Diferencias de respuesta', exact: true })
-    .getByRole('row')
-    .filter({ hasText: 'F39 · Código de respuesta' });
-  await expect(code).toContainText('No verificable');
+  await comparison.getByRole('tab', { name: /^Respuesta\s/ }).click();
+  await expect(comparison).toContainText('Mensaje no disponible en A');
+  await expect(
+    comparison.getByRole('row').filter({ hasText: 'Código de respuesta' }),
+  ).toContainText('No verificable');
   await app!.evaluate(({ ipcMain }) => {
     ipcMain.removeHandler('transaction:messages:session');
     ipcMain.handle('transaction:messages:session', () => new Promise(() => {}));
   });
   await comparison.getByRole('button', { name: 'Actualizar referencia' }).click();
-  await expect(comparison).toContainText('Consultando mensajes de referencia');
-  // Renderer and isolated preload have separate clocks; exercise their real deadlines together.
+  await expect(comparison).toContainText('Consultando mensajes');
   await expect(comparison).toContainText('El servicio local no respondió a tiempo', {
     timeout: 7000,
   });
@@ -227,6 +291,6 @@ test('referencia: consulta fallida, timeout y reintento sin inventar respuesta a
     ipcMain.handle('transaction:messages:session', () => ({ ok: true, value: null }));
   });
   await comparison.getByRole('button', { name: 'Actualizar referencia' }).click();
-  await expect(comparison).toContainText('Referencia: original completo no disponible');
+  await expect(comparison).toContainText('A: Original completo no disponible');
   await expect(comparison).not.toContainText('El servicio local no respondió a tiempo');
 });

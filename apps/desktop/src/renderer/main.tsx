@@ -5,6 +5,7 @@ import { AppErrorBoundary } from './AppErrorBoundary';
 import './styles.css';
 import './workspace.css';
 import './transaction-inspection.css';
+import './transaction-comparison.css';
 import './shell.css';
 
 const root = document.getElementById('root');

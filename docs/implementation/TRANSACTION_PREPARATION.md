@@ -2,6 +2,24 @@
 
 ## Comparador de transacciones — 2026-11-24
 
+Rediseño de uso — 2026-11-26: Mensajes ofrece el botón **Comparar transacciones**.
+Las tarjetas A (referencia) y B (a revisar) muestran operación, fecha local,
+STAN/RRN, terminal y respuesta/tiempo. B parte de la operación abierta; ambas
+se pueden cambiar desde Recientes o Todo el historial y se pueden intercambiar.
+No se acepta la misma operación en ambos lados. Cancelar conserva la pareja.
+
+Cada mensaje dispone de su pestaña; se muestran todos los campos por defecto.
+La tabla alinea campo/tag, valor A, valor B y estado. Resalta caracteres retirados
+e incorporados, con navegación entre filas distintas; nunca resalta diferencias
+supuestas entre máscaras. El algoritmo limita el alineamiento cuadrático y usa
+el tramo entre primer/último cambio para valores largos. No interpreta bytes ISO.
+La guía del comparador y **Ayuda interna** están incluidas en la app y funcionan
+sin enlaces externos. Salir de Mensajes desmonta la comparación y retira valores.
+
+La documentación técnica se conserva localmente fuera del seguimiento de Git por
+solicitud del operador. Los identificadores documentales de evidencia histórica
+se mantienen como procedencia, no como enlaces a documentación pública.
+
 Mejora de navegación — 2026-11-26: **Buscar referencia** filtra las operaciones
 cargadas por STAN, RRN, UUID, terminal, tipo o resultado mediante el buscador
 existente del historial. No pierde la referencia seleccionada si deja de coincidir.

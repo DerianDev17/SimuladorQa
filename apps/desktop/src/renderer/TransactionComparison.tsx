@@ -1,46 +1,15 @@
-import { useId, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { BalanceExecution } from '../../../../packages/domain/src/balance-inquiry';
-import {
-  compareIsoMessages,
-  type ComparisonStatus,
-} from '../../../../packages/domain/src/iso-message-comparison';
 import type { SessionMessages } from '../../../../packages/shared/src/session-messages';
 import type { DesktopClient } from './desktop-client';
 import { useSessionMessages } from './useSessionMessages';
-import { filterExecutionHistory } from './transaction-inspection';
+import { mergeExecutionHistory } from './transaction-inspection';
 import {
-  filterComparisonRows,
-  formatComparisonValue,
-  summarizeComparisonRows,
-} from './transaction-comparison-presentation';
-
-const statusLabels: Record<ComparisonStatus, string> = {
-  equal: 'Igual',
-  changed: 'Diferente',
-  added: 'Añadido',
-  removed: 'Ausente',
-  unverifiable: 'No verificable',
-};
-const slots = [
-  ['request', 'Solicitud'],
-  ['response', 'Respuesta'],
-  ['reversalRequest', 'Solicitud de reverso'],
-  ['reversalResponse', 'Respuesta de reverso'],
-] as const;
-function messages(execution: BalanceExecution) {
-  return {
-    request: execution.messages?.request,
-    response: execution.messages?.response,
-    reversalRequest: execution.reversal?.messages?.request,
-    reversalResponse: execution.reversal?.messages?.response,
-  };
-}
-function operation(execution: BalanceExecution) {
-  return execution.deposit ? 'Depósito' : execution.withdrawal ? 'Retiro' : 'Saldo';
-}
-function label(execution: BalanceExecution) {
-  return `${operation(execution)} · STAN ${execution.correlation?.stan ?? '—'} · ${new Date(execution.startedAt).toLocaleString()} · ${execution.requestId}`;
-}
+  ComparisonTransactionCard,
+  ComparisonTransactionPicker,
+} from './ComparisonTransactionPicker';
+import { ComparisonMessageTable, type ComparisonSlot } from './ComparisonMessageTable';
+import { ComparisonHelp } from './ComparisonHelp';
 
 export function TransactionComparison({
   execution,
@@ -55,202 +24,189 @@ export function TransactionComparison({
   complete: boolean;
   currentSession: SessionMessages | undefined;
 }) {
-  const [referenceId, setReferenceId] = useState('');
-  const [referenceQuery, setReferenceQuery] = useState('');
-  const id = useId();
-  const available = candidates.filter(
-    (item) => item.environment === 'QA' && item.requestId !== execution.requestId,
+  const [reference, setReference] = useState<BalanceExecution>();
+  const [chosenCurrent, setChosenCurrent] = useState<BalanceExecution>();
+  const [picker, setPicker] = useState<'A' | 'B'>();
+  const cards = useRef<HTMLDivElement>(null);
+  const records = mergeExecutionHistory(
+    reference ? [reference] : [],
+    chosenCurrent ? [chosenCurrent] : [],
+    candidates,
+    [execution],
   );
-  const reference = available.find((item) => item.requestId === referenceId);
-  const matches = filterExecutionHistory(available, {
-    query: referenceQuery,
-    atmId: '',
-    outcome: 'all',
-  });
-  const selectedOutsideSearch =
-    reference && !matches.some((item) => item.requestId === referenceId);
+  const current =
+    records.find((item) => item.requestId === (chosenCurrent?.requestId ?? execution.requestId)) ??
+    execution;
+  const selectedReference = records.find((item) => item.requestId === reference?.requestId);
+  function closePicker(side: 'A' | 'B') {
+    setPicker(undefined);
+    requestAnimationFrame(() =>
+      cards.current?.querySelector<HTMLButtonElement>(`.side-${side} button`)?.focus(),
+    );
+  }
   return (
     <section className="transaction-comparison" aria-label="Comparador de transacciones">
-      <h3>Comparar transacciones</h3>
-      <label htmlFor={`${id}-search`}>Buscar referencia</label>
-      <input
-        id={`${id}-search`}
-        type="search"
-        value={referenceQuery}
-        placeholder="STAN, RRN, UUID, terminal u operación"
-        onChange={(event) => setReferenceQuery(event.target.value)}
-      />
-      <p role="status">
-        {matches.length} de {available.length} referencias coinciden con la búsqueda.
-        {selectedOutsideSearch && ' Se conserva la referencia seleccionada.'}
-      </p>
-      <label htmlFor={id}>Operación de referencia</label>
-      <select
-        id={id}
-        value={reference?.requestId ?? ''}
-        onChange={(event) => setReferenceId(event.target.value)}
-      >
-        <option value="">Selecciona una referencia del historial cargado</option>
-        {selectedOutsideSearch && (
-          <option value={reference.requestId}>{label(reference)} · Seleccionada</option>
+      <div className="comparison-intro">
+        <span className="eyebrow">COMPARADOR ISO8583</span>
+        <h3>Dos transacciones. Cada campo, lado a lado.</h3>
+        <p>
+          1. Elige A como referencia. 2. Elige B para revisar. 3. Abre el mensaje y recorre las
+          diferencias.
+        </p>
+      </div>
+      <details className="comparison-guide">
+        <summary>Cómo elegir las transacciones y leer las diferencias</summary>
+        <ComparisonHelp />
+      </details>
+      <div className="comparison-pair" ref={cards}>
+        <ComparisonTransactionCard
+          side="A"
+          item={selectedReference}
+          onChoose={() => setPicker('A')}
+        />
+        <ComparisonTransactionCard side="B" item={current} onChoose={() => setPicker('B')} />
+      </div>
+      <div className="comparison-actions">
+        <button
+          className="secondary"
+          disabled={!selectedReference}
+          onClick={() => {
+            setReference(current);
+            setChosenCurrent(selectedReference);
+          }}
+        >
+          Intercambiar A y B
+        </button>
+        {selectedReference && (
+          <button className="text-button" onClick={() => setReference(undefined)}>
+            Quitar referencia
+          </button>
         )}
-        {matches.map((item) => (
-          <option key={item.requestId} value={item.requestId}>
-            {label(item)}
-          </option>
-        ))}
-      </select>
-      {!available.length && <p>No hay otra operación cargada para comparar.</p>}
-      {available.length > 0 && !matches.length && (
-        <p>Sin coincidencias. Cambia la búsqueda o bórrala para ver las referencias cargadas.</p>
+      </div>
+      {picker && (
+        <ComparisonTransactionPicker
+          key={picker}
+          side={picker}
+          candidates={records}
+          client={client}
+          excludedId={picker === 'A' ? current.requestId : selectedReference?.requestId}
+          onSelect={(item) => {
+            if (picker === 'A') setReference(item);
+            else setChosenCurrent(item);
+            closePicker(picker);
+          }}
+          onClose={() => closePicker(picker)}
+        />
       )}
-      {reference && (
+      {selectedReference ? (
         <ComparisonDetails
-          key={reference.requestId}
-          reference={reference}
-          execution={execution}
+          key={`${selectedReference.requestId}:${current.requestId}`}
+          reference={selectedReference}
+          current={current}
           client={client}
           complete={complete}
-          currentSession={currentSession}
+          useOpenedSession={current.requestId === execution.requestId}
+          openedSession={currentSession}
         />
+      ) : (
+        <div className="comparison-empty">
+          <strong>Empieza eligiendo la transacción A</strong>
+          <p>
+            B ya contiene la operación abierta. Puedes cambiar ambas desde sus tarjetas, sin
+            reenviar ninguna transacción.
+          </p>
+        </div>
       )}
     </section>
   );
 }
-
 function ComparisonDetails({
   reference,
-  execution,
+  current,
   client,
   complete,
-  currentSession,
+  useOpenedSession,
+  openedSession,
 }: {
   reference: BalanceExecution;
-  execution: BalanceExecution;
+  current: BalanceExecution;
   client: DesktopClient | undefined;
   complete: boolean;
-  currentSession: SessionMessages | undefined;
+  useOpenedSession: boolean;
+  openedSession: SessionMessages | undefined;
 }) {
-  const session = useSessionMessages(client, reference, complete);
-  const [onlyDifferences, setOnlyDifferences] = useState(true);
-  const [fieldQuery, setFieldQuery] = useState('');
-  const fieldSearchId = useId();
-  const referenceMessages = messages(reference);
-  const currentMessages = messages(execution);
+  const a = useSessionMessages(client, reference, complete);
+  const b = useSessionMessages(client, current, complete && !useOpenedSession);
+  const currentSession = useOpenedSession ? openedSession : b.value;
+  const definitions = [
+    ['request', 'Solicitud', reference.messages?.request, current.messages?.request],
+    ['response', 'Respuesta', reference.messages?.response, current.messages?.response],
+    ...(reference.reversal || current.reversal
+      ? ([
+          [
+            'reversal-request',
+            'Reverso',
+            reference.reversal?.messages?.request,
+            current.reversal?.messages?.request,
+          ],
+          [
+            'reversal-response',
+            'Respuesta de reverso',
+            reference.reversal?.messages?.response,
+            current.reversal?.messages?.response,
+          ],
+        ] as const)
+      : []),
+  ] as const;
+  const slots: ComparisonSlot[] = definitions.map(([id, title, left, right]) => {
+    const fullLeft = complete && left ? a.value?.messages[left.mti] : undefined;
+    const fullRight = complete && right ? currentSession?.messages[right.mti] : undefined;
+    return {
+      id,
+      title,
+      reference: fullLeft ?? left,
+      current: fullRight ?? right,
+      referenceComplete: !!fullLeft,
+      currentComplete: !!fullRight,
+    };
+  });
   return (
     <>
-      <p>Referencia: {label(reference)}</p>
-      <p>Actual: {label(execution)}</p>
-      <p>
-        Comparación literal de evidencia guardada; no certifica aprobación, débito ni dispensación.
-        STAN y RRN se señalan como identificadores variables, sin ocultar sus diferencias.
-      </p>
-      <p>
-        Tiempo registrado: referencia {reference.elapsedMs} ms · actual {execution.elapsedMs} ms.
-        Código de respuesta: referencia {reference.responseCode ?? 'Sin respuesta'} · actual{' '}
-        {execution.responseCode ?? 'Sin respuesta'}.
-      </p>
       {complete && (
-        <div role="status">
-          {session.loading
-            ? 'Consultando mensajes de referencia…'
-            : (session.error ??
-              (session.value
-                ? 'Referencia: valores completos disponibles.'
-                : 'Referencia: original completo no disponible; se compara la versión protegida.'))}
-          <button className="text-button" onClick={session.refresh}>
-            Actualizar referencia
-          </button>
+        <div className="comparison-source-status">
+          <p role="status">
+            A:{' '}
+            {a.loading
+              ? 'Consultando mensajes…'
+              : (a.error ??
+                (a.value
+                  ? 'Valores completos disponibles.'
+                  : 'Original completo no disponible; versión protegida.'))}{' '}
+            <button className="text-button" onClick={a.refresh}>
+              Actualizar referencia
+            </button>
+          </p>
+          {!useOpenedSession && (
+            <p role="status">
+              B:{' '}
+              {b.loading
+                ? 'Consultando mensajes…'
+                : (b.error ??
+                  (b.value
+                    ? 'Valores completos disponibles.'
+                    : 'Original completo no disponible; versión protegida.'))}{' '}
+              <button className="text-button" onClick={b.refresh}>
+                Actualizar transacción B
+              </button>
+            </p>
+          )}
         </div>
       )}
-      <label>
-        <input
-          type="checkbox"
-          checked={onlyDifferences}
-          onChange={(event) => setOnlyDifferences(event.target.checked)}
-        />
-        Solo diferencias y valores no verificables
-      </label>
-      <label htmlFor={fieldSearchId}>Buscar campo o tag</label>
-      <input
-        id={fieldSearchId}
-        type="search"
-        value={fieldQuery}
-        placeholder="F39, respuesta, 9F26…"
-        onChange={(event) => setFieldQuery(event.target.value)}
-      />
-      {slots.map(([slot, title]) => {
-        const leftPublic = referenceMessages[slot];
-        const rightPublic = currentMessages[slot];
-        if (slot.startsWith('reversal') && !reference.reversal && !execution.reversal) return null;
-        const leftFull =
-          complete && leftPublic ? session.value?.messages[leftPublic.mti] : undefined;
-        const rightFull =
-          complete && rightPublic ? currentSession?.messages[rightPublic.mti] : undefined;
-        const allRows = compareIsoMessages(
-          { message: leftFull ?? leftPublic, complete: !!leftFull },
-          { message: rightFull ?? rightPublic, complete: !!rightFull },
-        );
-        const rows = filterComparisonRows(allRows, fieldQuery, onlyDifferences);
-        const counts = summarizeComparisonRows(allRows);
-        return (
-          <section key={slot} aria-label={`Comparación de ${title.toLowerCase()}`}>
-            <h4>{title}</h4>
-            <p className="comparison-summary" aria-label={`Resumen de ${title.toLowerCase()}`}>
-              Filas: {counts.changed} diferentes · {counts.added} añadidas · {counts.removed}{' '}
-              ausentes · {counts.unverifiable} no verificables · {counts.equal} iguales. Mostrando{' '}
-              {rows.length} de {allRows.length} (MTI, campos y tags).
-            </p>
-            {(!leftPublic || !rightPublic) && (
-              <p>
-                Mensaje no disponible en{' '}
-                {!leftPublic && !rightPublic
-                  ? 'ambas operaciones'
-                  : !leftPublic
-                    ? 'la referencia'
-                    : 'la operación actual'}
-                . No se puede verificar la comparación.
-              </p>
-            )}
-            {rows.length ? (
-              <div className="comparison-scroll">
-                <table
-                  className="inspector-table"
-                  aria-label={`Diferencias de ${title.toLowerCase()}`}
-                >
-                  <thead>
-                    <tr>
-                      <th>Campo</th>
-                      <th>Referencia</th>
-                      <th>Actual</th>
-                      <th>Comparación</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row) => (
-                      <tr key={row.id} data-comparison={row.status}>
-                        <th scope="row">
-                          {row.id} · {row.label}
-                          {row.variable && <small> · Identificador variable</small>}
-                        </th>
-                        <td className="iso-field-value">{formatComparisonValue(row.reference)}</td>
-                        <td className="iso-field-value">{formatComparisonValue(row.current)}</td>
-                        <td>{statusLabels[row.status]}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p>
-                {fieldQuery.trim()
-                  ? 'No hay filas que coincidan con los filtros. Cambia la búsqueda o muestra también los valores iguales.'
-                  : 'Sin diferencias en los valores disponibles de este mensaje.'}
-              </p>
-            )}
-          </section>
-        );
-      })}
+      <ComparisonMessageTable slots={slots} />
+      <p className="comparison-footnote">
+        Comparación literal de evidencia guardada. STAN y RRN son identificadores variables. Las
+        diferencias no certifican aprobación, débito ni dispensación.
+      </p>
     </>
   );
 }

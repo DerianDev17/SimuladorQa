@@ -19,6 +19,7 @@ import type { IconName } from './Icon';
 import type { AtmSelection } from './transaction-setup';
 import { LoadTestView } from './LoadTestView';
 import { VirtualCardGeneratorView } from './VirtualCardGeneratorView';
+import { InternalHelpView } from './InternalHelpView';
 
 const navigation: { id: string; label: string; icon: IconName; group: string }[] = [
   { id: 'dashboard', label: 'Inicio', icon: 'dashboard', group: 'ESTACIÓN DE PRUEBAS' },
@@ -30,6 +31,7 @@ const navigation: { id: string; label: string; icon: IconName; group: string }[]
   { id: 'monitor', label: 'Monitor', icon: 'monitor', group: 'OBSERVABILIDAD' },
   { id: 'history', label: 'Reportería y auditoría', icon: 'history', group: '' },
   { id: 'settings', label: 'Configuración', icon: 'settings', group: '' },
+  { id: 'help', label: 'Ayuda interna', icon: 'file', group: '' },
 ];
 const client = new DesktopClient(window.desktop);
 
@@ -356,7 +358,7 @@ export function App({ initialPage = 'dashboard' }: { initialPage?: 'dashboard' |
               </button>
             </div>
           )}
-          {!['dashboard', 'transactions', 'load', 'settings', 'history'].includes(page) && (
+          {!['dashboard', 'transactions', 'load', 'settings', 'history', 'help'].includes(page) && (
             <div className="page-heading">
               <div>
                 <h1>{current?.label}</h1>
@@ -549,6 +551,7 @@ export function App({ initialPage = 'dashboard' }: { initialPage?: 'dashboard' |
             />
           )}
 
+          {page === 'help' && <InternalHelpView />}
           <footer className="main-footer">
             <span>Coonecta ATM Transaction Simulator</span>
             <span>

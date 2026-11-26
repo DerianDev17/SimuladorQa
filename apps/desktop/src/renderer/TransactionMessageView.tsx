@@ -78,6 +78,7 @@ export function TransactionMessageView({
   const [expanded, setExpanded] = useState(false);
   const [format, setFormat] = useState<'text' | 'fields'>('text');
   const [complete, setComplete] = useState(true);
+  const [comparing, setComparing] = useState(false);
   const session = useSessionMessages(client, execution, visible && complete);
   const [fieldSelection, setFieldSelection] = useState<{ message: string; number: number }>();
   // Follow progress until the operator explicitly selects a message.
@@ -94,6 +95,51 @@ export function TransactionMessageView({
   const id = useId();
   const tags = message?.fields.find((field) => field.number === 55)?.tags;
   const reversalTab = active.key.startsWith('reversal-');
+  if (comparing)
+    return (
+      <section
+        className="panel transaction-inspector live-message-inspector"
+        aria-label="Mensajería de la transacción"
+      >
+        <div className="panel-heading">
+          <h2>Comparador de transacciones</h2>
+          <button className="secondary" onClick={() => setComparing(false)}>
+            Volver al mensaje
+          </button>
+        </div>
+        <label className="comparison-check">
+          <input
+            type="checkbox"
+            checked={complete}
+            onChange={(event) => setComplete(event.target.checked)}
+          />
+          Mostrar valores completos
+        </label>
+        {complete && (
+          <p role="status">
+            {session.loading
+              ? 'Consultando operación abierta…'
+              : (session.error ??
+                (session.value
+                  ? 'Operación abierta: valores completos disponibles.'
+                  : 'Operación abierta: original no disponible; versión protegida.'))}
+            <button className="text-button" onClick={session.refresh}>
+              Actualizar operación abierta
+            </button>
+          </p>
+        )}
+        {visible && (
+          <TransactionComparison
+            key={execution.requestId}
+            execution={execution}
+            candidates={comparisonCandidates}
+            client={client}
+            complete={complete}
+            currentSession={session.value}
+          />
+        )}
+      </section>
+    );
   return (
     <section
       className="panel transaction-inspector live-message-inspector"
@@ -101,6 +147,9 @@ export function TransactionMessageView({
     >
       <div className="panel-heading">
         <h2>Mensaje ISO8583</h2>
+        <button className="secondary" onClick={() => setComparing(true)}>
+          Comparar transacciones
+        </button>
         <span className="pill neutral">
           {message ? `${message.fields.length} campos` : 'Campos'}
         </span>
@@ -353,16 +402,6 @@ export function TransactionMessageView({
       <p className="message-correlation">
         STAN {execution.correlation?.stan ?? '—'} · RRN {execution.correlation?.rrn ?? '—'}
       </p>
-      {visible && (
-        <TransactionComparison
-          key={execution.requestId}
-          execution={execution}
-          candidates={comparisonCandidates}
-          client={client}
-          complete={complete}
-          currentSession={session.value}
-        />
-      )}
     </section>
   );
 }

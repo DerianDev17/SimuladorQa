@@ -67,7 +67,7 @@ export function TransactionDocumentation({
                   </p>
                   <p>
                     {transaction === 'DEPOSIT'
-                      ? 'La transcripción sanitizada y sus límites están documentados en docs/transactions/DEPOSIT.md.'
+                      ? 'Depósito de prueba en ahorros/USD. La respuesta de referencia fue RC 12; no acredita aceptación del host. Consulta Ayuda interna para preparar y revisar la operación.'
                       : 'El documento original no está adjunto a esta vista. Se conserva la referencia aprobada del catálogo.'}
                   </p>
                 </details>
