@@ -43,3 +43,12 @@ artifacts/
 /Docs tecnicos/Pass oracle.txt
 # Capturas originales privadas; versionar solo evidencia sanitizada y metadatos.
 /Tramas transacciones/
+# Documentacion tecnica interna: conservar en este equipo, no publicar en GitHub.
+/docs/
+/ARCHITECTURE.md
+/CHANGELOG.md
+/REALTIME_DASHBOARD.md
+/templates/*.md
+/references/**/*.md
+/references/README.md
+/.internal-documentation/
