@@ -413,6 +413,24 @@
   min-width: 0;
   margin: 0.5rem 0;
 }
+.transaction-comparison input[type='search'] {
+  display: block;
+  width: 100%;
+  margin: 6px 0 12px;
+}
+.transaction-comparison label {
+  display: block;
+  margin-top: 8px;
+}
+.transaction-comparison .comparison-summary {
+  padding: 8px 10px;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.transaction-comparison .iso-field-value {
+  white-space: pre-wrap;
+}
 .comparison-scroll {
   overflow-x: auto;
   max-height: 28rem;

@@ -2,6 +2,15 @@
 
 ## Comparador de transacciones — 2026-11-24
 
+Mejora de navegación — 2026-11-26: **Buscar referencia** filtra las operaciones
+cargadas por STAN, RRN, UUID, terminal, tipo o resultado mediante el buscador
+existente del historial. No pierde la referencia seleccionada si deja de coincidir.
+**Buscar campo o tag** filtra únicamente números y descripciones, nunca valores.
+La búsqueda ignora mayúsculas y acentos. Cada mensaje resume filas diferentes,
+añadidas, ausentes, no verificables e iguales antes de aplicar los filtros; indica
+cuántas quedan visibles. El conteo incluye MTI, campos y tags, no transacciones.
+Vacío, espacios en blanco y dato no disponible tienen etiquetas distintas.
+
 En **Mensajes → Comparar transacciones**, elegir una operación de referencia del
 historial cargado. Disponible tanto en Nueva transacción como en Reportes de
 transacciones. La operación abierta es la actual; no se permite compararla consigo

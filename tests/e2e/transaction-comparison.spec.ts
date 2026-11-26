@@ -47,6 +47,13 @@ function fixtures() {
   ]) {
     message.fields.find((field) => field.number === 11)!.value = '000124';
   }
+  for (const message of [
+    current.messages.request,
+    current.messages.response!,
+    ...Object.values(currentFull.messages),
+  ]) {
+    message.fields.find((field) => field.number === 11)!.value = current.correlation!.stan;
+  }
   return { reference, current, referenceFull, currentFull };
 }
 test.beforeEach(async () => {
@@ -91,7 +98,20 @@ test('compara dos operaciones, filtra y retira los valores completos al ocultar 
   const comparison = await openComparison();
   const select = comparison.getByLabel('Operación de referencia');
   await expect(select.locator('option')).toHaveCount(2);
+  const referenceSearch = comparison.getByRole('searchbox', {
+    name: 'Buscar referencia',
+    exact: true,
+  });
+  await referenceSearch.fill('inexistente');
+  await expect(select.locator('option')).toHaveCount(1);
+  await expect(comparison).toContainText('Sin coincidencias');
+  await referenceSearch.fill(data.reference.requestId);
+  await expect(select.locator('option')).toHaveCount(2);
   await select.selectOption(data.reference.requestId);
+  await referenceSearch.fill('inexistente');
+  await expect(select).toHaveValue(data.reference.requestId);
+  await expect(comparison).toContainText('Se conserva la referencia seleccionada');
+  await referenceSearch.fill('000124');
   await expect(comparison).toContainText('Referencia: valores completos disponibles.');
   await expect(comparison).toContainText('referencia 250 ms · actual 650 ms');
   const response = comparison.getByRole('table', { name: 'Diferencias de respuesta', exact: true });
@@ -99,6 +119,24 @@ test('compara dos operaciones, filtra y retira los valores completos al ocultar 
   await expect(code).toContainText('00');
   await expect(code).toContainText('96');
   await expect(code).toContainText('Diferente');
+  const responseSummary = comparison.getByLabel('Resumen de respuesta', { exact: true });
+  await expect(responseSummary).toContainText('2 diferentes');
+  const summaryBefore = await responseSummary.textContent();
+  const fieldSearch = comparison.getByRole('searchbox', {
+    name: 'Buscar campo o tag',
+    exact: true,
+  });
+  await fieldSearch.fill('CODIGO DE RESPUESTA');
+  await expect(response.getByRole('row')).toHaveCount(2);
+  await expect(responseSummary).toContainText('2 diferentes');
+  await expect(responseSummary).toContainText('Mostrando 1 de');
+  await fieldSearch.fill('inexistente');
+  await expect(response).toHaveCount(0);
+  await expect(
+    comparison.getByText('No hay filas que coincidan con los filtros.', { exact: false }),
+  ).toHaveCount(2);
+  await fieldSearch.fill('');
+  await expect(responseSummary).toHaveText(summaryBefore!);
   await expect(response.getByRole('row').filter({ hasText: 'F11 · STAN' })).toContainText(
     'Identificador variable',
   );

@@ -7,6 +7,12 @@ import {
 import type { SessionMessages } from '../../../../packages/shared/src/session-messages';
 import type { DesktopClient } from './desktop-client';
 import { useSessionMessages } from './useSessionMessages';
+import { filterExecutionHistory } from './transaction-inspection';
+import {
+  filterComparisonRows,
+  formatComparisonValue,
+  summarizeComparisonRows,
+} from './transaction-comparison-presentation';
 
 const statusLabels: Record<ComparisonStatus, string> = {
   equal: 'Igual',
@@ -50,14 +56,34 @@ export function TransactionComparison({
   currentSession: SessionMessages | undefined;
 }) {
   const [referenceId, setReferenceId] = useState('');
+  const [referenceQuery, setReferenceQuery] = useState('');
   const id = useId();
   const available = candidates.filter(
     (item) => item.environment === 'QA' && item.requestId !== execution.requestId,
   );
   const reference = available.find((item) => item.requestId === referenceId);
+  const matches = filterExecutionHistory(available, {
+    query: referenceQuery,
+    atmId: '',
+    outcome: 'all',
+  });
+  const selectedOutsideSearch =
+    reference && !matches.some((item) => item.requestId === referenceId);
   return (
     <section className="transaction-comparison" aria-label="Comparador de transacciones">
       <h3>Comparar transacciones</h3>
+      <label htmlFor={`${id}-search`}>Buscar referencia</label>
+      <input
+        id={`${id}-search`}
+        type="search"
+        value={referenceQuery}
+        placeholder="STAN, RRN, UUID, terminal u operación"
+        onChange={(event) => setReferenceQuery(event.target.value)}
+      />
+      <p role="status">
+        {matches.length} de {available.length} referencias coinciden con la búsqueda.
+        {selectedOutsideSearch && ' Se conserva la referencia seleccionada.'}
+      </p>
       <label htmlFor={id}>Operación de referencia</label>
       <select
         id={id}
@@ -65,13 +91,19 @@ export function TransactionComparison({
         onChange={(event) => setReferenceId(event.target.value)}
       >
         <option value="">Selecciona una referencia del historial cargado</option>
-        {available.map((item) => (
+        {selectedOutsideSearch && (
+          <option value={reference.requestId}>{label(reference)} · Seleccionada</option>
+        )}
+        {matches.map((item) => (
           <option key={item.requestId} value={item.requestId}>
             {label(item)}
           </option>
         ))}
       </select>
       {!available.length && <p>No hay otra operación cargada para comparar.</p>}
+      {available.length > 0 && !matches.length && (
+        <p>Sin coincidencias. Cambia la búsqueda o bórrala para ver las referencias cargadas.</p>
+      )}
       {reference && (
         <ComparisonDetails
           key={reference.requestId}
@@ -101,6 +133,8 @@ function ComparisonDetails({
 }) {
   const session = useSessionMessages(client, reference, complete);
   const [onlyDifferences, setOnlyDifferences] = useState(true);
+  const [fieldQuery, setFieldQuery] = useState('');
+  const fieldSearchId = useId();
   const referenceMessages = messages(reference);
   const currentMessages = messages(execution);
   return (
@@ -137,6 +171,14 @@ function ComparisonDetails({
         />
         Solo diferencias y valores no verificables
       </label>
+      <label htmlFor={fieldSearchId}>Buscar campo o tag</label>
+      <input
+        id={fieldSearchId}
+        type="search"
+        value={fieldQuery}
+        placeholder="F39, respuesta, 9F26…"
+        onChange={(event) => setFieldQuery(event.target.value)}
+      />
       {slots.map(([slot, title]) => {
         const leftPublic = referenceMessages[slot];
         const rightPublic = currentMessages[slot];
@@ -145,13 +187,20 @@ function ComparisonDetails({
           complete && leftPublic ? session.value?.messages[leftPublic.mti] : undefined;
         const rightFull =
           complete && rightPublic ? currentSession?.messages[rightPublic.mti] : undefined;
-        const rows = compareIsoMessages(
+        const allRows = compareIsoMessages(
           { message: leftFull ?? leftPublic, complete: !!leftFull },
           { message: rightFull ?? rightPublic, complete: !!rightFull },
-        ).filter((row) => !onlyDifferences || row.status !== 'equal');
+        );
+        const rows = filterComparisonRows(allRows, fieldQuery, onlyDifferences);
+        const counts = summarizeComparisonRows(allRows);
         return (
           <section key={slot} aria-label={`Comparación de ${title.toLowerCase()}`}>
             <h4>{title}</h4>
+            <p className="comparison-summary" aria-label={`Resumen de ${title.toLowerCase()}`}>
+              Filas: {counts.changed} diferentes · {counts.added} añadidas · {counts.removed}{' '}
+              ausentes · {counts.unverifiable} no verificables · {counts.equal} iguales. Mostrando{' '}
+              {rows.length} de {allRows.length} (MTI, campos y tags).
+            </p>
             {(!leftPublic || !rightPublic) && (
               <p>
                 Mensaje no disponible en{' '}
@@ -184,8 +233,8 @@ function ComparisonDetails({
                           {row.id} · {row.label}
                           {row.variable && <small> · Identificador variable</small>}
                         </th>
-                        <td className="iso-field-value">{row.reference ?? 'No disponible'}</td>
-                        <td className="iso-field-value">{row.current ?? 'No disponible'}</td>
+                        <td className="iso-field-value">{formatComparisonValue(row.reference)}</td>
+                        <td className="iso-field-value">{formatComparisonValue(row.current)}</td>
                         <td>{statusLabels[row.status]}</td>
                       </tr>
                     ))}
@@ -193,7 +242,11 @@ function ComparisonDetails({
                 </table>
               </div>
             ) : (
-              <p>Sin diferencias en los valores disponibles de este mensaje.</p>
+              <p>
+                {fieldQuery.trim()
+                  ? 'No hay filas que coincidan con los filtros. Cambia la búsqueda o muestra también los valores iguales.'
+                  : 'Sin diferencias en los valores disponibles de este mensaje.'}
+              </p>
             )}
           </section>
         );
