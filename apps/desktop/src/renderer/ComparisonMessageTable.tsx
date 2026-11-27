@@ -88,7 +88,7 @@ function Row({ row, id, focused }: { row: MessageComparisonRow; id: string; focu
       </td>
       <td>
         <span className={`comparison-state state-${row.status}`}>{labels[row.status]}</span>
-        {row.status === 'unverifiable' && <small>Máscara o mensaje no disponible</small>}
+        {row.status === 'unverifiable' && <small>Máscara, mensaje o desglose no disponible</small>}
       </td>
     </tr>
   );

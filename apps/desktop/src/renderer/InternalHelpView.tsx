@@ -36,6 +36,7 @@ export function InternalHelpView() {
   const matches = topics.filter((item) =>
     normalize(`${item.title} ${item.text}`).includes(normalize(query)),
   );
+  const activeTopic = matches.find((item) => item.id === topic) ?? matches[0];
   return (
     <div className="internal-help">
       <header>
@@ -60,7 +61,7 @@ export function InternalHelpView() {
           {matches.map((item) => (
             <button
               key={item.id}
-              aria-current={topic === item.id ? 'page' : undefined}
+              aria-current={activeTopic?.id === item.id ? 'page' : undefined}
               onClick={() => setTopic(item.id)}
             >
               {item.title}
@@ -69,8 +70,9 @@ export function InternalHelpView() {
           {!matches.length && <p>No hay temas para esa búsqueda.</p>}
         </nav>
         <article className="panel" aria-label="Contenido de ayuda">
-          <h2>{topics.find((item) => item.id === topic)?.title}</h2>
-          {topic === 'comparison' && (
+          {!activeTopic && <p role="status">Prueba con otro término para encontrar una guía.</p>}
+          {activeTopic && <h2>{activeTopic.title}</h2>}
+          {activeTopic?.id === 'comparison' && (
             <>
               <p>
                 Abre Reportería y auditoría → Reportes → Transacciones, elige una operación y entra
@@ -80,7 +82,7 @@ export function InternalHelpView() {
               <ComparisonHelp />
             </>
           )}
-          {topic === 'operations' && (
+          {activeTopic?.id === 'operations' && (
             <>
               <ol>
                 <li>
@@ -104,7 +106,7 @@ export function InternalHelpView() {
               </p>
             </>
           )}
-          {topic === 'history' && (
+          {activeTopic?.id === 'history' && (
             <>
               <p>
                 En Reportería y auditoría → Reportes → Transacciones se combinan saldo, retiro y
@@ -124,7 +126,7 @@ export function InternalHelpView() {
               </p>
             </>
           )}
-          {topic === 'load' && (
+          {activeTopic?.id === 'load' && (
             <>
               <p>
                 Configura la corrida en Carga y estrés y revisa los requisitos indicados antes de

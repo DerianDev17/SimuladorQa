@@ -27,13 +27,14 @@ export function compareIsoMessages(
     left: string | undefined,
     right: string | undefined,
     variable = false,
+    evidenceAvailable = true,
   ) {
     const masked = (value: string | undefined, complete: boolean) =>
       !complete &&
       value !== undefined &&
       (value.includes(protectedIsoValue) || /X{2,}|\*{3,}/.test(value));
     const status: ComparisonStatus =
-      !reference.message || !current.message
+      !reference.message || !current.message || !evidenceAvailable
         ? 'unverifiable'
         : left === undefined
           ? 'added'
@@ -68,6 +69,9 @@ export function compareIsoMessages(
         publicEmvTags[tag]?.label ?? 'Tag EMV',
         leftTags.get(tag),
         rightTags.get(tag),
+        false,
+        // A present field without a tag projection is not evidence of absent tags.
+        (!left || left.tags !== undefined) && (!right || right.tags !== undefined),
       );
     }
   }

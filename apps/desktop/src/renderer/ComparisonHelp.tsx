@@ -23,7 +23,8 @@ export function ComparisonHelp() {
       </ol>
       <p>
         Igual compara el valor visible completo. No verificable significa que hay máscaras o falta
-        un mensaje: no confirma igualdad. Ausente/Añadido describe presencia en B respecto de A.
+        un mensaje o su desglose de tags: no confirma igualdad ni eliminación. Ausente/Añadido
+        describe presencia en B respecto de A cuando hay evidencia disponible.
       </p>
       <p>
         Los espacios modificados se muestran como · y los saltos como ↵. Se comparan caracteres del

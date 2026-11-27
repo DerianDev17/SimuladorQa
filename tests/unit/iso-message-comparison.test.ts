@@ -117,6 +117,37 @@ describe('comparación literal de mensajes', () => {
       ).toBe(true);
     }
   });
+  it.each([false, true])(
+    'no inventa ausencias cuando falta el desglose de tags (completo: %s)',
+    (complete) => {
+      const undecoded = source([{ number: 55, value: 'opaque' }], complete);
+      const decoded = source(
+        [{ number: 55, value: 'opaque', tags: [{ tag: '95', value: '0000000000' }] }],
+        complete,
+      );
+      for (const pair of [
+        [undecoded, decoded],
+        [decoded, undecoded],
+      ] as const) {
+        expect(compareIsoMessages(...pair).find((row) => row.id === 'F55/95')?.status).toBe(
+          'unverifiable',
+        );
+      }
+    },
+  );
+  it('distingue desglose vacío y campo ausente de desglose no disponible', () => {
+    const decoded = source([
+      { number: 55, value: 'opaque', tags: [{ tag: '95', value: '0000000000' }] },
+    ]);
+    for (const absent of [source([]), source([{ number: 55, value: '', tags: [] }])]) {
+      expect(compareIsoMessages(absent, decoded).find((row) => row.id === 'F55/95')?.status).toBe(
+        'added',
+      );
+      expect(compareIsoMessages(decoded, absent).find((row) => row.id === 'F55/95')?.status).toBe(
+        'removed',
+      );
+    }
+  });
   it('rechaza selección propia o identificadores que no están en el historial cargado', () => {
     const execution = approvedWithdrawalExecution();
     const html = renderToStaticMarkup(

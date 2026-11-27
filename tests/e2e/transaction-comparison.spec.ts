@@ -209,7 +209,33 @@ test('selección A/B, tabla completa, diferencias por caracteres, intercambio y 
     window.getByRole('article', { name: 'Contenido de ayuda' }).getByRole('link'),
   ).toHaveCount(0);
   await window.getByRole('searchbox', { name: 'Buscar en la ayuda' }).fill('cifrado');
+  await expect(window.getByRole('article', { name: 'Contenido de ayuda' })).toContainText(
+    'archivo cifrado local',
+  );
+  await expect(window.getByRole('article', { name: 'Contenido de ayuda' })).not.toContainText(
+    'Elige A, la referencia',
+  );
+  await expect(
+    window.getByRole('button', { name: 'Historial y mensajes', exact: true }),
+  ).toHaveAttribute('aria-current', 'page');
   await window.getByRole('button', { name: 'Historial y mensajes', exact: true }).click();
+  await expect(window.getByRole('article', { name: 'Contenido de ayuda' })).toContainText(
+    'archivo cifrado local',
+  );
+  await window.getByRole('searchbox', { name: 'Buscar en la ayuda' }).fill('sin coincidencias');
+  await expect(
+    window.getByRole('article', { name: 'Contenido de ayuda' }).getByRole('status'),
+  ).toContainText('Prueba con otro término');
+  await expect(window.getByRole('article', { name: 'Contenido de ayuda' })).not.toContainText(
+    'archivo cifrado local',
+  );
+  await expect(
+    window.getByRole('navigation', { name: 'Temas de ayuda' }).getByRole('button'),
+  ).toHaveCount(0);
+  await window.getByRole('searchbox', { name: 'Buscar en la ayuda' }).fill('');
+  await expect(
+    window.getByRole('button', { name: 'Historial y mensajes', exact: true }),
+  ).toHaveAttribute('aria-current', 'page');
   await expect(window.getByRole('article', { name: 'Contenido de ayuda' })).toContainText(
     'archivo cifrado local',
   );
@@ -258,6 +284,10 @@ test('selecciona B desde todo el historial, rechaza A duplicada y conserva la pa
 
 test('referencia: error, timeout y recuperación sin inventar mensajes ausentes', async () => {
   const data = fixtures();
+  delete data.reference.messages!.request.fields.find((field) => field.number === 55)!.tags;
+  data.current.messages!.request.fields.find((field) => field.number === 55)!.tags = [
+    { tag: '95', value: '0000000000' },
+  ];
   delete data.reference.messages!.response;
   data.reference.responseCode = null;
   data.reference.outcome = 'RESPONSE_TIMEOUT';
@@ -272,6 +302,9 @@ test('referencia: error, timeout y recuperación sin inventar mensajes ausentes'
   const comparison = await openComparison();
   await chooseReference(comparison);
   await expect(comparison).toContainText('Archivo de prueba no disponible');
+  const tagRow = comparison.getByRole('row').filter({ hasText: 'F55/95' });
+  await expect(tagRow).toHaveAttribute('data-comparison', 'unverifiable');
+  await expect(tagRow).toContainText('desglose no disponible');
   await comparison.getByRole('tab', { name: /^Respuesta\s/ }).click();
   await expect(comparison).toContainText('Mensaje no disponible en A');
   await expect(
